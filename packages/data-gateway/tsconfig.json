@@ -1,0 +1,30 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "composite": true,
+    "rootDir": "./src",
+    "outDir": "./build",
+    "baseUrl": "./src",
+    "tsBuildInfoFile": "./build/.tsbuildinfo",
+    "paths": {
+      "@lambdaorm/base": ["../../packages/base/build"],
+      "@lambdaorm/base/*": ["../../packages/base/build/*"],
+      "@lambdaorm/lib": ["../../packages/lib/build"],
+      "@lambdaorm/lib/*": ["../../packages/lib/build/*"]
+    }
+  },
+  "references": [
+    { "path": "../../packages/base" },
+    { "path": "../../packages/lib" }
+  ],
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "build",
+    "**/__tests__/**",
+    "**/__jest__/**"
+  ]
+}
