@@ -3,8 +3,8 @@
   "version": "2.2.1",
   "description": "Service that exposes the functionality of the LambdaOrm library",
   "license": "MIT",
-  "main": "./build/index.js",
-  "types": "./build/index.d.ts",
+  "main": "./build/lib/index.js",
+  "types": "./build/lib/index.d.ts",
   "private": true,
   "repository": {
     "type": "git",
@@ -68,9 +68,11 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "build:dev": "tsc -p tsconfig.dev.json",
+		"build:all": "tsc -p tsconfig.json && tsc -p tsconfig.dev.json",
     "build:watch": "tsc -p tsconfig.json --watch",
     "clean": "rm -rf build",
     "test": "jest --config jest-config.json",
-    "start": "node build/index.js"
+    "start": "node build/lib/index.js"
   }
 }

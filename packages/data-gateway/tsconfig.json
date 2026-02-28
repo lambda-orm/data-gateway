@@ -3,14 +3,14 @@
   "compilerOptions": {
     "composite": true,
     "rootDir": "./src",
-    "outDir": "./build",
+    "outDir": "./build/lib",
     "baseUrl": "./src",
     "tsBuildInfoFile": "./build/.tsbuildinfo",
     "paths": {
-      "@lambdaorm/base": ["../../packages/base/build"],
-      "@lambdaorm/base/*": ["../../packages/base/build/*"],
-      "@lambdaorm/lib": ["../../packages/lib/build"],
-      "@lambdaorm/lib/*": ["../../packages/lib/build/*"]
+      "@lambdaorm/base": ["../../packages/base/build/lib"],
+      "@lambdaorm/base/*": ["../../packages/base/build/lib/*"],
+      "@lambdaorm/lib": ["../../packages/lib/build/lib"],
+      "@lambdaorm/lib/*": ["../../packages/lib/build/lib/*"]
     }
   },
   "references": [

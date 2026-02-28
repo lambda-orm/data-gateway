@@ -1,0 +1,18 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "composite": true,
+    "rootDir": "./dev",
+    "outDir": "./build/dev",
+    "baseUrl": "./dev",
+    "tsBuildInfoFile": "./build/.tsbuildinfo"
+  },
+  "include": [
+    "dev/**/*.ts",
+    "dev/**/*.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "build"
+  ]
+}
