@@ -68,8 +68,6 @@
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "build:dev": "tsc -p tsconfig.dev.json",
-		"build:all": "tsc -p tsconfig.json && tsc -p tsconfig.dev.json",
     "build:watch": "tsc -p tsconfig.json --watch",
     "clean": "rm -rf build",
     "test": "jest --config jest-config.json",
