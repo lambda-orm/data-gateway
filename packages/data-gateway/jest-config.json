@@ -14,9 +14,9 @@
 		"node"
 	],
 	"moduleNameMapper": {
-		"^@lambdaorm/base$": "<rootDir>/../../packages/base/build",
-		"^@lambdaorm/base/(.*)$": "<rootDir>/../../packages/base/build/$1",
-		"^@lambdaorm/lib$": "<rootDir>/../../packages/lib/build",
-		"^@lambdaorm/lib/(.*)$": "<rootDir>/../../packages/lib/build/$1"
+		"^@lambdaorm/base$": "<rootDir>/../../packages/base/build/lib",
+		"^@lambdaorm/base/(.*)$": "<rootDir>/../../packages/base/build/lib/$1",
+		"^@lambdaorm/lib$": "<rootDir>/../../packages/lib/build/lib",
+		"^@lambdaorm/lib/(.*)$": "<rootDir>/../../packages/lib/build/lib/$1"
 	}
 }

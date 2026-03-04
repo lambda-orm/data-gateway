@@ -67,10 +67,11 @@
     "typescript": "^5.8.3"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "build:watch": "tsc -p tsconfig.json --watch",
-    "clean": "rm -rf build",
-    "test": "jest --config jest-config.json",
-    "start": "node build/lib/index.js"
+    "lint": "npx grunt lint",
+    "build": "npx grunt build",
+    "test": "npx grunt test",
+    "doc": "npx grunt doc",
+    "dist": "npx grunt dist",
+    "release": "npx grunt release"
   }
 }
