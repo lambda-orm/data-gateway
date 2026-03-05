@@ -1,13 +1,16 @@
-const fs = require('fs')
-
 module.exports = function (grunt) {
-	require('load-grunt-tasks')(grunt)
+	const path = require('path');
+	const baseDir = __dirname; 
+  const repoRoot = path.resolve(baseDir, "../..")
+	grunt.loadNpmTasks('grunt-exec');
+  grunt.loadNpmTasks('grunt-contrib-clean');
+  grunt.loadNpmTasks('grunt-contrib-copy');
 	grunt.initConfig({
 		exec: {
-			lint: { cmd: 'npx eslint src ' },
+			lint: { cmd: 'npx eslint -c ../../eslint.config.js "src/**/*.ts" --ignore-pattern "src/lib/repository/domain/queryable.ts"' },
+			test: { cmd: 'npx jest --config ./jest-config.json' },
 			tsc: { cmd: 'npx tsc ' },
-			test: { cmd: 'npx jest --config jest-config.json' },
-			doc: { cmd: 'npx typedoc --plugin typedoc-plugin-markdown --out doc/source src/doc.index.ts' },
+			doc: { cmd: 'npx typedoc --plugin typedoc-plugin-markdown --out doc/source src/lib/index.ts' },
 			getOriginalBranch: {
 				cmd: 'git branch | sed -n -e \'s/^\\* \\(.*\\)/\\1/p\'',
 				callback: function (error, stdout, stderr) {
@@ -21,20 +24,15 @@ module.exports = function (grunt) {
 			standardVersion: {
 				cmd: 'standard-version'
 			},
-			push: {
-				cmd: 'git add . && git commit -m "chore(release): <%= version %>" && git push'
+			createRelease: {
+				cmd: `git add . && git commit -m "chore(release): <%= version %>" && git push && git push --tags
+				  &&  git checkout -b release/<%= version %> && git push --set-upstream origin release/<%= version %>				  
+				  &&  git checkout <%= originalBranch %>
+				  &&  git branch -D release/<%= version %>
+				`
 			},
-			createReleaseBranch: {
-				cmd: 'git checkout -b release/<%= version %> && git push --set-upstream origin release/<%= version %>'
-			},
-			mergeToMain: {
-				cmd: 'git checkout main && git merge release/<%= version %> -m "chore(release): release <%= version %>" && git push'
-			},
-			mergeToOriginalBranch: {
-				cmd: 'git checkout <%= originalBranch %> && git merge release/<%= version %> -m "chore(release): release <%= version %>" && git push'
-			},
-			removeLocalReleaseBranch: {
-				cmd: 'git branch -D release/<%= version %>'
+			publish: {
+				cmd: 'cd dist && npm publish --access public'
 			}
 		},
 		clean: {
@@ -42,13 +40,13 @@ module.exports = function (grunt) {
 			dist: ['dist']
 		},
 		copy: {
-			swagger: { expand: true, cwd: './src/infrastructure', src: './swagger.yaml', dest: 'build/infrastructure' },
-			lib: { expand: true, cwd: 'build/', src: '**', dest: 'dist/' },
-			images: { expand: true, cwd: 'images/', src: '**', dest: 'dist/images/' },
+			lib: { expand: true, cwd: 'build/lib/', src: '**', dest: 'dist/' },
 			readme: { expand: true, src: './README.md', dest: 'dist/' },
+			license: { expand: true, src: path.join(repoRoot, "LICENSE"), dest: path.join(baseDir, "dist", "LICENSE") },
 			changeLog: { expand: true, src: './CHANGELOG.md', dest: 'dist/' },
-			license: { expand: true, src: './LICENSE', dest: 'dist/' },
-			jest: { expand: true, src: './jest-config.json', dest: 'dist/' }
+			jest: { expand: true, src: './jest-config.json', dest: 'dist/' },
+			npmrc: { expand: false, src: path.join(repoRoot, ".npmrc"), dest: path.join(baseDir, "dist", ".npmrc") },
+			npmignore: { expand: false, src: path.join(repoRoot, ".npmignore"), dest: path.join(baseDir, "dist", ".npmignore") }
 		}
 	})
 	grunt.registerTask('get-version', 'get version from package.json', function () {
@@ -56,25 +54,25 @@ module.exports = function (grunt) {
 		grunt.config.set('version', version)
 	})
 	grunt.registerTask('create-package', 'create package.json for dist', function () {
+		const fs = require('fs')
 		const data = require('./package.json')
 		delete data.devDependencies
 		delete data.private
-		delete data.scripts
-		delete data.nodemonConfig
 		data.scripts = {
-			start: 'node index.js'
+			test: data.scripts.test
 		}
 		data.main = 'index.js'
-		fs.writeFileSync('dist/package.json', JSON.stringify(data, null, 2), 'utf8')
+		data.types = 'index.d.ts'
+		fs.writeFileSync('./dist/package.json', JSON.stringify(data, null, 2), 'utf8')
 	})
 	grunt.registerTask('changelog-format', 'apply format to changelog', function () {
 		const changelog = grunt.file.read('CHANGELOG.md')
-		let newChangelog = changelog.replace(/https:\/\/github.com\/FlavioLionelRita\/lambdaorm-svc\/issues\//g, 'https://github.com/lambda-orm/lambdaorm/issues/')
+		let newChangelog = changelog.replace(/https:\/\/github.com\/lambda-orm\/core\/issues\//g, 'https://github.com/lambda-orm/core/issues/')
 		newChangelog = newChangelog.replace(/\n### Bug Fixes/g, '**Bug Fixes:**')
 		newChangelog = newChangelog.replace(/\n### Features/g, '**Features:**')
 		grunt.file.write('CHANGELOG.md', newChangelog)
 	})
-	grunt.registerTask('exec-release', ['exec:standardVersion', 'changelog-format', 'copy:changeLog', 'create-package', 'get-version', 'exec:push', 'exec:createReleaseBranch', 'exec:mergeToMain', 'exec:mergeToOriginalBranch', 'exec:removeLocalReleaseBranch'])
+	grunt.registerTask('exec-release', ['exec:standardVersion', 'changelog-format', 'copy:changeLog', 'create-package', 'get-version', 'exec:createRelease'])
 	grunt.registerTask('run-release-if-applicable', 'run release if applicable', function () {
 		const originalBranch = grunt.config.get('originalBranch')
 		if (originalBranch === 'develop' || originalBranch.startsWith('hotfix')) {
@@ -84,10 +82,11 @@ module.exports = function (grunt) {
 		}
 	})
 	grunt.registerTask('lint', ['exec:lint'])
-	grunt.registerTask('build', ['lint', 'clean:build', 'exec:tsc', 'copy:swagger'])
+	grunt.registerTask('build', ['lint', 'clean:build', 'exec:tsc'])
 	grunt.registerTask('test', ['build', 'exec:test'])
-	grunt.registerTask('doc', ['exec:doc'])
-	grunt.registerTask('dist', ['test', 'clean:dist', 'copy:lib', 'copy:readme', 'copy:license', 'copy:images', 'create-package'])
-	grunt.registerTask('release', ['dist', 'doc', 'exec:getOriginalBranch', 'run-release-if-applicable'])
+	grunt.registerTask('docs', ['exec:doc'])
+	grunt.registerTask('dist', ['build', 'clean:dist', 'copy:lib', 'copy:jest', 'copy:readme', 'copy:license', 'copy:npmrc', 'copy:npmignore', 'create-package', ])
+	grunt.registerTask('release-manual', ['dist', 'docs', 'exec:standardVersion', 'changelog-format', 'copy:changeLog', 'create-package', 'get-version', 'exec:publish' ])
+	grunt.registerTask('release', ['dist', 'docs', 'exec:getOriginalBranch', 'run-release-if-applicable'])
 	grunt.registerTask('default', [])
 }
