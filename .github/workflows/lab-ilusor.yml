@@ -1,0 +1,60 @@
+name: Lab ilusor-cloud
+# The ilusor-cloud lab (packages/lib/src/dev/labs/ilusor-cloud) on a real Postgres: lib specs and the REST service.
+# Non-blocking until every item of docs/LAMBDAORM_PENDING.md passes (docs/PLAN.md B6); then make it required.
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+  workflow_dispatch:
+jobs:
+  lab:
+    name: Lab
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: ilusor
+          POSTGRES_USER: admin
+          POSTGRES_PASSWORD: admin
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U admin -d ilusor"
+          --health-interval 2s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.16.0
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Build
+        run: pnpm run build
+      - name: Schemas and roles
+        run: psql -h 127.0.0.1 -p 55432 -U admin -d ilusor -v ON_ERROR_STOP=1 -f packages/lib/src/dev/labs/ilusor-cloud/db/01-schemas.sql
+        env:
+          PGPASSWORD: admin
+      - name: Tables (push, stage ddl)
+        working-directory: packages/lib
+        run: npm run lab:ilusor:setup
+      - name: Lab (lib)
+        working-directory: packages/lib
+        run: npm run lab:ilusor:test -- --verbose
+      - name: Lab (service)
+        working-directory: packages/service
+        run: |
+          LAB=$(realpath ../lib/src/dev/labs/ilusor-cloud)
+          WORKSPACE=$LAB PORT=59292 RATE_LIMIT_MAX=0 SCRIPT_ENABLED=true SERVICE_TOKEN=lab-token \
+            npx tsx --env-file=$LAB/.env src/lib/index.ts > service.log 2>&1 &
+          for i in $(seq 1 60); do curl -sf http://127.0.0.1:59292/ping > /dev/null && break; sleep 1; done
+          cd ../lib
+          ORM_SVC=1 ORM_URL=http://127.0.0.1:59292 ORM_SVC_TOKEN=lab-token \
+            npx jest -c src/dev/labs/ilusor-cloud/jest.config.json --verbose src/dev/labs/ilusor-cloud/tests/service.spec.ts
