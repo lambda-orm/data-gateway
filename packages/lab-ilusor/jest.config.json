@@ -1,14 +1,28 @@
 {
 	"rootDir": ".",
-	"testMatch": ["<rootDir>/tests/**/*.spec.ts"],
+	"testMatch": [
+		"<rootDir>/tests/**/*.spec.ts"
+	],
 	"testTimeout": 30000,
 	"maxWorkers": 1,
 	"transform": {
-		"^.+\\.ts$": ["ts-jest", { "tsconfig": "<rootDir>/../../../../tsconfig.json", "diagnostics": false }]
+		"^.+\\.ts$": [
+			"ts-jest",
+			{
+				"tsconfig": "<rootDir>/../../../../tsconfig.json",
+				"diagnostics": false
+			}
+		]
 	},
-	"moduleFileExtensions": ["ts", "js", "json", "node"],
+	"moduleFileExtensions": [
+		"ts",
+		"js",
+		"json",
+		"node"
+	],
 	"moduleNameMapper": {
 		"^@lambdaorm/base$": "<rootDir>/../../../../../base/build/lib",
 		"^@lambdaorm/base/(.*)$": "<rootDir>/../../../../../base/build/lib/$1"
-	}
+	},
+	"globalSetup": "<rootDir>/globalSetup.ts"
 }

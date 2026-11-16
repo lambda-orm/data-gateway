@@ -14,8 +14,7 @@ const copyWorkspace = (change?: (schema: any) => void): string => {
 	const schema: any = yaml.load(fs.readFileSync(path.join(workspace, 'lambdaORM.yaml'), 'utf8'))
 	if (change) change(schema)
 	fs.writeFileSync(path.join(dir, 'lambdaORM.yaml'), yaml.dump(schema))
-	// push compares the model with orm_state (what the last push applied), not with the database: copy it too
-	fs.cpSync(path.join(workspace, 'orm_state'), path.join(dir, 'orm_state'), { recursive: true })
+	// no orm_state: push compares the model with the database (L19)
 	return path.join(dir, 'lambdaORM.yaml')
 }
 
@@ -55,8 +54,22 @@ describe('stage', () => {
 			const flat = JSON.stringify(sentences)
 			expect(flat).toMatch(/ALTER TABLE .*accounts.* ADD .*phone/i)
 			expect(flat).not.toMatch(/device_models|areas|CREATE TABLE/i)
-			const state = path.join(path.dirname(schemaPath), 'orm_state')
-			expect(fs.readdirSync(state).sort()).toEqual(fs.readdirSync(path.join(workspace, 'orm_state')).sort())
+			// the temp workspace has no orm_state (L19: not needed any more); push -o must not write one
+			expect(fs.existsSync(path.join(path.dirname(schemaPath), 'orm_state'))).toBe(false)
+		} finally {
+			await changed.end()
+		}
+	})
+
+	test('L19 push -o grouped by source: one entry for the source that changes, none for the others', async () => {
+		const schemaPath = copyWorkspace(schema => {
+			schema.domain.entities.find((e: any) => e.name === 'Accounts').properties.push({ name: 'phone', length: 32 })
+		})
+		const changed = await newOrm(schemaPath)
+		try {
+			const bySource = await changed.stage.push({ stage: 'ddl' }).sentencesBySource()
+			expect(bySource.map(p => p.source)).toEqual(['accountsOwner'])
+			expect(bySource[0].sentences.join()).toMatch(/ALTER TABLE accounts ADD phone/i)
 		} finally {
 			await changed.end()
 		}
@@ -124,6 +137,21 @@ describe('stage', () => {
 		// expected: an empty diff (or a result that says "in step"); today fetch returns the database's mappings
 		const differences = Array.isArray(mappings) ? mappings.filter((m: any) => (m.entities || []).length > 0) : mappings
 		expect(differences).toEqual([])
+	})
+
+	test('L22 fetch reports the drift: a column of the model missing in the database', async () => {
+		const schemaPath = copyWorkspace(schema => {
+			schema.domain.entities.find((e: any) => e.name === 'Accounts').properties.push({ name: 'phone', length: 20 })
+		})
+		const changed = await newOrm(schemaPath)
+		try {
+			const mappings: any = await changed.stage.fetch({ stage: 'ddl' })
+			const differing = mappings.flatMap((m: any) => m.entities)
+			expect(differing.map((e: any) => e.name)).toEqual(['Accounts'])
+			expect(differing[0].differences).toEqual(['column phone missing in the database'])
+		} finally {
+			await changed.end()
+		}
 	})
 
 	test('L6 + L21 pull on an existing model: no error with reserved words, and what was written by hand survives', async () => {

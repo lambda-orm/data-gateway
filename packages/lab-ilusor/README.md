@@ -42,8 +42,9 @@ The specs are `tests/*.spec.ts` (not `*.test.ts`), so the package's own `npm tes
 | --- | --- |
 | `types.spec.ts` | JSON, milliseconds/timestamptz, empty strings, reserved words (L1, L2, L3, L6) |
 | `dml.spec.ts` | affected rows, optimistic lock, delete, upsert, bulkInsert, page, count, search (L4, L5, L18, L23) |
-| `include.spec.ts` | aggregates, includes across schemas, filter across sources, transactions (L15, L16, L17, L26) |
+| `include.spec.ts` | aggregates, includes across schemas, filter across sources, transactions (L15, L16, L17, L26, L31) |
 | `listeners.spec.ts` | listeners awaited, in the sentence's transaction, errors (L10, L11) |
+| `script.spec.ts` | `orm.executeScript`: several queries in one transaction across sources, throw, try/catch, for (L32) |
 | `stage.spec.ts` | push -o, fetch, pull, renames, catch-all source, string length (L1, L2, L6, L19–L22, L24, L25, L27) |
 | `service.spec.ts` | the REST service as Ilusor's clients call it (L4, L5, L9, L12, L14) |
 
@@ -54,9 +55,10 @@ The specs are `tests/*.spec.ts` (not `*.test.ts`), so the package's own `npm tes
 docker compose -f src/dev/labs/ilusor-cloud/docker-compose.yaml -p ilusor-cloud-lab --profile svc up -d --wait
 ORM_SVC=1 npx jest -c src/dev/labs/ilusor-cloud/jest.config.json tests/service.spec.ts
 # this repo's packages/service on 59292
-(cd ../service && set -a && . ../lib/src/dev/labs/ilusor-cloud/.env && set +a && \
-  WORKSPACE=../lib/src/dev/labs/ilusor-cloud PORT=59292 RATE_LIMIT_MAX=100000 npx tsx src/lib/index.ts)
-ORM_SVC=1 ORM_URL=http://127.0.0.1:59292 npx jest -c src/dev/labs/ilusor-cloud/jest.config.json tests/service.spec.ts
+# (--env-file, not `set -a && . .env`: the shell strips the quotes inside the JSON connections)
+(cd ../service && WORKSPACE=$(realpath ../lib/src/dev/labs/ilusor-cloud) PORT=59292 RATE_LIMIT_MAX=0 SCRIPT_ENABLED=true \
+  SERVICE_TOKEN=lab-token npx tsx --env-file=../lib/src/dev/labs/ilusor-cloud/.env src/lib/index.ts)
+ORM_SVC=1 ORM_URL=http://127.0.0.1:59292 ORM_SVC_TOKEN=lab-token npx jest -c src/dev/labs/ilusor-cloud/jest.config.json tests/service.spec.ts
 ```
 
 ## Stop

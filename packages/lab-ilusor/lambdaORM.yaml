@@ -22,7 +22,7 @@ domain:
         - { name: name, required: true }
         - { name: nameNormalized }
         - { name: deviceTypeId, length: 36 }
-        - { name: settings }                          # jsonb (L1)
+        - { name: settings, type: json }              # jsonb (L1)
         - { name: createdAt, type: dateTime }          # timestamptz with ms (L2)
       relations:
         - { name: deviceType, from: deviceTypeId, entity: DeviceTypes, to: id, target: deviceModels }
@@ -127,7 +127,7 @@ domain:
         - { name: tenantId, length: 36 }
         - { name: accountId, length: 36 }
         - { name: locationId, length: 36 }
-        - { name: sets }                              # jsonb (L1)
+        - { name: sets, type: json }                  # jsonb (L1)
 infrastructure:
   mappings:
     - name: catalog
@@ -214,12 +214,12 @@ infrastructure:
       sources:
         - { name: catalog, condition: 'entity.in(["DeviceTypes","DeviceModels","DeviceModelPrices"])' }
         - { name: accounts, condition: 'entity.in(["Accounts","Locations","Quotes","QuoteLines","Installations","InstallationFiles","InstallationEvents"])' }
-        - { name: site, condition: 'entity.in(["Areas","Parameters"])' }   # catch-all source breaks push (L25)
+        - { name: site }   # catch-all: Areas, Parameters (L25)
     - name: ddl
       sources:
         - { name: catalogOwner, condition: 'entity.in(["DeviceTypes","DeviceModels","DeviceModelPrices"])' }
         - { name: accountsOwner, condition: 'entity.in(["Accounts","Locations","Quotes","QuoteLines","Installations","InstallationFiles","InstallationEvents"])' }
-        - { name: siteOwner, condition: 'entity.in(["Areas","Parameters"])' }
+        - { name: siteOwner }   # catch-all (L25)
   service:
     host: $HOST
     port: $PORT
