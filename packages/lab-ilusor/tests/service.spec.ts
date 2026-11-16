@@ -1,6 +1,6 @@
 // The REST service as Ilusor's Go and Python clients call it (docs/LAMBDAORM_PENDING.md L4, L5, L9, L12, L14).
 // Runs only with ORM_SVC=1 and a service at ORM_URL (README: published image on 59291, this repo's on 59292).
-import { describeSvc, id, svc, svcUrl } from './helpers'
+import { describeSvc, id, svc, svcUrl, svcToken } from './helpers'
 
 describeSvc('service', () => {
 	test('ping', async () => {
@@ -94,7 +94,7 @@ describeSvc('service', () => {
 		// eslint-disable-next-line @typescript-eslint/no-var-requires
 		const { Orm: ClientOrm } = require('../../../../../../client/src/lib')
 		const client = new ClientOrm(svcUrl)
-		await client.init()
+		await client.init(undefined, { token: svcToken })
 		const typeId = id()
 		const result = await client.executeScript('orm.execute("DeviceTypes.insert()", { id: typeId, code: "cli-" + typeId, name: "client" }); typeId', { typeId })
 		expect(result).toBe(typeId)
@@ -107,8 +107,11 @@ describeSvc('service', () => {
 	})
 
 	test('L12 a request without the service token is refused (only once the service validates one)', async () => {
-		const res = await svc('/execute', { query: 'DeviceTypes.map(p => p.id).page(1, 1)', data: {} })
+		// the service runs with SERVICE_TOKEN (README); this request sends no token
+		const res = await svc('/execute', { query: 'DeviceTypes.map(p => p.id).page(1, 1)', data: {} }, { Authorization: undefined })
 		expect(res.status).toBe(401)
+		expect((await svc('/execute', { query: 'DeviceTypes.map(p => p.id).page(1, 1)', data: {} }, { Authorization: 'Bearer wrong' })).status).toBe(401)
+		expect((await svc('/ping', undefined, { Authorization: undefined })).status).toBe(200)
 	})
 
 	test('plan of an include across sources names every source it reads', async () => {

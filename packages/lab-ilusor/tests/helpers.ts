@@ -38,10 +38,14 @@ export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, 
 export const svcUrl = process.env.ORM_URL || 'http://127.0.0.1:59291'
 export const describeSvc = (name: string, fn: () => void) => (process.env.ORM_SVC === '1' ? describe : describe.skip)(name, fn)
 
-export async function svc (route: string, body?: any, headers: Record<string, string> = {}): Promise<{ status: number, body: any }> {
+/** The service's token (SERVICE_TOKEN of the service under test), sent by svc() unless a test says otherwise */
+export const svcToken = process.env.ORM_SVC_TOKEN
+
+export async function svc (route: string, body?: any, headers: Record<string, string | undefined> = {}): Promise<{ status: number, body: any }> {
+	const all: Record<string, string | undefined> = { 'Content-Type': 'application/json', ...(svcToken ? { Authorization: `Bearer ${svcToken}` } : {}), ...headers }
 	const res = await fetch(svcUrl + route, {
 		method: body === undefined ? 'GET' : 'POST',
-		headers: { 'Content-Type': 'application/json', ...headers },
+		headers: Object.fromEntries(Object.entries(all).filter(([, v]) => v !== undefined)) as Record<string, string>,
 		body: body === undefined ? undefined : JSON.stringify(body)
 	})
 	const text = await res.text()
