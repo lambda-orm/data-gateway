@@ -61,6 +61,20 @@ describe('stage', () => {
 		}
 	})
 
+	test('L19 push -o grouped by source: one entry for the source that changes, none for the others', async () => {
+		const schemaPath = copyWorkspace(schema => {
+			schema.domain.entities.find((e: any) => e.name === 'Accounts').properties.push({ name: 'phone', length: 32 })
+		})
+		const changed = await newOrm(schemaPath)
+		try {
+			const bySource = await changed.stage.push({ stage: 'ddl' }).sentencesBySource()
+			expect(bySource.map(p => p.source)).toEqual(['accountsOwner'])
+			expect(bySource[0].sentences.join()).toMatch(/ALTER TABLE accounts ADD phone/i)
+		} finally {
+			await changed.end()
+		}
+	})
+
 	test('L25 push with a last source without condition (catch-all) creates only the entities no other source took', async () => {
 		const schemaPath = copyWorkspace(schema => {
 			for (const stage of schema.infrastructure.stages) {
