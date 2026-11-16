@@ -1,6 +1,6 @@
 name: Lab ilusor-cloud
 # The ilusor-cloud lab (packages/lib/src/dev/labs/ilusor-cloud) on a real Postgres: lib specs and the REST service.
-# Non-blocking until every item of docs/LAMBDAORM_PENDING.md passes (docs/PLAN.md B6); then make it required.
+# Required: every item of docs/LAMBDAORM_PENDING.md has a test here and they all pass (docs/PLAN.md B6).
 on:
   push:
     branches: [develop, main]
@@ -11,7 +11,6 @@ jobs:
   lab:
     name: Lab
     runs-on: ubuntu-latest
-    continue-on-error: true
     services:
       postgres:
         image: postgres:17-alpine
