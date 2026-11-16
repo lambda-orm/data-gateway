@@ -42,8 +42,9 @@ The specs are `tests/*.spec.ts` (not `*.test.ts`), so the package's own `npm tes
 | --- | --- |
 | `types.spec.ts` | JSON, milliseconds/timestamptz, empty strings, reserved words (L1, L2, L3, L6) |
 | `dml.spec.ts` | affected rows, optimistic lock, delete, upsert, bulkInsert, page, count, search (L4, L5, L18, L23) |
-| `include.spec.ts` | aggregates, includes across schemas, filter across sources, transactions (L15, L16, L17, L26) |
+| `include.spec.ts` | aggregates, includes across schemas, filter across sources, transactions (L15, L16, L17, L26, L31) |
 | `listeners.spec.ts` | listeners awaited, in the sentence's transaction, errors (L10, L11) |
+| `script.spec.ts` | `orm.executeScript`: several queries in one transaction across sources, throw, try/catch, for (L32) |
 | `stage.spec.ts` | push -o, fetch, pull, renames, catch-all source, string length (L1, L2, L6, L19–L22, L24, L25, L27) |
 | `service.spec.ts` | the REST service as Ilusor's clients call it (L4, L5, L9, L12, L14) |
 
