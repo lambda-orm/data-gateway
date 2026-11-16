@@ -68,6 +68,24 @@ describe('include', () => {
 		expect(rows).toHaveLength(2)
 	})
 
+	test('L15 across sources: with ||, with no match in the other source, and a clear error when compared with a field', async () => {
+		const { modelId, quoteId } = await seedQuote()
+		const either = await orm.execute('QuoteLines.filter(p => p.quoteId == quoteId && (p.deviceModel.name == name || p.quantity > 100))', { name: 'Model ' + modelId, quoteId })
+		expect(either).toHaveLength(2)
+		const none = await orm.execute('QuoteLines.filter(p => p.quoteId == quoteId && p.deviceModel.name == name)', { name: 'no such model', quoteId })
+		expect(none).toHaveLength(0)
+		await expect(orm.execute('QuoteLines.filter(p => p.deviceModel.name == p.quoteId)', {}))
+			.rejects.toThrow(/in another source, so it can only be compared with values/)
+	})
+
+	test('L33 in() with a list in a variable (Postgres)', async () => {
+		const { quoteId } = await seedQuote()
+		const lines = await orm.execute('QuoteLines.filter(p => p.quoteId == quoteId)', { quoteId })
+		const ids = lines.map((l: any) => l.id)
+		expect(await orm.execute('QuoteLines.filter(p => in(p.id, ids))', { ids })).toHaveLength(2)
+		expect(await orm.execute('QuoteLines.filter(p => p.id.in(ids))', { ids: [ids[0]] })).toHaveLength(1)
+	})
+
 	test('L16 a transaction across two sources is all or nothing', async () => {
 		const typeId = id(); const accountId = id()
 		// the error comes from a query (duplicate key); an error thrown by the callback itself is L26 and L31
