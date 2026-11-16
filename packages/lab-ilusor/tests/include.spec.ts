@@ -1,5 +1,5 @@
 // One expression per use case: aggregates, includes across Postgres schemas (sources) and transactions
-// (docs/LAMBDAORM_PENDING.md L15, L16, L17).
+// (docs/LAMBDAORM_PENDING.md L15, L16, L17, L31).
 import { Orm } from '../../../../lib'
 import { id, newOrm } from './helpers'
 
@@ -70,8 +70,7 @@ describe('include', () => {
 
 	test('L16 a transaction across two sources is all or nothing', async () => {
 		const typeId = id(); const accountId = id()
-		// today the callback's error escapes orm.transaction as an uncaught exception (it doesn't reject): the
-		// error is thrown here on purpose through a query error, which the transaction does catch.
+		// the error comes from a query (duplicate key); an error thrown by the callback itself is L26 and L31
 		await expect(orm.transaction({ stage: 'default' }, async tr => {
 			await tr.execute('DeviceTypes.insert()', { id: typeId, code: 'tx-' + typeId, name: 'tx' })
 			await tr.execute('Accounts.insert()', { id: accountId, name: 'tx' })
@@ -79,6 +78,40 @@ describe('include', () => {
 		})).rejects.toThrow()
 		expect(await orm.execute('DeviceTypes.filter(p => p.id == id)', { id: typeId })).toHaveLength(0)
 		expect(await orm.execute('Accounts.filter(p => p.id == id)', { id: accountId })).toHaveLength(0)
+	})
+
+	test('L31 orm.execute inside orm.transaction (not through tr) runs in that transaction: a rollback undoes it in both sources', async () => {
+		const typeId = id(); const accountId = id()
+		await expect(orm.transaction({ stage: 'default' }, async () => {
+			// as a repository, a service method or a listener would do: plain orm.execute, no tr
+			await orm.execute('DeviceTypes.insert()', { id: typeId, code: 'l31-' + typeId, name: 'l31' })
+			await orm.execute('Accounts.insert()', { id: accountId, name: 'l31' })
+			throw new Error('abort the use case')
+		})).rejects.toThrow('abort the use case')
+		expect(await orm.execute('DeviceTypes.filter(p => p.id == id)', { id: typeId })).toHaveLength(0)
+		expect(await orm.execute('Accounts.filter(p => p.id == id)', { id: accountId })).toHaveLength(0)
+	})
+
+	test('L31 orm.execute inside orm.transaction: the commit keeps both writes, and they see each other before it', async () => {
+		const typeId = id(); const accountId = id()
+		let seenInside: any[] = []
+		await orm.transaction({ stage: 'default' }, async () => {
+			await orm.execute('DeviceTypes.insert()', { id: typeId, code: 'l31c-' + typeId, name: 'l31' })
+			await orm.execute('Accounts.insert()', { id: accountId, name: 'l31' })
+			seenInside = await orm.execute('DeviceTypes.filter(p => p.id == id)', { id: typeId })
+		})
+		expect(seenInside).toHaveLength(1)
+		expect(await orm.execute('DeviceTypes.filter(p => p.id == id)', { id: typeId })).toHaveLength(1)
+		expect(await orm.execute('Accounts.filter(p => p.id == id)', { id: accountId })).toHaveLength(1)
+	})
+
+	test('L31 an execution on another stage inside a transaction fails with a clear error (and rolls back)', async () => {
+		const typeId = id()
+		await expect(orm.transaction({ stage: 'default' }, async () => {
+			await orm.execute('DeviceTypes.insert()', { id: typeId, code: 'l31s-' + typeId, name: 'l31' })
+			await orm.execute('DeviceTypes.filter(p => p.id == id)', { id: typeId }, { stage: 'ddl' })
+		})).rejects.toThrow('inside a transaction of stage "default"')
+		expect(await orm.execute('DeviceTypes.filter(p => p.id == id)', { id: typeId })).toHaveLength(0)
 	})
 
 	test('L17 update of an aggregate with include: children not sent are removed, new ones added, the rest updated (today: only the sent existing ones are updated)', async () => {
