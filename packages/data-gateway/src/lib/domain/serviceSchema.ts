@@ -13,6 +13,8 @@ export interface ServiceConfig {
 	scriptMaxLength?: number | string
 	/** Max time of a script in ms; then it rolls back (SCRIPT_TIMEOUT_MS, default 30000) */
 	scriptTimeoutMs?: number | string
+	/** When set (SERVICE_TOKEN), requests need "Authorization: Bearer <token>"; /ping, /health and /metrics don't */
+	token?: string
 }
 
 export interface ServiceInfrastructureSchema extends InfrastructureSchema {

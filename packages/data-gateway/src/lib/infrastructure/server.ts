@@ -15,6 +15,7 @@ import { beautifyJsonMiddleware } from './middleware/beautifyJsonMiddleware'
 import { LoggerBuilder } from './logger/loggerBuilder'
 import { QueueBuilder } from './queued/queueBuilder'
 import { MetricBuilder } from './metric/metricBuilder'
+import { serviceToken } from './middleware/serviceTokenMiddleware'
 const YAML = require('js-yaml')
 
 export class Server {
@@ -41,7 +42,8 @@ export class Server {
 			const host = this.config?.host || process.env.HOST || 'http://localhost'
 			const requestBodySize = this.config.requestBodySize || process.env.REQUEST_BODY_SIZE
 			const rateLimitWindowMs = parseInt(this.config.rateLimitWindowMs || process.env.RATE_LIMIT_WINDOWS_MS || '30000')
-			const rateLimitMax = parseInt(this.config.rateLimitMax || process.env.RATE_LIMIT_MAX || '30')
+			// RATE_LIMIT_MAX=0: no rate limit (an internal service behind its own gateway) — L9
+			const rateLimitMax = parseInt(String(this.config.rateLimitMax ?? process.env.RATE_LIMIT_MAX ?? '30'))
 			const swagger = YAML.load(await h3lp.fs.read(path.join(__dirname, './swagger.yaml')))
 			const swaggerSetup = swaggerUi.setup(swagger)
 			swagger.servers = [{ description: 'default', url: `${host}:${port}` }]
@@ -49,7 +51,15 @@ export class Server {
 			this.app.use(bodyParser.json())
 			this.app.use(bodyParser.urlencoded({ extended: true }))
 			this.app.use(cors())
-			this.app.use(this.rateLimit(rateLimitWindowMs || 3000, rateLimitMax || 30))
+			if (rateLimitMax > 0) {
+				this.app.use(this.rateLimit(rateLimitWindowMs || 3000, rateLimitMax))
+			}
+			// SERVICE_TOKEN: every request but the health ones needs "Authorization: Bearer <token>" — L12
+			const token = this.config.token ?? process.env.SERVICE_TOKEN
+			if (token) {
+				this.app.use(serviceToken(String(token), ['/ping', '/health', '/metrics']))
+			}
+			this.logger.info(`rate limit: ${rateLimitMax > 0 ? `${rateLimitMax} per ${rateLimitWindowMs} ms` : 'off'}; service token: ${token ? 'required' : 'not required'}`)
 			this.app.use(express.json())
 			this.app.use(express.urlencoded({ extended: false }))
 			this.app.use(beautifyJsonMiddleware)
