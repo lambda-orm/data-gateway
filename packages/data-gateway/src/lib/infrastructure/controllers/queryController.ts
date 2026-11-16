@@ -34,6 +34,10 @@ export class QueryController extends Controller {
 		await this.handleRequest(request, response, this.service.parameters.bind(this.service))
 	}
 
+	public async script (request: Request, response: Response) {
+		await this.handleRequest(request, response, this.service.script.bind(this.service))
+	}
+
 	public async plan (request: Request, response: Response) {
 		await this.handleRequest(request, response, this.service.plan.bind(this.service))
 	}
