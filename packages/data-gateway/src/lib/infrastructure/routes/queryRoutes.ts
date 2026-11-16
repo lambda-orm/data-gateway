@@ -13,6 +13,7 @@ export class QueryRoutes {
 		router.post('/constraints', this.controller.constraints.bind(this.controller))
 		router.post('/execute', this.controller.execute.bind(this.controller))
 		router.post('/execute-queued', this.controller.executeQueued.bind(this.controller))
+		router.post('/script', this.controller.script.bind(this.controller))
 		router.post('/metadata', this.controller.metadata.bind(this.controller))
 		router.post('/model', this.controller.model.bind(this.controller))
 		router.post('/parameters', this.controller.parameters.bind(this.controller))

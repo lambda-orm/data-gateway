@@ -194,6 +194,36 @@ paths:
       tags:
       - query
       x-eov-operation-handler: controllers/QueryController
+  /script:
+    post:
+      operationId: script
+      description: >-
+        Runs a 3xpr script whose orm.execute(query, data, options) calls all run in one transaction, also across
+        sources: commit when it ends, rollback when anything fails (a query or a `throw`). Answers the value of the
+        last statement (or of `return`). Disabled unless the service runs with SCRIPT_ENABLED=true.
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ScriptRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {}
+          description: The value of the script's last statement (null when it has none)
+        "400":
+          description: Invalid script or values (e.g. not null violation)
+        "403":
+          description: Scripts are disabled in this service (SCRIPT_ENABLED)
+        "409":
+          description: Unique or foreign key violation
+        "413":
+          description: Script longer than SCRIPT_MAX_LENGTH
+      tags:
+      - query
+      x-eov-operation-handler: controllers/QueryController
   /execute-queued:
     post:
       operationId: executeQueued
@@ -1613,6 +1643,24 @@ components:
       required:
       - query
       - options
+      type: object
+    ScriptRequest:
+      additionalProperties: false
+      example:
+        script: 'orm.execute("Orders.insert()", { id: id, customerId: customerId }); id'
+        data:
+          id: o1
+          customerId: c1
+        options:
+          stage: default
+      properties:
+        script:
+          type: string
+        data: {}
+        options:
+          $ref: '#/components/schemas/QueryOptions'
+      required:
+      - script
       type: object
     QueryRequest:
       additionalProperties: false
