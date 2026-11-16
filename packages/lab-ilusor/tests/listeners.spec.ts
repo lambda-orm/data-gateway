@@ -1,9 +1,8 @@
 // Ilusor writes what an insert drags to other tables with schema listeners (docs/LAMBDAORM_PENDING.md L10, L11).
 // The lab's listener: inserting an InstallationFile sets its Installation's lastEventAt.
-//
-// Reading of the code (lib, execution/application/services/queryExecutor/queryExecutorObservableDecorator.ts):
-// observers run inside `forEach(async ...)`, not awaited — `after` may still be running when execute returns,
-// its errors don't reach the caller, and `orm.execute` inside it opens its own transaction.
+// Listeners are awaited one after the other and run in the sentence's transaction (an implicit one when the sentence
+// runs alone): their orm.execute uses the same connections, an error fails the sentence and rolls everything back.
+// `transactional: false` runs a listener outside the transaction.
 import { Orm } from '../../../../lib'
 import fs from 'fs'
 import os from 'os'
@@ -65,6 +64,52 @@ describe('listeners', () => {
 			expect(await orm.execute('InstallationFiles.filter(p => p.id == id)', { id: fileId })).toHaveLength(0)
 		} finally {
 			await broken.end()
+		}
+	})
+
+	/** An Orm on a copy of the lab's schema with these listeners instead of the lab's. */
+	const ormWithListeners = async (listeners: any[]): Promise<Orm> => {
+		const schema: any = yaml.load(fs.readFileSync(path.join(workspace, 'lambdaORM.yaml'), 'utf8'))
+		schema.application.listeners = listeners
+		const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ilusor-cloud-lab-'))
+		fs.writeFileSync(path.join(dir, 'lambdaORM.yaml'), yaml.dump(schema))
+		return newOrm(path.join(dir, 'lambdaORM.yaml'))
+	}
+
+	test('L10 an error in a before listener prevents the sentence', async () => {
+		const other = await ormWithListeners([{ name: 'refuse', on: ['insert'], condition: 'entity == "InstallationFiles"', before: 'throw "files are closed"' }])
+		try {
+			const installationId = await newInstallation()
+			const fileId = id()
+			await expect(other.execute('InstallationFiles.insert()', { id: fileId, installationId, name: 'b.pdf', uploadedAt: new Date() }))
+				.rejects.toThrow(/^files are closed$/)
+			expect(await orm.execute('InstallationFiles.filter(p => p.id == id)', { id: fileId })).toHaveLength(0)
+		} finally {
+			await other.end()
+		}
+	})
+
+	test('L10 a listener with transactional: false runs outside the transaction: its write survives a rollback', async () => {
+		const other = await ormWithListeners([{
+			name: 'audit',
+			on: ['insert'],
+			condition: 'entity == "InstallationFiles"',
+			transactional: false,
+			after: 'orm.execute("Installations.update(p => ({ lastEventAt: at })).filter(p => p.id == id)", { id: data.installationId, at: data.uploadedAt })'
+		}])
+		try {
+			const installationId = await newInstallation()
+			const fileId = id()
+			const uploadedAt = new Date('2026-11-16T13:00:00.000Z')
+			await expect(other.transaction({ stage: 'default' }, async tr => {
+				await tr.execute('InstallationFiles.insert()', { id: fileId, installationId, name: 'a.pdf', uploadedAt })
+				throw new Error('abort')
+			})).rejects.toThrow('abort')
+			expect(await orm.execute('InstallationFiles.filter(p => p.id == id)', { id: fileId })).toHaveLength(0)
+			const [installation] = await orm.execute('Installations.filter(p => p.id == id)', { id: installationId })
+			expect(new Date(installation.lastEventAt).toISOString()).toBe(uploadedAt.toISOString())
+		} finally {
+			await other.end()
 		}
 	})
 
