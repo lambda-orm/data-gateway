@@ -126,6 +126,21 @@ describe('stage', () => {
 		expect(differences).toEqual([])
 	})
 
+	test('L22 fetch reports the drift: a column of the model missing in the database', async () => {
+		const schemaPath = copyWorkspace(schema => {
+			schema.domain.entities.find((e: any) => e.name === 'Accounts').properties.push({ name: 'phone', length: 20 })
+		})
+		const changed = await newOrm(schemaPath)
+		try {
+			const mappings: any = await changed.stage.fetch({ stage: 'ddl' })
+			const differing = mappings.flatMap((m: any) => m.entities)
+			expect(differing.map((e: any) => e.name)).toEqual(['Accounts'])
+			expect(differing[0].differences).toEqual(['column phone missing in the database'])
+		} finally {
+			await changed.end()
+		}
+	})
+
 	test('L6 + L21 pull on an existing model: no error with reserved words, and what was written by hand survives', async () => {
 		const schemaPath = copyWorkspace()
 		const pulled = await newOrm(schemaPath)
