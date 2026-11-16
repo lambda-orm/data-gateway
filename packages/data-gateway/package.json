@@ -4,7 +4,7 @@
   "description": "Service that exposes the functionality of the LambdaOrm library",
   "license": "MIT",
   "engines": {
-   "node": ">=20"
+    "node": ">=20"
   },
   "main": "./build/lib/index.js",
   "types": "./build/lib/index.d.ts",
