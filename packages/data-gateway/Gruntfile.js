@@ -41,6 +41,8 @@ module.exports = function (grunt) {
 		},
 		copy: {
 			lib: { expand: true, cwd: 'build/lib/', src: '**', dest: 'dist/' },
+			// tsc doesn't copy it and the server reads it next to infrastructure/server.js (L8)
+			swagger: { expand: true, cwd: 'src/lib/infrastructure/', src: 'swagger.yaml', dest: 'build/lib/infrastructure/' },
 			readme: { expand: true, src: './README.md', dest: 'dist/' },
 			license: { expand: true, src: path.join(repoRoot, "LICENSE"), dest: path.join(baseDir, "dist", "LICENSE") },
 			changeLog: { expand: true, src: './CHANGELOG.md', dest: 'dist/' },
@@ -62,11 +64,20 @@ module.exports = function (grunt) {
 	grunt.registerTask('create-package', 'create package.json for dist', function () {
 		const fs = require('fs')
 		const data = require('./package.json')
+		// workspace:* → the version of the package in this repo (npm can't install workspace:*) — L8
+		for (const dep of Object.keys(data.dependencies || {})) {
+			if (String(data.dependencies[dep]).startsWith('workspace:')) {
+				const depPkg = require(path.join(repoRoot, 'packages', dep.split('/').pop(), 'package.json'))
+				data.dependencies[dep] = `^${depPkg.version}`
+			}
+		}
 		delete data.devDependencies
 		delete data.private
 		data.scripts = {
+			start: 'node index.js',
 			test: data.scripts.test
 		}
+		data.engines = { node: '>=20' }
 		data.main = 'index.js'
 		data.types = 'index.d.ts'
 		fs.writeFileSync('./dist/package.json', JSON.stringify(data, null, 2), 'utf8')
@@ -88,7 +99,7 @@ module.exports = function (grunt) {
 		}
 	})
 	grunt.registerTask('lint', ['exec:lint'])
-	grunt.registerTask('build', ['lint', 'clean:build', 'exec:tsc'])
+	grunt.registerTask('build', ['lint', 'clean:build', 'exec:tsc', 'copy:swagger'])
 	grunt.registerTask('test', ['build', 'exec:test'])
 	grunt.registerTask('docs', ['exec:doc'])
 	grunt.registerTask('dist', ['build', 'clean:dist', 'copy:lib', 'copy:jest', 'copy:readme', 'copy:license', 'copy:npmrc', 'copy:npmignore', 'create-package',])
