@@ -14,8 +14,7 @@ const copyWorkspace = (change?: (schema: any) => void): string => {
 	const schema: any = yaml.load(fs.readFileSync(path.join(workspace, 'lambdaORM.yaml'), 'utf8'))
 	if (change) change(schema)
 	fs.writeFileSync(path.join(dir, 'lambdaORM.yaml'), yaml.dump(schema))
-	// push compares the model with orm_state (what the last push applied), not with the database: copy it too
-	fs.cpSync(path.join(workspace, 'orm_state'), path.join(dir, 'orm_state'), { recursive: true })
+	// no orm_state: push compares the model with the database (L19)
 	return path.join(dir, 'lambdaORM.yaml')
 }
 
@@ -55,8 +54,8 @@ describe('stage', () => {
 			const flat = JSON.stringify(sentences)
 			expect(flat).toMatch(/ALTER TABLE .*accounts.* ADD .*phone/i)
 			expect(flat).not.toMatch(/device_models|areas|CREATE TABLE/i)
-			const state = path.join(path.dirname(schemaPath), 'orm_state')
-			expect(fs.readdirSync(state).sort()).toEqual(fs.readdirSync(path.join(workspace, 'orm_state')).sort())
+			// the temp workspace has no orm_state (L19: not needed any more); push -o must not write one
+			expect(fs.existsSync(path.join(path.dirname(schemaPath), 'orm_state'))).toBe(false)
 		} finally {
 			await changed.end()
 		}
