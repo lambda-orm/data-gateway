@@ -48,6 +48,48 @@ describeSvc('service', () => {
 		expect(dup.status).toBeLessThan(500) // a duplicate key is the caller's error (409), not the service's
 	})
 
+	// /script (L32): this repo's service started with SCRIPT_ENABLED=true (README); the published image has no /script
+	test('L32 /script runs several queries in one transaction across sources and answers the last value', async () => {
+		const typeId = id(); const accountId = id()
+		const res = await svc('/script', {
+			script: 'orm.execute("DeviceTypes.insert()", { id: typeId, code: "svc-s-" + typeId, name: "svc" }); orm.execute("Accounts.insert()", { id: accountId, name: "svc" }); typeId',
+			data: { typeId, accountId },
+			options: { stage: 'default' }
+		})
+		expect(res.status).toBe(200)
+		expect(res.body).toBe(typeId)
+		expect((await svc('/execute', { query: 'Accounts.filter(p => p.id == id)', data: { id: accountId } })).body).toHaveLength(1)
+	})
+
+	test('L32 /script: a duplicate key answers 409 and nothing of the script is written', async () => {
+		const typeId = id(); const accountId = id()
+		const res = await svc('/script', {
+			script: 'orm.execute("DeviceTypes.insert()", { id: typeId, code: "svc-s-" + typeId, name: "svc" }); orm.execute("Accounts.insert()", { id: accountId, name: "a" }); orm.execute("Accounts.insert()", { id: accountId, name: "dup" })',
+			data: { typeId, accountId }
+		})
+		expect(res.status).toBe(409)
+		expect(res.body.code).toBe('23505')
+		expect((await svc('/execute', { query: 'DeviceTypes.filter(p => p.id == id)', data: { id: typeId } })).body).toHaveLength(0)
+	})
+
+	test('L32 /script: throw { status, message } answers that status (e.g. 404) and rolls back', async () => {
+		const typeId = id()
+		const res = await svc('/script', {
+			script: 'orm.execute("DeviceTypes.insert()", { id: typeId, code: "svc-s-" + typeId, name: "svc" }); q = orm.execute("Quotes.filter(p => p.id == quoteId)", { quoteId: typeId }); if (q.length() == 0) { throw { status: 404, message: "quote not found" }; }',
+			data: { typeId }
+		})
+		expect(res.status).toBe(404)
+		expect(res.body.message).toBe('quote not found')
+		expect((await svc('/execute', { query: 'DeviceTypes.filter(p => p.id == id)', data: { id: typeId } })).body).toHaveLength(0)
+	})
+
+	test('L32 /script refuses a script longer than SCRIPT_MAX_LENGTH (413) and one reading environment variables', async () => {
+		expect((await svc('/script', { script: '1;'.repeat(20001) })).status).toBe(413)
+		const env = await svc('/script', { script: '$ORM_CATALOG_CNX' })
+		expect(env.status).toBeGreaterThanOrEqual(400)
+		expect(JSON.stringify(env.body)).not.toMatch(/password|catalog_rw/)
+	})
+
 	test('L9 many requests in a row are not rate limited (internal service)', async () => {
 		const results = await Promise.all(Array.from({ length: 60 }, () => svc('/ping')))
 		expect(results.filter(r => r.status === 429)).toHaveLength(0)
