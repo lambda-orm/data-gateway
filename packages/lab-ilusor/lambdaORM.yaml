@@ -1,0 +1,237 @@
+# Ilusor Cloud lab — the shape Ilusor's Cloud uses (Ilusor's docs/CLOUD_DATA_ACCESS.md):
+# ONE domain with every entity and relation (also between Postgres schemas), one mapping and one
+# source per Postgres schema, stage `default` (DML-only users) routing entities by source, and stage
+# `ddl` (schema owners) only for push/fetch/pull. Reduced model: a few entities per schema, chosen to
+# exercise each open item of docs/LAMBDAORM_PENDING.md (repo root).
+domain:
+  entities:
+    # ---------------------------------------------------------------- catalog
+    - name: DeviceTypes
+      primaryKey: [id]
+      uniqueKey: [code]
+      properties:
+        - { name: id, length: 36, required: true }
+        - { name: code, length: 64, required: true }
+        - { name: name, required: true }
+        - { name: icon }
+        - { name: order, type: integer }              # reserved word as column (L6)
+    - name: DeviceModels
+      primaryKey: [id]
+      properties:
+        - { name: id, length: 36, required: true }
+        - { name: name, required: true }
+        - { name: nameNormalized }
+        - { name: deviceTypeId, length: 36 }
+        - { name: settings }                          # jsonb (L1)
+        - { name: createdAt, type: dateTime }          # timestamptz with ms (L2)
+      relations:
+        - { name: deviceType, from: deviceTypeId, entity: DeviceTypes, to: id, target: deviceModels }
+        - { name: prices, type: manyToOne, composite: true, from: id, entity: DeviceModelPrices, to: deviceModelId }
+    - name: DeviceModelPrices
+      primaryKey: [id]
+      properties:
+        - { name: id, length: 36, required: true }
+        - { name: deviceModelId, length: 36, required: true }
+        - { name: countryCode, length: 2, required: true }
+        - { name: amount, type: decimal }
+      relations:
+        - { name: deviceModel, from: deviceModelId, entity: DeviceModels, to: id }
+    # ---------------------------------------------------------------- accounts
+    - name: Accounts
+      primaryKey: [id]
+      properties:
+        - { name: id, length: 36, required: true }
+        - { name: name, required: true }
+        - { name: nameNormalized }
+        - { name: managedByTenantId, length: 36 }       # '' = none (L3)
+    - name: Locations
+      primaryKey: [id]
+      properties:
+        - { name: id, length: 36, required: true }
+        - { name: accountId, length: 36, required: true }
+        - { name: tenantId, length: 36 }
+        - { name: name, required: true }
+      relations:
+        - { name: account, from: accountId, entity: Accounts, to: id, target: locations }
+    - name: Quotes
+      primaryKey: [id]
+      properties:
+        - { name: id, length: 36, required: true }
+        - { name: tenantId, length: 36, required: true }
+        - { name: accountId, length: 36 }
+        - { name: number, length: 32 }
+        - { name: status, length: 20, required: true }
+        - { name: total, type: decimal }
+        - { name: version, type: integer, required: true }
+        - { name: issuedAt, type: dateTime }
+      relations:
+        - { name: account, from: accountId, entity: Accounts, to: id, target: quotes }
+        - { name: lines, type: manyToOne, composite: true, from: id, entity: QuoteLines, to: quoteId }
+    - name: QuoteLines
+      primaryKey: [id]
+      properties:
+        - { name: id, length: 36, required: true }
+        - { name: quoteId, length: 36, required: true }
+        - { name: deviceModelId, length: 36 }
+        - { name: quantity, type: integer }
+        - { name: unitPrice, type: decimal }
+      relations:
+        - { name: quote, from: quoteId, entity: Quotes, to: id }
+        # between schemas (accounts → catalog): no FK in Postgres
+        - { name: deviceModel, from: deviceModelId, entity: DeviceModels, to: id, target: quoteLines, weak: true }
+    - name: Installations
+      primaryKey: [id]
+      properties:
+        - { name: id, length: 36, required: true }
+        - { name: locationId, length: 36, required: true }
+        - { name: status, length: 20, required: true }
+        - { name: lastEventAt, type: dateTime }
+        - { name: version, type: integer, required: true }
+      relations:
+        - { name: location, from: locationId, entity: Locations, to: id, target: installations }
+    - name: InstallationFiles
+      primaryKey: [id]
+      properties:
+        - { name: id, length: 36, required: true }
+        - { name: installationId, length: 36, required: true }
+        - { name: name, required: true }
+        - { name: uploadedAt, type: dateTime, required: true }
+      relations:
+        - { name: installation, from: installationId, entity: Installations, to: id, target: files }
+    - name: InstallationEvents
+      primaryKey: [id]
+      properties:
+        - { name: id, length: 36, required: true }
+        - { name: installationId, length: 36, required: true }
+        - { name: kind, length: 40, required: true }
+        - { name: at, type: dateTime, required: true }
+      relations:
+        - { name: installation, from: installationId, entity: Installations, to: id, target: events }
+    # ---------------------------------------------------------------- site
+    - name: Areas
+      primaryKey: [id]
+      properties:
+        - { name: id, length: 36, required: true }
+        - { name: tenantId, length: 36 }
+        - { name: accountId, length: 36 }
+        - { name: locationId, length: 36, required: true }
+        - { name: name, required: true }
+      relations:
+        # between schemas (site → accounts)
+        - { name: location, from: locationId, entity: Locations, to: id, target: areas, weak: true }
+    - name: Parameters
+      primaryKey: [id]
+      properties:
+        - { name: id, length: 36, required: true }
+        - { name: code, length: 64, required: true }
+        - { name: tenantId, length: 36 }
+        - { name: accountId, length: 36 }
+        - { name: locationId, length: 36 }
+        - { name: sets }                              # jsonb (L1)
+infrastructure:
+  mappings:
+    - name: catalog
+      entities:
+        - name: DeviceTypes
+          mapping: device_types
+          properties:
+            - { name: order, mapping: order }
+        - name: DeviceModels
+          mapping: device_models
+          properties:
+            - { name: nameNormalized, mapping: name_normalized }
+            - { name: deviceTypeId, mapping: device_type_id }
+            - { name: settings, mapping: settings, dbType: jsonb }
+            - { name: createdAt, mapping: created_at, dbType: timestamptz(3) }
+        - name: DeviceModelPrices
+          mapping: device_model_prices
+          properties:
+            - { name: deviceModelId, mapping: device_model_id }
+            - { name: countryCode, mapping: country_code }
+    - name: accounts
+      entities:
+        - name: Accounts
+          mapping: accounts
+          properties:
+            - { name: nameNormalized, mapping: name_normalized }
+            - { name: managedByTenantId, mapping: managed_by_tenant_id }
+        - name: Locations
+          mapping: locations
+          properties:
+            - { name: accountId, mapping: account_id }
+            - { name: tenantId, mapping: tenant_id }
+        - name: Quotes
+          mapping: quotes
+          properties:
+            - { name: tenantId, mapping: tenant_id }
+            - { name: accountId, mapping: account_id }
+            - { name: issuedAt, mapping: issued_at, dbType: timestamptz(3) }
+        - name: QuoteLines
+          mapping: quote_lines
+          properties:
+            - { name: quoteId, mapping: quote_id }
+            - { name: deviceModelId, mapping: device_model_id }
+            - { name: unitPrice, mapping: unit_price }
+        - name: Installations
+          mapping: installations
+          properties:
+            - { name: locationId, mapping: location_id }
+            - { name: lastEventAt, mapping: last_event_at, dbType: timestamptz(3) }
+        - name: InstallationFiles
+          mapping: installation_files
+          properties:
+            - { name: installationId, mapping: installation_id }
+            - { name: uploadedAt, mapping: uploaded_at, dbType: timestamptz(3) }
+        - name: InstallationEvents
+          mapping: installation_events
+          properties:
+            - { name: installationId, mapping: installation_id }
+            - { name: at, mapping: at, dbType: timestamptz(3) }
+    - name: site
+      entities:
+        - name: Areas
+          mapping: areas
+          properties:
+            - { name: tenantId, mapping: tenant_id }
+            - { name: accountId, mapping: account_id }
+            - { name: locationId, mapping: location_id }
+        - name: Parameters
+          mapping: parameters
+          properties:
+            - { name: tenantId, mapping: tenant_id }
+            - { name: accountId, mapping: account_id }
+            - { name: locationId, mapping: location_id }
+            - { name: sets, mapping: sets, dbType: jsonb }
+  sources:
+    - { name: catalog, dialect: PostgreSQL, mapping: catalog, connection: "${ORM_CATALOG_CNX}" }
+    - { name: accounts, dialect: PostgreSQL, mapping: accounts, connection: "${ORM_ACCOUNTS_CNX}" }
+    - { name: site, dialect: PostgreSQL, mapping: site, connection: "${ORM_SITE_CNX}" }
+    - { name: catalogOwner, dialect: PostgreSQL, mapping: catalog, connection: "${ORM_CATALOG_OWNER_CNX}" }
+    - { name: accountsOwner, dialect: PostgreSQL, mapping: accounts, connection: "${ORM_ACCOUNTS_OWNER_CNX}" }
+    - { name: siteOwner, dialect: PostgreSQL, mapping: site, connection: "${ORM_SITE_OWNER_CNX}" }
+  stages:
+    - name: default
+      sources:
+        - { name: catalog, condition: 'entity.in(["DeviceTypes","DeviceModels","DeviceModelPrices"])' }
+        - { name: accounts, condition: 'entity.in(["Accounts","Locations","Quotes","QuoteLines","Installations","InstallationFiles","InstallationEvents"])' }
+        - { name: site, condition: 'entity.in(["Areas","Parameters"])' }   # catch-all source breaks push (L25)
+    - name: ddl
+      sources:
+        - { name: catalogOwner, condition: 'entity.in(["DeviceTypes","DeviceModels","DeviceModelPrices"])' }
+        - { name: accountsOwner, condition: 'entity.in(["Accounts","Locations","Quotes","QuoteLines","Installations","InstallationFiles","InstallationEvents"])' }
+        - { name: siteOwner, condition: 'entity.in(["Areas","Parameters"])' }
+  service:
+    host: $HOST
+    port: $PORT
+    requestBodySize: $REQUEST_BODY_SIZE
+    rateLimitWindowMs: $RATE_LIMIT_WINDOWS_MS
+    rateLimitMax: $RATE_LIMIT_MAX
+application:
+  listeners:
+    # Ilusor's Installations.AddFile: the service only inserts the file; the listener moves
+    # the installation's lastEventAt (L10, L11).
+    - name: installationFileTouchesInstallation
+      on: [insert]
+      condition: entity == "InstallationFiles"
+      after: >-
+        orm.execute("Installations.update(p => ({ lastEventAt: at })).filter(p => p.id == id)", { id: data.installationId, at: data.uploadedAt })

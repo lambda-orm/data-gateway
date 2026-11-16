@@ -1,0 +1,43 @@
+# Ilusor Cloud lab: one Postgres with one schema per service (catalog, accounts, site),
+# each with its owner (DDL) and a DML-only user, as Ilusor's Cloud deploys it.
+#   docker compose -p ilusor-cloud-lab up -d                 # Postgres only (lib tests)
+#   docker compose -p ilusor-cloud-lab --profile svc up -d   # + lambdaorm-svc (service tests)
+services:
+  postgres:
+    container_name: ilusor-cloud-lab-postgres
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ilusor
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+    ports:
+      - 127.0.0.1:55432:5432
+    volumes:
+      - ./db:/docker-entrypoint-initdb.d:ro
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d ilusor"]
+      interval: 2s
+      retries: 30
+  # The published service, to compare with the one built from this repo
+  # (packages/service: WORKSPACE=<this folder> PORT=59292 …, see README).
+  orm:
+    profiles: [svc]
+    container_name: ilusor-cloud-lab-orm
+    image: flaviorita/lambdaorm-svc:2.2.1
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env.svc
+    environment:
+      HOST: http://0.0.0.0
+      PORT: 9291
+      WORKSPACE: /workspace
+      REQUEST_BODY_SIZE: 10mb
+      RATE_LIMIT_WINDOWS_MS: 60000
+      RATE_LIMIT_MAX: 100000
+    ports:
+      - 127.0.0.1:59291:9291
+    volumes:
+      - ./:/workspace
