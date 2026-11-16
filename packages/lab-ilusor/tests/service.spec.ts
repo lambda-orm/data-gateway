@@ -39,7 +39,7 @@ describeSvc('service', () => {
 		expect(res.body).toBe(1)
 	})
 
-	test('errors carry a code a client can map (not found / unique / foreign key / invalid)', async () => {
+	test('L30 errors carry a code a client can map (not found / unique / foreign key / invalid)', async () => {
 		const typeId = id()
 		const row = { id: typeId, code: 'svc-dup-' + typeId, name: 'svc' }
 		await svc('/execute', { query: 'DeviceTypes.insert()', data: row })

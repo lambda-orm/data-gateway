@@ -54,8 +54,9 @@ The specs are `tests/*.spec.ts` (not `*.test.ts`), so the package's own `npm tes
 docker compose -f src/dev/labs/ilusor-cloud/docker-compose.yaml -p ilusor-cloud-lab --profile svc up -d --wait
 ORM_SVC=1 npx jest -c src/dev/labs/ilusor-cloud/jest.config.json tests/service.spec.ts
 # this repo's packages/service on 59292
-(cd ../service && set -a && . ../lib/src/dev/labs/ilusor-cloud/.env && set +a && \
-  WORKSPACE=../lib/src/dev/labs/ilusor-cloud PORT=59292 RATE_LIMIT_MAX=100000 npx tsx src/lib/index.ts)
+# (--env-file, not `set -a && . .env`: the shell strips the quotes inside the JSON connections)
+(cd ../service && WORKSPACE=$(realpath ../lib/src/dev/labs/ilusor-cloud) PORT=59292 RATE_LIMIT_MAX=100000 \
+  npx tsx --env-file=../lib/src/dev/labs/ilusor-cloud/.env src/lib/index.ts)
 ORM_SVC=1 ORM_URL=http://127.0.0.1:59292 npx jest -c src/dev/labs/ilusor-cloud/jest.config.json tests/service.spec.ts
 ```
 
