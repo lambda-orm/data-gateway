@@ -1,6 +1,6 @@
 // The REST service as Ilusor's Go and Python clients call it (docs/LAMBDAORM_PENDING.md L4, L5, L9, L12, L14).
 // Runs only with ORM_SVC=1 and a service at ORM_URL (README: published image on 59291, this repo's on 59292).
-import { describeSvc, id, svc } from './helpers'
+import { describeSvc, id, svc, svcUrl } from './helpers'
 
 describeSvc('service', () => {
 	test('ping', async () => {
@@ -88,6 +88,17 @@ describeSvc('service', () => {
 		const env = await svc('/script', { script: '$ORM_CATALOG_CNX' })
 		expect(env.status).toBeGreaterThanOrEqual(400)
 		expect(JSON.stringify(env.body)).not.toMatch(/password|catalog_rw/)
+	})
+
+	test('L32 @lambdaorm/client executeScript runs a script on the service', async () => {
+		// eslint-disable-next-line @typescript-eslint/no-var-requires
+		const { Orm: ClientOrm } = require('../../../../../../client/src/lib')
+		const client = new ClientOrm(svcUrl)
+		await client.init()
+		const typeId = id()
+		const result = await client.executeScript('orm.execute("DeviceTypes.insert()", { id: typeId, code: "cli-" + typeId, name: "client" }); typeId', { typeId })
+		expect(result).toBe(typeId)
+		expect(await client.execute('DeviceTypes.filter(p => p.id == id)', { id: typeId })).toHaveLength(1)
 	})
 
 	test('L9 many requests in a row are not rate limited (internal service)', async () => {
