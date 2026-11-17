@@ -1,4 +1,7 @@
-// Before the lab: its Postgres must be up and the tables created — a clear message instead of every test failing.
+// Before the lab: its Postgres must be up, the tables created and in step with the model — a clear message instead of
+// every test failing (docs/PLAN.md B3). A DDL fix (a type, a length) changes what setup creates: the tables of an older
+// setup are then out of step and the lab asks for `npm run lab:ilusor:reset`.
+import path from 'path'
 import { Client } from 'pg'
 
 export default async function (): Promise<void> {
@@ -15,5 +18,27 @@ export default async function (): Promise<void> {
 		}
 	} finally {
 		await client.end()
+	}
+	await checkDrift()
+}
+
+/** stage.fetch of the lab's own model must be empty (L22) */
+async function checkDrift (): Promise<void> {
+	// eslint-disable-next-line @typescript-eslint/no-var-requires
+	const dotenv = require('dotenv')
+	dotenv.config({ path: path.join(__dirname, '.env'), quiet: true })
+	// eslint-disable-next-line @typescript-eslint/no-var-requires
+	const { Orm } = require('../../../lib')
+	const orm = new Orm()
+	try {
+		await orm.init(path.join(__dirname, 'lambdaORM.yaml'))
+		const mappings: any[] = await orm.stage.fetch({ stage: 'ddl' })
+		const drift = mappings.flatMap(m => (m.entities || []).map((e: any) => `${e.name}: ${(e.differences || []).join('; ')}`))
+		if (drift.length > 0) {
+			throw new Error('the lab\'s tables are out of step with its model (an older setup?): from packages/lib run ' +
+				'`npm run lab:ilusor:reset`\n  ' + drift.join('\n  '))
+		}
+	} finally {
+		await orm.end()
 	}
 }

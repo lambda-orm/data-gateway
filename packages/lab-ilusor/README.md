@@ -36,7 +36,16 @@ npx jest -c src/dev/labs/ilusor-cloud/jest.config.json --verbose
 npx jest -c src/dev/labs/ilusor-cloud/jest.config.json -t "L10"
 ```
 
+The same with the package's scripts: `npm run lab:ilusor:up`, `lab:ilusor:setup`, `lab:ilusor:test`, `lab:ilusor:down`,
+and `lab:ilusor:reset` (down + up + setup: empty tables, as the model creates them now).
+
 The specs are `tests/*.spec.ts` (not `*.test.ts`), so the package's own `npm test` doesn't pick them up.
+
+Before the tests, `globalSetup.ts` checks that Postgres is up, the tables exist and are **in step with the model**
+(`stage.fetch`, L22). After a fix that changes the DDL (a type, a length, a default) the tables of an earlier setup are
+out of step: it stops with the differing columns and asks for `npm run lab:ilusor:reset`. The specs never apply DDL
+to the lab's tables (`stage.spec.ts` only generates it, on a copy of the workspace), so the lab passes twice in a row
+and in any order (`--randomize`).
 
 | Spec | Checks |
 | --- | --- |
@@ -47,6 +56,23 @@ The specs are `tests/*.spec.ts` (not `*.test.ts`), so the package's own `npm tes
 | `script.spec.ts` | `orm.executeScript`: several queries in one transaction across sources, throw, try/catch, for (L32) |
 | `stage.spec.ts` | push -o, fetch, pull, renames, catch-all source, string length (L1, L2, L6, L19–L22, L24, L25, L27) |
 | `service.spec.ts` | the REST service as Ilusor's clients call it (L4, L5, L9, L12, L14) |
+
+### Adding a test
+
+- **Name**: start with the item of [`LAMBDAORM_PENDING.md`](../../../../../../docs/LAMBDAORM_PENDING.md) it checks,
+  `L<n> <what it expects>` (a new item: add its row with the next `L<n>` first). `-t "L<n>"` then runs it.
+- **File**: the spec of its area (table above); a new area, a new `tests/<area>.spec.ts`.
+- **Own data**: every test writes its own rows with new ids (`id()`), and only reads those. Never rely on what another
+  test (or an earlier run) left, never empty tables, never change the lab's tables (DDL): a change to the model goes to
+  a copy of the workspace (`copyWorkspace` in `stage.spec.ts`) and is only generated (`push().sentence()`).
+- **Its own Orm**: `newOrm()` in `beforeAll`, `orm.end()` in `afterAll`. Another model (listeners, a property): write
+  the changed `lambdaORM.yaml` to a temp folder and `newOrm(thatPath)` (see `ormWithListeners` in `listeners.spec.ts`).
+- **Helpers** (`tests/helpers.ts`): `newOrm`, `id`, `affected` (the number an update/delete answered), `pgColumn`
+  (a column as Postgres has it, for DDL checks), `svc`/`describeSvc` (service tests, only with `ORM_SVC=1`), `sleep`.
+- **What it asserts**: what Ilusor needs (the expected behaviour), not what λORM does today; a test of an open item
+  fails until it is fixed.
+- Something every engine shares (DML, types, transactions) also belongs in the
+  [engines lab](../engines/README.md), which runs on PostgreSQL, MySQL, MariaDB, SQL Server, Oracle and MongoDB.
 
 ### Service tests
 
