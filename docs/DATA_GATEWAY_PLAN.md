@@ -18,7 +18,9 @@ el desarrollo está en este paquete; `@lambdaorm/lib` y `@lambdaorm/base` no se 
 que se agregan o cambian: **`@lambdaorm/ui`** (nuevo, 3.1.0) y `@lambdaorm/client` (adaptador WebSocket, 3.2.0). Qué se construye y cómo se comporta:
 [`DATA_GATEWAY.md`](DATA_GATEWAY.md). Este documento dice en qué orden, qué archivos y cuándo está terminado.
 
-> **Estado (2026-11-17): plan, sin empezar. Ticket: #96.** Base: rama `release/service-2.4.0` (service 2.4.0, lib 3.5.0).
+> **Estado (2026-11-17): fases 1 y 2 implementadas, sin publicar. Ticket: #96.** Base: `develop` con service 2.4.0
+> (lib 3.5.0). Ramas: `feature/data-gateway-rename` (fase 1) y `feature/data-gateway-core` (fase 2, sobre la anterior).
+> Desvíos de la fase 2 respecto de este plan: ver "Hecho" en la fase 2.
 
 ## 0. Punto de partida
 
@@ -198,6 +200,25 @@ estos documentos; `pnpm build`, `pnpm test`, `pnpm lint` y `npx grunt dist` en v
 ### Fase 2 — Núcleo hexagonal, configuración, permisos y `http` → `3.0.0-rc.1`
 
 En esta fase todo corre en un hilo: `http` conectado directo a la fachada, un esquema en la raíz.
+
+> **Hecho (2026-11-17, `feature/data-gateway-core`).** Verificado: 54 tests unitarios, 16 de integración (sockets
+> reales y `@lambdaorm/lib` real sobre el fixture northwind, sin base), y los 14 tests de servicio del laboratorio
+> `ilusor-cloud` con Postgres contra el gateway por `tsx`, contra el `dist` y contra la imagen Docker construida
+> localmente. Desvíos:
+>
+> - **Reglas de capas solo con el test de arquitectura** (`tests/unit/architecture.test.ts`), sin ESLint: ESLint 8.57
+>   no admite `regex` en `no-restricted-imports` y los patrones tipo gitignore no aplican a imports relativos. El test
+>   recorre todos los imports de `src/lib`.
+> - **`executeQueued` pide `queue` y además `write` cuando la consulta escribe**, para que `[read, queue]` no pueda
+>   escribir por la cola (`DATA_GATEWAY.md` §6.2 decía solo `queue`).
+> - **Swagger público** (`/doc`, `/api-docs`; `/` redirige a `/doc/`): solo es documentación; en 2.x quedaba detrás del
+>   token. La API sigue protegida.
+> - **La imagen corre `node index.js`** en lugar de `npm run start`: con npm como PID 1 el SIGTERM no llegaba al gateway
+>   y el contenedor terminaba con error en lugar de apagarse ordenadamente.
+> - **`doc/source` (typedoc) no se regeneró**: typedoc no está entre las dependencias y no se pudo descargar; quedó
+>   desactualizado (describe las clases del service 2.x). Pendiente: regenerarlo o eliminarlo.
+> - **Pendiente para publicar `3.0.0-rc.1`**: rama `release/data-gateway-3.0.0-rc.1` con la versión y el CHANGELOG
+>   (el workflow ya publica prereleases sin mover `latest`).
 
 1. **Dominio:** configuración completa (incluidos `orm`, `runtime`, `schemas`, `server`) y `configValidator`;
    `GatewayError` y derivados; `Principal`, `Permission`, `AuthorizationPolicy`.

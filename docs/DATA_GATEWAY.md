@@ -687,7 +687,7 @@ en el edge, antes de enviar nada al esquema. Cada tipo es un `AuthenticatorPort`
 | `read` | esquema, dominio, plan, metadata, model, parameters, constraints, `stage_exists`, `stage_export`, health, version, y `execute` **solo si todas sus sentencias son `select`** |
 | `write` | `execute` con escrituras (`insert`, `update`, `delete`, `upsert`, `merge`, `bulk*`, …) |
 | `script` | `executeScript` / `POST /script` (un script de 3xpr puede hacer cualquier cosa adentro: no se clasifica, es un permiso aparte) |
-| `queue` | `executeQueued` |
+| `queue` | `executeQueued` (y además `write` si la consulta escribe) |
 | `stageImport` | `stage_import` / `POST /stages/:stage/import` |
 
 - Se autoriza en el **schema worker**, en la capa de aplicación, antes de ejecutar, con `AuthorizationPolicy` (dominio,
