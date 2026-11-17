@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## Versions
 
+### 2.3.3 (2026-11-17)
+
+Uses `@lambdaorm/lib` 3.4.1 and `@lambdaorm/cli` 1.6.5 (3xpr 5.3.1).
+
+**Bug Fixes:**
+
+- `POST /script`: an empty list literal (`names = [];`) and a query result indexed directly
+  (`orm.execute(…)[0].name`) work.
+
 ### 2.3.2 (2026-11-17)
 
 Uses `@lambdaorm/lib` 3.4.0 and `@lambdaorm/cli` 1.6.4.
