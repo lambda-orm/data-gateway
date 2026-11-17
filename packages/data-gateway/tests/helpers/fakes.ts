@@ -1,7 +1,8 @@
 // Fakes of the output ports: the application and the transports are tested without λORM nor a database.
 import { DataGateway } from '../../src/lib/application/facade/dataGateway'
 import { OrmQueryPort, OrmSchemaPort, OrmScriptPort, OrmStagePort } from '../../src/lib/application/ports/output/ormPorts'
-import { AuditPort, ClockPort, QueueExecuteArgs, QueuePort } from '../../src/lib/application/ports/output/supportPorts'
+import { AuditPort, ClockPort, QueueExecuteArgs, QueueOutcome, QueuePort } from '../../src/lib/application/ports/output/supportPorts'
+import { Listeners } from '../../src/lib/application/runtime/listeners'
 import { Auditor } from '../../src/lib/application/usecases/auditor'
 import { QueryUseCases } from '../../src/lib/application/usecases/queryUseCases'
 import { QueueUseCase } from '../../src/lib/application/usecases/queueUseCase'
@@ -87,7 +88,11 @@ export class FixedClock implements ClockPort {
 export class FakeQueue implements QueuePort {
 	public available = true
 	public calls: QueueExecuteArgs[] = []
-	public execute (args: QueueExecuteArgs) { this.calls.push(args); return 'queue-1' }
+	public execute (args: QueueExecuteArgs) { this.calls.push(args); return `queue-${this.calls.length}` }
+	/** The background execution n (from 1) ends */
+	public finish (n: number, ok = true) {
+		this.calls[n - 1].onDone?.({ queueId: `queue-${n}`, ok, ...(ok ? { rows: 3 } : { error: 'topic down' }) })
+	}
 }
 
 export const ctx = (permissions: Permission[], name = 'tester', transport = 'test'): RequestContext =>
@@ -100,6 +105,8 @@ export interface GatewayFixture {
 	orm: FakeOrm
 	audit: MemoryAudit
 	queue: FakeQueue
+	/** The ends of the background executions, as the edge receives them */
+	queueOutcomes: Listeners<QueueOutcome>
 }
 
 export const fakeGateway = (options: { scripts?: Partial<ScriptSettings>, timeoutMs?: number, includeData?: boolean, auditEnabled?: boolean, queue?: FakeQueue | null } = {}): GatewayFixture => {
@@ -108,14 +115,15 @@ export const fakeGateway = (options: { scripts?: Partial<ScriptSettings>, timeou
 	const clock = new FixedClock()
 	const queue = options.queue === null ? undefined : options.queue ?? new FakeQueue()
 	const auditor = new Auditor(audit, clock, '', { enabled: options.auditEnabled ?? true, includeData: options.includeData ?? false })
+	const queueOutcomes = new Listeners<QueueOutcome>()
 	const queries = new QueryUseCases(orm, auditor)
 	const scripts: ScriptSettings = { enabled: true, maxLength: 20000, timeoutMs: 30000, maxIterations: 100000, ...options.scripts }
 	const gateway = new DataGateway({
 		queries,
 		script: new ScriptUseCase(orm, scripts, auditor),
-		queue: new QueueUseCase(queue, queries, auditor),
+		queue: new QueueUseCase(queue, queries, auditor, { completed: outcome => queueOutcomes.emit(outcome) }),
 		schema: new SchemaUseCases(orm),
 		stages: new StageUseCases(orm, auditor)
 	}, orm, clock, '9.9.9', options.timeoutMs ?? 5000)
-	return { gateway, orm, audit, queue: queue ?? new FakeQueue() }
+	return { gateway, orm, audit, queue: queue ?? new FakeQueue(), queueOutcomes }
 }

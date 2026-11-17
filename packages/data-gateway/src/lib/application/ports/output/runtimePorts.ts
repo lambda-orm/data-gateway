@@ -1,4 +1,4 @@
-import { ChannelRequest } from '../../../domain/runtime/channelProtocol'
+import { ChannelEvent, ChannelRequest } from '../../../domain/runtime/channelProtocol'
 import { SchemaState } from '../../../domain/runtime/policies'
 import { SchemaDescriptor, SchemaSettings } from '../../../domain/runtime/schemas'
 import { McpServerInfo } from '../input/mcpServerPort'
@@ -7,6 +7,8 @@ import { McpServerInfo } from '../input/mcpServerPort'
 export interface SchemaChannelPort {
 	/** Sends one operation; resolves with its result (already parsed) or rejects with a GatewayError */
 	request (request: Omit<ChannelRequest, 'type' | 'id'>): Promise<unknown>
+	/** Events the worker sends unasked */
+	onEvent (listener: (event: ChannelEvent) => void): void
 	close (): void
 }
 

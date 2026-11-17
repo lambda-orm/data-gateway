@@ -13,7 +13,8 @@ export interface RequestContext {
 export interface QueryRequest { query: string, options?: QueryOptions }
 export interface ExecuteRequest { query: string, data?: unknown, options?: QueryOptions }
 export interface ScriptRequest { script: string, data?: unknown, options?: ScriptOptions }
-export interface QueuedRequest { topic: string, query: string, data?: unknown, chunk?: number, options?: QueryOptions }
+/** notify: the WebSocket connection that sends it gets queue.completed / queue.failed */
+export interface QueuedRequest { topic: string, query: string, data?: unknown, chunk?: number, options?: QueryOptions, notify?: boolean }
 
 /**
  * Everything the gateway does for one schema. Transports (REST, MCP, WebSocket) only talk to this port; whether the

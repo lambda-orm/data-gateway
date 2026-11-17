@@ -3,7 +3,8 @@ import { SchemaState } from '../../domain/runtime/policies'
 import { DataGatewayPort } from '../ports/input/dataGatewayPort'
 import { McpServerPort } from '../ports/input/mcpServerPort'
 import { GatewayHealth, SchemaDirectoryPort, ServedSchema } from '../ports/input/schemaDirectoryPort'
-import { AuthenticatorPort, ClockPort } from '../ports/output/supportPorts'
+import { AuthenticatorPort, ClockPort, QueueOutcome } from '../ports/output/supportPorts'
+import { Listeners } from './listeners'
 
 export interface InlineSchema {
 	path: string
@@ -12,6 +13,8 @@ export interface InlineSchema {
 	transports: TransportName[]
 	authenticators: Partial<Record<TransportName, AuthenticatorPort>>
 	features?: { scripts: boolean }
+	/** Where its queue reports the end of background executions */
+	queueOutcomes?: Listeners<QueueOutcome>
 }
 
 /**
@@ -29,6 +32,7 @@ export class InlineSchemaDirectory implements SchemaDirectoryPort {
 			gateway: s.gateway,
 			mcp: s.mcp,
 			features: s.features ?? { scripts: false },
+			onQueueOutcome: listener => s.queueOutcomes?.subscribe(listener) ?? (() => undefined),
 			exposedOn: transport => s.transports.includes(transport),
 			authenticator: transport => {
 				const authenticator = s.authenticators[transport]
@@ -48,6 +52,11 @@ export class InlineSchemaDirectory implements SchemaDirectoryPort {
 
 	public async health (): Promise<GatewayHealth> {
 		return { message: 'OK', time: this.clock.now().toISOString(), uptime: this.clock.uptimeSeconds(), schemas: this.states() }
+	}
+
+	/** Inline schemas are always ready */
+	public onStateChange (): () => void {
+		return () => undefined
 	}
 
 	public version () {

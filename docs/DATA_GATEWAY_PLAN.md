@@ -18,7 +18,7 @@ el desarrollo está en este paquete; `@lambdaorm/lib` y `@lambdaorm/base` no se 
 que se agregan o cambian: **`@lambdaorm/ui`** (nuevo, 3.1.0) y `@lambdaorm/client` (adaptador WebSocket, 3.2.0). Qué se construye y cómo se comporta:
 [`DATA_GATEWAY.md`](DATA_GATEWAY.md). Este documento dice en qué orden, qué archivos y cuándo está terminado.
 
-> **Estado (2026-11-17): fases 1 a 5 implementadas, sin publicar. Ticket: #96.** Base: `develop` con service 2.4.0
+> **Estado (2026-11-17): fases 1 a 6 implementadas, sin publicar. Ticket: #96.** Base: `develop` con service 2.4.0
 > (lib 3.5.0). Rama: `feature/data-gateway-core` (todas las fases, sobre `feature/data-gateway-rename`). Desvíos
 > respecto de este plan: ver "Hecho" en cada fase.
 
@@ -485,6 +485,23 @@ editor, sin errores de CSP. Desvíos:
 
 **Terminado:** la misma consulta del laboratorio por REST, por WebSocket y con el cliente en modo WebSocket da el
 mismo resultado; una ejecución encolada notifica su fin; `3.2.0` publicada.
+
+**Hecho (2026-11-17).** `RpcDispatcher` (tabla registrable, `-32601` / `-32602`, el resto `-32000` con `name`,
+`status` y `code` como REST), `WebSocketTransport` (conexión por ruta de esquema; la raíz con `general.*` y
+`gateway.schemas`; `-32700`, `-32600` para lotes; `maxPayload`, `maxConnections`; esquema no `ready` → `503` sin cerrar),
+notificaciones `queue.completed` / `queue.failed` (la cola informa el fin; el schema worker lo manda por el canal como
+evento; el edge lo reenvía solo a la conexión que pidió `notify`) y `schema.statusChanged`, `asyncapi.yaml`, y el modo
+WebSocket de `@lambdaorm/client` (`orm.init('ws://…')`, `orm.on(...)`, changeset). Tests: 6 de integración del
+transporte (métodos, errores, notificaciones solo a quien las pidió, fin antes de la respuesta, handshake, 503 y
+`schema.statusChanged` con el router del edge) y el cliente por REST y por WebSocket con λORM real dando lo mismo. En
+el laboratorio con Postgres, la misma consulta por REST y por WebSocket con el cliente da el mismo resultado. Desvíos:
+
+- El timeout por mensaje es el de la operación (`server.timeout` en la fachada y en el edge), no uno propio del
+  transporte.
+- Sin lotes JSON-RPC (un array responde `-32600`).
+- Las notificaciones de cola no se probaron con Kafka real (sin Kafka en el equipo); sí con la cola falsa y el canal.
+- Corregido de paso en el cliente: `general.version()` llamaba a `/ping`.
+- Pendiente: publicar `@lambdaorm/client` y la imagen 3.2.0.
 
 ### Fase 7 — Observabilidad completa → `3.3.0`
 

@@ -1,6 +1,6 @@
 import { TransportName } from '../../../domain/config/dataGatewayConfig'
 import { SchemaState } from '../../../domain/runtime/policies'
-import { AuthenticatorPort } from '../output/supportPorts'
+import { AuthenticatorPort, QueueOutcome } from '../output/supportPorts'
 import { DataGatewayPort } from './dataGatewayPort'
 import { McpServerPort } from './mcpServerPort'
 
@@ -15,6 +15,8 @@ export interface ServedSchema {
 	authenticator (transport: TransportName): AuthenticatorPort
 	/** What a client (the UI) should offer: scripts.enabled of the schema */
 	features: { scripts: boolean }
+	/** The ends of its background executions (executeQueued) */
+	onQueueOutcome (listener: (outcome: QueueOutcome) => void): () => void
 }
 
 export interface GatewayHealth {
@@ -31,4 +33,6 @@ export interface SchemaDirectoryPort {
 	states (): SchemaState[]
 	health (): Promise<GatewayHealth>
 	version (): { version: string }
+	/** A schema changed its state (WebSocket: schema.statusChanged) */
+	onStateChange (listener: (state: SchemaState) => void): () => void
 }

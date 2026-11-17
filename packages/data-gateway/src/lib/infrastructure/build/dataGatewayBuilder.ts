@@ -1,7 +1,8 @@
 import path from 'path'
 import fs from 'fs'
 import { InlineSchema, InlineSchemaDirectory } from '../../application/runtime/inlineSchemaDirectory'
-import { LoggerPort, MetricsPort, AuditPort, ClockPort, AuthenticatorPort } from '../../application/ports/output/supportPorts'
+import { LoggerPort, MetricsPort, AuditPort, ClockPort, AuthenticatorPort, QueueOutcome } from '../../application/ports/output/supportPorts'
+import { Listeners } from '../../application/runtime/listeners'
 import { DataGatewayConfig, TransportName } from '../../domain/config/dataGatewayConfig'
 import { ConfigError } from '../../domain/errors/gatewayError'
 import { effectiveAuthentication, effectiveSettings, resolveSchemas, SchemaDescriptor, SchemaSettings } from '../../domain/runtime/schemas'
@@ -89,6 +90,7 @@ export class DataGatewayBuilder {
 		const inline: InlineSchema[] = []
 		try {
 			for (const { descriptor, settings } of resolveConfiguredSchemas(config)) {
+				const queueOutcomes = new Listeners<QueueOutcome>()
 				const schema = await composeSchema({
 					path: descriptor.path,
 					workspace: descriptor.workspace,
@@ -98,7 +100,7 @@ export class DataGatewayBuilder {
 					pageSize: config.mcp.pageSize,
 					version,
 					checkConnections: options.checkConnections ?? false
-				}, { logger, audit, clock })
+				}, { logger, audit, clock, queueEvents: { completed: outcome => queueOutcomes.emit(outcome) } })
 				composed.push(schema)
 				inline.push({
 					path: descriptor.path,
@@ -106,6 +108,7 @@ export class DataGatewayBuilder {
 					mcp: schema.mcp,
 					transports: settings.transports,
 					features: { scripts: settings.scripts.enabled },
+					queueOutcomes,
 					authenticators: schemaAuthenticators(config, descriptor, settings, authenticators)
 				})
 			}

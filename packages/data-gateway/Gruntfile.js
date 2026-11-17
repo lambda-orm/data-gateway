@@ -45,6 +45,7 @@ module.exports = function (grunt) {
 			// tsc doesn't copy it and the http transport reads it next to its own .js (L8)
 			swagger: { expand: true, cwd: 'src/lib/infrastructure/input/http/', src: 'swagger.yaml', dest: 'build/lib/infrastructure/input/http/' },
 			asyncapi: { expand: true, cwd: 'src/lib/infrastructure/input/mcp/', src: 'asyncapi.yaml', dest: 'build/lib/infrastructure/input/mcp/' },
+			asyncapiWs: { expand: true, cwd: 'src/lib/infrastructure/input/websocket/', src: 'asyncapi.yaml', dest: 'build/lib/infrastructure/input/websocket/' },
 			// the query UI (ui-app, built with Vite), served at /ui when transports.http.ui.enabled
 			ui: { expand: true, cwd: 'ui-app/dist/', src: '**', dest: 'build/lib/infrastructure/input/http/ui/' },
 			// plain JavaScript (tsc doesn't copy it): the entry of every worker thread and process
@@ -104,7 +105,7 @@ module.exports = function (grunt) {
 		}
 	})
 	grunt.registerTask('lint', ['exec:lint'])
-	grunt.registerTask('build', ['lint', 'clean:build', 'exec:tsc', 'copy:swagger', 'copy:asyncapi', 'copy:bootstrap', 'exec:ui', 'copy:ui'])
+	grunt.registerTask('build', ['lint', 'clean:build', 'exec:tsc', 'copy:swagger', 'copy:asyncapi', 'copy:asyncapiWs', 'copy:bootstrap', 'exec:ui', 'copy:ui'])
 	grunt.registerTask('test', ['build', 'exec:test'])
 	grunt.registerTask('docs', ['exec:doc'])
 	grunt.registerTask('dist', ['build', 'clean:dist', 'copy:lib', 'copy:jest', 'copy:readme', 'copy:license', 'copy:npmignore', 'create-package',])

@@ -48,10 +48,11 @@ describe('config reader', () => {
 
 		test('MCP transports with their defaults; transports of later versions are warned; unknown ones stop', () => {
 			const { config, warnings } = read({ ...base, transports: { http: { port: 1 }, mcpHttp: { port: 2 }, mcpWebSocket: { port: 3, maxConnections: '5' }, webSocket: { port: 4 } } })
-			expect(Object.keys(config!.transports)).toEqual(['http', 'mcpHttp', 'mcpWebSocket'])
+			expect(Object.keys(config!.transports)).toEqual(['http', 'mcpHttp', 'mcpWebSocket', 'webSocket'])
+			expect(config!.transports.webSocket).toEqual({ port: 4, host: '0.0.0.0', basePath: '', maxConnections: 100, asyncapi: { enabled: true } })
 			expect(config!.transports.mcpHttp).toEqual({ port: 2, host: '0.0.0.0', basePath: '', legacySse: true, stateful: false, maxConnections: 100 })
 			expect(config!.transports.mcpWebSocket).toEqual({ port: 3, host: '0.0.0.0', basePath: '', maxConnections: 5, asyncapi: { enabled: true } })
-			expect(warnings).toContain('transports.webSocket is not available in this version: not exposed')
+			expect(warnings).toEqual([])
 			expect(read({ ...base, transports: { http: { port: 1 }, mcpHttp: { port: 1 } } }).issues).toContain('transports.mcpHttp and transports.http use the same 0.0.0.0:1')
 			expect(read({ ...base, transports: { ftp: { port: 1 } } }).issues).toContain('unknown transport "ftp"')
 		})

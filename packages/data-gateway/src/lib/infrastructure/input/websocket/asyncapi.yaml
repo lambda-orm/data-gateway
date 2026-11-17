@@ -1,0 +1,97 @@
+asyncapi: 3.0.0
+info:
+  title: λORM data-gateway — WebSocket API
+  version: '3'
+  description: |
+    The λORM API over WebSocket, JSON-RPC 2.0 (docs/DATA_GATEWAY.md §7).
+
+    - Connect to the route of a schema ({basePath}/{schema}) with the credential in the handshake headers; the root
+      (when no schema is served there) answers general.* and gateway.schemas.
+    - Methods: general.version|health|ping, gateway.schemas, query.execute|executeQueued|script|plan|metadata|model|
+      parameters|constraints, schema.schema|version|domain|sources|source|entities|entity|enums|enum|mappings|mapping|
+      entityMapping|stages|stage|views|typings, stage.exists|export|import. The params are the body (or the route
+      parameters) of the equivalent REST endpoint.
+    - Errors: -32700 parse, -32600 invalid request, -32601 no such method, -32602 invalid params, -32000 for the
+      rest with data { name, status, code } (the status REST would answer: 403, 503 while the schema is not ready…).
+    - Notifications (no id): queue.completed / queue.failed for executeQueued with notify: true on this connection,
+      schema.statusChanged when the schema leaves or comes back to ready.
+channels:
+  schema:
+    address: '/{schema}'
+    parameters:
+      schema:
+        description: Route of the schema (iot/v1); empty for the root
+    messages:
+      request:
+        $ref: '#/components/messages/request'
+      response:
+        $ref: '#/components/messages/response'
+      notification:
+        $ref: '#/components/messages/notification'
+operations:
+  call:
+    action: receive
+    channel:
+      $ref: '#/channels/schema'
+    messages:
+      - $ref: '#/channels/schema/messages/request'
+    reply:
+      channel:
+        $ref: '#/channels/schema'
+      messages:
+        - $ref: '#/channels/schema/messages/response'
+  notify:
+    action: send
+    channel:
+      $ref: '#/channels/schema'
+    messages:
+      - $ref: '#/channels/schema/messages/notification'
+components:
+  messages:
+    request:
+      name: request
+      payload:
+        type: object
+        required: [jsonrpc, id, method]
+        properties:
+          jsonrpc: { const: '2.0' }
+          id: { oneOf: [{ type: string }, { type: integer }] }
+          method: { type: string, examples: [query.execute, schema.entities] }
+          params: { type: object }
+      examples:
+        - name: execute
+          payload: { jsonrpc: '2.0', id: 1, method: query.execute, params: { query: 'Products.filter(p => p.price > 10)', data: {} } }
+        - name: queued
+          payload: { jsonrpc: '2.0', id: 7, method: query.executeQueued, params: { topic: products, query: Products, notify: true } }
+    response:
+      name: response
+      payload:
+        type: object
+        required: [jsonrpc, id]
+        properties:
+          jsonrpc: { const: '2.0' }
+          id: { oneOf: [{ type: string }, { type: integer }, { type: 'null' }] }
+          result: {}
+          error:
+            type: object
+            properties:
+              code: { type: integer }
+              message: { type: string }
+              data:
+                type: object
+                properties:
+                  name: { type: string }
+                  status: { type: integer }
+                  code: { type: string }
+    notification:
+      name: notification
+      payload:
+        type: object
+        required: [jsonrpc, method, params]
+        properties:
+          jsonrpc: { const: '2.0' }
+          method: { type: string, enum: [queue.completed, queue.failed, schema.statusChanged] }
+          params: { type: object }
+      examples:
+        - name: completed
+          payload: { jsonrpc: '2.0', method: queue.completed, params: { queueId: q-123, ok: true, rows: 18234 } }

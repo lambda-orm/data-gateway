@@ -124,10 +124,16 @@ export interface McpWebSocketTransportConfig extends TransportConfig {
 	asyncapi: { enabled: boolean }
 }
 
+export interface WebSocketTransportConfig extends TransportConfig {
+	maxConnections: number
+	asyncapi: { enabled: boolean }
+}
+
 export interface TransportsConfig {
 	http?: HttpTransportConfig
 	mcpHttp?: McpHttpTransportConfig
 	mcpWebSocket?: McpWebSocketTransportConfig
+	webSocket?: WebSocketTransportConfig
 }
 
 export interface McpConfig {

@@ -41,3 +41,10 @@ export class McpRequestError extends GatewayError {
 		super(400, 'McpRequestError', message)
 	}
 }
+
+/** A JSON-RPC call the gateway can't route: -32601 (no such method) or -32602 (invalid params) */
+export class RpcCallError extends GatewayError {
+	constructor (public readonly rpcCode: -32601 | -32602, message: string) {
+		super(rpcCode === -32601 ? 404 : 400, rpcCode === -32601 ? 'MethodNotFoundError' : 'InvalidParamsError', message)
+	}
+}

@@ -1,14 +1,19 @@
 import { authorize } from '../../domain/auth/authorizationPolicy'
 import { badRequest, unavailable } from '../../domain/errors/gatewayError'
 import { QueuedRequest, RequestContext } from '../ports/input/dataGatewayPort'
-import { QueuePort } from '../ports/output/supportPorts'
+import { QueueEventsPort, QueuePort } from '../ports/output/supportPorts'
 import { Auditor } from './auditor'
 import { QueryUseCases, requireQuery } from './queryUseCases'
 
 /** Runs a query in the background and sends its result to a topic. Needs `queue`, and `write` when the query writes. */
 export class QueueUseCase {
 	// eslint-disable-next-line no-useless-constructor
-	constructor (private readonly queue: QueuePort | undefined, private readonly queries: QueryUseCases, private readonly auditor: Auditor) {}
+	constructor (
+		private readonly queue: QueuePort | undefined,
+		private readonly queries: QueryUseCases,
+		private readonly auditor: Auditor,
+		private readonly events?: QueueEventsPort
+	) {}
 
 	public async execute (ctx: RequestContext, request: QueuedRequest): Promise<{ queueId: string }> {
 		const query = requireQuery(request.query)
@@ -28,7 +33,14 @@ export class QueueUseCase {
 			query,
 			data: request.data
 		}, async () => ({
-			queueId: queue.execute({ topic: request.topic, query, data: request.data, chunk: request.chunk, options: request.options })
+			queueId: queue.execute({
+				topic: request.topic,
+				query,
+				data: request.data,
+				chunk: request.chunk,
+				options: request.options,
+				onDone: outcome => this.events?.completed(outcome)
+			})
 		}))
 	}
 }

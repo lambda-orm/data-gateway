@@ -10,6 +10,7 @@ import { ConsoleLogger } from '../../src/lib/infrastructure/output/logger/logger
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import ts from 'typescript'
+import { Orm } from '@lambdaorm/client'
 import { call, freePort } from '../helpers/net'
 import { globalQueryableDeclarations } from '../helpers/queryableDeclarations'
 
@@ -26,10 +27,12 @@ describe('gateway from its configuration file', () => {
 	let gateway: RunningGateway
 	let base: string
 	let mcpPort: number
+	let wsPort: number
 
 	beforeAll(async () => {
 		const port = await freePort()
 		mcpPort = await freePort()
+		wsPort = await freePort()
 		const file = writeConfig(`
 orm:
   workspacePath: $WORKSPACE
@@ -49,8 +52,11 @@ transports:
     port: $MCP_PORT
     host: 127.0.0.1
     legacySse: false
+  webSocket:
+    port: $WS_PORT
+    host: 127.0.0.1
 `)
-		const env = { WORKSPACE, PORT: String(port), MCP_PORT: String(mcpPort), AGENT_KEY: 'agent-key' }
+		const env = { WORKSPACE, PORT: String(port), MCP_PORT: String(mcpPort), WS_PORT: String(wsPort), AGENT_KEY: 'agent-key' }
 		gateway = await startGateway({ source: new YamlFileConfigSource(file, env), bootLogger: new ConsoleLogger('error') })
 		base = `http://127.0.0.1:${port}`
 	})
@@ -118,6 +124,27 @@ transports:
 	test('whoami: the credential and what the schema offers; typings need read', async () => {
 		expect((await call(base, '/whoami', { headers: { 'X-Api-Key': 'agent-key' } })).body).toEqual({ name: 'agent', permissions: ['read'], schema: '', scripts: false })
 		expect((await call(base, '/whoami')).status).toBe(401)
+	})
+
+	test('@lambdaorm/client by REST and by WebSocket answers the same (real λORM)', async () => {
+		const rest = new Orm()
+		const ws = new Orm()
+		await rest.init(base, { headers: { 'X-Api-Key': 'agent-key' } })
+		await ws.init(`ws://127.0.0.1:${wsPort}`, { headers: { 'X-Api-Key': 'agent-key' } })
+		try {
+			const query = 'Orders.filter(p => p.customerId == id).include(p => p.details)'
+			expect(await ws.plan(query, undefined)).toEqual(await rest.plan(query, undefined))
+			expect(await ws.metadata(query)).toEqual(await rest.metadata(query))
+			expect(await ws.parameters(query)).toEqual(await rest.parameters(query))
+			expect((await ws.schema.entities()).map(e => e.name)).toEqual((await rest.schema.entities()).map(e => e.name))
+			expect(await ws.schema.entity('Nope')).toBeUndefined()
+			expect((await ws.general.version()).version).toBe((await rest.general.version()).version)
+			await expect(ws.execute('Products.delete().filter(p => p.id == 1)', {})).rejects.toMatchObject({ name: 'ForbiddenError', status: 403, rpcCode: -32000 })
+			await expect(new Orm().init(`ws://127.0.0.1:${wsPort}`, { headers: { 'X-Api-Key': 'wrong' } })).rejects.toThrow()
+			expect(() => rest.on('queue.completed', () => undefined)).toThrow(/WebSocket/)
+		} finally {
+			await ws.end()
+		}
 	})
 
 	test('scripts are disabled by default', async () => {

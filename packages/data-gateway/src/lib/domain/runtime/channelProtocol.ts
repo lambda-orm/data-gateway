@@ -42,7 +42,14 @@ export interface ChannelResponse {
 	error?: WireError
 }
 
-export type ChannelMessage = ChannelRequest | ChannelResponse
+/** schema worker → edge, unasked: a background execution ended (the edge forwards it to the connection that asked) */
+export interface ChannelEvent {
+	type: 'event'
+	event: 'queue'
+	outcome: { queueId: string, ok: boolean, rows?: number, error?: string }
+}
+
+export type ChannelMessage = ChannelRequest | ChannelResponse | ChannelEvent
 
 /** Operations a schema worker answers: anything else is refused (the channel is not an eval) */
 export const GATEWAY_OPERATIONS = [

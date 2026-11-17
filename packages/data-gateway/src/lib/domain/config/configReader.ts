@@ -7,8 +7,8 @@ import { normalizeSchemaPath, schemaPathIssues } from '../runtime/schemaPath'
 import { parseSize } from './sizes'
 
 /** Transports of the design that this version does not serve yet (docs/DATA_GATEWAY_PLAN.md). */
-const LATER_TRANSPORTS = ['webSocket']
-const TRANSPORTS = ['http', 'mcpHttp', 'mcpWebSocket']
+const LATER_TRANSPORTS: string[] = []
+const TRANSPORTS = ['http', 'mcpHttp', 'mcpWebSocket', 'webSocket']
 const KNOWN_SECTIONS = ['orm', 'server', 'logger', 'metrics', 'audit', 'authentication', 'rateLimit', 'scripts', 'mcp', 'runtime', 'transports']
 const SCHEMA_KEYS = ['path', 'workspace', 'transports', 'authentication', 'env', 'scripts', 'mcp', 'server', 'runtime']
 /** The tools of docs/DATA_GATEWAY.md §5.1: mcp.tools.include / exclude must name them */
@@ -301,6 +301,12 @@ export class ConfigReader {
 					legacySse: this.bool(section.legacySse, true, `${key}.legacySse`),
 					stateful: this.bool(section.stateful, false, `${key}.stateful`),
 					maxConnections: this.int(section.maxConnections, 100, `${key}.maxConnections`, 1)
+				}
+			} else if (name === 'webSocket') {
+				transports.webSocket = {
+					...base,
+					maxConnections: this.int(section.maxConnections, 100, `${key}.maxConnections`, 1),
+					asyncapi: { enabled: this.bool(section.asyncapi?.enabled, true, `${key}.asyncapi.enabled`) }
 				}
 			} else {
 				transports.mcpWebSocket = {

@@ -6,6 +6,7 @@ import { ApiKeyAuthenticator, BasicAuthenticator, BearerAuthenticator, NoneAuthe
 import { HttpTransport } from '../input/http/httpTransport'
 import { McpHttpTransport } from '../input/mcp/mcpHttpTransport'
 import { McpWebSocketTransport } from '../input/mcp/mcpWebSocketTransport'
+import { WebSocketTransport } from '../input/websocket/webSocketTransport'
 import { Transport } from '../input/transport'
 
 type AuthenticatorFactory = (config: AuthenticationConfig) => AuthenticatorPort
@@ -72,6 +73,17 @@ export class TransportRegistry {
 				stateful: t.stateful,
 				maxConnections: t.maxConnections
 			}, { directory, metrics, logger })
+		})
+		this.register('webSocket', ({ config, directory, logger }) => {
+			const t = config.transports.webSocket!
+			return new WebSocketTransport({
+				port: t.port,
+				host: t.host,
+				basePath: t.basePath,
+				maxConnections: t.maxConnections,
+				maxPayload: parseSize(config.server.requestBodySize) ?? 14 * 1024 * 1024,
+				asyncapiEnabled: t.asyncapi.enabled
+			}, { directory, logger, rootAuthenticator: new AuthenticatorRegistry().build(t.authentication ?? config.authentication) })
 		})
 		this.register('mcpWebSocket', ({ config, directory, logger }) => {
 			const t = config.transports.mcpWebSocket!

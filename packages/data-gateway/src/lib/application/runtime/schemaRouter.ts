@@ -6,7 +6,8 @@ import { DataGatewayPort, RequestContext } from '../ports/input/dataGatewayPort'
 import { McpServerInfo, McpServerPort } from '../ports/input/mcpServerPort'
 import { GatewayHealth, SchemaDirectoryPort, ServedSchema } from '../ports/input/schemaDirectoryPort'
 import { SchemaChannelPort } from '../ports/output/runtimePorts'
-import { AuthenticatorPort, ClockPort } from '../ports/output/supportPorts'
+import { AuthenticatorPort, ClockPort, QueueOutcome } from '../ports/output/supportPorts'
+import { Listeners } from './listeners'
 import { toolError } from '../mcp/resultSerializer'
 
 /** What the edge knows of a schema, fixed at start */
@@ -34,6 +35,7 @@ class RoutedSchema {
 	public channel: SchemaChannelPort | undefined
 	public info: McpServerInfo | undefined
 	public inFlight = 0
+	public readonly queueOutcomes = new Listeners<QueueOutcome>()
 
 	constructor (public readonly settings: RoutedSchemaSettings, now: string) {
 		this.state = { path: settings.path, status: 'starting', since: now, restarts: 0 }
@@ -48,6 +50,7 @@ class RoutedSchema {
 export class SchemaRouter implements SchemaDirectoryPort {
 	private readonly routes = new Map<string, RoutedSchema>()
 	private readonly served: ServedSchema[]
+	private readonly stateChanges = new Listeners<SchemaState>()
 
 	constructor (settings: RoutedSchemaSettings[], private readonly clock: ClockPort, private readonly gatewayVersion: string) {
 		for (const s of settings) this.routes.set(s.path, new RoutedSchema(s, clock.now().toISOString()))
@@ -82,15 +85,22 @@ export class SchemaRouter implements SchemaDirectoryPort {
 		route.channel?.close()
 		route.channel = channel
 		route.info = info
+		channel.onEvent(event => { if (event.event === 'queue') route.queueOutcomes.emit(event.outcome) })
+	}
+
+	public onStateChange (listener: (state: SchemaState) => void): () => void {
+		return this.stateChanges.subscribe(listener)
 	}
 
 	public setState (state: SchemaState): void {
 		const route = this.route(state.path)
+		const changed = route.state.status !== state.status
 		route.state = { ...state }
 		if (state.status !== 'ready') {
 			route.channel?.close()
 			route.channel = undefined
 		}
+		if (changed) this.stateChanges.emit({ ...state })
 	}
 
 	public closeAll (): void {
@@ -161,6 +171,7 @@ export class SchemaRouter implements SchemaDirectoryPort {
 			gateway: gateway as unknown as DataGatewayPort,
 			mcp: mcp as unknown as McpServerPort,
 			features: { scripts: settings.scriptsEnabled ?? false },
+			onQueueOutcome: listener => this.route(path).queueOutcomes.subscribe(listener),
 			exposedOn: transport => settings.transports.includes(transport),
 			authenticator: transport => {
 				const authenticator = settings.authenticators[transport]

@@ -139,7 +139,7 @@ describe('schema router (edge side)', () => {
 		{ path: 'iot/v1', transports: ['http'], maxConcurrent, timeout, authenticators: { http: new NoneAuthenticator() } },
 		{ path: 'iot/v2', transports: ['http', 'mcpHttp'], maxConcurrent, timeout, authenticators: { http: new NoneAuthenticator() } }
 	], new FixedClock(), '3.0.0')
-	const channel = (answer: (request: any) => Promise<unknown>) => ({ request: answer, close: jest.fn() })
+	const channel = (answer: (request: any) => Promise<unknown>) => ({ request: answer, close: jest.fn(), onEvent: jest.fn() })
 	const ready = (path: string) => ({ path, status: 'ready' as const, since: 'now', restarts: 0 })
 	const info = { name: 'n', version: '1', instructions: 'i' }
 

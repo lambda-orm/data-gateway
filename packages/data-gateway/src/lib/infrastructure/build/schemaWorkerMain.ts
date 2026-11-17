@@ -5,7 +5,8 @@ import net from 'net'
 import { randomBytes } from 'crypto'
 import { MessagePort } from 'worker_threads'
 import { ChannelDispatcher } from '../../application/runtime/channelDispatcher'
-import { receiveOnPort, receiveOnSocket } from '../input/channel/channelReceivers'
+import { EventSender, receiveOnPort, receiveOnSocket } from '../input/channel/channelReceivers'
+import { ChannelEvent } from '../../domain/runtime/channelProtocol'
 import { StdoutAuditAdapter } from '../output/audit/stdoutAuditAdapter'
 import { SystemClock } from '../output/clock/systemClock'
 import { ConsoleLogger, WinstonLogger } from '../output/logger/loggers'
@@ -24,12 +25,15 @@ const run = async (): Promise<void> => {
 	let server: net.Server | undefined
 	let dispatcher: ChannelDispatcher | undefined
 	const pendingPorts: MessagePort[] = []
+	// every channel with the edge (a new one when the edge restarts): events go to all of them
+	const senders: EventSender[] = []
+	const broadcast = (event: ChannelEvent) => { for (const send of senders) send(event) }
 	ctl.on(async request => {
 		if (request.type === 'ping') {
 			ctl.send({ type: 'pong' })
 		} else if (request.type === 'attach') {
 			const port = request.port as MessagePort
-			if (dispatcher) receiveOnPort(port, dispatcher)
+			if (dispatcher) senders.push(receiveOnPort(port, dispatcher))
 			else pendingPorts.push(port)
 		} else if (request.type === 'stop') {
 			server?.close()
@@ -47,7 +51,12 @@ const run = async (): Promise<void> => {
 			pageSize: data.mcp.pageSize,
 			version: data.version,
 			checkConnections: data.settings.runtime.checkConnections
-		}, { logger, audit: new StdoutAuditAdapter(), clock: new SystemClock() })
+		}, {
+			logger,
+			audit: new StdoutAuditAdapter(),
+			clock: new SystemClock(),
+			queueEvents: { completed: outcome => broadcast({ type: 'event', event: 'queue', outcome }) }
+		})
 	} catch (error: any) {
 		const reason = error?.issues ? error.issues.join('; ') : (error?.message ?? String(error))
 		logger.error(`[data-gateway] ${name} did not start: ${reason}`)
@@ -57,11 +66,13 @@ const run = async (): Promise<void> => {
 		return
 	}
 	dispatcher = new ChannelDispatcher(schema.gateway, schema.mcp, data.settings.server.maxResponseBytes, logger)
-	for (const port of pendingPorts.splice(0)) receiveOnPort(port, dispatcher)
+	for (const port of pendingPorts.splice(0)) senders.push(receiveOnPort(port, dispatcher))
 	let socketPath: string | undefined
 	if (data.settings.runtime.mode === 'process') {
 		socketPath = path.join(data.socketDir, `data-gateway-${process.pid}-${randomBytes(4).toString('hex')}.sock`)
-		server = await receiveOnSocket(socketPath, dispatcher, logger)
+		const socket = await receiveOnSocket(socketPath, dispatcher, logger)
+		server = socket.server
+		senders.push(socket.send)
 	}
 	started = true
 	ctl.send({ type: 'ready', info: schema.mcp.info(), socketPath })

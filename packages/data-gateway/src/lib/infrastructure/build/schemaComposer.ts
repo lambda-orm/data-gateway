@@ -6,7 +6,7 @@ import { gatewayTools } from '../../application/mcp/gatewayTools'
 import { ToolCatalog } from '../../application/mcp/toolCatalog'
 import { DataGatewayPort } from '../../application/ports/input/dataGatewayPort'
 import { McpServerPort } from '../../application/ports/input/mcpServerPort'
-import { AuditPort, ClockPort, LoggerPort } from '../../application/ports/output/supportPorts'
+import { AuditPort, ClockPort, LoggerPort, QueueEventsPort } from '../../application/ports/output/supportPorts'
 import { Auditor } from '../../application/usecases/auditor'
 import { QueryUseCases } from '../../application/usecases/queryUseCases'
 import { QueueUseCase } from '../../application/usecases/queueUseCase'
@@ -45,7 +45,7 @@ export const workspaceFile = (workspace: string): string =>
  * One schema, in the thread that calls it: λORM on its workspace, its queue, its use cases, facade and MCP server. The
  * schema worker runs one; the inline runtime (tests, one process) runs them all.
  */
-export const composeSchema = async (input: SchemaCompositionInput, deps: { logger: LoggerPort, audit: AuditPort, clock: ClockPort }): Promise<ComposedSchema> => {
+export const composeSchema = async (input: SchemaCompositionInput, deps: { logger: LoggerPort, audit: AuditPort, clock: ClockPort, queueEvents?: QueueEventsPort }): Promise<ComposedSchema> => {
 	const { logger } = deps
 	const file = workspaceFile(input.workspace)
 	if (!fs.existsSync(file)) throw new ConfigError([`schema "${input.path || '/'}": ${file} not found (the workspace must have its lambdaORM.yaml)`])
@@ -72,7 +72,7 @@ export const composeSchema = async (input: SchemaCompositionInput, deps: { logge
 	const gateway = new DataGateway({
 		queries,
 		script: new ScriptUseCase(orm, settings.scripts, auditor),
-		queue: new QueueUseCase(queue, queries, auditor),
+		queue: new QueueUseCase(queue, queries, auditor, deps.queueEvents),
 		schema: new SchemaUseCases(orm),
 		stages: new StageUseCases(orm, auditor)
 	}, orm, deps.clock, input.version, settings.server.timeout)

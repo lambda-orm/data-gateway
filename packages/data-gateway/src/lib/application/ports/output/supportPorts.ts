@@ -8,6 +8,22 @@ export interface QueueExecuteArgs {
 	data?: unknown
 	chunk?: number
 	options?: QueryOptions
+	/** Called when the background execution ends (sent or failed) */
+	onDone?: (outcome: QueueOutcome) => void
+}
+
+/** How a background execution ended: what queue.completed / queue.failed notify */
+export interface QueueOutcome {
+	queueId: string
+	ok: boolean
+	/** Rows sent to the topic */
+	rows?: number
+	error?: string
+}
+
+/** Where the ends of the background executions of a schema go (the edge forwards them to who asked) */
+export interface QueueEventsPort {
+	completed (outcome: QueueOutcome): void
 }
 
 /** Background execution: runs a query and sends its result to a topic in chunks. */

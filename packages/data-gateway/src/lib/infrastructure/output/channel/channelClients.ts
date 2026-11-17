@@ -2,7 +2,7 @@ import net from 'net'
 import { MessagePort } from 'worker_threads'
 import { SchemaChannelPort } from '../../../application/ports/output/runtimePorts'
 import { GatewayError, unavailable } from '../../../domain/errors/gatewayError'
-import { ChannelRequest, ChannelResponse, WireError } from '../../../domain/runtime/channelProtocol'
+import { ChannelEvent, ChannelRequest, ChannelResponse, WireError } from '../../../domain/runtime/channelProtocol'
 import { FrameDecoder, encodeFrame } from '../../shared/framing'
 
 const decoder = new TextDecoder()
@@ -21,6 +21,11 @@ abstract class PendingChannel implements SchemaChannelPort {
 	private nextId = 1
 	private readonly pending = new Map<number, { resolve: (value: unknown) => void, reject: (error: Error) => void }>()
 	protected closed = false
+	private eventListener: ((event: ChannelEvent) => void) | undefined
+
+	public onEvent (listener: (event: ChannelEvent) => void): void {
+		this.eventListener = listener
+	}
 
 	protected abstract send (request: ChannelRequest): void
 	protected abstract dispose (): void
@@ -40,7 +45,12 @@ abstract class PendingChannel implements SchemaChannelPort {
 	}
 
 	/** A response that arrives after the edge stopped waiting finds nobody and is dropped */
-	protected receive (response: ChannelResponse): void {
+	protected receive (message: ChannelResponse | ChannelEvent): void {
+		if (message.type === 'event') {
+			this.eventListener?.(message)
+			return
+		}
+		const response = message
 		const waiting = this.pending.get(response.id)
 		if (!waiting) return
 		this.pending.delete(response.id)
@@ -64,7 +74,7 @@ abstract class PendingChannel implements SchemaChannelPort {
 export class MessagePortChannel extends PendingChannel {
 	constructor (private readonly port: MessagePort) {
 		super()
-		port.on('message', (message: ChannelResponse) => this.receive(message))
+		port.on('message', (message: ChannelResponse | ChannelEvent) => this.receive(message))
 		port.on('close', () => this.close())
 	}
 
@@ -81,7 +91,7 @@ export class MessagePortChannel extends PendingChannel {
 export class SocketChannel extends PendingChannel {
 	private constructor (private readonly socket: net.Socket) {
 		super()
-		const frames = new FrameDecoder((message: ChannelResponse) => this.receive(message))
+		const frames = new FrameDecoder((message: ChannelResponse | ChannelEvent) => this.receive(message))
 		socket.on('data', chunk => frames.push(chunk))
 		socket.on('close', () => this.close())
 		socket.on('error', () => this.close())

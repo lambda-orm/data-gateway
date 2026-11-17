@@ -110,8 +110,10 @@ export class KafkaQueueAdapter implements QueuePort {
 			await producer.connect()
 			await producer.send({ topic: args.topic, messages })
 			await producer.disconnect()
+			args.onDone?.({ queueId, ok: true, rows: rows.length })
 		} catch (error: any) {
 			this.logger.info(`executed.queued: ${queueId} error: ${error?.message || 'undefined'}`)
+			args.onDone?.({ queueId, ok: false, error: error?.message ?? String(error) })
 		}
 	}
 }
