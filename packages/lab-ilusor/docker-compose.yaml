@@ -25,7 +25,7 @@ services:
   orm:
     profiles: [svc]
     container_name: ilusor-cloud-lab-orm
-    image: flaviorita/lambdaorm-svc:2.2.1
+    image: flaviorita/lambdaorm-svc:2.3.0
     depends_on:
       postgres:
         condition: service_healthy
