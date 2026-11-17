@@ -69,13 +69,20 @@ describe('/script', () => {
 	test('disabled by default: 403', async () => {
 		await expect(new QueryService(orm).script({ body: { script: '1' } })).rejects.toMatchObject({ status: 403 })
 	})
-	test('enabled: runs with the timeout; too long → 413; empty → 400; undefined result → null', async () => {
-		const service = new QueryService(orm, { enabled: true, maxLength: 10, timeoutMs: 1234 })
+	test('enabled: runs with the limits in its options; too long → 413; empty → 400; undefined result → null', async () => {
+		const service = new QueryService(orm, { enabled: true, maxLength: 10, timeoutMs: 1234, maxIterations: 500 })
 		expect(await service.script({ body: { script: 'a = 1; a', data: { x: 1 }, options: { stage: 'default' } } })).toBe(7)
-		expect(orm.executeScript).toHaveBeenCalledWith('a = 1; a', { x: 1 }, { stage: 'default' }, { timeout: 1234 })
+		expect(orm.executeScript).toHaveBeenCalledWith('a = 1; a', { x: 1 }, { stage: 'default', timeout: 1234, maxIterations: 500 })
 		await expect(service.script({ body: { script: 'x'.repeat(11) } })).rejects.toMatchObject({ status: 413 })
 		await expect(service.script({ body: { script: ' ' } })).rejects.toMatchObject({ status: 400 })
 		orm.executeScript.mockResolvedValueOnce(undefined)
 		expect(await service.script({ body: { script: 'x' } })).toBeNull()
+	})
+	test('a client may lower the limits, never raise them', async () => {
+		const service = new QueryService(orm, { enabled: true, maxLength: 100, timeoutMs: 1000, maxIterations: 500 })
+		await service.script({ body: { script: 'x', options: { stage: 'default', timeout: 200, maxIterations: 9999999 } as any } })
+		expect(orm.executeScript).toHaveBeenLastCalledWith('x', undefined, { stage: 'default', timeout: 200, maxIterations: 500 })
+		await service.script({ body: { script: 'x', options: { timeout: 60000, maxIterations: 10 } as any } })
+		expect(orm.executeScript).toHaveBeenLastCalledWith('x', undefined, { timeout: 1000, maxIterations: 10 })
 	})
 })
