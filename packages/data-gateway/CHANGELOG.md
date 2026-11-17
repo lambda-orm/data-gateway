@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 ## Versions
 
+### 2.4.0 (2026-11-17)
+
+Uses `@lambdaorm/lib` 3.5.0.
+
+**Features:**
+
+- `upsert()` on SQL Server and Oracle (`MERGE` on the primary key), and with it `update().include()` of a composite
+  relation saves the aggregate (children inserted, updated and deleted) on every SQL engine — through `/execute` and
+  `/script`.
+
 ### 2.3.3 (2026-11-17)
 
 Uses `@lambdaorm/lib` 3.4.1 and `@lambdaorm/cli` 1.6.5 (3xpr 5.3.1).
