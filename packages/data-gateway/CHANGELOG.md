@@ -4,6 +4,17 @@ All notable changes to this project will be documented in this file.
 
 ## Versions
 
+### 2.3.1 (2026-11-17)
+
+Uses `@lambdaorm/lib` 3.2.1 and `@lambdaorm/cli` 1.6.1.
+
+**Bug Fixes:**
+
+* MySQL, MariaDB, SQL Server, Oracle and MongoDB fixes found by the engines lab (`in` with a list variable, json
+  columns, SQL Server delete, Oracle identity and booleans, MongoDB transactions and documents, no false drift in
+  `fetch`/`push`)
+* listeners and scripts run on their own Orm, inside their transaction
+
 ### 2.3.0 (2026-11-17)
 
 Uses `@lambdaorm/lib` 3.2.0 (transactions, scripts, listeners, `json` type, upsert, stage push/fetch against the
