@@ -21,7 +21,7 @@ RUN apt-get update \
 	&& rm -rf /var/lib/apt/lists/*
 ENV LD_LIBRARY_PATH=/opt/oracle/instantclient_19_18:$LD_LIBRARY_PATH \
 	PATH=/opt/oracle/instantclient_19_18:$PATH
-RUN npm install -g @lambdaorm/cli
+RUN npm install -g @lambdaorm/cli@1.6.0
 WORKDIR /usr/src/app
 COPY ./dist .
 RUN npm install --omit=dev
