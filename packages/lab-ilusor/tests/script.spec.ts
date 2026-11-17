@@ -92,7 +92,42 @@ describe('script', () => {
 		const typeId = id()
 		await orm.executeScript('orm.execute("DeviceTypes.insert()", { id: typeId, code: "s-" + typeId, name: "script" })', { typeId }, { stage: 'default' })
 		expect(await typeExists(typeId)).toBe(true)
-		await expect(orm.executeScript('orm.execute("DeviceTypes.filter(p => p.id == typeId)", { typeId: typeId }, { stage: "ddl" })', { typeId }, { stage: 'default' }))
-			.rejects.toThrow('inside a transaction of stage "default"')
+	})
+
+	test('L32 orm.execute with another stage joins the script\'s transaction: commit together', async () => {
+		const typeId = id(); const accountId = id()
+		const result = await orm.executeScript(`
+			orm.execute("DeviceTypes.insert()", { id: typeId, code: "s-" + typeId, name: "script" });
+			orm.execute("Accounts.insert()", { id: accountId, name: "ddl stage" }, { stage: "ddl" });
+			rows = orm.execute("Accounts.filter(p => p.id == accountId)", { accountId: accountId }, { stage: "ddl" });
+			rows[0].name
+		`, { typeId, accountId }, { stage: 'default' })
+		expect(result).toBe('ddl stage')
+		expect(await typeExists(typeId)).toBe(true)
+		expect(await accountExists(accountId)).toBe(true)
+	})
+
+	test('L32 orm.execute with another stage joins the script\'s transaction: rollback together', async () => {
+		const typeId = id(); const accountId = id()
+		await expect(orm.executeScript(`
+			orm.execute("DeviceTypes.insert()", { id: typeId, code: "s-" + typeId, name: "script" });
+			orm.execute("Accounts.insert()", { id: accountId, name: "ddl stage" }, { stage: "ddl" });
+			throw "abort";
+		`, { typeId, accountId }, { stage: 'default' })).rejects.toThrow(/^abort$/)
+		expect(await typeExists(typeId)).toBe(false)
+		expect(await accountExists(accountId)).toBe(false)
+	})
+
+	test('L32 the script language: variables, functions, loops, lists and the λORM functions', async () => {
+		const result = await orm.executeScript(`
+			total = 0;
+			i = 0;
+			while (i < 3) { total = total + items[i].qty; i = i + 1; }
+			for (j = 0; j < 2; j += 1) { total = total + 1; }
+			names = items.filter(p => p.qty > 1).map(p => upper(p.name));
+			plan = orm.plan("Accounts.filter(p => p.id == id)", { stage: "default" });
+			{ total: total, names: names, encoded: toBase64("abc"), hasSentence: nvl(plan.sentence, "") != "" }
+		`, { items: [{ name: 'a', qty: 1 }, { name: 'b', qty: 2 }, { name: 'c', qty: 3 }] })
+		expect(result).toEqual({ total: 8, names: ['B', 'C'], encoded: 'YWJj', hasSentence: true })
 	})
 })
