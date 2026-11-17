@@ -9,7 +9,9 @@ import { YamlFileConfigSource } from '../../src/lib/infrastructure/output/config
 import { ConsoleLogger } from '../../src/lib/infrastructure/output/logger/loggers'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
+import ts from 'typescript'
 import { call, freePort } from '../helpers/net'
+import { globalQueryableDeclarations } from '../helpers/queryableDeclarations'
 
 const WORKSPACE = path.join(__dirname, '../fixtures/northwind')
 
@@ -91,6 +93,31 @@ transports:
 		} finally {
 			await client.close()
 		}
+	})
+
+	test('typings: the domain as declarations that compile with Queryable, and catch a wrong property', async () => {
+		const res = await fetch(`${base}/typings`, { headers: { 'X-Api-Key': 'agent-key' } })
+		expect(res.headers.get('content-type')).toMatch(/text\/plain/)
+		const typings = await res.text()
+		expect(typings).toMatch(/interface QryOrder \{[^}]*details: ManyToOne<QryOrdersDetail>/)
+		expect(typings).toMatch(/declare const Orders: Queryable<QryOrder> & \{ details: Queryable<QryOrdersDetail> \}/)
+		const diagnostics = (query: string) => {
+			const files: Record<string, string> = { 'queryable.d.ts': globalQueryableDeclarations(), 'typings.d.ts': typings, 'query.ts': `const q = ${query}\n` }
+			const host = ts.createCompilerHost({})
+			const read = host.getSourceFile
+			host.getSourceFile = (name, version) => files[name] !== undefined ? ts.createSourceFile(name, files[name], version) : read(name, version)
+			const program = ts.createProgram(Object.keys(files), { noEmit: true, strict: false, target: ts.ScriptTarget.ES2020, lib: ['lib.es2020.d.ts'], types: [] }, host)
+			return ts.getPreEmitDiagnostics(program).map(d => ts.flattenDiagnosticMessageText(d.messageText, '\n'))
+		}
+		expect(diagnostics('Orders.filter(p => p.customer.name == \'x\').include(p => p.details.include(d => d.product)).page(1, 10)')).toEqual([])
+		expect(diagnostics('Products.map(p => ({ category: p.category.name, n: count(1) })).sort(p => desc(p.n))')).toEqual([])
+		expect(diagnostics('Orders.details.filter(p => p.quantity > 1)')).toEqual([])
+		expect(diagnostics('Orders.filter(p => p.nope == 1)')).toEqual([expect.stringMatching(/Property 'nope' does not exist on type 'QryOrder'/)])
+	})
+
+	test('whoami: the credential and what the schema offers; typings need read', async () => {
+		expect((await call(base, '/whoami', { headers: { 'X-Api-Key': 'agent-key' } })).body).toEqual({ name: 'agent', permissions: ['read'], schema: '', scripts: false })
+		expect((await call(base, '/whoami')).status).toBe(401)
 	})
 
 	test('scripts are disabled by default', async () => {

@@ -17,6 +17,7 @@ export interface RoutedSchemaSettings {
 	maxConcurrent: number
 	timeout: number
 	authenticators: Partial<Record<TransportName, AuthenticatorPort>>
+	scriptsEnabled?: boolean
 }
 
 export const tooManyRequests = (path: string, max: number): GatewayError =>
@@ -159,6 +160,7 @@ export class SchemaRouter implements SchemaDirectoryPort {
 			path,
 			gateway: gateway as unknown as DataGatewayPort,
 			mcp: mcp as unknown as McpServerPort,
+			features: { scripts: settings.scriptsEnabled ?? false },
 			exposedOn: transport => settings.transports.includes(transport),
 			authenticator: transport => {
 				const authenticator = settings.authenticators[transport]

@@ -105,6 +105,7 @@ export class DataGatewayBuilder {
 					gateway: schema.gateway,
 					mcp: schema.mcp,
 					transports: settings.transports,
+					features: { scripts: settings.scripts.enabled },
 					authenticators: schemaAuthenticators(config, descriptor, settings, authenticators)
 				})
 			}

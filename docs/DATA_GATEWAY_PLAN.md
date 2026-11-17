@@ -18,7 +18,7 @@ el desarrollo está en este paquete; `@lambdaorm/lib` y `@lambdaorm/base` no se 
 que se agregan o cambian: **`@lambdaorm/ui`** (nuevo, 3.1.0) y `@lambdaorm/client` (adaptador WebSocket, 3.2.0). Qué se construye y cómo se comporta:
 [`DATA_GATEWAY.md`](DATA_GATEWAY.md). Este documento dice en qué orden, qué archivos y cuándo está terminado.
 
-> **Estado (2026-11-17): fases 1 a 4 implementadas, sin publicar. Ticket: #96.** Base: `develop` con service 2.4.0
+> **Estado (2026-11-17): fases 1 a 5 implementadas, sin publicar. Ticket: #96.** Base: `develop` con service 2.4.0
 > (lib 3.5.0). Rama: `feature/data-gateway-core` (todas las fases, sobre `feature/data-gateway-rename`). Desvíos
 > respecto de este plan: ver "Hecho" en cada fase.
 
@@ -450,6 +450,26 @@ packages/ui/src/
 **Terminado:** la UI servida en `/ui` permite escribir con autocompletado, ejecutar las ocho acciones y ver / convertir
 / descargar el resultado sobre `/northwind/v1`; un proyecto React de ejemplo (fuera del gateway) instala
 `@lambdaorm/ui` desde npm y monta `QueryWorkbench` contra el gateway; `3.1.0` y `@lambdaorm/ui` 0.1.0 publicadas.
+
+**Hecho (2026-11-17).** Gateway: `TypingsGenerator`, `GET /{esquema}/typings` y `/{esquema}/whoami` (también por el
+canal de los workers), `transports.http.ui.enabled` con CSP / `X-Frame-Options` / `Referrer-Policy` y caché larga de los
+assets, `ui-app` (Vite) dentro del build. Librería `packages/ui` (`@lambdaorm/ui`, changeset inicial a 0.1.0):
+dominio, `WorkbenchController`, `RestQueryApi`, `LocalStorageHistory`, Monaco diferido con las declaraciones de
+`Queryable` de `base` generadas en el build, `QueryWorkbench` y sus piezas; ESM + CJS + tipos + `styles.css`;
+`dist` que carga por su nombre. Tests: gateway (los typings de northwind compilan con `Queryable` y detectan una
+propiedad inexistente; `whoami`; `/ui` apagada por defecto y sus cabeceras) y librería (16 con Vitest y Testing Library).
+Verificado en Chrome headless contra el gateway compilado con northwind en MySQL: autocompletado de entidades,
+cláusulas y propiedades de relaciones, `parameters` completa `data`, `execute` con tabla y YAML, marca de λORM en el
+editor, sin errores de CSP. Desvíos:
+
+- La prueba en navegador fue manual (`playwright-core` con el Chrome del equipo), no un test de Playwright del repo.
+- `OptionsPanel` es un editor JSON de las opciones (más `topic` / `chunk`), no un formulario.
+- Los errores de λORM no traen posición: la marca cubre la consulta entera.
+- Los typings no se comparan con la salida del generador del CLI (se verifica que compilan y tipan las consultas).
+- Monaco y sus workers los pone la aplicación (en `ui-app`, con `?worker` de Vite); la librería no los empaqueta.
+- Encontrado y corregido de paso: la config de ESLint ignoraba toda carpeta `build` (no se linteaba
+  `src/lib/infrastructure/build`); `scripts/dist.mjs` traduce `main` / `module` / `types` en lugar de fijarlos.
+- Pendiente: proyecto React de ejemplo fuera del gateway, publicar `@lambdaorm/ui` 0.1.0 y la imagen 3.1.0.
 
 ### Fase 6 — WebSocket JSON-RPC + adaptador en `@lambdaorm/client` → `3.2.0`
 

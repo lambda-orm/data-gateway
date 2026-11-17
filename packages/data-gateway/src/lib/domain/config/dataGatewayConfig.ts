@@ -106,6 +106,8 @@ export interface TransportConfig {
 
 export interface HttpTransportConfig extends TransportConfig {
 	swagger: { enabled: boolean }
+	/** The query UI at /ui (off by default: exposing a tool to write and run queries is a decision) */
+	ui: { enabled: boolean }
 }
 
 export interface McpHttpTransportConfig extends TransportConfig {

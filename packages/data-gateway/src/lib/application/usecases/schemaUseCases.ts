@@ -3,6 +3,7 @@ import { authorize } from '../../domain/auth/authorizationPolicy'
 import { RequestContext } from '../ports/input/dataGatewayPort'
 import { OrmSchemaPort, OrmStagePort } from '../ports/output/ormPorts'
 import { Auditor } from './auditor'
+import { generateTypings } from '../typings/typingsGenerator'
 
 /** The schema as λORM loaded it. Everything needs `read`. A name that doesn't exist answers undefined (204). */
 export class SchemaUseCases {
@@ -40,6 +41,7 @@ export class SchemaUseCases {
 	public stages (ctx: RequestContext): Promise<Stage[]> { return this.read(ctx, () => this.orm.stages()) }
 	public stage (ctx: RequestContext, name: string) { return this.read(ctx, () => this.orm.stage(name)) }
 	public views (ctx: RequestContext): Promise<string[]> { return this.read(ctx, () => this.orm.views()) }
+	public typings (ctx: RequestContext): Promise<string> { return this.read(ctx, () => generateTypings(this.orm.domain())) }
 }
 
 /** Stages: exists and export need `read`; import needs `stageImport` and is audited. */

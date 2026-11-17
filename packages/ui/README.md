@@ -1,0 +1,59 @@
+# @lambdaorm/ui
+
+React components to write, check and run [λORM](https://github.com/lambda-orm/core) queries against a λORM
+data-gateway: a Monaco editor with the autocompletion of the schema's domain, data and options, the actions plan /
+metadata / model / parameters / constraints / execute / executeQueued / executeScript (enabled by the permissions of
+the credential), and the result as tree, table, JSON or YAML, with downloads. The data-gateway serves it at `/ui`
+(`transports.http.ui.enabled`); any React application can mount it too.
+
+```bash
+npm install @lambdaorm/ui react react-dom
+```
+
+```tsx
+import { QueryWorkbench } from '@lambdaorm/ui'
+import '@lambdaorm/ui/styles.css'
+
+<QueryWorkbench
+  baseUrl="https://gateway.example.com"     // the REST transport of the data-gateway
+  schema="iot/v1"                           // optional: without it, a selector of the ready schemas
+  headers={() => ({ 'X-Api-Key': token })}  // how to authenticate; the library keeps no credential
+  theme="dark"
+  onResult={result => console.log(result.operation, result.durationMs)}
+/>
+```
+
+- `api={myAdapter}` instead of `baseUrl`: anything that implements `QueryApiPort` (for example through a backend of
+  your own). `RestQueryApi` is the adapter for the REST API.
+- `operations={['plan', 'execute']}` limits the actions; `history={false}` keeps no history (by default the last 30
+  queries of each schema go to `localStorage`, never credentials nor results).
+- The parts are exported too: `QueryEditor`, `ScriptEditor`, `DataEditor`, `ResultViewer`, `SchemaSelector`,
+  `WorkbenchController` (the state and actions, without React).
+
+## Monaco
+
+Monaco is loaded on first use and its workers come from your bundler. With Vite:
+
+```ts
+import EditorWorker from 'monaco-editor/esm/vs/editor/editor.worker?worker'
+import TsWorker from 'monaco-editor/esm/vs/language/typescript/ts.worker?worker'
+import JsonWorker from 'monaco-editor/esm/vs/language/json/json.worker?worker'
+
+self.MonacoEnvironment = {
+  getWorker: (_id, label) => label === 'typescript' || label === 'javascript' ? new TsWorker()
+    : label === 'json' ? new JsonWorker() : new EditorWorker()
+}
+```
+
+Without Monaco (no workers), the editors are plain text areas and everything else works.
+
+The autocompletion comes from `GET /{schema}/typings` of the gateway (the domain as declarations) plus the
+`Queryable` declarations of `@lambdaorm/base`, embedded at build time. While writing, the query is checked with λORM
+(`metadata`) and its errors are marked in the editor.
+
+## Development
+
+```bash
+npm run build   # declarations of base, Vite (ESM + CJS + styles.css), types
+npm test        # Vitest + Testing Library
+```

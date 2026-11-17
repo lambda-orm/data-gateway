@@ -20,6 +20,7 @@ const run = async (): Promise<void> => {
 		transports: settings.transports,
 		maxConcurrent: settings.server.maxConcurrent,
 		timeout: settings.server.timeout,
+		scriptsEnabled: settings.scripts.enabled,
 		authenticators: schemaAuthenticators(config, descriptor, settings, registry)
 	})), new SystemClock(), data.version)
 	const transports = new TransportRegistry().build({

@@ -290,7 +290,11 @@ export class ConfigReader {
 			const authentication = this.authentication(section.authentication, `${key}.authentication`)
 			if (authentication) base.authentication = authentication
 			if (name === 'http') {
-				transports.http = { ...base, swagger: { enabled: this.bool(section.swagger?.enabled, true, `${key}.swagger.enabled`) } }
+				transports.http = {
+					...base,
+					swagger: { enabled: this.bool(section.swagger?.enabled, true, `${key}.swagger.enabled`) },
+					ui: { enabled: this.bool(section.ui?.enabled, false, `${key}.ui.enabled`) }
+				}
 			} else if (name === 'mcpHttp') {
 				transports.mcpHttp = {
 					...base,

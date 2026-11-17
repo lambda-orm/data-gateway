@@ -21,6 +21,10 @@ export interface HttpTransportOptions {
 	requestBodySize: string
 	rateLimit: { windowMs: number, max: number }
 	swaggerEnabled: boolean
+	/** Serve the query UI (packages/data-gateway/ui-app) at {basePath}/ui */
+	uiEnabled?: boolean
+	/** Folder of the built UI (default: ui next to this file) */
+	uiDir?: string
 }
 
 export interface HttpTransportDeps {
@@ -110,6 +114,7 @@ export class HttpTransport implements Transport {
 		app.use(this.beautify)
 		// the documentation is public (it holds no data): its "Authorize" button takes the credential
 		if (this.options.swaggerEnabled) this.swagger(app)
+		if (this.options.uiEnabled) this.ui(app)
 		const base = this.options.basePath
 		const directory = this.deps.directory
 		const root = this.served.find(s => s.path === '')
@@ -128,6 +133,22 @@ export class HttpTransport implements Transport {
 			const router = express.Router()
 			this.generalRoutes(router, schema.gateway)
 			router.use(this.authenticate(schema.authenticator(TRANSPORT_NAME)))
+			// who the credential is and what this schema offers: the UI enables its actions with it
+			router.get('/whoami', this.handle(async (_req, ctx) => ({
+				name: ctx.principal.name,
+				permissions: [...ctx.principal.permissions],
+				schema: schema.path,
+				scripts: schema.features.scripts
+			})))
+			router.get('/typings', async (req, res) => {
+				try {
+					const ctx: RequestContext = { principal: res.locals.principal as Principal, transport: TRANSPORT_NAME }
+					res.status(200).type('text/plain; charset=utf-8').send(await schema.gateway.typings(ctx))
+				} catch (error: any) {
+					const httpError = toHttpError(error)
+					res.status(httpError.status).json(httpError.body)
+				}
+			})
 			this.queryRoutes(router, schema.gateway)
 			this.schemaRoutes(router, schema.gateway)
 			this.stageRoutes(router, schema.gateway)
@@ -231,6 +252,31 @@ export class HttpTransport implements Transport {
 		router.get('/stages/:stage/exists', this.handle((req, ctx) => gw.stageExists(ctx, String(req.params.stage))))
 		router.get('/stages/:stage/export', this.handle((req, ctx) => gw.stageExport(ctx, String(req.params.stage))))
 		router.post('/stages/:stage/import', this.handle((req, ctx) => gw.stageImport(ctx, String(req.params.stage), req.body)))
+	}
+
+	/**
+	 * The query UI: static files with long cache for the hashed assets, and headers that keep it from loading anything
+	 * from elsewhere or being framed (docs/DATA_GATEWAY.md §10.4). It calls the REST API of the same origin.
+	 */
+	private ui (app: express.Express): void {
+		const dir = this.options.uiDir ?? path.join(__dirname, 'ui')
+		if (!fs.existsSync(path.join(dir, 'index.html'))) {
+			this.deps.logger.warn(`transports.http.ui.enabled but the UI is not built (${dir}): /ui not served`)
+			return
+		}
+		const base = `${this.options.basePath}/ui`
+		app.use(base, (_req, res, next) => {
+			res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'none'")
+			res.setHeader('X-Frame-Options', 'DENY')
+			res.setHeader('Referrer-Policy', 'no-referrer')
+			res.setHeader('X-Content-Type-Options', 'nosniff')
+			next()
+		}, express.static(dir, {
+			index: 'index.html',
+			setHeaders: (res, file) => {
+				res.setHeader('Cache-Control', file.includes(`${path.sep}assets${path.sep}`) ? 'public, max-age=31536000, immutable' : 'no-cache')
+			}
+		}))
 	}
 
 	private swagger (app: express.Express): void {

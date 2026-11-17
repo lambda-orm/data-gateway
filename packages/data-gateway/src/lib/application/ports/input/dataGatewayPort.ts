@@ -48,6 +48,8 @@ export interface DataGatewayPort {
 	stages (ctx: RequestContext): Promise<Stage[]>
 	stage (ctx: RequestContext, name: string): Promise<Stage | undefined>
 	views (ctx: RequestContext): Promise<string[]>
+	/** The domain as TypeScript declarations for an editor (docs/DATA_GATEWAY.md §10.3) */
+	typings (ctx: RequestContext): Promise<string>
 
 	stageExists (ctx: RequestContext, stage: string): Promise<{ exists: boolean }>
 	stageExport (ctx: RequestContext, stage: string): Promise<SchemaData>

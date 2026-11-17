@@ -465,6 +465,39 @@ paths:
       tags:
       - schema
       x-eov-operation-handler: controllers/SchemaController  
+  /typings:
+    get:
+      operationId: typings
+      description: The domain of the schema as TypeScript declarations (interfaces Qry<Entity> and a global per entity), for an editor
+      parameters: []
+      responses:
+        "200":
+          content:
+            text/plain:
+              schema:
+                type: string
+          description: Ok
+      tags:
+      - schema
+  /whoami:
+    get:
+      operationId: whoami
+      description: The credential (name and permissions) and what this schema offers (scripts enabled)
+      parameters: []
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  name: { type: string }
+                  permissions: { type: array, items: { type: string } }
+                  schema: { type: string }
+                  scripts: { type: boolean }
+          description: Ok
+      tags:
+      - general
   /views:
     get:
       operationId: views

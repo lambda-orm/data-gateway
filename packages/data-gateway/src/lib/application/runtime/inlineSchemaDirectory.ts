@@ -11,6 +11,7 @@ export interface InlineSchema {
 	mcp: McpServerPort
 	transports: TransportName[]
 	authenticators: Partial<Record<TransportName, AuthenticatorPort>>
+	features?: { scripts: boolean }
 }
 
 /**
@@ -27,6 +28,7 @@ export class InlineSchemaDirectory implements SchemaDirectoryPort {
 			path: s.path,
 			gateway: s.gateway,
 			mcp: s.mcp,
+			features: s.features ?? { scripts: false },
 			exposedOn: transport => s.transports.includes(transport),
 			authenticator: transport => {
 				const authenticator = s.authenticators[transport]

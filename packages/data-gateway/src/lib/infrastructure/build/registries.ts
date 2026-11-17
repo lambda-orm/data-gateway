@@ -56,7 +56,8 @@ export class TransportRegistry {
 				basePath: http.basePath,
 				requestBodySize: config.server.requestBodySize,
 				rateLimit: config.rateLimit,
-				swaggerEnabled: http.swagger.enabled
+				swaggerEnabled: http.swagger.enabled,
+				uiEnabled: http.ui.enabled
 			}, { directory, metrics, logger })
 		})
 		this.register('mcpHttp', ({ config, directory, metrics, logger }) => {

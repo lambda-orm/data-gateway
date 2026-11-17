@@ -13,6 +13,8 @@ export interface ServedSchema {
 	exposedOn (transport: TransportName): boolean
 	/** Its effective authentication on a transport: schema → transport → global */
 	authenticator (transport: TransportName): AuthenticatorPort
+	/** What a client (the UI) should offer: scripts.enabled of the schema */
+	features: { scripts: boolean }
 }
 
 export interface GatewayHealth {
