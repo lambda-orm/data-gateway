@@ -169,7 +169,8 @@ export class SchemaWorkerRuntime implements SchemaRuntimePort {
 			audit: config.audit,
 			mcp: { name: config.mcp.name, pageSize: config.mcp.pageSize },
 			version,
-			socketDir: this.settings.socketDir ?? os.tmpdir()
+			socketDir: this.settings.socketDir ?? os.tmpdir(),
+			metricsEnabled: config.metrics.enabled
 		}
 		const maxMemoryMb = spec.settings.runtime.maxMemoryMb
 		return spec.settings.runtime.mode === 'process'

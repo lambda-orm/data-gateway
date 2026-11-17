@@ -258,3 +258,44 @@ describe('supervisor', () => {
 		expect(edges[1].stopped).toBe(true)
 	})
 })
+
+describe('observability', () => {
+	test('every operation measured by transport / schema / method / status / credential; forbidden and throttled', async () => {
+		const { MeasuredSchemaDirectory } = await import('../../src/lib/application/runtime/measuredDirectory')
+		const { PromClientMetrics } = await import('../../src/lib/infrastructure/output/metrics/promClientMetrics')
+		const { InlineSchemaDirectory } = await import('../../src/lib/application/runtime/inlineSchemaDirectory')
+		const fixture = fakeGateway()
+		const metrics = new PromClientMetrics('edge')
+		const inline = new InlineSchemaDirectory([{ path: 'iot/v1', gateway: fixture.gateway, mcp: undefined as any, transports: ['http'], authenticators: {} }], new FixedClock(), '1')
+		const [schema] = new MeasuredSchemaDirectory(inline, metrics).schemas()
+		await schema.gateway.execute(ctx(['read'], 'agent', 'http'), { query: 'Products' })
+		await expect(schema.gateway.execute(ctx(['read'], 'agent', 'webSocket'), { query: 'Products.insert()' })).rejects.toMatchObject({ status: 403 })
+		await schema.gateway.version()
+		const { body } = await metrics.render()
+		expect(body).toMatch(/data_gateway_requests_total\{transport="http",schema="iot\/v1",method="execute",status="200",credential="agent",worker="edge"\} 1/)
+		expect(body).toMatch(/data_gateway_requests_total\{transport="webSocket",schema="iot\/v1",method="execute",status="403",credential="agent",worker="edge"\} 1/)
+		expect(body).toMatch(/data_gateway_forbidden_total\{credential="agent",permission="write",worker="edge"\} 1/)
+		expect(body).toMatch(/data_gateway_schema_status\{schema="iot\/v1",status="ready",worker="edge"\} 1/)
+		expect(body).toMatch(/node_nodejs_eventloop_lag_seconds\{worker="edge"\}/)
+		// the metrics of one schema, and other workers' added
+		metrics.addSource(async () => new PromClientMetrics('schema:iot/v1').snapshot())
+		const filtered = (await metrics.render({ schema: 'iot/v1' })).body
+		expect(filtered).toMatch(/node_nodejs_eventloop_lag_seconds\{worker="schema:iot\/v1"\}/)
+		expect(filtered).not.toMatch(/worker="edge"\}.*\n.*eventloop/)
+		expect(filtered).toMatch(/data_gateway_requests_total\{transport="http"/)
+	})
+
+	test('the configuration logged without secrets', async () => {
+		const { maskSecrets } = await import('../../src/lib/infrastructure/build/dataGatewayBuilder')
+		const c = config({
+			orm: { workspacePath: '/w', schemas: [{ path: 'iot/v1', env: { DB: 'postgres://user:pass@host' } }] },
+			authentication: { adapter: 'local', type: 'basic', users: [{ username: 'u', password: 'p' }] },
+			runtime: { env: { passthrough: ['KAFKA'] } }
+		})
+		const masked = JSON.stringify(maskSecrets(c))
+		expect(masked).not.toMatch(/pass@host|"p"/)
+		expect(masked).toMatch(/"DB":"\*\*\*"/)
+		expect(masked).toMatch(/"password":"\*\*\*"/)
+		expect(masked).toMatch(/"passthrough":\["KAFKA"\]/)
+	})
+})

@@ -23,7 +23,9 @@ export class ChannelDispatcher {
 		private readonly gateway: DataGatewayPort,
 		private readonly mcp: McpServerPort,
 		private readonly maxResponseBytes: number,
-		private readonly logger: LoggerPort
+		private readonly logger: LoggerPort,
+		/** runtime.metrics: this worker's metrics, for the edge to aggregate */
+		private readonly metrics?: () => Promise<unknown>
 	) {}
 
 	public async dispatch (request: ChannelRequest): Promise<ChannelResponse | undefined> {
@@ -70,6 +72,7 @@ export class ChannelDispatcher {
 			const method = (this.mcp as any)[request.op] as (...args: unknown[]) => Promise<unknown>
 			return method.apply(this.mcp, [ctx, ...request.args])
 		}
+		if (request.target === 'runtime' && request.op === 'metrics') return this.metrics ? this.metrics() : Promise.resolve([])
 		throw new GatewayError(400, 'ChannelError', `unknown operation ${request.target}.${request.op}`)
 	}
 }

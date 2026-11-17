@@ -18,7 +18,7 @@ el desarrollo está en este paquete; `@lambdaorm/lib` y `@lambdaorm/base` no se 
 que se agregan o cambian: **`@lambdaorm/ui`** (nuevo, 3.1.0) y `@lambdaorm/client` (adaptador WebSocket, 3.2.0). Qué se construye y cómo se comporta:
 [`DATA_GATEWAY.md`](DATA_GATEWAY.md). Este documento dice en qué orden, qué archivos y cuándo está terminado.
 
-> **Estado (2026-11-17): fases 1 a 6 implementadas, sin publicar. Ticket: #96.** Base: `develop` con service 2.4.0
+> **Estado (2026-11-17): fases 1 a 7 implementadas, sin publicar. Ticket: #96.** Base: `develop` con service 2.4.0
 > (lib 3.5.0). Rama: `feature/data-gateway-core` (todas las fases, sobre `feature/data-gateway-rename`). Desvíos
 > respecto de este plan: ver "Hecho" en cada fase.
 
@@ -509,6 +509,20 @@ el laboratorio con Postgres, la misma consulta por REST y por WebSocket con el c
   worker; `credential` y `forbidden_total`.
 - Logs etiquetados por worker; configuración efectiva con secretos enmascarados.
 - Prueba de carga: un esquema saturado no degrada la latencia de otro más allá de un umbral acordado.
+
+**Hecho (2026-11-17).** `MeasuredSchemaDirectory` mide toda operación de todo transporte en un solo lugar
+(`data_gateway_requests_total{transport,schema,method,status,credential}`, `data_gateway_request_duration_seconds`,
+`data_gateway_forbidden_total{credential,permission}`, `data_gateway_throttled_total`), más
+`data_gateway_connections{transport}`, `data_gateway_schema_status` y `data_gateway_schema_restarts`; cada worker con su
+registro (`worker="edge"`, `"schema:iot/v1"`: lag del event loop, memoria, GC) y el edge los junta en `/metrics` pidiéndolos
+por el canal; `/{esquema}/metrics` filtra. Logs etiquetados (`[supervisor]`, `[edge]`, `[schema:…]`) y la configuración
+efectiva al arrancar con secretos y `env` enmascarados. Tests: unitarios de medición y enmascarado; con workers reales,
+`/metrics` con los tres workers, `/{esquema}/metrics`, y la carga: con 30 scripts sobre un esquema, el p95 de otro queda
+por debajo de 250 ms. Desvíos:
+
+- Las métricas se piden a los schema workers por el canal del edge, no por el supervisor (que sigue sin red ni datos).
+- Reinicios: `data_gateway_schema_restarts{schema}` (gauge de lo que el edge sabe) en lugar de
+  `data_gateway_worker_restarts_total{kind,name,reason}`; los del edge no se cuentan.
 
 ### Fase 8 (opcional)
 

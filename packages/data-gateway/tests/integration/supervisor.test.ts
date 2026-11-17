@@ -148,6 +148,36 @@ transports:
 		expect(await heavy).toMatchObject({ status: 200, body: 1200000 })
 	}, 30000)
 
+	test('/metrics: the edge and every schema worker, operations by schema; /{schema}/metrics only that one', async () => {
+		await call(base, '/ready/a/plan', { body: { query: 'Products' } })
+		const all = String((await call(base, '/metrics')).body)
+		expect(all).toMatch(/node_nodejs_eventloop_lag_seconds\{worker="edge"\}/)
+		expect(all).toMatch(/node_nodejs_eventloop_lag_seconds\{worker="schema:ready\/a"\}/)
+		expect(all).toMatch(/node_nodejs_eventloop_lag_seconds\{worker="schema:ready\/b"\}/)
+		expect(all).toMatch(/data_gateway_requests_total\{transport="http",schema="ready\/a",method="plan",status="200",credential="anonymous",worker="edge"\}/)
+		expect(all).toMatch(/data_gateway_schema_status\{schema="northwind\/v1",status="error",worker="edge"\} 1/)
+		const one = String((await call(base, '/ready/a/metrics')).body)
+		expect(one).toMatch(/worker="schema:ready\/a"/)
+		expect(one).not.toMatch(/worker="schema:ready\/b"/)
+		expect(one).not.toMatch(/schema="ready\/b"/)
+	})
+
+	test('load: a burst on one schema does not raise the latency of the other beyond 250 ms', async () => {
+		const burst = Array.from({ length: 30 }, () => call(base, '/ready/a/script', { body: { script: 'i = 0; while (i < n) { i = i + 1 }; i', data: { n: 100000 } } }))
+		await sleep(100)
+		const latencies: number[] = []
+		for (let i = 0; i < 15; i++) {
+			const started = Date.now()
+			expect((await call(base, '/ready/b/plan', { body: { query: 'Products' } })).status).toBe(200)
+			latencies.push(Date.now() - started)
+		}
+		latencies.sort((x, y) => x - y)
+		const p95 = latencies[Math.floor(latencies.length * 0.95) - 1]
+		expect(p95).toBeLessThan(250)
+		const answers = await Promise.all(burst)
+		expect(answers.every(a => a.status === 200)).toBe(true)
+	}, 60000)
+
 	test('a hung worker (it stops answering the heartbeat) is terminated and restarted; the other keeps answering', async () => {
 		const before = (await state('ready/b')).restarts
 		const [child] = schemaProcesses()

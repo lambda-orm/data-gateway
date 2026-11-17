@@ -5,4 +5,6 @@ export interface Transport {
 	stop (): Promise<void>
 	/** host:port it listens on, once started */
 	readonly address: { host: string, port: number } | undefined
+	/** Open connections (WebSocket, SSE, stateful sessions), for data_gateway_connections */
+	readonly connections?: number
 }

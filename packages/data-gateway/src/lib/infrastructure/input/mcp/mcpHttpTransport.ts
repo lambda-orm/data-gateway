@@ -171,7 +171,7 @@ export class McpHttpTransport implements Transport {
 		return { principal: res.locals.principal as Principal, transport: TRANSPORT_NAME }
 	}
 
-	private get connections (): number {
+	public get connections (): number {
 		return this.sseSessions.size + this.streamSessions.size
 	}
 

@@ -740,7 +740,7 @@ el adaptador WebSocket de `@lambdaorm/client` (§9).
 
 ## 8. Observabilidad
 
-- **Logs:** cada worker loguea con su etiqueta (`[edge]`, `[schema:iot/v1]`); el supervisor loguea arranques,
+- **Logs:** cada worker loguea con su etiqueta (`[edge]`, `[schema:iot/v1]`, `[supervisor]`); el supervisor loguea arranques,
   caídas, reinicios, heartbeats perdidos y cambios de estado, transportes expuestos / no expuestos y la configuración
   efectiva sin secretos. Cada operación se registra con el nombre de la credencial (nunca su valor).
 - **Métricas:** cada worker tiene las suyas; `GET /metrics` (en `http`) las pide a todos a través del supervisor y las
@@ -748,8 +748,8 @@ el adaptador WebSocket de `@lambdaorm/client` (§9).
   `data_gateway_request_duration_seconds{transport,schema,method}`, `data_gateway_forbidden_total{credential,permission}`,
   `data_gateway_connections{transport}`, `data_gateway_schema_status{schema,status}`,
   `data_gateway_worker_restarts_total{kind,name,reason}` y `data_gateway_event_loop_lag_seconds{worker}`.
-  `GET /iot/v1/metrics` filtra por esquema. (La agregación completa y el lag del event loop llegan en 3.3.0; en 3.0.0
-  cada `/metrics` reporta el edge y los estados de los esquemas.)
+  `GET /iot/v1/metrics` filtra por esquema. Cada muestra lleva `worker` (`edge`, `schema:iot/v1`); los reinicios se
+  publican como `data_gateway_schema_restarts{schema}` (lo que el edge sabe de cada esquema).
 - **Health:** §4 (`/health`, `/{esquema}/health`, `/schemas`).
 - **Rechazos por carga:** `data_gateway_throttled_total{schema,transport}` (respuestas `429` por `maxConcurrent`).
 - OpenTelemetry queda para una fase posterior (`TracerPort` + adaptador).

@@ -107,6 +107,10 @@ export class WebSocketTransport implements Transport {
 		await new Promise<void>(resolve => server.close(() => resolve()))
 	}
 
+	public get connections (): number {
+		return this.wss.clients.size
+	}
+
 	public status () {
 		return { transport: TRANSPORT_NAME, schemas: this.served.map(s => ({ path: s.path, url: this.route(s) })), connections: this.wss.clients.size, max: this.options.maxConnections }
 	}

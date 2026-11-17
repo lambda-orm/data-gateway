@@ -5,7 +5,8 @@ import { SchemaRouter } from '../../application/runtime/schemaRouter'
 import { MessagePortChannel, SocketChannel } from '../output/channel/channelClients'
 import { SystemClock } from '../output/clock/systemClock'
 import { NoMetrics, PromClientMetrics } from '../output/metrics/promClientMetrics'
-import { buildLogger, schemaAuthenticators } from './dataGatewayBuilder'
+import { buildLogger, measureConnections, schemaAuthenticators } from './dataGatewayBuilder'
+import { MeasuredSchemaDirectory } from '../../application/runtime/measuredDirectory'
 import { AuthenticatorRegistry, TransportRegistry } from './registries'
 import { control, EdgeWorkerData } from './workerControl'
 
@@ -13,7 +14,7 @@ const run = async (): Promise<void> => {
 	const ctl = control()
 	const data = ctl.data<EdgeWorkerData>()
 	const { config } = data
-	const logger = buildLogger(config)
+	const logger = buildLogger(config, '[edge]')
 	const registry = new AuthenticatorRegistry()
 	const router = new SchemaRouter(data.schemas.map(({ descriptor, settings }) => ({
 		path: descriptor.path,
@@ -23,12 +24,12 @@ const run = async (): Promise<void> => {
 		scriptsEnabled: settings.scripts.enabled,
 		authenticators: schemaAuthenticators(config, descriptor, settings, registry)
 	})), new SystemClock(), data.version)
-	const transports = new TransportRegistry().build({
-		config,
-		directory: router,
-		metrics: config.metrics.enabled ? new PromClientMetrics() : new NoMetrics(),
-		logger
-	})
+	const metrics = config.metrics.enabled ? new PromClientMetrics('edge') : new NoMetrics()
+	// /metrics: the edge's and every schema worker's, asked through its channel
+	for (const { descriptor } of data.schemas) metrics.addSource(() => router.workerMetrics(descriptor.path))
+	const directory = metrics.enabled ? new MeasuredSchemaDirectory(router, metrics) : router
+	const transports = new TransportRegistry().build({ config, directory, metrics, logger })
+	measureConnections(metrics, transports)
 	ctl.on(async request => {
 		switch (request.type) {
 		case 'ping':

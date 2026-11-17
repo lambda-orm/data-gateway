@@ -113,8 +113,16 @@ export class SchemaRouter implements SchemaDirectoryPort {
 		return route
 	}
 
+	/** The metrics of a schema worker (JSON of its registry); [] when it isn't ready */
+	public async workerMetrics (path: string): Promise<unknown[]> {
+		const route = this.route(path)
+		if (route.state.status !== 'ready' || !route.channel) return []
+		const result = await route.channel.request({ target: 'runtime', op: 'metrics', args: [], transport: 'edge', deadline: Date.now() + 5000 })
+		return Array.isArray(result) ? result : []
+	}
+
 	/** One operation on a schema worker, with the state, concurrency and deadline rules */
-	public async call (path: string, target: 'gateway' | 'mcp', op: string, args: unknown[], ctx: RequestContext | undefined): Promise<unknown> {
+	public async call (path: string, target: 'gateway' | 'mcp' | 'runtime', op: string, args: unknown[], ctx: RequestContext | undefined): Promise<unknown> {
 		const route = this.route(path)
 		if (route.state.status !== 'ready' || !route.channel) throw schemaUnavailable(route.state)
 		const max = route.settings.maxConcurrent

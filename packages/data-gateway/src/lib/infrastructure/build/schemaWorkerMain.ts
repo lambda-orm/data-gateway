@@ -10,6 +10,7 @@ import { ChannelEvent } from '../../domain/runtime/channelProtocol'
 import { StdoutAuditAdapter } from '../output/audit/stdoutAuditAdapter'
 import { SystemClock } from '../output/clock/systemClock'
 import { ConsoleLogger, WinstonLogger } from '../output/logger/loggers'
+import { PromClientMetrics } from '../output/metrics/promClientMetrics'
 import { composeSchema, ComposedSchema } from './schemaComposer'
 import { control, SchemaWorkerData } from './workerControl'
 
@@ -18,7 +19,10 @@ let started = false
 
 const run = async (): Promise<void> => {
 	const data = ctl.data<SchemaWorkerData>()
-	const logger = data.logger.adapter === 'winston' ? new WinstonLogger(data.logger.level) : new ConsoleLogger(data.logger.level)
+	const label = `[schema:${data.descriptor.path || '/'}]`
+	const logger = data.logger.adapter === 'winston' ? new WinstonLogger(data.logger.level, label) : new ConsoleLogger(data.logger.level, label)
+	// its event loop lag, memory and GC, for the edge's /metrics
+	const metrics = data.metricsEnabled ? new PromClientMetrics(`schema:${data.descriptor.path || '/'}`) : undefined
 	const name = `schema "${data.descriptor.path || '/'}"`
 	// the heartbeat is answered from the first moment: a slow start is not a hang
 	let schema: ComposedSchema | undefined
@@ -65,7 +69,7 @@ const run = async (): Promise<void> => {
 		setTimeout(() => process.exit(1), 50)
 		return
 	}
-	dispatcher = new ChannelDispatcher(schema.gateway, schema.mcp, data.settings.server.maxResponseBytes, logger)
+	dispatcher = new ChannelDispatcher(schema.gateway, schema.mcp, data.settings.server.maxResponseBytes, logger, metrics ? () => metrics.snapshot() : undefined)
 	for (const port of pendingPorts.splice(0)) senders.push(receiveOnPort(port, dispatcher))
 	let socketPath: string | undefined
 	if (data.settings.runtime.mode === 'process') {

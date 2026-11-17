@@ -10,7 +10,8 @@ export interface WirePrincipal {
 export interface ChannelRequest {
 	type: 'request'
 	id: number
-	target: 'gateway' | 'mcp'
+	/** runtime: the worker itself (its metrics) */
+	target: 'gateway' | 'mcp' | 'runtime'
 	op: string
 	args: unknown[]
 	principal?: WirePrincipal

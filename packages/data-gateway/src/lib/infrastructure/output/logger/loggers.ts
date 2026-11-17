@@ -29,13 +29,13 @@ export class ConsoleLogger implements LoggerPort {
 export class WinstonLogger implements LoggerPort {
 	private readonly logger: any
 
-	constructor (level = 'info') {
+	constructor (level = 'info', label = '') {
 		const { transports, createLogger, format } = require('winston')
 		this.logger = createLogger({
 			level,
 			format: format.combine(
 				format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss.SSS' }),
-				format.printf(({ level, message, timestamp }: { level: string, message: string, timestamp: string }) => `${timestamp} ${level}: ${message}`)
+				format.printf(({ level, message, timestamp }: { level: string, message: string, timestamp: string }) => `${timestamp} ${level}${label ? ' ' + label : ''}: ${message}`)
 			),
 			transports: [new transports.Console()]
 		})

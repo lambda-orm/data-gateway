@@ -30,6 +30,7 @@ export interface SchemaWorkerData {
 	mcp: { name: string, pageSize: number }
 	version: string
 	socketDir: string
+	metricsEnabled: boolean
 }
 
 /** What the edge gets: the configuration (credentials included: it authenticates) and the schemas, without their env */

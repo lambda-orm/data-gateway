@@ -10,7 +10,7 @@ import { DotEnvFileReader } from '../output/discovery/dotEnvFileReader'
 import { ConsoleLogger } from '../output/logger/loggers'
 import { YamlFileConfigSource } from '../output/config/yamlFileConfigSource'
 import { EdgeWorkerRuntime, SchemaWorkerRuntime } from '../output/runtime/workerRuntimes'
-import { buildLogger, DataGatewayBuilder, packageVersion, resolveConfiguredSchemas, RunningGateway } from './dataGatewayBuilder'
+import { buildLogger, DataGatewayBuilder, maskSecrets, packageVersion, resolveConfiguredSchemas, RunningGateway } from './dataGatewayBuilder'
 
 export interface MainOptions {
 	source?: ConfigSourcePort
@@ -27,9 +27,10 @@ const readConfig = async (options: MainOptions): Promise<{ config: DataGatewayCo
 	const reading = new ConfigReader().read(await source.load())
 	for (const warning of reading.warnings) bootLogger.warn(warning)
 	if (!reading.config) throw new ConfigError(reading.issues)
-	const logger = buildLogger(reading.config)
+	const logger = buildLogger(reading.config, '[supervisor]')
 	for (const note of reading.notes) logger.info(note)
 	logger.info(`[data-gateway] configuration ${source.location}`)
+	logger.info(`[data-gateway] effective configuration: ${JSON.stringify(maskSecrets(reading.config))}`)
 	return { config: reading.config, logger, location: source.location }
 }
 

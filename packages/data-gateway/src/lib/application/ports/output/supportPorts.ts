@@ -47,11 +47,32 @@ export interface LoggerPort {
 	error (message: string | Error): void
 }
 
+/** One operation on a schema, whatever the transport (docs/DATA_GATEWAY.md §8) */
+export interface OperationSample {
+	transport: string
+	schema: string
+	method: string
+	status: number
+	credential: string
+	seconds: number
+}
+
+/** A value read when the metrics are rendered (connections, states of the schemas…) */
+export type GaugeReader = () => { labels: Record<string, string>, value: number }[]
+
 export interface MetricsPort {
 	readonly enabled: boolean
-	/** Starts measuring a request; the returned function ends it with its labels */
+	/** Starts measuring an HTTP request; the returned function ends it with its labels */
 	startTimer (): (labels: Record<string, string | number>) => void
-	render (): Promise<{ contentType: string, body: string }>
+	operation (sample: OperationSample): void
+	forbidden (credential: string, permission: string): void
+	throttled (schema: string, transport: string): void
+	gauge (name: string, help: string, labelNames: string[], read: GaugeReader): void
+	/** Metrics of other workers (JSON of their registries), rendered with these */
+	addSource (source: () => Promise<unknown[]>): void
+	render (filter?: { schema?: string }): Promise<{ contentType: string, body: string }>
+	/** This worker's metrics as JSON, for the edge to aggregate */
+	snapshot (): Promise<unknown[]>
 }
 
 /** Where the audit entries go (stdout, a file, a topic, …). */

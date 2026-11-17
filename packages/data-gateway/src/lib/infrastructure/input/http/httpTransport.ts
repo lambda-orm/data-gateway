@@ -132,6 +132,11 @@ export class HttpTransport implements Transport {
 		for (const schema of this.served) {
 			const router = express.Router()
 			this.generalRoutes(router, schema.gateway)
+			// the metrics of this schema: its operations and its worker
+			router.get('/metrics', async (_req, res) => {
+				const { contentType, body } = await this.deps.metrics.render({ schema: schema.path || '/' })
+				res.status(200).type(contentType).send(body)
+			})
 			router.use(this.authenticate(schema.authenticator(TRANSPORT_NAME)))
 			// who the credential is and what this schema offers: the UI enables its actions with it
 			router.get('/whoami', this.handle(async (_req, ctx) => ({

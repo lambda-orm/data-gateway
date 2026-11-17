@@ -1,6 +1,7 @@
 import path from 'path'
 import fs from 'fs'
 import { InlineSchema, InlineSchemaDirectory } from '../../application/runtime/inlineSchemaDirectory'
+import { MeasuredSchemaDirectory } from '../../application/runtime/measuredDirectory'
 import { LoggerPort, MetricsPort, AuditPort, ClockPort, AuthenticatorPort, QueueOutcome } from '../../application/ports/output/supportPorts'
 import { Listeners } from '../../application/runtime/listeners'
 import { DataGatewayConfig, TransportName } from '../../domain/config/dataGatewayConfig'
@@ -47,8 +48,16 @@ export class RunningGateway {
 	}
 }
 
-export const buildLogger = (config: DataGatewayConfig): LoggerPort =>
-	config.logger.adapter === 'winston' ? new WinstonLogger(config.logger.level) : new ConsoleLogger(config.logger.level)
+/** The logger of a worker, its lines labeled with it ([edge], [schema:iot/v1], [supervisor]) */
+export const buildLogger = (config: Pick<DataGatewayConfig, 'logger'>, label = ''): LoggerPort =>
+	config.logger.adapter === 'winston' ? new WinstonLogger(config.logger.level, label) : new ConsoleLogger(config.logger.level, label)
+
+/** The configuration as it can be logged: secrets and the variables given to the schemas masked */
+export const maskSecrets = (config: DataGatewayConfig): unknown => JSON.parse(JSON.stringify(config, (key, value) =>
+	['value', 'password', 'token'].includes(key) && typeof value === 'string' ? '***'
+		: key === 'env' && value && typeof value === 'object' && !Array.isArray(value) && !('isolate' in value)
+			? Object.fromEntries(Object.keys(value).map(k => [k, '***']))
+			: value))
 
 export const packageVersion = (): string => {
 	for (const candidate of ['../../../package.json', '../../../../package.json', '../../package.json']) {
@@ -59,6 +68,12 @@ export const packageVersion = (): string => {
 		}
 	}
 	return '0.0.0'
+}
+
+/** data_gateway_connections{transport}: open WebSocket connections, SSE streams and sessions */
+export const measureConnections = (metrics: MetricsPort, transports: Transport[]): void => {
+	metrics.gauge('data_gateway_connections', 'Open connections by transport (WebSocket, SSE, stateful sessions)', ['transport'],
+		() => transports.filter(t => t.connections !== undefined).map(t => ({ labels: { transport: t.name }, value: t.connections! })))
 }
 
 /** Discovered under orm.workspacePath + declared in orm.schemas, checked; ConfigError with every problem */
@@ -116,8 +131,10 @@ export class DataGatewayBuilder {
 			await Promise.all(composed.map(schema => schema.stop()))
 			throw error
 		}
-		const directory = new InlineSchemaDirectory(inline, clock, version)
+		const inlineDirectory = new InlineSchemaDirectory(inline, clock, version)
+		const directory = metrics.enabled ? new MeasuredSchemaDirectory(inlineDirectory, metrics) : inlineDirectory
 		const transports = (options.transports ?? new TransportRegistry()).build({ config, directory, metrics, logger })
+		measureConnections(metrics, transports)
 		logger.info(`[data-gateway] ${version} (inline): schemas ${inline.map(s => `/${s.path}`).join(', ')}; rate limit ${config.rateLimit.max > 0 ? `${config.rateLimit.max} per ${config.rateLimit.windowMs} ms` : 'off'}; ` +
 			`scripts ${config.scripts.enabled ? 'enabled' : 'disabled'}; audit ${config.audit.enabled ? 'on' : 'off'}; authentication ${config.authentication.adapter}`)
 		return new RunningGateway(transports, composed, logger)
