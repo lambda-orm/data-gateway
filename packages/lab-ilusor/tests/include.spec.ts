@@ -123,12 +123,13 @@ describe('include', () => {
 		expect(await orm.execute('Accounts.filter(p => p.id == id)', { id: accountId })).toHaveLength(1)
 	})
 
-	test('L31 an execution on another stage inside a transaction fails with a clear error (and rolls back)', async () => {
+	test('L31 an execution on another stage inside a transaction joins it (and rolls back with it)', async () => {
 		const typeId = id()
-		await expect(orm.transaction({ stage: 'default' }, async () => {
+		await expect(orm.transaction({ stage: 'default' }, async tr => {
 			await orm.execute('DeviceTypes.insert()', { id: typeId, code: 'l31s-' + typeId, name: 'l31' })
-			await orm.execute('DeviceTypes.filter(p => p.id == id)', { id: typeId }, { stage: 'ddl' })
-		})).rejects.toThrow('inside a transaction of stage "default"')
+			await tr.execute('Accounts.filter(p => p.id == id)', { id: typeId }, { stage: 'ddl' })
+			throw new Error('abort')
+		})).rejects.toThrow('abort')
 		expect(await orm.execute('DeviceTypes.filter(p => p.id == id)', { id: typeId })).toHaveLength(0)
 	})
 
