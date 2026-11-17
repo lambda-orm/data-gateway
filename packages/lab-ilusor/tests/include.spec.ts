@@ -88,7 +88,7 @@ describe('include', () => {
 
 	test('L16 a transaction across two sources is all or nothing', async () => {
 		const typeId = id(); const accountId = id()
-		// the error comes from a query (duplicate key); an error thrown by the callback itself is L26 and L31
+		// the error comes from a query (duplicate key); an error thrown by the callback is L26 and L31
 		await expect(orm.transaction({ stage: 'default' }, async tr => {
 			await tr.execute('DeviceTypes.insert()', { id: typeId, code: 'tx-' + typeId, name: 'tx' })
 			await tr.execute('Accounts.insert()', { id: accountId, name: 'tx' })
@@ -132,7 +132,7 @@ describe('include', () => {
 		expect(await orm.execute('DeviceTypes.filter(p => p.id == id)', { id: typeId })).toHaveLength(0)
 	})
 
-	test('L17 update of an aggregate with include: children not sent are removed, new ones added, the rest updated (today: only the sent existing ones are updated)', async () => {
+	test('L17 update of an aggregate with include: children not sent are removed, new ones added, the rest updated', async () => {
 		const { quoteId, modelId } = await seedQuote()
 		const [quote] = await orm.execute('Quotes.filter(p => p.id == id).include(p => p.lines)', { id: quoteId })
 		const kept = { ...quote.lines[0], quantity: 7 }
@@ -145,21 +145,16 @@ describe('include', () => {
 })
 
 describe('transaction callback errors', () => {
-	test('L26 an error thrown by the callback rejects orm.transaction and rolls back (today: uncaught exception)', async () => {
-		// run in a child process: today the error escapes as an uncaught exception and would kill jest's worker
-		const { spawnSync } = await import('child_process')
-		const path = await import('path')
-		const script = `
-			const { newOrm, id } = require(${JSON.stringify(path.join(__dirname, 'helpers'))});
-			(async () => {
-				const orm = await newOrm(); const accountId = id(); let rejected = false
-				try { await orm.transaction({ stage: 'default' }, async tr => { await tr.execute('Accounts.insert()', { id: accountId, name: 'tx' }); throw new Error('boom') }) } catch { rejected = true }
-				const rows = await orm.execute('Accounts.filter(p => p.id == id)', { id: accountId })
-				console.log(JSON.stringify({ rejected, committed: rows.length })); await orm.end()
-			})()`
-		const tsx = path.join(__dirname, '../../../../../../../node_modules/.bin/tsx')
-		const res = spawnSync(tsx, ['-e', script], { encoding: 'utf8', timeout: 30000 })
-		const line = (res.stdout || '').trim().split('\n').pop() || ''
-		expect(line).toBe(JSON.stringify({ rejected: true, committed: 0 }))
+	let orm: Orm
+	beforeAll(async () => { orm = await newOrm() })
+	afterAll(async () => { await orm.end() })
+
+	test('L26 an error thrown by the callback rejects orm.transaction and rolls back', async () => {
+		const accountId = id()
+		await expect(orm.transaction({ stage: 'default' }, async tr => {
+			await tr.execute('Accounts.insert()', { id: accountId, name: 'tx' })
+			throw new Error('boom')
+		})).rejects.toThrow('boom')
+		expect(await orm.execute('Accounts.filter(p => p.id == id)', { id: accountId })).toHaveLength(0)
 	})
 })
