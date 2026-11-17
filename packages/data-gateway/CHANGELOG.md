@@ -4,6 +4,24 @@ All notable changes to this project will be documented in this file.
 
 ## Versions
 
+### 2.3.2 (2026-11-17)
+
+Uses `@lambdaorm/lib` 3.4.0 and `@lambdaorm/cli` 1.6.4.
+
+**Features:**
+
+- `POST /script`: `orm.execute(query, data, { stage })` inside a script can name another stage; it joins the script's
+  transaction (commit or rollback together).
+- `POST /script`: the script's limits travel in its `options` — `{ stage, timeout, maxIterations }`. A client may lower
+  them, never above the service's `SCRIPT_TIMEOUT_MS` and the new `SCRIPT_MAX_ITERATIONS` (default 100000).
+- The timeout and `maxIterations` stop a script's loops: a `while (true) {}` no longer blocks the service.
+- OpenAPI document: version taken from the service, `bearerAuth` security scheme (`SERVICE_TOKEN`).
+
+**Bug Fixes:**
+
+- SQL Server: decimal parameters keep their decimals (they were rounded to integers).
+- `toBase64` / `getBase64` return strings.
+
 ### 2.3.1 (2026-11-17)
 
 Uses `@lambdaorm/lib` 3.2.1 and `@lambdaorm/cli` 1.6.1.
