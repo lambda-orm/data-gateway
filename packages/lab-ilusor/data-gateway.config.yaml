@@ -18,3 +18,6 @@ server:
 transports:
   http:
     port: $PORT
+  # MCP (Streamable HTTP at /mcp) only when MCP_PORT is set: claude mcp add --transport http ilusor http://localhost:$MCP_PORT/mcp --header "Authorization: Bearer $SERVICE_TOKEN"
+  mcpHttp:
+    port: $MCP_PORT
