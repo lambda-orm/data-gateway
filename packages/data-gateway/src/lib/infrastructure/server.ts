@@ -54,6 +54,7 @@ export class Server {
 			const swagger = YAML.load(await h3lp.fs.read(path.join(__dirname, './swagger.yaml')))
 			const swaggerSetup = swaggerUi.setup(swagger)
 			swagger.servers = [{ description: 'default', url: `${host}:${port}` }]
+			swagger.info.version = await this.getVersion()
 			this.app.use(bodyParser.json({ limit: requestBodySize || '14MB' }))
 			this.app.use(bodyParser.json())
 			this.app.use(bodyParser.urlencoded({ extended: true }))
