@@ -18,6 +18,13 @@ import { MetricBuilder } from './metric/metricBuilder'
 import { serviceToken } from './middleware/serviceTokenMiddleware'
 const YAML = require('js-yaml')
 
+/**
+ * The service's settings without the values whose environment variable was not defined: λORM leaves "$VAR" as it is,
+ * and e.g. requestBodySize "$REQUEST_BODY_SIZE" made the service fail to start. Those fall back to the defaults.
+ */
+export const withoutUnresolved = <T extends object>(config: T): T => Object.fromEntries(Object.entries(config || {})
+	.filter(([, value]) => !(typeof value === 'string' && /^\$\{?[A-Za-z_][A-Za-z0-9_]*\}?$/.test(value.trim())))) as T
+
 export class Server {
 	private app: express.Express | undefined
 	private server: http.Server | undefined
@@ -33,7 +40,7 @@ export class Server {
 		try {
 			this.orm = new Orm()
 			this.schema = await this.orm.init(process.env.WORKSPACE || '/workspace') as ServiceSchema
-			this.config = this.schema.infrastructure.service || {}
+			this.config = withoutUnresolved(this.schema.infrastructure.service || {})
 			if (h3lp.val.isNotNull(this.schema.infrastructure.queue)) {
 				this.queue = new QueueBuilder().build(this.orm, this.logger)
 				this.queue.start(this.schema.infrastructure.queue)
