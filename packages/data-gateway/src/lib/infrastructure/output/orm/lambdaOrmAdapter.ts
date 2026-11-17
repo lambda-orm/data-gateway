@@ -15,6 +15,31 @@ export class LambdaOrmAdapter implements OrmQueryPort, OrmScriptPort, OrmSchemaP
 		await this.orm.init(workspace)
 	}
 
+	/**
+	 * Opens and releases one connection of every source with a connection: a database down, wrong credentials or a
+	 * missing variable fail here, at start, instead of in the first query.
+	 */
+	public async checkConnections (timeoutMs: number): Promise<void> {
+		const connection = (this.orm as any).connection
+		const sources: { name: string, connection?: unknown }[] = this.infrastructure()?.sources ?? []
+		for (const source of sources.filter(s => s.connection !== undefined && s.connection !== null && s.connection !== '')) {
+			let timer: ReturnType<typeof setTimeout> | undefined
+			try {
+				await Promise.race([
+					(async () => {
+						const opened = await connection.acquire(source.name)
+						await connection.release(opened)
+					})(),
+					new Promise((_resolve, reject) => { timer = setTimeout(() => reject(new Error(`no answer in ${timeoutMs} ms`)), timeoutMs) })
+				])
+			} catch (error: any) {
+				throw new Error(`source "${source.name}": ${error?.message ?? error}`)
+			} finally {
+				if (timer) clearTimeout(timer)
+			}
+		}
+	}
+
 	public async end (): Promise<void> {
 		await this.orm.end()
 	}

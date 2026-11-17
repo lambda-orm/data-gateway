@@ -1,0 +1,25 @@
+# Several schemas (docs/DATA_GATEWAY.md §2.2): northwind/v1 discovered under workspace/, northwind/v2 declared with the
+# same model; each worker gets only its own variables. See README.md.
+orm:
+  workspacePath: ${MULTI_WORKSPACE}
+  schemas:
+    - path: northwind/v1
+      env: { EVAL_DB_CONNECTION: $NORTHWIND_V1_DB }
+    - path: northwind/v2
+      workspace: ${MULTI_WORKSPACE}/northwind/v1
+      env: { EVAL_DB_CONNECTION: $NORTHWIND_V2_DB }
+      runtime: { mode: process }
+      server: { maxConcurrent: 8 }
+      mcp: { tools: { exclude: [ orm_execute_script ] } }
+scripts: { enabled: true }
+authentication:
+  adapter: local
+  type: apikey
+  keys:
+    - { name: reader, value: $READER_KEY, permissions: [ read ] }
+    - { name: backend, value: $BACKEND_KEY }
+transports:
+  http:
+    port: $HTTP_PORT
+  mcpHttp:
+    port: $MCP_PORT

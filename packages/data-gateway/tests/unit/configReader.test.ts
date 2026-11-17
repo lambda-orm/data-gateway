@@ -11,7 +11,7 @@ describe('config reader', () => {
 		expect(warnings).toEqual([])
 		expect(config).toMatchObject({
 			orm: { workspacePath: '/workspace', schemas: [] },
-			server: { timeout: 120000, requestBodySize: '14MB' },
+			server: { timeout: 120000, requestBodySize: '14MB', maxConcurrent: 64, maxResponseBytes: 268435456 },
 			logger: { adapter: 'console', level: 'info' },
 			metrics: { enabled: true },
 			audit: { enabled: true, includeData: false },
@@ -120,9 +120,31 @@ describe('config reader', () => {
 			expect(read({ transports: base.transports }).issues).toContain('orm.workspacePath (or an orm.schemas entry with workspace) is required')
 		})
 
-		test('one explicit schema at the root is accepted; several schemas arrive later', () => {
-			expect(read({ ...base, orm: { schemas: [{ path: '', workspace: '/w' }] } }).issues).toEqual([])
-			expect(read({ ...base, orm: { workspacePath: '/w', schemas: [{ path: 'iot/v1' }] } }).issues[0]).toMatch(/single schema at the root/)
+		test('schemas: explicit and adjustments with their overrides; reserved and invalid routes stop', () => {
+			const { config, issues } = read({
+				...base,
+				orm: {
+					workspacePath: '/w',
+					schemas: [
+						{ path: '/iot/v1/', env: { DB: 'x', MISSING: undefined }, transports: ['http'], server: { maxConcurrent: '4', maxResponseBytes: '1MB' }, runtime: { mode: 'process' }, mcp: { maxRows: 10 }, scripts: { enabled: 'true' } },
+						{ path: 'accounts/v1', workspace: '/mnt/accounts', authentication: { adapter: 'local', type: 'bearer', token: 't' } }
+					]
+				}
+			})
+			expect(issues).toEqual([])
+			expect(config?.orm.schemas[0]).toEqual({
+				path: 'iot/v1', env: { DB: 'x' }, transports: ['http'], server: { maxConcurrent: 4, maxResponseBytes: 1048576 },
+				runtime: { mode: 'process' }, mcp: { maxRows: 10 }, scripts: { enabled: true }
+			})
+			expect(config?.orm.schemas[1]).toMatchObject({ path: 'accounts/v1', workspace: '/mnt/accounts', authentication: { adapter: 'local', type: 'bearer' } })
+			expect(read({ ...base, orm: { workspacePath: '/w', schemas: [{ path: 'iot/mcp' }, { path: 'a b' }] } }).issues).toEqual([
+				'schema path "iot/mcp": "mcp" is reserved',
+				'schema path "a b": segment "a b" must be [a-zA-Z0-9_.-]'
+			])
+			expect(read({ ...base, orm: { workspacePath: '/w', schemas: [{ path: 'x', transports: ['ftp'], runtime: { mode: 'fiber' } }] } }).issues).toEqual([
+				'orm.schemas "x".runtime.mode "fiber" is not thread or process',
+				'orm.schemas "x": unknown transport "ftp"'
+			])
 		})
 	})
 
@@ -141,8 +163,21 @@ describe('config reader', () => {
 		expect(read({ ...base, mcp: { tools: { include: ['orm_nope'] } } }).issues).toEqual(['mcp.tools.include: unknown tools orm_nope'])
 	})
 
-	test('unknown sections are warned; sections of later versions are accepted', () => {
+	test('unknown sections are warned', () => {
 		const { warnings } = read({ ...base, mcp: {}, runtime: {}, extra: 1 })
 		expect(warnings).toEqual(['unknown section "extra" ignored'])
+	})
+
+	test('runtime: defaults, threadpool, heartbeat; transports thread / process are not available yet', () => {
+		expect(read(base).config?.runtime).toEqual({
+			transports: 'shared', schemas: 'thread', maxMemoryMb: 512, checkConnections: true, threadpoolSize: undefined,
+			heartbeat: { intervalMs: 5000, timeoutMs: 30000 }, restart: { initialDelayMs: 1000, maxDelayMs: 300000 },
+			env: { isolate: true, passthrough: [] }
+		})
+		const { config, warnings } = read({ ...base, runtime: { transports: 'thread', schemas: 'process', threadpoolSize: '16', env: { isolate: 'false', passthrough: ['KAFKA'] } } })
+		expect(config?.runtime).toMatchObject({ transports: 'shared', schemas: 'process', threadpoolSize: 16, env: { isolate: false, passthrough: ['KAFKA'] } })
+		expect(warnings[0]).toMatch(/runtime.transports "thread" is not available/)
+		expect(read({ ...base, runtime: { heartbeat: { intervalMs: 100, timeoutMs: 50 } } }).issues).toEqual(['runtime.heartbeat.timeoutMs must be greater than intervalMs'])
+		expect(read({ ...base, server: { maxResponseBytes: 'huge' } }).issues).toEqual(['server.maxResponseBytes "huge" must be a size (bytes, or like 256MB)'])
 	})
 })

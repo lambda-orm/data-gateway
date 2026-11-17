@@ -1,6 +1,10 @@
 # data-gateway for the MCP evaluation set (eval/README.md)
 orm:
   workspacePath: ${EVAL_WORKSPACE}
+  schemas:
+    # the schema at the root of the workspace receives only the variables given here (docs/DATA_GATEWAY.md §2.3)
+    - path: ''
+      env: { EVAL_DB_CONNECTION: $EVAL_DB_CONNECTION }
 logger: { level: warn }
 audit: { enabled: false }
 rateLimit: { max: 0 }

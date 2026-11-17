@@ -121,7 +121,7 @@ ajusta a la vez. Qué se puede ajustar:
 | `scripts` | `enabled` y límites de scripts | `scripts` global |
 | `mcp.maxRows`, `mcp.tools` | límite de filas y tools listadas en el MCP de este esquema | `mcp` global |
 | `server.timeout`, `server.maxConcurrent`, `server.maxResponseBytes`, `server.streamThresholdBytes` | timeout, operaciones simultáneas y tamaños de respuesta de este esquema | `server` global |
-| `runtime.mode`, `runtime.maxMemoryMb` | `thread` / `process` y límite de memoria del worker de este esquema | `runtime.schemas` y `runtime.maxMemoryMb` globales |
+| `runtime.mode`, `runtime.maxMemoryMb`, `runtime.checkConnections` | `thread` / `process`, límite de memoria del worker de este esquema y si prueba sus conexiones al arrancar | `runtime.schemas`, `runtime.maxMemoryMb` y `runtime.checkConnections` globales |
 
 Solo globales o por transporte (son del proceso o del puerto, no del esquema): puertos, `host`, `basePath`,
 `rateLimit`, `logger`, `metrics`, `swagger` / `asyncapi`, `legacySse`, `stateful`, `runtime.transports`,
@@ -274,9 +274,10 @@ transports:
 | --- | --- | --- |
 | `orm.workspacePath` | — | raíz donde se descubren esquemas (§2.2) |
 | `orm.schemas[]` | `[]` | `path` (obligatorio), `workspace` (define un esquema) y ajustes (§2.2) |
-| `runtime.transports` | `shared` | `shared` / `thread` / `process` (§3.1) |
+| `runtime.transports` | `shared` | `shared` / `thread` / `process` (§3.1); en 3.0.0 solo `shared` (los otros dos avisan y usan `shared`) |
 | `runtime.schemas` | `thread` | `thread` / `process` |
 | `runtime.maxMemoryMb` | `512` | por worker |
+| `runtime.checkConnections` | `true` | al arrancar, cada esquema abre y libera una conexión de cada fuente: una base caída lo deja en `error` (y se reintenta) en lugar de fallar en la primera consulta |
 | `runtime.threadpoolSize` | `auto` | `max(4, 2 × esquemas thread)`, tope 64 |
 | `runtime.heartbeat.intervalMs` / `timeoutMs` | `5000` / `30000` | |
 | `runtime.restart.initialDelayMs` / `maxDelayMs` | `1000` / `300000` | espera creciente entre reinicios |
@@ -285,7 +286,7 @@ transports:
 | `server.maxConcurrent` | `64` | operaciones simultáneas por esquema; por encima, `429` (§3.2); `0` = sin límite |
 | `server.requestBodySize` | `14MB` | |
 | `server.maxResponseBytes` | `256MB` | `0` = sin límite; si se supera, error `413` (§3.2) |
-| `server.streamThresholdBytes` | `8MB` | por encima, la respuesta REST va en partes |
+| `server.streamThresholdBytes` | `8MB` | por encima, la respuesta REST va en partes (pendiente: en 3.0.0 el resultado viaja entero, transferido sin copia) |
 | `logger.adapter` / `logger.level` | `winston` / `info` | |
 | `metrics.enabled` | `true` | |
 | `audit.enabled` | `true` | registro de escrituras (§8.1) |

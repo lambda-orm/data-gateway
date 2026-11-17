@@ -124,7 +124,7 @@ transports: { http: { port: $PORT } }
 	test('a workspace without lambdaORM.yaml', async () => {
 		const port = await freePort()
 		const file = writeConfig(`
-orm: { workspacePath: ${os.tmpdir()} }
+orm: { workspacePath: ${fs.mkdtempSync(path.join(os.tmpdir(), 'empty-'))} }
 transports: { http: { port: ${port} } }
 `)
 		await expect(startGateway({ source: new YamlFileConfigSource(file, {}), bootLogger: new ConsoleLogger('error') }))

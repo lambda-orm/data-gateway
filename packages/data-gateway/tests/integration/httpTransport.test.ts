@@ -3,7 +3,8 @@ import { HttpTransport } from '../../src/lib/infrastructure/input/http/httpTrans
 import { BearerAuthenticator } from '../../src/lib/infrastructure/output/auth/authenticators'
 import { NoMetrics, PromClientMetrics } from '../../src/lib/infrastructure/output/metrics/promClientMetrics'
 import { ConsoleLogger } from '../../src/lib/infrastructure/output/logger/loggers'
-import { fakeGateway, GatewayFixture } from '../helpers/fakes'
+import { fakeGateway, FixedClock, GatewayFixture } from '../helpers/fakes'
+import { InlineSchemaDirectory } from '../../src/lib/application/runtime/inlineSchemaDirectory'
 import { call } from '../helpers/net'
 
 const credentials = [
@@ -22,8 +23,9 @@ const start = async (fixture: GatewayFixture, options: Partial<{ basePath: strin
 		rateLimit: options.rateLimit ?? { windowMs: 1000, max: 0 },
 		swaggerEnabled: true
 	}, {
-		gateway: fixture.gateway,
-		authenticator: new BearerAuthenticator(credentials),
+		directory: new InlineSchemaDirectory([{
+			path: '', gateway: fixture.gateway, mcp: undefined as any, transports: ['http'], authenticators: { http: new BearerAuthenticator(credentials) }
+		}], new FixedClock(), '9.9.9'),
 		metrics: options.metrics ? new PromClientMetrics() : new NoMetrics(),
 		logger: new ConsoleLogger('error')
 	})

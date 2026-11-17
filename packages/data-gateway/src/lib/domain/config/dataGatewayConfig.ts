@@ -19,11 +19,40 @@ export interface AuthenticationConfig {
 	credentials: CredentialConfig[]
 }
 
-export interface SchemaConfig {
+export type RuntimeMode = 'thread' | 'process'
+
+/** What a schema may override (docs/DATA_GATEWAY.md §2.2): schema → transport → global, the most specific replaces */
+export interface SchemaOverrides {
+	/** Transports that expose it (default: all exposed) */
+	transports?: TransportName[]
+	authentication?: AuthenticationConfig
+	/** Variables its worker receives on top of its .env and the base variables */
+	env?: Record<string, string>
+	scripts?: Partial<ScriptsConfig>
+	mcp?: { maxRows?: number, tools?: { include: string[], exclude: string[] } }
+	server?: { timeout?: number, maxConcurrent?: number, maxResponseBytes?: number }
+	runtime?: { mode?: RuntimeMode, maxMemoryMb?: number, checkConnections?: boolean }
+}
+
+export interface SchemaConfig extends SchemaOverrides {
 	/** Route of the schema ('' = served at the root) */
 	path: string
-	/** Folder with lambdaORM.yaml (or the file itself) */
+	/** Folder with lambdaORM.yaml (or the file itself); without it the entry adjusts a discovered schema */
 	workspace?: string
+}
+
+export interface RuntimeConfig {
+	/** shared: every transport in one edge worker */
+	transports: 'shared'
+	schemas: RuntimeMode
+	maxMemoryMb: number
+	/** Open a connection of each source when a schema starts: a database down leaves it in error (and retried) */
+	checkConnections: boolean
+	/** UV_THREADPOOL_SIZE; undefined = auto */
+	threadpoolSize?: number
+	heartbeat: { intervalMs: number, timeoutMs: number }
+	restart: { initialDelayMs: number, maxDelayMs: number }
+	env: { isolate: boolean, passthrough: string[] }
 }
 
 export interface OrmConfig {
@@ -34,6 +63,10 @@ export interface OrmConfig {
 export interface ServerConfig {
 	timeout: number
 	requestBodySize: string
+	/** Operations in flight per schema; over it 429. 0 = no limit */
+	maxConcurrent: number
+	/** Bytes of a serialized result; over it 413. 0 = no limit */
+	maxResponseBytes: number
 }
 
 export interface ScriptsConfig {
@@ -117,6 +150,7 @@ export interface DataGatewayConfig {
 	rateLimit: RateLimitConfig
 	scripts: ScriptsConfig
 	mcp: McpConfig
+	runtime: RuntimeConfig
 	/** Only the transports with a port (docs/DATA_GATEWAY.md §2.1) */
 	transports: TransportsConfig
 }

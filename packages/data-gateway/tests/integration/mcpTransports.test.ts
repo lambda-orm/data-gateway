@@ -12,7 +12,8 @@ import { McpWebSocketTransport } from '../../src/lib/infrastructure/input/mcp/mc
 import { BearerAuthenticator } from '../../src/lib/infrastructure/output/auth/authenticators'
 import { NoMetrics } from '../../src/lib/infrastructure/output/metrics/promClientMetrics'
 import { ConsoleLogger } from '../../src/lib/infrastructure/output/logger/loggers'
-import { fakeGateway, GatewayFixture } from '../helpers/fakes'
+import { fakeGateway, FixedClock, GatewayFixture } from '../helpers/fakes'
+import { InlineSchemaDirectory } from '../../src/lib/application/runtime/inlineSchemaDirectory'
 import { call } from '../helpers/net'
 
 const credentials = [
@@ -26,18 +27,26 @@ const mcpServer = (fixture: GatewayFixture) => new DataGatewayMcpServer(new Tool
 	name: 'northwind', version: '9.9.9', pageSize: 50, maxRows: 2
 })
 
+/** One schema at the root, on the MCP transports */
+const directory = (fixture: GatewayFixture) => new InlineSchemaDirectory([{
+	path: '',
+	gateway: fixture.gateway,
+	mcp: mcpServer(fixture),
+	transports: ['mcpHttp', 'mcpWebSocket'],
+	authenticators: { mcpHttp: new BearerAuthenticator(credentials), mcpWebSocket: new BearerAuthenticator(credentials) }
+}], new FixedClock(), '9.9.9')
+
 const startHttp = async (fixture: GatewayFixture, options: { stateful?: boolean, maxConnections?: number, basePath?: string } = {}) => {
 	const transport = new McpHttpTransport({
 		port: 0,
 		host: '127.0.0.1',
 		basePath: options.basePath ?? '',
-		schemaPath: '',
 		requestBodySize: '1mb',
 		rateLimit: { windowMs: 1000, max: 0 },
 		legacySse: true,
 		stateful: options.stateful ?? false,
 		maxConnections: options.maxConnections ?? 10
-	}, { server: mcpServer(fixture), authenticator: new BearerAuthenticator(credentials), metrics: new NoMetrics(), logger })
+	}, { directory: directory(fixture), metrics: new NoMetrics(), logger })
 	await transport.start()
 	return { transport, base: `http://127.0.0.1:${transport.address!.port}${options.basePath ?? ''}` }
 }
@@ -181,8 +190,8 @@ describe('mcpWebSocket', () => {
 	let url: string
 
 	beforeAll(async () => {
-		transport = new McpWebSocketTransport({ port: 0, host: '127.0.0.1', basePath: '', schemaPath: '', maxConnections: 2, maxPayload: 1024 * 1024, asyncapiEnabled: true },
-			{ server: mcpServer(fakeGateway()), authenticator: new BearerAuthenticator(credentials), logger })
+		transport = new McpWebSocketTransport({ port: 0, host: '127.0.0.1', basePath: '', maxConnections: 2, maxPayload: 1024 * 1024, asyncapiEnabled: true },
+			{ directory: directory(fakeGateway()), logger })
 		await transport.start()
 		url = `ws://127.0.0.1:${transport.address!.port}/mcp`
 	})
@@ -244,7 +253,7 @@ describe('mcpWebSocket', () => {
 		const base = url.replace('ws://', 'http://').replace('/mcp', '')
 		expect((await call(base, '/status')).body).toMatchObject({ transport: 'mcpWebSocket', schemas: [{ mcp: '/mcp' }] })
 		const asyncapi = await call(base, '/asyncapi.json')
-		expect(asyncapi.body).toMatchObject({ asyncapi: '3.0.0', servers: { gateway: { protocol: 'ws', pathname: '/mcp' } } })
+		expect(asyncapi.body).toMatchObject({ asyncapi: '3.0.0', servers: { root: { protocol: 'ws', pathname: '/mcp' } } })
 		expect((await call(base, '/mcp')).status).toBe(426)
 	})
 })

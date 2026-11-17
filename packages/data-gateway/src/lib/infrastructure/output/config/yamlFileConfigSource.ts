@@ -20,7 +20,8 @@ export class YamlFileConfigSource implements ConfigSourcePort {
 		}
 		let parsed: unknown
 		try {
-			parsed = YAML.load(await fs.promises.readFile(this.location, 'utf8'))
+			// synchronous: the supervisor sets UV_THREADPOOL_SIZE after reading it, before anything uses the threadpool
+			parsed = YAML.load(fs.readFileSync(this.location, 'utf8'))
 		} catch (error: any) {
 			throw new ConfigError([`${this.location} is not valid YAML: ${error.message}`])
 		}

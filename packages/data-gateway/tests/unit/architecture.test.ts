@@ -32,8 +32,8 @@ describe('architecture', () => {
 		expect(application.length).toBeGreaterThan(3)
 		expect(input.length).toBeGreaterThan(1)
 		// the parser sees multi-line imports and require
-		const builder = imports(path.join(SRC, 'infrastructure/build/dataGatewayBuilder.ts'))
-		expect(builder).toEqual(expect.arrayContaining(['application/facade/dataGateway', path.normalize('infrastructure/output/orm/lambdaOrmAdapter'), 'fs']))
+		const composer = imports(path.join(SRC, 'infrastructure/build/schemaComposer.ts'))
+		expect(composer).toEqual(expect.arrayContaining(['application/facade/dataGateway', path.normalize('infrastructure/output/orm/lambdaOrmAdapter'), 'fs']))
 		expect(imports(path.join(SRC, 'infrastructure/input/http/httpTransport.ts'))).toContain('js-yaml')
 	})
 

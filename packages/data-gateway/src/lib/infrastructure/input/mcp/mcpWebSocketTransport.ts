@@ -6,8 +6,8 @@ import { AddressInfo } from 'net'
 import { WebSocket, WebSocketServer } from 'ws'
 import { Transport as SdkTransport } from '@modelcontextprotocol/sdk/shared/transport.js'
 import { JSONRPCMessage, JSONRPCMessageSchema } from '@modelcontextprotocol/sdk/types.js'
-import { McpServerPort } from '../../../application/ports/input/mcpServerPort'
-import { AuthenticatorPort, LoggerPort } from '../../../application/ports/output/supportPorts'
+import { SchemaDirectoryPort, ServedSchema } from '../../../application/ports/input/schemaDirectoryPort'
+import { LoggerPort } from '../../../application/ports/output/supportPorts'
 import { Principal } from '../../../domain/auth/principal'
 import { Transport } from '../transport'
 import { createSdkServer } from './sdkMcpServer'
@@ -17,7 +17,6 @@ export interface McpWebSocketTransportOptions {
 	port: number
 	host: string
 	basePath: string
-	schemaPath: string
 	maxConnections: number
 	/** Bytes of a message */
 	maxPayload: number
@@ -25,8 +24,7 @@ export interface McpWebSocketTransportOptions {
 }
 
 export interface McpWebSocketTransportDeps {
-	server: McpServerPort
-	authenticator: AuthenticatorPort
+	directory: SchemaDirectoryPort
 	logger: LoggerPort
 }
 
@@ -98,8 +96,16 @@ export class McpWebSocketTransport implements Transport {
 		return info ? { host: info.address, port: info.port } : undefined
 	}
 
-	private get path (): string {
-		return `${this.options.basePath}${this.options.schemaPath ? `/${this.options.schemaPath}` : ''}/mcp`
+	private get served (): ServedSchema[] {
+		return this.deps.directory.schemas().filter(s => s.exposedOn(TRANSPORT_NAME))
+	}
+
+	private path (schema: ServedSchema): string {
+		return `${this.options.basePath}${schema.path ? `/${schema.path}` : ''}/mcp`
+	}
+
+	private schemaAt (pathname: string): ServedSchema | undefined {
+		return this.served.find(s => this.path(s) === pathname)
 	}
 
 	public async start (): Promise<void> {
@@ -114,7 +120,7 @@ export class McpWebSocketTransport implements Transport {
 			this.server = server
 		})
 		const address = this.address
-		this.deps.logger.info(`[data-gateway] mcpWebSocket listening on ws://${address?.host}:${address?.port}${this.path}`)
+		this.deps.logger.info(`[data-gateway] mcpWebSocket listening on ws://${address?.host}:${address?.port}: ${this.served.map(s => this.path(s)).join(', ')}`)
 	}
 
 	public async stop (): Promise<void> {
@@ -128,7 +134,7 @@ export class McpWebSocketTransport implements Transport {
 	}
 
 	public status () {
-		return { transport: TRANSPORT_NAME, schemas: [{ path: this.options.schemaPath, mcp: this.path }], connections: this.wss.clients.size, max: this.options.maxConnections }
+		return { transport: TRANSPORT_NAME, schemas: this.served.map(s => ({ path: s.path, mcp: this.path(s) })), connections: this.wss.clients.size, max: this.options.maxConnections }
 	}
 
 	private http (req: http.IncomingMessage, res: http.ServerResponse): void {
@@ -139,10 +145,13 @@ export class McpWebSocketTransport implements Transport {
 			res.end(typeof body === 'string' ? body : JSON.stringify(body))
 		}
 		if (req.method === 'GET' && url.pathname === `${base}/status`) return send(200, this.status())
-		if (req.method === 'GET' && url.pathname === `${base}/health`) return send(200, { message: 'OK' })
+		if (req.method === 'GET' && url.pathname === `${base}/health`) {
+			this.deps.directory.health().then(health => send(200, health), () => send(500, { error: 'Error' }))
+			return
+		}
 		if (req.method === 'GET' && this.asyncapi && url.pathname === `${base}/asyncapi.json`) return send(200, this.asyncapi)
 		if (req.method === 'GET' && this.asyncapi && url.pathname === `${base}/asyncapi`) return send(200, YAML.dump(this.asyncapi), 'application/yaml')
-		if (url.pathname === this.path) return send(426, { error: 'UpgradeRequired', message: `connect with WebSocket (subprotocol "${SUBPROTOCOL}")` })
+		if (this.schemaAt(url.pathname)) return send(426, { error: 'UpgradeRequired', message: `connect with WebSocket (subprotocol "${SUBPROTOCOL}")` })
 		send(404, { error: 'NotFound', message: `${req.method} ${url.pathname}` })
 	}
 
@@ -153,11 +162,12 @@ export class McpWebSocketTransport implements Transport {
 
 	private async upgrade (req: http.IncomingMessage, socket: Duplex, head: Buffer): Promise<void> {
 		const url = new URL(req.url ?? '/', 'http://localhost')
-		if (url.pathname !== this.path) return this.reject(socket, 404, `no MCP server at ${url.pathname}`)
+		const schema = this.schemaAt(url.pathname)
+		if (!schema) return this.reject(socket, 404, `no MCP server at ${url.pathname}`)
 		if (this.wss.clients.size >= this.options.maxConnections) return this.reject(socket, 503, `too many connections (maxConnections ${this.options.maxConnections})`)
 		let principal: Principal | undefined
 		try {
-			const result = await this.deps.authenticator.authenticate(req.headers)
+			const result = await schema.authenticator(TRANSPORT_NAME).authenticate(req.headers)
 			if (!result.valid || !result.principal) return this.reject(socket, 401, result.reason ?? 'a valid credential is required')
 			principal = result.principal
 		} catch (error) {
@@ -165,7 +175,7 @@ export class McpWebSocketTransport implements Transport {
 			return this.reject(socket, 500, 'authentication failed')
 		}
 		this.wss.handleUpgrade(req, socket, head, ws => {
-			const server = createSdkServer(this.deps.server, { principal: principal!, transport: TRANSPORT_NAME }, this.deps.logger)
+			const server = createSdkServer(schema.mcp, { principal: principal!, transport: TRANSPORT_NAME }, this.deps.logger)
 			ws.on('close', () => { server.close().catch(() => undefined) })
 			server.connect(new ServerSocketTransport(ws)).catch(error => {
 				this.deps.logger.error(error as Error)
@@ -181,7 +191,7 @@ export class McpWebSocketTransport implements Transport {
 			return undefined
 		}
 		const document = YAML.load(fs.readFileSync(file, 'utf8'))
-		document.servers = { gateway: { host: `localhost:${this.options.port}`, protocol: 'ws', pathname: this.path } }
+		document.servers = Object.fromEntries(this.served.map(s => [s.path || 'root', { host: `localhost:${this.options.port}`, protocol: 'ws', pathname: this.path(s) }]))
 		return document
 	}
 }

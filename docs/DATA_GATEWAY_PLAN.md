@@ -18,7 +18,7 @@ el desarrollo está en este paquete; `@lambdaorm/lib` y `@lambdaorm/base` no se 
 que se agregan o cambian: **`@lambdaorm/ui`** (nuevo, 3.1.0) y `@lambdaorm/client` (adaptador WebSocket, 3.2.0). Qué se construye y cómo se comporta:
 [`DATA_GATEWAY.md`](DATA_GATEWAY.md). Este documento dice en qué orden, qué archivos y cuándo está terminado.
 
-> **Estado (2026-11-17): fases 1 a 3 implementadas, sin publicar. Ticket: #96.** Base: `develop` con service 2.4.0
+> **Estado (2026-11-17): fases 1 a 4 implementadas, sin publicar. Ticket: #96.** Base: `develop` con service 2.4.0
 > (lib 3.5.0). Rama: `feature/data-gateway-core` (todas las fases, sobre `feature/data-gateway-rename`). Desvíos
 > respecto de este plan: ver "Hecho" en cada fase.
 
@@ -372,6 +372,34 @@ nueva. Documentación externa (PRs aparte): wiki (`docs/api/index.md`, `docs/api
 `@lambdaorm/client` apuntando a cada URL y con Claude Code conectado a `/northwind/v1/mcp` y `/northwind/v2/mcp`;
 benchmark dentro del criterio; conjunto de evaluación sigue en el objetivo; imagen `3.0.0` verificada descargándola de
 Docker Hub.
+
+**Hecho (2026-11-17).** Supervisor en el hilo principal, edge (todos los transportes) en un worker thread, un worker
+por esquema en `thread` o `process`, canal directo edge ↔ esquema (`MessagePort` con el resultado transferido como
+bytes; socket unix con frames en `process`), estados difundidos al edge, heartbeat, reinicios con espera creciente,
+`maxConcurrent` (`429` con `Retry-After`; `isError` en MCP), `maxResponseBytes` (`413`), env por esquema (`schemas[].env`,
+`.env` del workspace, variables base y `passthrough`), `UV_THREADPOOL_SIZE`, descubrimiento (sigue enlaces simbólicos),
+ajustes por esquema y `config/multi-schema`. Tests: 86 unitarios (rutas, combinación de esquemas, prioridad de ajustes,
+`schemaEnv`, políticas, despachador, `SchemaRouter`, `Supervisor` con fakes) y 33 de integración, 6 de ellos con
+workers reales: esquema con base caída en `error` con su motivo (cada worker con su valor de `$DB_CONNECTION`), REST y
+MCP por esquema, script pesado en uno sin frenar al otro, worker colgado (`SIGSTOP`) terminado por el heartbeat y
+reiniciado, proceso matado y reiniciado solo. Verificado además con el build compilado: laboratorio `ilusor-cloud`
+14/14 y `eval --check` 30/30 a través de los workers, `config/multi-schema` con MySQL, smoke MCP y `SIGTERM` en 53 ms.
+Desvíos:
+
+- **`runtime.checkConnections`** (nuevo, `true` por defecto, ajustable por esquema): λORM no conecta en `init`, así
+  que para que una base caída deje al esquema en `error` el worker abre una conexión de cada fuente al arrancar.
+- **`runtime.transports`: solo `shared`.** `thread` / `process` avisan y usan el edge compartido.
+- **Sin respuestas en partes** (`streamThresholdBytes`): el resultado viaja entero como bytes transferidos; sí está el
+  límite `maxResponseBytes`.
+- Los scripts de 3xpr ceden el event loop: un `while` largo no cuelga el worker. El test del heartbeat congela el
+  proceso con `SIGSTOP`; no hay test de `maxMemoryMb` (se aplica con `resourceLimits` / `--max-old-space-size`) ni de
+  reinicio del edge con workers reales (cubierto con fakes).
+- Errores por el canal: viajan `status` (solo si el error lo tiene), `code` de la base y lo que lanzó un script, para
+  que REST responda igual que sin workers (409 por clave duplicada, el `status` de un `throw`).
+- El runtime en línea (`DataGatewayBuilder`, todos los esquemas en el mismo hilo) queda para tests y para embeber.
+- El adaptador `sql.js` de λORM no funciona (crea la conexión con `null`): los tests no usan SQLite.
+- Pendiente: benchmark contra 2.4.0, smoke multi-esquema en el workflow de la imagen (está el de MCP), release 3.0.0
+  (versión, CHANGELOG, `latest`) y la documentación externa.
 
 ### Fase 5 — UI de consultas (`@lambdaorm/ui`) → `3.1.0`
 

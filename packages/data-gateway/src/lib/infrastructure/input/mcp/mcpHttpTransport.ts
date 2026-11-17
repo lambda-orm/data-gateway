@@ -7,7 +7,7 @@ import { rateLimit } from 'express-rate-limit'
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js'
 import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
-import { McpServerPort } from '../../../application/ports/input/mcpServerPort'
+import { SchemaDirectoryPort, ServedSchema } from '../../../application/ports/input/schemaDirectoryPort'
 import { AuthenticatorPort, LoggerPort, MetricsPort } from '../../../application/ports/output/supportPorts'
 import { Principal } from '../../../domain/auth/principal'
 import { Transport } from '../transport'
@@ -17,8 +17,6 @@ export interface McpHttpTransportOptions {
 	port: number
 	host: string
 	basePath: string
-	/** Route of the schema ('' = at the root): /{schema}/mcp */
-	schemaPath: string
 	requestBodySize: string
 	rateLimit: { windowMs: number, max: number }
 	legacySse: boolean
@@ -27,8 +25,7 @@ export interface McpHttpTransportOptions {
 }
 
 export interface McpHttpTransportDeps {
-	server: McpServerPort
-	authenticator: AuthenticatorPort
+	directory: SchemaDirectoryPort
 	metrics: MetricsPort
 	logger: LoggerPort
 }
@@ -39,6 +36,8 @@ interface Session<T> {
 	transport: T
 	server: Server
 	credential: string
+	/** Route of its schema: a session id only works under it */
+	schema: string
 }
 
 const rpcError = (res: express.Response, status: number, code: number, message: string): void => {
@@ -46,7 +45,7 @@ const rpcError = (res: express.Response, status: number, code: number, message: 
 }
 
 /**
- * MCP over HTTP: Streamable HTTP at {basePath}/{schema}/mcp (stateless by default: every POST stands alone, so any
+ * MCP over HTTP, one MCP server per schema: Streamable HTTP at {basePath}/{schema}/mcp (stateless by default: every POST stands alone, so any
  * replica answers it) and, with legacySse, the deprecated HTTP+SSE at /sse + /messages. Authenticates every request.
  */
 export class McpHttpTransport implements Transport {
@@ -65,8 +64,12 @@ export class McpHttpTransport implements Transport {
 		return info ? { host: info.address, port: info.port } : undefined
 	}
 
-	private get prefix (): string {
-		return `${this.options.basePath}${this.options.schemaPath ? `/${this.options.schemaPath}` : ''}`
+	private get served (): ServedSchema[] {
+		return this.deps.directory.schemas().filter(s => s.exposedOn(TRANSPORT_NAME))
+	}
+
+	private prefix (schema: ServedSchema): string {
+		return `${this.options.basePath}${schema.path ? `/${schema.path}` : ''}`
 	}
 
 	public async start (): Promise<void> {
@@ -80,8 +83,8 @@ export class McpHttpTransport implements Transport {
 			this.server = server
 		})
 		const address = this.address
-		this.deps.logger.info(`[data-gateway] mcpHttp listening on ${address?.host}:${address?.port}${this.prefix}/mcp` +
-			`${this.options.stateful ? ' (stateful)' : ''}${this.options.legacySse ? `, SSE ${this.prefix}/sse` : ''}`)
+		this.deps.logger.info(`[data-gateway] mcpHttp listening on ${address?.host}:${address?.port}: ${this.served.map(s => `${this.prefix(s)}/mcp`).join(', ')}` +
+			`${this.options.stateful ? ' (stateful)' : ''}${this.options.legacySse ? ' (and /sse)' : ''}`)
 	}
 
 	public async stop (): Promise<void> {
@@ -99,7 +102,7 @@ export class McpHttpTransport implements Transport {
 	public status () {
 		return {
 			transport: TRANSPORT_NAME,
-			schemas: [{ path: this.options.schemaPath, mcp: `${this.prefix}/mcp`, sse: this.options.legacySse ? `${this.prefix}/sse` : undefined }],
+			schemas: this.served.map(s => ({ path: s.path, mcp: `${this.prefix(s)}/mcp`, sse: this.options.legacySse ? `${this.prefix(s)}/sse` : undefined })),
 			stateful: this.options.stateful,
 			sessions: { sse: this.sseSessions.size, streamable: this.streamSessions.size, max: this.options.maxConnections }
 		}
@@ -128,14 +131,17 @@ export class McpHttpTransport implements Transport {
 		const json = express.json({ limit: this.options.requestBodySize })
 		const base = this.options.basePath
 		app.get(`${base}/status`, (_req, res) => { res.json(this.status()) })
-		app.get(`${base}/health`, (_req, res) => { res.json({ message: 'OK' }) })
-		const prefix = this.prefix
-		app.post(`${prefix}/mcp`, json, this.authenticate, (req, res) => this.streamable(req, res))
-		app.get(`${prefix}/mcp`, this.authenticate, (req, res) => this.streamableSession(req, res))
-		app.delete(`${prefix}/mcp`, this.authenticate, (req, res) => this.streamableSession(req, res))
-		if (this.options.legacySse) {
-			app.get(`${prefix}/sse`, this.authenticate, (req, res) => this.sse(req, res))
-			app.post(`${prefix}/messages`, json, this.authenticate, (req, res) => this.sseMessage(req, res))
+		app.get(`${base}/health`, async (_req, res) => { res.json(await this.deps.directory.health()) })
+		for (const schema of this.served) {
+			const prefix = this.prefix(schema)
+			const authenticate = this.authenticate(schema.authenticator(TRANSPORT_NAME))
+			app.post(`${prefix}/mcp`, json, authenticate, (req, res) => this.streamable(schema, req, res))
+			app.get(`${prefix}/mcp`, authenticate, (req, res) => this.streamableSession(schema, req, res))
+			app.delete(`${prefix}/mcp`, authenticate, (req, res) => this.streamableSession(schema, req, res))
+			if (this.options.legacySse) {
+				app.get(`${prefix}/sse`, authenticate, (req, res) => this.sse(schema, req, res))
+				app.post(`${prefix}/messages`, json, authenticate, (req, res) => this.sseMessage(schema, req, res))
+			}
 		}
 		app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
 			if (res.headersSent) return next(err)
@@ -145,9 +151,10 @@ export class McpHttpTransport implements Transport {
 		return app
 	}
 
-	private readonly authenticate = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+	private authenticate (authenticator: AuthenticatorPort) {
+		return async (req: express.Request, res: express.Response, next: express.NextFunction) => {
 		try {
-			const result = await this.deps.authenticator.authenticate(req.headers)
+			const result = await authenticator.authenticate(req.headers)
 			if (!result.valid || !result.principal) {
 				rpcError(res, 401, -32001, result.reason ?? 'a valid credential is required')
 				return
@@ -156,6 +163,7 @@ export class McpHttpTransport implements Transport {
 			next()
 		} catch (error) {
 			next(error)
+		}
 		}
 	}
 
@@ -169,14 +177,14 @@ export class McpHttpTransport implements Transport {
 
 	// ─── Streamable HTTP ─────────────────────────────────────────────────────
 
-	private async streamable (req: express.Request, res: express.Response): Promise<void> {
+	private async streamable (schema: ServedSchema, req: express.Request, res: express.Response): Promise<void> {
 		try {
 			if (this.options.stateful) {
-				await this.statefulPost(req, res)
+				await this.statefulPost(schema, req, res)
 				return
 			}
 			// stateless: a server and a transport per request, closed with the response
-			const server = createSdkServer(this.deps.server, this.context(res), this.deps.logger)
+			const server = createSdkServer(schema.mcp, this.context(res), this.deps.logger)
 			const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true })
 			res.on('close', () => {
 				transport.close().catch(() => undefined)
@@ -190,10 +198,10 @@ export class McpHttpTransport implements Transport {
 		}
 	}
 
-	private async statefulPost (req: express.Request, res: express.Response): Promise<void> {
+	private async statefulPost (schema: ServedSchema, req: express.Request, res: express.Response): Promise<void> {
 		const id = req.header('mcp-session-id')
 		if (id) {
-			const session = this.ownSession(this.streamSessions, id, res)
+			const session = this.ownSession(this.streamSessions, schema, id, res)
 			if (session) await session.transport.handleRequest(req, res, req.body)
 			return
 		}
@@ -202,11 +210,11 @@ export class McpHttpTransport implements Transport {
 			return
 		}
 		const ctx = this.context(res)
-		const server = createSdkServer(this.deps.server, ctx, this.deps.logger)
+		const server = createSdkServer(schema.mcp, ctx, this.deps.logger)
 		const transport: StreamableHTTPServerTransport = new StreamableHTTPServerTransport({
 			sessionIdGenerator: () => randomUUID(),
 			onsessioninitialized: sessionId => {
-				this.streamSessions.set(sessionId, { transport, server, credential: ctx.principal.name })
+				this.streamSessions.set(sessionId, { transport, server, credential: ctx.principal.name, schema: schema.path })
 			}
 		})
 		transport.onclose = () => {
@@ -216,7 +224,7 @@ export class McpHttpTransport implements Transport {
 		await transport.handleRequest(req, res, req.body)
 	}
 
-	private async streamableSession (req: express.Request, res: express.Response): Promise<void> {
+	private async streamableSession (schema: ServedSchema, req: express.Request, res: express.Response): Promise<void> {
 		if (!this.options.stateful) {
 			res.setHeader('Allow', 'POST')
 			rpcError(res, 405, -32000, 'method not allowed: this server is stateless, send every message with POST')
@@ -227,14 +235,14 @@ export class McpHttpTransport implements Transport {
 			rpcError(res, 400, -32000, 'mcp-session-id header is required')
 			return
 		}
-		const session = this.ownSession(this.streamSessions, id, res)
+		const session = this.ownSession(this.streamSessions, schema, id, res)
 		if (session) await session.transport.handleRequest(req, res)
 	}
 
-	/** The session, if it exists and belongs to the same credential (a session id is not a credential) */
-	private ownSession<T> (sessions: Map<string, Session<T>>, id: string, res: express.Response): Session<T> | undefined {
+	/** The session, if it exists, is of this schema and belongs to the same credential (a session id is not a credential) */
+	private ownSession<T> (sessions: Map<string, Session<T>>, schema: ServedSchema, id: string, res: express.Response): Session<T> | undefined {
 		const session = sessions.get(id)
-		if (!session || session.credential !== this.context(res).principal.name) {
+		if (!session || session.schema !== schema.path || session.credential !== this.context(res).principal.name) {
 			rpcError(res, 404, -32001, `session "${id}" not found`)
 			return undefined
 		}
@@ -243,15 +251,15 @@ export class McpHttpTransport implements Transport {
 
 	// ─── HTTP+SSE (deprecated) ───────────────────────────────────────────────
 
-	private async sse (_req: express.Request, res: express.Response): Promise<void> {
+	private async sse (schema: ServedSchema, _req: express.Request, res: express.Response): Promise<void> {
 		if (this.connections >= this.options.maxConnections) {
 			rpcError(res, 503, -32000, `too many SSE connections (maxConnections ${this.options.maxConnections})`)
 			return
 		}
 		const ctx = this.context(res)
-		const transport = new SSEServerTransport(`${this.prefix}/messages`, res)
-		const server = createSdkServer(this.deps.server, ctx, this.deps.logger)
-		this.sseSessions.set(transport.sessionId, { transport, server, credential: ctx.principal.name })
+		const transport = new SSEServerTransport(`${this.prefix(schema)}/messages`, res)
+		const server = createSdkServer(schema.mcp, ctx, this.deps.logger)
+		this.sseSessions.set(transport.sessionId, { transport, server, credential: ctx.principal.name, schema: schema.path })
 		res.on('close', () => {
 			this.sseSessions.delete(transport.sessionId)
 			server.close().catch(() => undefined)
@@ -259,9 +267,9 @@ export class McpHttpTransport implements Transport {
 		await server.connect(transport)
 	}
 
-	private async sseMessage (req: express.Request, res: express.Response): Promise<void> {
+	private async sseMessage (schema: ServedSchema, req: express.Request, res: express.Response): Promise<void> {
 		const id = String(req.query.sessionId ?? '')
-		const session = this.ownSession(this.sseSessions, id, res)
+		const session = this.ownSession(this.sseSessions, schema, id, res)
 		if (session) await session.transport.handlePostMessage(req, res, req.body)
 	}
 }

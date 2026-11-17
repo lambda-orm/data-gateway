@@ -110,7 +110,7 @@ jobs:
         working-directory: packages/lib
         run: |
           LAB=$(realpath src/dev/labs/ilusor-cloud)
-          docker run -d --name svc --network host --env-file $LAB/.env -e WORKSPACE=/workspace -e PORT=18292 \
+          docker run -d --name svc --network host --env-file $LAB/.env -e WORKSPACE=/workspace -e PORT=18292 -e MCP_PORT=18293 \
             -e RATE_LIMIT_MAX=0 -e SCRIPT_ENABLED=true -e SERVICE_TOKEN=lab-token -v $LAB:/workspace \
             -v $LAB/data-gateway.config.yaml:/config/data-gateway.config.yaml:ro \
             $IMAGE:${{ steps.version.outputs.version }}
@@ -120,6 +120,16 @@ jobs:
           docker exec svc sh -c 'node --version && lambdaorm --version'
           ORM_SVC=1 ORM_URL=http://127.0.0.1:18292 ORM_SVC_TOKEN=lab-token \
             npx jest -c src/dev/labs/ilusor-cloud/jest.config.json --verbose src/dev/labs/ilusor-cloud/tests/service.spec.ts
+      - name: Test the image (MCP)
+        if: steps.version.outputs.exists == 'false'
+        run: |
+          # Streamable HTTP, stateless: initialize and a tool call, each in its own POST
+          mcp() { curl -sf -X POST http://127.0.0.1:18293/mcp -H 'Authorization: Bearer lab-token' \
+            -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' -d "$1"; }
+          mcp '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' | grep -q '"serverInfo"'
+          tools=$(mcp '{"jsonrpc":"2.0","id":2,"method":"tools/list"}')
+          echo "$tools" | grep -q '"orm_execute"' || { echo "::error::tools/list without orm_execute"; echo "$tools"; exit 1; }
+          curl -sf http://127.0.0.1:18292/schemas | grep -q '"status":"ready"' || { echo "::error::the schema is not ready"; exit 1; }
       - name: Image log
         if: always() && steps.version.outputs.exists == 'false'
         run: docker logs svc 2>&1 || true

@@ -7,6 +7,7 @@ import { AddressInfo } from 'net'
 import { rateLimit } from 'express-rate-limit'
 import swaggerUi from 'swagger-ui-express'
 import { DataGatewayPort, RequestContext } from '../../../application/ports/input/dataGatewayPort'
+import { SchemaDirectoryPort, ServedSchema } from '../../../application/ports/input/schemaDirectoryPort'
 import { AuthenticatorPort, LoggerPort, MetricsPort } from '../../../application/ports/output/supportPorts'
 import { Principal } from '../../../domain/auth/principal'
 import { Transport } from '../transport'
@@ -23,8 +24,7 @@ export interface HttpTransportOptions {
 }
 
 export interface HttpTransportDeps {
-	gateway: DataGatewayPort
-	authenticator: AuthenticatorPort
+	directory: SchemaDirectoryPort
 	metrics: MetricsPort
 	logger: LoggerPort
 }
@@ -35,7 +35,11 @@ export const TRANSPORT_NAME = 'http'
 
 type Handler = (req: express.Request, ctx: RequestContext) => Promise<unknown>
 
-/** The REST API (the endpoints of the former service) on its own port. */
+/**
+ * The REST API (the endpoints of the former service) on its own port, for every schema exposed on it: under
+ * {basePath}/{schema} (or at {basePath} for the only schema at the root). {basePath}/schemas lists them; /health is
+ * aggregated when there are several.
+ */
 export class HttpTransport implements Transport {
 	public readonly name = TRANSPORT_NAME
 	public readonly app: express.Express
@@ -61,7 +65,16 @@ export class HttpTransport implements Transport {
 			this.server = server
 		})
 		const address = this.address
-		this.deps.logger.info(`[data-gateway] http listening on ${address?.host}:${address?.port}${this.options.basePath || '/'}`)
+		const schemas = this.served.map(s => `/${s.path}`).join(', ')
+		this.deps.logger.info(`[data-gateway] http listening on ${address?.host}:${address?.port}${this.options.basePath || '/'} (schemas ${schemas})`)
+	}
+
+	private get served (): ServedSchema[] {
+		return this.deps.directory.schemas().filter(s => s.exposedOn(TRANSPORT_NAME))
+	}
+
+	private schemaBase (schema: ServedSchema): string {
+		return `${this.options.basePath}${schema.path ? `/${schema.path}` : ''}`
 	}
 
 	public async stop (): Promise<void> {
@@ -97,13 +110,29 @@ export class HttpTransport implements Transport {
 		app.use(this.beautify)
 		// the documentation is public (it holds no data): its "Authorize" button takes the credential
 		if (this.options.swaggerEnabled) this.swagger(app)
-		const router = express.Router()
-		this.generalRoutes(router)
-		router.use(this.authenticate)
-		this.queryRoutes(router)
-		this.schemaRoutes(router)
-		this.stageRoutes(router)
-		app.use(this.options.basePath || '/', router)
+		const base = this.options.basePath
+		const directory = this.deps.directory
+		const root = this.served.find(s => s.path === '')
+		app.get(`${base}/metrics`, async (_req, res) => {
+			const { contentType, body } = await this.deps.metrics.render()
+			res.status(200).type(contentType).send(body)
+		})
+		app.get(`${base}/schemas`, this.handle(async () => directory.states()))
+		if (!root) {
+			// several schemas (or one under a route): the gateway's own general routes at the base
+			app.get(`${base}/health`, this.handle(() => directory.health()))
+			app.get(`${base}/ping`, this.handle(async () => ({ message: 'pong', time: new Date().toISOString() })))
+			app.get(`${base}/version`, this.handle(async () => directory.version()))
+		}
+		for (const schema of this.served) {
+			const router = express.Router()
+			this.generalRoutes(router, schema.gateway)
+			router.use(this.authenticate(schema.authenticator(TRANSPORT_NAME)))
+			this.queryRoutes(router, schema.gateway)
+			this.schemaRoutes(router, schema.gateway)
+			this.stageRoutes(router, schema.gateway)
+			app.use(this.schemaBase(schema) || '/', router)
+		}
 		app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
 			if (res.headersSent) return next(err)
 			// body too large / invalid JSON (body-parser), with its own status
@@ -122,10 +151,11 @@ export class HttpTransport implements Transport {
 		next()
 	}
 
-	private readonly authenticate = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+	private authenticate (authenticator: AuthenticatorPort) {
+		return async (req: express.Request, res: express.Response, next: express.NextFunction) => {
 		if (OPEN_PATHS.includes(req.path)) return next()
 		try {
-			const result = await this.deps.authenticator.authenticate(req.headers)
+			const result = await authenticator.authenticate(req.headers)
 			if (!result.valid || !result.principal) {
 				res.status(401).json({ error: 'Unauthorized', message: result.reason ?? 'a valid credential is required' })
 				return
@@ -134,6 +164,7 @@ export class HttpTransport implements Transport {
 			next()
 		} catch (error) {
 			next(error)
+		}
 		}
 	}
 
@@ -150,7 +181,8 @@ export class HttpTransport implements Transport {
 				res.status(200).json(payload)
 			} catch (error: any) {
 				const httpError = toHttpError(error)
-				if (httpError.status >= 500) this.deps.logger.error(error)
+				if (httpError.status >= 500 && httpError.status !== 503) this.deps.logger.error(error)
+				if (httpError.status === 429) res.setHeader('Retry-After', '1')
 				res.status(httpError.status).json(httpError.body)
 			}
 		}
@@ -158,19 +190,13 @@ export class HttpTransport implements Transport {
 
 	// ─── routes ──────────────────────────────────────────────────────────────
 
-	private generalRoutes (router: express.Router): void {
-		const gw = this.deps.gateway
+	private generalRoutes (router: express.Router, gw: DataGatewayPort): void {
 		router.get('/version', this.handle(() => gw.version()))
 		router.get('/health', this.handle(() => gw.health()))
 		router.get('/ping', this.handle(() => gw.ping()))
-		router.get('/metrics', async (_req, res) => {
-			const { contentType, body } = await this.deps.metrics.render()
-			res.status(200).type(contentType).send(body)
-		})
 	}
 
-	private queryRoutes (router: express.Router): void {
-		const gw = this.deps.gateway
+	private queryRoutes (router: express.Router, gw: DataGatewayPort): void {
 		const body = (req: express.Request): any => req.body ?? {}
 		router.post('/constraints', this.handle((req, ctx) => gw.constraints(ctx, body(req))))
 		router.post('/metadata', this.handle((req, ctx) => gw.metadata(ctx, body(req))))
@@ -183,8 +209,7 @@ export class HttpTransport implements Transport {
 		router.post('/execute-queued', this.handle(async (req, ctx) => (await gw.executeQueued(ctx, body(req))).queueId))
 	}
 
-	private schemaRoutes (router: express.Router): void {
-		const gw = this.deps.gateway
+	private schemaRoutes (router: express.Router, gw: DataGatewayPort): void {
 		router.get('/schema', this.handle((_req, ctx) => gw.schema(ctx)))
 		router.get('/schema/version', this.handle((_req, ctx) => gw.schemaVersion(ctx)))
 		router.get('/domain', this.handle((_req, ctx) => gw.domain(ctx)))
@@ -202,8 +227,7 @@ export class HttpTransport implements Transport {
 		router.get('/views', this.handle((_req, ctx) => gw.views(ctx)))
 	}
 
-	private stageRoutes (router: express.Router): void {
-		const gw = this.deps.gateway
+	private stageRoutes (router: express.Router, gw: DataGatewayPort): void {
 		router.get('/stages/:stage/exists', this.handle((req, ctx) => gw.stageExists(ctx, String(req.params.stage))))
 		router.get('/stages/:stage/export', this.handle((req, ctx) => gw.stageExport(ctx, String(req.params.stage))))
 		router.post('/stages/:stage/import', this.handle((req, ctx) => gw.stageImport(ctx, String(req.params.stage), req.body)))
@@ -216,7 +240,7 @@ export class HttpTransport implements Transport {
 			return
 		}
 		const document = YAML.load(fs.readFileSync(file, 'utf8'))
-		document.servers = [{ description: 'this gateway', url: this.options.basePath || '/' }]
+		document.servers = this.served.map(schema => ({ description: `schema ${schema.path || '/'}`, url: this.schemaBase(schema) || '/' }))
 		const base = this.options.basePath
 		app.use(`${base}/api-docs`, swaggerUi.serve, swaggerUi.setup(document))
 		app.use(`${base}/doc`, swaggerUi.serve, swaggerUi.setup(document))

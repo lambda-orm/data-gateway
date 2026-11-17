@@ -1,15 +1,16 @@
 import { ALL_PERMISSIONS, isPermission, Permission } from '../auth/permission'
 import {
 	AuthenticationConfig, AuthenticationType, ConfigReading, CredentialConfig, DataGatewayConfig, LoggerConfig, McpConfig,
-	SchemaConfig, TransportConfig, TransportsConfig
+	RuntimeConfig, RuntimeMode, SchemaConfig, TransportConfig, TransportName, TransportsConfig
 } from './dataGatewayConfig'
+import { normalizeSchemaPath, schemaPathIssues } from '../runtime/schemaPath'
+import { parseSize } from './sizes'
 
 /** Transports of the design that this version does not serve yet (docs/DATA_GATEWAY_PLAN.md). */
 const LATER_TRANSPORTS = ['webSocket']
 const TRANSPORTS = ['http', 'mcpHttp', 'mcpWebSocket']
-/** Sections of the design read by later versions: accepted without a warning. */
-const LATER_SECTIONS = ['runtime']
-const KNOWN_SECTIONS = ['orm', 'server', 'logger', 'metrics', 'audit', 'authentication', 'rateLimit', 'scripts', 'mcp', 'transports', ...LATER_SECTIONS]
+const KNOWN_SECTIONS = ['orm', 'server', 'logger', 'metrics', 'audit', 'authentication', 'rateLimit', 'scripts', 'mcp', 'runtime', 'transports']
+const SCHEMA_KEYS = ['path', 'workspace', 'transports', 'authentication', 'env', 'scripts', 'mcp', 'server', 'runtime']
 /** The tools of docs/DATA_GATEWAY.md §5.1: mcp.tools.include / exclude must name them */
 export const TOOL_NAMES = [
 	'orm_execute', 'orm_execute_script', 'orm_execute_queued', 'orm_plan', 'orm_metadata', 'orm_model', 'orm_parameters',
@@ -47,7 +48,9 @@ export class ConfigReader {
 			orm: this.orm(raw.orm),
 			server: {
 				timeout: this.int(raw.server?.timeout, 120000, 'server.timeout', 1),
-				requestBodySize: this.str(raw.server?.requestBodySize, '14MB')
+				requestBodySize: this.str(raw.server?.requestBodySize, '14MB'),
+				maxConcurrent: this.int(raw.server?.maxConcurrent, 64, 'server.maxConcurrent', 0),
+				maxResponseBytes: this.size(raw.server?.maxResponseBytes, 256 * 1024 ** 2, 'server.maxResponseBytes')
 			},
 			logger: this.logger(raw.logger),
 			metrics: { enabled: this.bool(raw.metrics?.enabled, true, 'metrics.enabled') },
@@ -67,7 +70,13 @@ export class ConfigReader {
 				maxIterations: this.int(raw.scripts?.maxIterations, 100000, 'scripts.maxIterations', 1)
 			},
 			mcp: this.mcp(raw.mcp),
+			runtime: this.runtime(raw.runtime),
 			transports: this.transports(raw.transports)
+		}
+		for (const schema of config.orm.schemas) {
+			for (const transport of schema.transports ?? []) {
+				if (!TRANSPORTS.includes(transport)) this.issues.push(`orm.schemas "${schema.path}": unknown transport "${transport}"`)
+			}
 		}
 		const reading: ConfigReading = { issues: this.issues, warnings: this.warnings, notes: this.notes }
 		if (this.issues.length === 0) reading.config = config
@@ -88,23 +97,123 @@ export class ConfigReader {
 				this.issues.push('orm.schemas must be a list')
 			} else {
 				raw.schemas.forEach((entry: unknown, i: number) => {
-					if (!isObject(entry) || typeof entry.path !== 'string') {
-						this.issues.push(`orm.schemas[${i}]: path is required`)
-						return
-					}
-					schemas.push({ path: entry.path.replace(/^\/+|\/+$/g, ''), workspace: entry.workspace })
+					const schema = this.schema(entry, `orm.schemas[${i}]`)
+					if (schema) schemas.push(schema)
 				})
 			}
 		}
-		const explicit = schemas.filter(s => s.workspace !== undefined)
-		if (!workspacePath && explicit.length === 0) {
+		if (!workspacePath && !schemas.some(s => s.workspace !== undefined)) {
 			this.issues.push('orm.workspacePath (or an orm.schemas entry with workspace) is required')
 		}
-		// one schema served at the root: several schemas arrive with the runtime of docs/DATA_GATEWAY_PLAN.md phase 4
-		if (schemas.some(s => s.path !== '') || (workspacePath && explicit.length > 0) || explicit.length > 1) {
-			this.issues.push('orm: this version serves a single schema at the root (orm.workspacePath, or one orm.schemas entry with path "" and workspace); several schemas arrive in 3.0.0')
-		}
 		return { workspacePath, schemas }
+	}
+
+	/** An entry of orm.schemas: with workspace it defines a schema, without it adjusts a discovered one */
+	private schema (entry: unknown, at: string): SchemaConfig | undefined {
+		if (!isObject(entry) || entry.path === undefined || entry.path === null) {
+			this.issues.push(`${at}: path is required`)
+			return undefined
+		}
+		const path = normalizeSchemaPath(String(entry.path))
+		const key = `orm.schemas "${path || '/'}"`
+		for (const name of Object.keys(entry)) {
+			if (!SCHEMA_KEYS.includes(name)) this.warnings.push(`${key}: unknown key "${name}" ignored`)
+		}
+		this.issues.push(...schemaPathIssues(path))
+		const schema: SchemaConfig = { path }
+		if (entry.workspace !== undefined && entry.workspace !== null && entry.workspace !== '') schema.workspace = String(entry.workspace)
+		if (entry.transports !== undefined) {
+			if (!Array.isArray(entry.transports)) this.issues.push(`${key}.transports must be a list`)
+			else schema.transports = entry.transports.map(String) as TransportName[]
+		}
+		const authentication = this.authentication(entry.authentication, `${key}.authentication`)
+		if (authentication) schema.authentication = authentication
+		if (entry.env !== undefined) {
+			if (!isObject(entry.env)) {
+				this.issues.push(`${key}.env must be an object`)
+			} else {
+				// a variable of the gateway that is not defined leaves the key out: the schema fails alone when it connects
+				schema.env = Object.fromEntries(Object.entries(entry.env).filter(([, v]) => v !== undefined && v !== null).map(([k, v]) => [k, String(v)]))
+			}
+		}
+		if (isObject(entry.scripts)) {
+			const scripts: SchemaConfig['scripts'] = {}
+			if (entry.scripts.enabled !== undefined) scripts.enabled = this.bool(entry.scripts.enabled, false, `${key}.scripts.enabled`)
+			if (entry.scripts.maxLength !== undefined) scripts.maxLength = this.int(entry.scripts.maxLength, 20000, `${key}.scripts.maxLength`, 1)
+			if (entry.scripts.timeoutMs !== undefined) scripts.timeoutMs = this.int(entry.scripts.timeoutMs, 30000, `${key}.scripts.timeoutMs`, 1)
+			if (entry.scripts.maxIterations !== undefined) scripts.maxIterations = this.int(entry.scripts.maxIterations, 100000, `${key}.scripts.maxIterations`, 1)
+			schema.scripts = scripts
+		}
+		if (isObject(entry.mcp)) {
+			schema.mcp = {}
+			if (entry.mcp.maxRows !== undefined) schema.mcp.maxRows = this.int(entry.mcp.maxRows, 500, `${key}.mcp.maxRows`, 0)
+			if (entry.mcp.tools !== undefined) {
+				schema.mcp.tools = {
+					include: this.toolNames(entry.mcp.tools?.include, `${key}.mcp.tools.include`),
+					exclude: this.toolNames(entry.mcp.tools?.exclude, `${key}.mcp.tools.exclude`)
+				}
+			}
+		}
+		if (isObject(entry.server)) {
+			schema.server = {}
+			if (entry.server.timeout !== undefined) schema.server.timeout = this.int(entry.server.timeout, 120000, `${key}.server.timeout`, 1)
+			if (entry.server.maxConcurrent !== undefined) schema.server.maxConcurrent = this.int(entry.server.maxConcurrent, 64, `${key}.server.maxConcurrent`, 0)
+			if (entry.server.maxResponseBytes !== undefined) schema.server.maxResponseBytes = this.size(entry.server.maxResponseBytes, 0, `${key}.server.maxResponseBytes`)
+		}
+		if (isObject(entry.runtime)) {
+			schema.runtime = {}
+			if (entry.runtime.mode !== undefined) schema.runtime.mode = this.mode(entry.runtime.mode, `${key}.runtime.mode`)
+			if (entry.runtime.maxMemoryMb !== undefined) schema.runtime.maxMemoryMb = this.int(entry.runtime.maxMemoryMb, 512, `${key}.runtime.maxMemoryMb`, 16)
+			if (entry.runtime.checkConnections !== undefined) schema.runtime.checkConnections = this.bool(entry.runtime.checkConnections, true, `${key}.runtime.checkConnections`)
+		}
+		return schema
+	}
+
+	private mode (raw: unknown, key: string): RuntimeMode {
+		const mode = this.str(raw, 'thread')
+		if (mode !== 'thread' && mode !== 'process') {
+			this.issues.push(`${key} "${mode}" is not thread or process`)
+			return 'thread'
+		}
+		return mode
+	}
+
+	private runtime (raw: unknown): RuntimeConfig {
+		if (raw !== undefined && !isObject(raw)) this.issues.push('runtime must be an object')
+		const r: Raw = isObject(raw) ? raw : {}
+		const transports = this.str(r.transports, 'shared')
+		if (transports !== 'shared') {
+			if (['thread', 'process'].includes(transports)) this.warnings.push(`runtime.transports "${transports}" is not available in this version: every transport runs in the shared edge worker`)
+			else this.issues.push(`runtime.transports "${transports}" is not shared, thread or process`)
+		}
+		let threadpoolSize: number | undefined
+		if (r.threadpoolSize !== undefined && r.threadpoolSize !== null && String(r.threadpoolSize) !== 'auto') {
+			threadpoolSize = this.int(r.threadpoolSize, 4, 'runtime.threadpoolSize', 1)
+			if (threadpoolSize > 1024) this.issues.push('runtime.threadpoolSize must be at most 1024')
+		}
+		const passthrough = r.env?.passthrough ?? []
+		if (!Array.isArray(passthrough)) this.issues.push('runtime.env.passthrough must be a list')
+		const heartbeat = {
+			intervalMs: this.int(r.heartbeat?.intervalMs, 5000, 'runtime.heartbeat.intervalMs', 10),
+			timeoutMs: this.int(r.heartbeat?.timeoutMs, 30000, 'runtime.heartbeat.timeoutMs', 10)
+		}
+		if (heartbeat.timeoutMs <= heartbeat.intervalMs) this.issues.push('runtime.heartbeat.timeoutMs must be greater than intervalMs')
+		return {
+			transports: 'shared',
+			schemas: this.mode(r.schemas, 'runtime.schemas'),
+			maxMemoryMb: this.int(r.maxMemoryMb, 512, 'runtime.maxMemoryMb', 16),
+			checkConnections: this.bool(r.checkConnections, true, 'runtime.checkConnections'),
+			threadpoolSize,
+			heartbeat,
+			restart: {
+				initialDelayMs: this.int(r.restart?.initialDelayMs, 1000, 'runtime.restart.initialDelayMs', 1),
+				maxDelayMs: this.int(r.restart?.maxDelayMs, 300000, 'runtime.restart.maxDelayMs', 1)
+			},
+			env: {
+				isolate: this.bool(r.env?.isolate, true, 'runtime.env.isolate'),
+				passthrough: Array.isArray(passthrough) ? passthrough.map(String) : []
+			}
+		}
 	}
 
 	private logger (raw: Raw | undefined): LoggerConfig {
@@ -304,6 +413,16 @@ export class ConfigReader {
 
 	private str (value: unknown, defaultValue: string): string {
 		return value === undefined || value === null ? defaultValue : String(value)
+	}
+
+	private size (value: unknown, defaultValue: number, key: string): number {
+		if (value === undefined || value === null || value === '') return defaultValue
+		const bytes = parseSize(value as string | number)
+		if (bytes === undefined) {
+			this.issues.push(`${key} "${value}" must be a size (bytes, or like 256MB)`)
+			return defaultValue
+		}
+		return bytes
 	}
 
 	private int (value: unknown, defaultValue: number, key: string, min: number): number {

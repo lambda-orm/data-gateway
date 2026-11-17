@@ -32,7 +32,8 @@ const ENTITY_URI = /^lambdaorm:\/\/entities\/([^/]+)$/
 
 /** Opaque cursor of the paginated lists: the offset */
 const paginate = <T>(items: T[], pageSize: number, cursor?: string): Page<T> => {
-	const offset = cursor === undefined ? 0 : Number(Buffer.from(cursor, 'base64url').toString())
+	// null too: undefined arguments cross a process channel as null
+	const offset = cursor === undefined || cursor === null ? 0 : Number(Buffer.from(cursor, 'base64url').toString())
 	if (!Number.isInteger(offset) || offset < 0 || offset > items.length) throw new McpRequestError(`invalid cursor "${cursor}"`)
 	const page: Page<T> = { items: items.slice(offset, offset + pageSize) }
 	if (offset + pageSize < items.length) page.nextCursor = Buffer.from(String(offset + pageSize)).toString('base64url')
