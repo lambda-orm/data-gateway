@@ -1,6 +1,6 @@
 {
   "name": "@lambdaorm/service",
-  "version": "2.3.3",
+  "version": "2.4.0",
   "description": "Service that exposes the functionality of the LambdaOrm library",
   "license": "MIT",
   "engines": {
