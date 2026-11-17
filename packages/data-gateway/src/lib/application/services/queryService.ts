@@ -4,6 +4,8 @@ export interface ScriptSettings {
 	enabled: boolean
 	maxLength: number
 	timeoutMs: number
+	/** Max loop iterations of a script (SCRIPT_MAX_ITERATIONS) */
+	maxIterations?: number
 }
 
 /** An error with the HTTP status the service answers with */
@@ -49,7 +51,7 @@ export class QueryService {
 		if (script.length > this.scripts.maxLength) {
 			throw httpError(413, 'ScriptTooLongError', `script longer than ${this.scripts.maxLength} characters (SCRIPT_MAX_LENGTH)`)
 		}
-		const result = await this.orm.executeScript(script, body.data, body.options, { timeout: this.scripts.timeoutMs })
+		const result = await this.orm.executeScript(script, body.data, body.options, { timeout: this.scripts.timeoutMs, maxIterations: this.scripts.maxIterations })
 		// a script that ends without a value answers null (not 204): the client always gets a body
 		return result === undefined ? null : result
 	}
