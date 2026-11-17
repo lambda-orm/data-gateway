@@ -75,8 +75,34 @@ export interface HttpTransportConfig extends TransportConfig {
 	swagger: { enabled: boolean }
 }
 
+export interface McpHttpTransportConfig extends TransportConfig {
+	/** HTTP+SSE (deprecated by the specification) besides Streamable HTTP */
+	legacySse: boolean
+	/** Streamable HTTP with sessions; false = every POST stands alone (any replica answers it) */
+	stateful: boolean
+	/** Open SSE streams / stateful sessions */
+	maxConnections: number
+}
+
+export interface McpWebSocketTransportConfig extends TransportConfig {
+	maxConnections: number
+	asyncapi: { enabled: boolean }
+}
+
 export interface TransportsConfig {
 	http?: HttpTransportConfig
+	mcpHttp?: McpHttpTransportConfig
+	mcpWebSocket?: McpWebSocketTransportConfig
+}
+
+export interface McpConfig {
+	/** Name the MCP server gives in initialize */
+	name: string
+	tools: { include: string[], exclude: string[] }
+	/** Page size of tools/list and resources/list */
+	pageSize: number
+	/** Rows of orm_execute / orm_execute_script; 0 = no limit */
+	maxRows: number
 }
 
 export type TransportName = keyof TransportsConfig
@@ -90,6 +116,7 @@ export interface DataGatewayConfig {
 	authentication: AuthenticationConfig
 	rateLimit: RateLimitConfig
 	scripts: ScriptsConfig
+	mcp: McpConfig
 	/** Only the transports with a port (docs/DATA_GATEWAY.md §2.1) */
 	transports: TransportsConfig
 }

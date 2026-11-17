@@ -25,14 +25,27 @@ scripts:
   enabled: true                      # POST /script, off by default
 rateLimit:
   max: 0                             # 0 = no rate limit
+mcp:
+  maxRows: 500                       # rows of orm_execute for a model; 0 = no limit
+  tools: { exclude: [ orm_execute_script ] }
 transports:
   http:
     port: $DATA_GATEWAY_HTTP_PORT    # no port, no transport: there are no default ports
+  mcpHttp:                           # MCP Streamable HTTP at /mcp (stateless), and the deprecated SSE at /sse
+    port: $DATA_GATEWAY_MCP_PORT
+  mcpWebSocket:                      # MCP over WebSocket at /mcp (not standard), /asyncapi
+    port: $DATA_GATEWAY_MCP_WS_PORT
 ```
 
 - **Permissions:** `read` (schema, plan, metadata, … and `execute` of queries that only select), `write` (`execute`
   that inserts, updates, deletes, …), `script`, `queue`, `stageImport`. A single `token` / `value` / `username` +
   `password` has every permission. A local credential whose secret is not defined stops the start.
+- **MCP:** 22 tools, one per operation of the REST API (`orm_execute`, `orm_plan`, `schema_entities`, `stage_import`,
+  …), with `readOnlyHint` / `destructiveHint`. `tools/list` shows a credential only the tools it can use; the
+  description of `orm_execute` carries the domain of the schema; resources `lambdaorm://guide/expressions` (the query
+  language) and `lambdaorm://schema/domain`. Results longer than `mcp.maxRows` are cut with a hint. With Claude Code:
+  `claude mcp add --transport http northwind http://localhost:8081/mcp --header "X-Api-Key: …"`. How well models use
+  it is measured with the [evaluation set](eval/README.md).
 - **Audit:** every write (and every script, queued execution and stage import) leaves a JSON line with
   `"type":"audit"` on stdout: credential, operation, actions, entities, query, rows, duration, result.
 - **Not used anymore:** `infrastructure.service` of `lambdaORM.yaml` and the variables `PORT`, `SERVICE_TOKEN`,
@@ -43,7 +56,7 @@ docker run -v $(pwd)/workspace:/workspace -v $(pwd)/data-gateway.config.yaml:/co
   -e DATA_GATEWAY_HTTP_PORT=8080 -e AGENT_KEY=… -e BACKEND_KEY=… --network host flaviorita/data-gateway
 ```
 
-Tests: `npm test` (unit), `npm run test:integration` (real sockets and λORM, no database). The service tests of the
+Tests: `npm test` (unit), `npm run test:integration` (real sockets, the MCP SDK clients and λORM, no database). The service tests of the
 [ilusor-cloud lab](../lib/src/dev/labs/ilusor-cloud/README.md) run against it with Postgres.
 
 ## Service

@@ -43,6 +43,7 @@ module.exports = function (grunt) {
 			lib: { expand: true, cwd: 'build/lib/', src: '**', dest: 'dist/' },
 			// tsc doesn't copy it and the http transport reads it next to its own .js (L8)
 			swagger: { expand: true, cwd: 'src/lib/infrastructure/input/http/', src: 'swagger.yaml', dest: 'build/lib/infrastructure/input/http/' },
+			asyncapi: { expand: true, cwd: 'src/lib/infrastructure/input/mcp/', src: 'asyncapi.yaml', dest: 'build/lib/infrastructure/input/mcp/' },
 			readme: { expand: true, src: './README.md', dest: 'dist/' },
 			license: { expand: true, src: path.join(repoRoot, "LICENSE"), dest: path.join(baseDir, "dist", "LICENSE") },
 			changeLog: { expand: true, src: './CHANGELOG.md', dest: 'dist/' },
@@ -98,7 +99,7 @@ module.exports = function (grunt) {
 		}
 	})
 	grunt.registerTask('lint', ['exec:lint'])
-	grunt.registerTask('build', ['lint', 'clean:build', 'exec:tsc', 'copy:swagger'])
+	grunt.registerTask('build', ['lint', 'clean:build', 'exec:tsc', 'copy:swagger', 'copy:asyncapi'])
 	grunt.registerTask('test', ['build', 'exec:test'])
 	grunt.registerTask('docs', ['exec:doc'])
 	grunt.registerTask('dist', ['build', 'clean:dist', 'copy:lib', 'copy:jest', 'copy:readme', 'copy:license', 'copy:npmignore', 'create-package',])

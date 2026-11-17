@@ -7,6 +7,8 @@ import { startGateway } from '../../src/lib/infrastructure/build/main'
 import { RunningGateway } from '../../src/lib/infrastructure/build/dataGatewayBuilder'
 import { YamlFileConfigSource } from '../../src/lib/infrastructure/output/config/yamlFileConfigSource'
 import { ConsoleLogger } from '../../src/lib/infrastructure/output/logger/loggers'
+import { Client } from '@modelcontextprotocol/sdk/client/index.js'
+import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { call, freePort } from '../helpers/net'
 
 const WORKSPACE = path.join(__dirname, '../fixtures/northwind')
@@ -21,9 +23,11 @@ const writeConfig = (yaml: string): string => {
 describe('gateway from its configuration file', () => {
 	let gateway: RunningGateway
 	let base: string
+	let mcpPort: number
 
 	beforeAll(async () => {
 		const port = await freePort()
+		mcpPort = await freePort()
 		const file = writeConfig(`
 orm:
   workspacePath: $WORKSPACE
@@ -39,8 +43,12 @@ transports:
   http:
     port: $PORT
     host: 127.0.0.1
+  mcpHttp:
+    port: $MCP_PORT
+    host: 127.0.0.1
+    legacySse: false
 `)
-		const env = { WORKSPACE, PORT: String(port), AGENT_KEY: 'agent-key' }
+		const env = { WORKSPACE, PORT: String(port), MCP_PORT: String(mcpPort), AGENT_KEY: 'agent-key' }
 		gateway = await startGateway({ source: new YamlFileConfigSource(file, env), bootLogger: new ConsoleLogger('error') })
 		base = `http://127.0.0.1:${port}`
 	})
@@ -66,6 +74,22 @@ transports:
 		for (const query of ['Products.insert()', 'Products.delete().filter(p => p.id == 1)', 'Orders.insert().include(p => p.details)']) {
 			const res = await call(base, '/execute', { body: { query, data: {} }, headers: { 'X-Api-Key': 'agent-key' } })
 			expect([query, res.status, res.body.error]).toEqual([query, 403, 'ForbiddenError'])
+		}
+	})
+
+	test('MCP over Streamable HTTP with the real domain in the description of orm_execute', async () => {
+		const client = new Client({ name: 'boot', version: '1' })
+		await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${mcpPort}/mcp`), { requestInit: { headers: { 'X-Api-Key': 'agent-key' } } }))
+		try {
+			const execute = (await client.listTools()).tools.find(t => t.name === 'orm_execute')!
+			expect(execute.description).toMatch(/- Customers: .*address: string.*\n {2}relations: orders → Orders\[\]/)
+			expect(execute.description).toMatch(/- Orders\.details: orderId: integer \(pk\); productId: integer \(pk\).*\n {2}relations: order → Orders; product → Products$/)
+			const plan = await client.callTool({ name: 'orm_plan', arguments: { query: 'Products.filter(p => p.price > 10)' } })
+			expect((plan.content as any)[0].text).toMatch(/"dialect":"PostgreSQL"/)
+			const denied = await client.callTool({ name: 'orm_execute', arguments: { query: 'Products.delete().filter(p => p.id == 1)' } })
+			expect(denied.isError).toBe(true)
+		} finally {
+			await client.close()
 		}
 	})
 

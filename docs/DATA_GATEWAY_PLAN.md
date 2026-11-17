@@ -18,9 +18,9 @@ el desarrollo está en este paquete; `@lambdaorm/lib` y `@lambdaorm/base` no se 
 que se agregan o cambian: **`@lambdaorm/ui`** (nuevo, 3.1.0) y `@lambdaorm/client` (adaptador WebSocket, 3.2.0). Qué se construye y cómo se comporta:
 [`DATA_GATEWAY.md`](DATA_GATEWAY.md). Este documento dice en qué orden, qué archivos y cuándo está terminado.
 
-> **Estado (2026-11-17): fases 1 y 2 implementadas, sin publicar. Ticket: #96.** Base: `develop` con service 2.4.0
-> (lib 3.5.0). Ramas: `feature/data-gateway-rename` (fase 1) y `feature/data-gateway-core` (fase 2, sobre la anterior).
-> Desvíos de la fase 2 respecto de este plan: ver "Hecho" en la fase 2.
+> **Estado (2026-11-17): fases 1 a 3 implementadas, sin publicar. Ticket: #96.** Base: `develop` con service 2.4.0
+> (lib 3.5.0). Rama: `feature/data-gateway-core` (todas las fases, sobre `feature/data-gateway-rename`). Desvíos
+> respecto de este plan: ver "Hecho" en cada fase.
 
 ## 0. Punto de partida
 
@@ -293,6 +293,26 @@ balanceador sin afinidad de sesión (docker-compose) atendiendo Streamable HTTP.
 a `/mcp` del laboratorio lista las tools según la credencial y responde consultas, incluida una escritura y un
 `orm_execute_script` con una credencial que lo permite; `3.0.0-rc.2` publicada.
 
+**Hecho (2026-11-17).** `@modelcontextprotocol/sdk` 1.32.2, `ws` 8.18.3. Tests: 72 unitarios (catálogo por
+credencial, anotaciones, include / exclude, paginación, `maxRows`, `isError` vs error JSON-RPC, recursos, descripción
+del dominio) y 27 de integración (clientes del SDK con Streamable HTTP sin y con estado y con SSE, cliente `ws` crudo,
+401 / 405 / 503 / 426, `/status`, `/asyncapi`, y MCP en el arranque con λORM real). Desvíos:
+
+- Las 22 tools son **especificaciones declarativas** (`ToolSpec`) de una sola clase `GatewayTool`, no una clase por
+  tool: cada una es nombre, esquema, permisos, anotaciones y una función sobre `DataGatewayPort`.
+- Sin `http.openapi.yaml` para `mcpHttp`: Streamable HTTP lo define la especificación MCP; sí `asyncapi.yaml` para
+  `mcpWebSocket`, servido en `/asyncapi` y `/asyncapi.json`.
+- Ya en la fase 3: `/status` y `/health` abiertos en los dos transportes MCP; en `stateful` y en SSE una sesión solo
+  acepta mensajes de la credencial que la abrió (404 si no).
+- El **conjunto de evaluación** (`packages/data-gateway/eval/`, 30 preguntas sobre northwind con datos en MySQL) tiene
+  runner y modo `--check` (sin modelo: referencias, comparador, escrituras y limpieza; 30/30). **La medición con Claude
+  (80% / 95%) está pendiente:** no hay credenciales de la API en el equipo donde se implementó.
+- Al escribir la guía y el set aparecieron tres errores de `@lambdaorm/lib` (no se corrigen acá, la lib no se toca):
+  `like` con patrón literal no lo pone entre comillas; `includes` sobre texto genera `IN`; una expresión junto a un
+  agregado agrupa por el campo y no por la expresión. La guía los evita; están en `eval/README.md`.
+- Pendiente: smoke test de MCP contra la imagen en el workflow, prueba con Claude Code (`claude mcp add`) y publicar
+  `3.0.0-rc.2`.
+
 ### Fase 4 — Varios esquemas y runtime aislado → `3.0.0`
 
 1. **Dominio:** `SchemaDescriptor`, `SchemaStatus`, `SchemaPath` (segmentos, reservados), reglas de combinación
@@ -432,7 +452,7 @@ mismo resultado; una ejecución encolada notifica su fin; `3.2.0` publicada.
 - Ajustes por esquema × transporte (`schemas[].transportOverrides.<t>`).
 - Recarga de esquemas sin reiniciar.
 - OpenTelemetry (`TracerPort` + adaptador).
-- `take` automático en las consultas MCP.
+- `page` automático en las consultas MCP (λORM no tiene `take`).
 - Prompts MCP y `completion/complete`.
 - `@lambdaorm/client` / `cli`: `orm.init(url, { schema })`, `orm.schemas()`, `--schema`.
 - Migrar el build de Grunt a `scripts/dist.mjs`.

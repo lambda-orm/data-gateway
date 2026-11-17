@@ -31,3 +31,13 @@ export class ConfigError extends Error {
 		this.name = 'ConfigError'
 	}
 }
+
+/**
+ * A request MCP can't route: unknown tool or resource, invalid arguments. The MCP transports answer it as a JSON-RPC
+ * error (-32602), not as `isError`: the model didn't fail at running something, it asked for something that isn't there.
+ */
+export class McpRequestError extends GatewayError {
+	constructor (message: string) {
+		super(400, 'McpRequestError', message)
+	}
+}

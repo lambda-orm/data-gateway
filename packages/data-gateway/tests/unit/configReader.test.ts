@@ -18,6 +18,7 @@ describe('config reader', () => {
 			authentication: { adapter: 'none', credentials: [] },
 			rateLimit: { windowMs: 30000, max: 30 },
 			scripts: { enabled: false, maxLength: 20000, timeoutMs: 30000, maxIterations: 100000 },
+			mcp: { name: 'data-gateway', tools: { include: [], exclude: [] }, pageSize: 50, maxRows: 500 },
 			transports: { http: { port: 8080, host: '0.0.0.0', basePath: '', swagger: { enabled: true } } }
 		})
 	})
@@ -45,10 +46,13 @@ describe('config reader', () => {
 			}
 		})
 
-		test('transports of later versions are warned and not exposed; unknown ones stop', () => {
-			const { config, warnings } = read({ ...base, transports: { http: { port: 1 }, mcpHttp: { port: 2 } } })
-			expect(Object.keys(config!.transports)).toEqual(['http'])
-			expect(warnings).toContain('transports.mcpHttp is not available in this version: not exposed')
+		test('MCP transports with their defaults; transports of later versions are warned; unknown ones stop', () => {
+			const { config, warnings } = read({ ...base, transports: { http: { port: 1 }, mcpHttp: { port: 2 }, mcpWebSocket: { port: 3, maxConnections: '5' }, webSocket: { port: 4 } } })
+			expect(Object.keys(config!.transports)).toEqual(['http', 'mcpHttp', 'mcpWebSocket'])
+			expect(config!.transports.mcpHttp).toEqual({ port: 2, host: '0.0.0.0', basePath: '', legacySse: true, stateful: false, maxConnections: 100 })
+			expect(config!.transports.mcpWebSocket).toEqual({ port: 3, host: '0.0.0.0', basePath: '', maxConnections: 5, asyncapi: { enabled: true } })
+			expect(warnings).toContain('transports.webSocket is not available in this version: not exposed')
+			expect(read({ ...base, transports: { http: { port: 1 }, mcpHttp: { port: 1 } } }).issues).toContain('transports.mcpHttp and transports.http use the same 0.0.0.0:1')
 			expect(read({ ...base, transports: { ftp: { port: 1 } } }).issues).toContain('unknown transport "ftp"')
 		})
 
@@ -129,6 +133,12 @@ describe('config reader', () => {
 			'logger.level "loud" is not error, warn, info or debug',
 			'scripts.enabled "yes" must be true or false'
 		])
+	})
+
+	test('mcp: tools must be names of tools; maxRows 0 = no limit', () => {
+		const { config } = read({ ...base, mcp: { tools: { exclude: ['orm_execute_script'] }, maxRows: '0', name: 'iot' } })
+		expect(config?.mcp).toEqual({ name: 'iot', tools: { include: [], exclude: ['orm_execute_script'] }, pageSize: 50, maxRows: 0 })
+		expect(read({ ...base, mcp: { tools: { include: ['orm_nope'] } } }).issues).toEqual(['mcp.tools.include: unknown tools orm_nope'])
 	})
 
 	test('unknown sections are warned; sections of later versions are accepted', () => {

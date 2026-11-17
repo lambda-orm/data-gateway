@@ -1,14 +1,22 @@
 import { ALL_PERMISSIONS, isPermission, Permission } from '../auth/permission'
 import {
-	AuthenticationConfig, AuthenticationType, ConfigReading, CredentialConfig, DataGatewayConfig, HttpTransportConfig,
-	LoggerConfig, SchemaConfig, TransportsConfig
+	AuthenticationConfig, AuthenticationType, ConfigReading, CredentialConfig, DataGatewayConfig, LoggerConfig, McpConfig,
+	SchemaConfig, TransportConfig, TransportsConfig
 } from './dataGatewayConfig'
 
 /** Transports of the design that this version does not serve yet (docs/DATA_GATEWAY_PLAN.md). */
-const LATER_TRANSPORTS = ['mcpHttp', 'mcpWebSocket', 'webSocket']
+const LATER_TRANSPORTS = ['webSocket']
+const TRANSPORTS = ['http', 'mcpHttp', 'mcpWebSocket']
 /** Sections of the design read by later versions: accepted without a warning. */
-const LATER_SECTIONS = ['mcp', 'runtime']
-const KNOWN_SECTIONS = ['orm', 'server', 'logger', 'metrics', 'audit', 'authentication', 'rateLimit', 'scripts', 'transports', ...LATER_SECTIONS]
+const LATER_SECTIONS = ['runtime']
+const KNOWN_SECTIONS = ['orm', 'server', 'logger', 'metrics', 'audit', 'authentication', 'rateLimit', 'scripts', 'mcp', 'transports', ...LATER_SECTIONS]
+/** The tools of docs/DATA_GATEWAY.md §5.1: mcp.tools.include / exclude must name them */
+export const TOOL_NAMES = [
+	'orm_execute', 'orm_execute_script', 'orm_execute_queued', 'orm_plan', 'orm_metadata', 'orm_model', 'orm_parameters',
+	'orm_constraints', 'schema_get', 'schema_version', 'schema_domain', 'schema_entities', 'schema_enums', 'schema_sources',
+	'schema_mappings', 'schema_views', 'schema_stages', 'stage_exists', 'stage_export', 'stage_import', 'gateway_version',
+	'gateway_health'
+]
 
 type Raw = Record<string, any>
 
@@ -58,6 +66,7 @@ export class ConfigReader {
 				timeoutMs: this.int(raw.scripts?.timeoutMs, 30000, 'scripts.timeoutMs', 1),
 				maxIterations: this.int(raw.scripts?.maxIterations, 100000, 'scripts.maxIterations', 1)
 			},
+			mcp: this.mcp(raw.mcp),
 			transports: this.transports(raw.transports)
 		}
 		const reading: ConfigReading = { issues: this.issues, warnings: this.warnings, notes: this.notes }
@@ -106,6 +115,31 @@ export class ConfigReader {
 		return { adapter: adapter as LoggerConfig['adapter'], level: level as LoggerConfig['level'] }
 	}
 
+	private mcp (raw: unknown): McpConfig {
+		if (raw !== undefined && !isObject(raw)) this.issues.push('mcp must be an object')
+		const section: Raw = isObject(raw) ? raw : {}
+		return {
+			name: this.str(section.name, 'data-gateway'),
+			tools: {
+				include: this.toolNames(section.tools?.include, 'mcp.tools.include'),
+				exclude: this.toolNames(section.tools?.exclude, 'mcp.tools.exclude')
+			},
+			pageSize: this.int(section.pageSize, 50, 'mcp.pageSize', 1),
+			maxRows: this.int(section.maxRows, 500, 'mcp.maxRows', 0)
+		}
+	}
+
+	private toolNames (raw: unknown, key: string): string[] {
+		if (raw === undefined || raw === null) return []
+		if (!Array.isArray(raw)) {
+			this.issues.push(`${key} must be a list`)
+			return []
+		}
+		const unknown = raw.filter(name => !TOOL_NAMES.includes(String(name)))
+		if (unknown.length) this.issues.push(`${key}: unknown tools ${unknown.join(', ')}`)
+		return raw.map(String).filter(name => TOOL_NAMES.includes(name))
+	}
+
 	private transports (raw: unknown): TransportsConfig {
 		const transports: TransportsConfig = {}
 		if (raw === undefined) {
@@ -122,7 +156,7 @@ export class ConfigReader {
 				this.warnings.push(`transports.${name} is not available in this version: not exposed`)
 				continue
 			}
-			if (name !== 'http') {
+			if (!TRANSPORTS.includes(name)) {
 				this.issues.push(`unknown transport "${name}"`)
 				continue
 			}
@@ -142,15 +176,26 @@ export class ConfigReader {
 				continue
 			}
 			endpoints.set(endpoint, name)
-			const http: HttpTransportConfig = {
-				port,
-				host,
-				basePath: this.basePath(section.basePath, `transports.${name}.basePath`),
-				swagger: { enabled: this.bool(section.swagger?.enabled, true, `transports.${name}.swagger.enabled`) }
+			const key = `transports.${name}`
+			const base: TransportConfig = { port, host, basePath: this.basePath(section.basePath, `${key}.basePath`) }
+			const authentication = this.authentication(section.authentication, `${key}.authentication`)
+			if (authentication) base.authentication = authentication
+			if (name === 'http') {
+				transports.http = { ...base, swagger: { enabled: this.bool(section.swagger?.enabled, true, `${key}.swagger.enabled`) } }
+			} else if (name === 'mcpHttp') {
+				transports.mcpHttp = {
+					...base,
+					legacySse: this.bool(section.legacySse, true, `${key}.legacySse`),
+					stateful: this.bool(section.stateful, false, `${key}.stateful`),
+					maxConnections: this.int(section.maxConnections, 100, `${key}.maxConnections`, 1)
+				}
+			} else {
+				transports.mcpWebSocket = {
+					...base,
+					maxConnections: this.int(section.maxConnections, 100, `${key}.maxConnections`, 1),
+					asyncapi: { enabled: this.bool(section.asyncapi?.enabled, true, `${key}.asyncapi.enabled`) }
+				}
 			}
-			const authentication = this.authentication(section.authentication, `transports.${name}.authentication`)
-			if (authentication) http.authentication = authentication
-			transports.http = http
 		}
 		if (Object.keys(transports).length === 0 && !this.issues.some(i => i.startsWith('transports'))) {
 			this.issues.push('no transport exposed: configure transports.<name>.port')

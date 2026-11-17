@@ -14,3 +14,12 @@ describe('swagger.yaml', () => {
 		expect(swagger.paths['/script']).toBeDefined()
 	})
 })
+
+describe('asyncapi.yaml', () => {
+	test('parses: the channel of the MCP WebSocket and its messages', () => {
+		const asyncapi = YAML.load(fs.readFileSync(path.join(__dirname, '../../src/lib/infrastructure/input/mcp/asyncapi.yaml'), 'utf8'))
+		expect(asyncapi.asyncapi).toBe('3.0.0')
+		expect(Object.keys(asyncapi.channels.mcp.messages)).toEqual(['request', 'response', 'notification'])
+		expect(asyncapi.components.messages.request.examples[0].payload.params.name).toBe('orm_execute')
+	})
+})

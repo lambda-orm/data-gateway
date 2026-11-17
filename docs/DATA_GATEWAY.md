@@ -454,7 +454,7 @@ declara `EXPOSE`: los puertos solo existen en la configuración.
   el pool de conexiones no crecen hasta que todo dé timeout. En MCP es `isError: true` con el mismo mensaje; en
   WebSocket, error con `status: 429`.
 - **Una respuesta enorme:** si el resultado serializado supera `server.maxResponseBytes`, el schema worker corta y
-  responde `413` ("usá `.page()` o `.take()`"), en lugar de agotar la memoria.
+  responde `413` ("usá `.page(1, n)` o agregá en la consulta"), en lugar de agotar la memoria.
 - **El proceso nunca muere por un esquema caído.** Solo no arranca por errores de configuración (§2), y termina por
   `SIGTERM` / `SIGINT`.
 
@@ -601,7 +601,7 @@ MCP, pero es una decisión explícita: el agente puede hacer lo mismo que una ap
 
   ```json
   { "rows": [ …500 filas… ], "truncated": true, "returned": 500, "total": 18234,
-    "hint": "El resultado se recortó a 500 filas. Usá .page(n, size) o .take(n), o filtrá más la consulta." }
+    "hint": "The result was cut to 500 rows. Use .page(1, 500) (or a smaller page), aggregate with map/count, or filter the query more." }
   ```
 
   Si no hace falta recortar, el resultado va tal cual (sin envoltorio). Solo aplica a MCP. El recorte es posterior a

@@ -10,7 +10,8 @@ const files = (dir: string): string[] => fs.readdirSync(dir, { withFileTypes: tr
 /** Every module a file imports (import … from / require), relative ones resolved to a path inside src/lib */
 const imports = (file: string): string[] => {
 	const text = fs.readFileSync(file, 'utf8')
-	const specifiers = [...text.matchAll(/(?:from\s+|require\()\s*['"]([^'"]+)['"]/g)].map(m => m[1])
+	// import statements (from the start of a line, possibly over several lines) and require calls; not text in strings
+	const specifiers = [...text.matchAll(/(?:^import\s[^'"]*?from\s+|^import\s+|\brequire\()\s*['"]([^'"]+)['"]/gm)].map(m => m[1])
 	return specifiers.map(s => s.startsWith('.') ? path.relative(SRC, path.resolve(path.dirname(file), s)) : s)
 }
 
@@ -30,6 +31,10 @@ describe('architecture', () => {
 		expect(domain.length).toBeGreaterThan(3)
 		expect(application.length).toBeGreaterThan(3)
 		expect(input.length).toBeGreaterThan(1)
+		// the parser sees multi-line imports and require
+		const builder = imports(path.join(SRC, 'infrastructure/build/dataGatewayBuilder.ts'))
+		expect(builder).toEqual(expect.arrayContaining(['application/facade/dataGateway', path.normalize('infrastructure/output/orm/lambdaOrmAdapter'), 'fs']))
+		expect(imports(path.join(SRC, 'infrastructure/input/http/httpTransport.ts'))).toContain('js-yaml')
 	})
 
 	test('domain depends on nothing but @lambdaorm/base types', () => {
