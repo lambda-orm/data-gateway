@@ -134,7 +134,7 @@ describe('stage', () => {
 
 	test('L22 fetch on a database in step with the model reports no differences', async () => {
 		const mappings: any = await orm.stage.fetch({ stage: 'ddl' })
-		// expected: an empty diff (or a result that says "in step"); today fetch returns the database's mappings
+		// fetch is a diff: empty when the database is in step with the model
 		const differences = Array.isArray(mappings) ? mappings.filter((m: any) => (m.entities || []).length > 0) : mappings
 		expect(differences).toEqual([])
 	})
