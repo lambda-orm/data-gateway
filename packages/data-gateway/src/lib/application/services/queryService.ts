@@ -1,19 +1,24 @@
-import { IOrm, Metadata, MetadataConstraint, MetadataModel, MetadataParameter, QueryPlan, QueryOptions } from '@lambdaorm/lib'
+import { IOrm, Metadata, MetadataConstraint, MetadataModel, MetadataParameter, QueryPlan, QueryOptions, ScriptOptions } from '@lambdaorm/lib'
 
 export interface ScriptSettings {
 	enabled: boolean
 	maxLength: number
 	timeoutMs: number
 	/** Max loop iterations of a script (SCRIPT_MAX_ITERATIONS) */
-	maxIterations?: number
+	maxIterations: number
 }
 
 /** An error with the HTTP status the service answers with */
+/** The lower of a client's value and the service's limit (the client can't raise it) */
+const lower = (requested: any, limit: number): number => {
+	const value = Number(requested)
+	return requested !== undefined && requested !== null && value > 0 && value < limit ? value : limit
+}
 const httpError = (status: number, name: string, message: string): Error => Object.assign(new Error(message), { name, status })
 
 export class QueryService {
 	// eslint-disable-next-line no-useless-constructor
-	constructor (private readonly orm: IOrm, private readonly scripts: ScriptSettings = { enabled: false, maxLength: 20000, timeoutMs: 30000 }) { }
+	constructor (private readonly orm: IOrm, private readonly scripts: ScriptSettings = { enabled: false, maxLength: 20000, timeoutMs: 30000, maxIterations: 100000 }) { }
 
 	public async constraints ({ body }: { body: {query:string} }): Promise<MetadataConstraint> {
 		return this.orm.constraints(body.query)
@@ -40,7 +45,7 @@ export class QueryService {
 	}
 
 	/** Several queries in one transaction: a 3xpr script calling orm.execute (orm.executeScript) */
-	public async script ({ body }: { body: {script:string, data?:any, options?:QueryOptions} }): Promise<any> {
+	public async script ({ body }: { body: {script:string, data?:any, options?:ScriptOptions} }): Promise<any> {
 		if (!this.scripts.enabled) {
 			throw httpError(403, 'ScriptDisabledError', 'scripts are disabled in this service (SCRIPT_ENABLED)')
 		}
@@ -51,7 +56,11 @@ export class QueryService {
 		if (script.length > this.scripts.maxLength) {
 			throw httpError(413, 'ScriptTooLongError', `script longer than ${this.scripts.maxLength} characters (SCRIPT_MAX_LENGTH)`)
 		}
-		const result = await this.orm.executeScript(script, body.data, body.options, { timeout: this.scripts.timeoutMs, maxIterations: this.scripts.maxIterations })
+		// a client may ask for lower limits, never higher than the service's (SCRIPT_TIMEOUT_MS, SCRIPT_MAX_ITERATIONS)
+		const options: ScriptOptions = typeof body.options === 'string' ? JSON.parse(body.options) : { ...(body.options || {}) }
+		options.timeout = lower(options.timeout, this.scripts.timeoutMs)
+		options.maxIterations = lower(options.maxIterations, this.scripts.maxIterations)
+		const result = await this.orm.executeScript(script, body.data, options)
 		// a script that ends without a value answers null (not 204): the client always gets a body
 		return result === undefined ? null : result
 	}
