@@ -51,13 +51,14 @@ jobs:
         working-directory: packages/service
         run: |
           LAB=$(realpath ../lib/src/dev/labs/ilusor-cloud)
-          WORKSPACE=$LAB PORT=59292 RATE_LIMIT_MAX=0 SCRIPT_ENABLED=true SERVICE_TOKEN=lab-token \
+          # a port below Linux's ephemeral range (32768-60999): an outgoing connection of the runner can hold one in it
+          WORKSPACE=$LAB PORT=18292 RATE_LIMIT_MAX=0 SCRIPT_ENABLED=true SERVICE_TOKEN=lab-token \
             npx tsx --env-file=$LAB/.env src/lib/index.ts > service.log 2>&1 &
           up=0
-          for i in $(seq 1 90); do curl -sf http://127.0.0.1:59292/ping > /dev/null && up=1 && break; sleep 1; done
+          for i in $(seq 1 90); do curl -sf http://127.0.0.1:18292/ping > /dev/null && up=1 && break; sleep 1; done
           if [ "$up" != 1 ]; then echo "::error::the service did not start"; cat service.log; exit 1; fi
           cd ../lib
-          ORM_SVC=1 ORM_URL=http://127.0.0.1:59292 ORM_SVC_TOKEN=lab-token \
+          ORM_SVC=1 ORM_URL=http://127.0.0.1:18292 ORM_SVC_TOKEN=lab-token \
             npx jest -c src/dev/labs/ilusor-cloud/jest.config.json --verbose src/dev/labs/ilusor-cloud/tests/service.spec.ts
       - name: Service log
         if: always()
