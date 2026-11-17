@@ -1,0 +1,20 @@
+# The data-gateway (packages/data-gateway) for the service tests: the same environment variables the former service
+# read (docs/DATA_GATEWAY.md §2.7). Mounted as /config/data-gateway.config.yaml, or DATA_GATEWAY_CONFIG_PATH=<this file>.
+# The published image of the compose file (flaviorita/lambdaorm-svc:2.4.0) doesn't use it: it reads
+# infrastructure.service of lambdaORM.yaml.
+orm:
+  workspacePath: $WORKSPACE
+authentication:
+  adapter: local
+  type: bearer
+  token: $SERVICE_TOKEN
+rateLimit:
+  windowMs: $RATE_LIMIT_WINDOWS_MS
+  max: $RATE_LIMIT_MAX
+scripts:
+  enabled: $SCRIPT_ENABLED
+server:
+  requestBodySize: $REQUEST_BODY_SIZE
+transports:
+  http:
+    port: $PORT
