@@ -77,9 +77,10 @@ export class Server {
 			const scripts = {
 				enabled: String(this.config.scriptEnabled ?? process.env.SCRIPT_ENABLED ?? 'false').toLowerCase() === 'true',
 				maxLength: parseInt(String(this.config.scriptMaxLength ?? process.env.SCRIPT_MAX_LENGTH ?? '20000')),
-				timeoutMs: parseInt(String(this.config.scriptTimeoutMs ?? process.env.SCRIPT_TIMEOUT_MS ?? '30000'))
+				timeoutMs: parseInt(String(this.config.scriptTimeoutMs ?? process.env.SCRIPT_TIMEOUT_MS ?? '30000')),
+				maxIterations: parseInt(String(this.config.scriptMaxIterations ?? process.env.SCRIPT_MAX_ITERATIONS ?? '100000'))
 			}
-			this.logger.info(`scripts (POST /script): ${scripts.enabled ? `enabled, max ${scripts.maxLength} chars, timeout ${scripts.timeoutMs} ms` : 'disabled'}`)
+			this.logger.info(`scripts (POST /script): ${scripts.enabled ? `enabled, max ${scripts.maxLength} chars, timeout ${scripts.timeoutMs} ms, max ${scripts.maxIterations} loop iterations` : 'disabled'}`)
 			this.app.use('', new QueryRoutes(new QueryService(this.orm, scripts), this.queue).getRoutes())
 			this.app.use('', new SchemaRoutes(new SchemaService(this.orm)).getRoutes())
 			this.app.use('', new StageRoutes(new StageService(this.orm)).getRoutes())
