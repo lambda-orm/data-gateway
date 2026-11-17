@@ -76,6 +76,7 @@
     "test": "npx grunt test",
     "doc": "npx grunt doc",
     "dist": "npx grunt dist",
-    "release": "npx grunt release"
+    "release": "npx grunt release",
+    "test:integration": "npx tsc -b ../base ../lib && npx jest --config ./jest-integration-config.json --runInBand --detectOpenHandles"
   }
 }

@@ -1,0 +1,30 @@
+{
+	"transform": {
+		"^.+\\.ts$": [
+			"ts-jest",
+			{
+				"tsconfig": "tsconfig.json"
+			}
+		]
+	},
+	"testMatch": [
+		"<rootDir>/tests/integration/**/*.test.ts"
+	],
+	"moduleFileExtensions": [
+		"ts",
+		"js",
+		"json",
+		"node"
+	],
+	"moduleNameMapper": {
+		"^@lambdaorm/base$": "<rootDir>/../../packages/base/build/lib",
+		"^@lambdaorm/base/(.*)$": "<rootDir>/../../packages/base/build/lib/$1",
+		"^@lambdaorm/lib$": "<rootDir>/../../packages/lib/build/lib",
+		"^@lambdaorm/lib/(.*)$": "<rootDir>/../../packages/lib/build/lib/$1"
+	},
+	"testTimeout": 30000,
+	"modulePathIgnorePatterns": [
+		"<rootDir>/dist/",
+		"<rootDir>/build/"
+	]
+}

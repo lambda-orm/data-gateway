@@ -7,7 +7,7 @@ module.exports = function (grunt) {
 	grunt.loadNpmTasks('grunt-contrib-copy');
 	grunt.initConfig({
 		exec: {
-			lint: { cmd: 'npx eslint -c ../../eslint.config.js "src/**/*.ts" --ignore-pattern "src/lib/repository/domain/queryable.ts"' },
+			lint: { cmd: 'npx eslint -c ../../eslint.config.js "src/**/*.ts"' },
 			test: { cmd: 'npx jest --config ./jest-config.json' },
 			tsc: { cmd: 'npx tsc ' },
 			doc: { cmd: 'npx typedoc --plugin typedoc-plugin-markdown --out doc/source src/lib/index.ts' },
@@ -41,8 +41,8 @@ module.exports = function (grunt) {
 		},
 		copy: {
 			lib: { expand: true, cwd: 'build/lib/', src: '**', dest: 'dist/' },
-			// tsc doesn't copy it and the server reads it next to infrastructure/server.js (L8)
-			swagger: { expand: true, cwd: 'src/lib/infrastructure/', src: 'swagger.yaml', dest: 'build/lib/infrastructure/' },
+			// tsc doesn't copy it and the http transport reads it next to its own .js (L8)
+			swagger: { expand: true, cwd: 'src/lib/infrastructure/input/http/', src: 'swagger.yaml', dest: 'build/lib/infrastructure/input/http/' },
 			readme: { expand: true, src: './README.md', dest: 'dist/' },
 			license: { expand: true, src: path.join(repoRoot, "LICENSE"), dest: path.join(baseDir, "dist", "LICENSE") },
 			changeLog: { expand: true, src: './CHANGELOG.md', dest: 'dist/' },

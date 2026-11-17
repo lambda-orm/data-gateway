@@ -1,0 +1,66 @@
+import { IOrm, Orm } from '@lambdaorm/lib'
+import { QueryOptions, ScriptOptions } from '@lambdaorm/base'
+import { OrmQueryPort, OrmSchemaPort, OrmScriptPort, OrmStagePort } from '../../../application/ports/output/ormPorts'
+
+/** λORM (@lambdaorm/lib) behind the ports of the application: one instance per schema. */
+export class LambdaOrmAdapter implements OrmQueryPort, OrmScriptPort, OrmSchemaPort, OrmStagePort {
+	public readonly orm: IOrm
+
+	constructor (orm?: IOrm) {
+		this.orm = orm ?? new Orm()
+	}
+
+	/** Loads the schema (lambdaORM.yaml of the workspace) and creates its connection pools */
+	public async init (workspace: string): Promise<void> {
+		await this.orm.init(workspace)
+	}
+
+	public async end (): Promise<void> {
+		await this.orm.end()
+	}
+
+	/** The raw infrastructure of the loaded schema (queue, legacy service settings, …) */
+	public infrastructure (): any {
+		return this.orm.state?.schema?.infrastructure
+	}
+
+	// ─── queries ─────────────────────────────────────────────────────────────
+
+	public execute (query: string, data?: unknown, options?: QueryOptions) { return this.orm.execute(query, data, options) }
+	public async plan (query: string, options?: QueryOptions) { return this.orm.plan(query, options) }
+	public async metadata (query: string) { return this.orm.metadata(query) }
+	public async model (query: string) { return this.orm.model(query) }
+	public async parameters (query: string) { return this.orm.parameters(query) }
+	public async constraints (query: string) { return this.orm.constraints(query) }
+	public executeScript (script: string, data?: unknown, options?: ScriptOptions) { return this.orm.executeScript(script, data, options) }
+
+	// ─── schema ──────────────────────────────────────────────────────────────
+
+	public check (): void {
+		const infrastructure = this.infrastructure()
+		if (!infrastructure) throw new Error('Lambda ORM not initialized')
+		if (!infrastructure.stages || infrastructure.stages.length === 0) throw new Error('Lambda ORM can\'t stages not initialized')
+		if (!infrastructure.sources || infrastructure.sources.length === 0) throw new Error('Lambda ORM can\'t sources not initialized')
+	}
+
+	public version () { return this.orm.state.getSchemaVersion() }
+	public domain () { return this.orm.state.getSchemaDomain() }
+	public sources () { return this.orm.state.getSchemaSources() }
+	public source (name: string) { return this.orm.state.getSchemaSource(name) }
+	public entities () { return this.orm.state.getSchemaEntities() }
+	public entity (name: string) { return this.orm.state.getSchemaEntity(name) }
+	public enums () { return this.orm.state.getSchemaEnums() }
+	public enum (name: string) { return this.orm.state.getSchemaEnum(name) }
+	public mappings () { return this.orm.state.getSchemaMappings() }
+	public mapping (name: string) { return this.orm.state.getSchemaMapping(name) }
+	public entityMapping (mapping: string, entity: string) { return this.orm.state.getSchemaEntityMapping(mapping, entity) }
+	public stages () { return this.orm.state.getSchemaStages() }
+	public stage (name: string) { return this.orm.state.getSchemaStage(name) }
+	public views () { return this.orm.state.getSchemaViews() }
+
+	// ─── stages ──────────────────────────────────────────────────────────────
+
+	public exists (stage: string) { return this.orm.stage.exists(stage) }
+	public export (stage: string) { return this.orm.stage.export({ stage }).execute() }
+	public import (stage: string, data: unknown) { return this.orm.stage.import({ stage }).execute(data as any) }
+}

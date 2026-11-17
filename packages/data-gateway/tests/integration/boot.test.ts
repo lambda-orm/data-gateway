@@ -1,0 +1,109 @@
+// The whole gateway from a configuration: real λORM (@lambdaorm/lib) on the northwind fixture, real http transport.
+// The fixture's source is unreachable: plan, metadata, the schema and the authorization happen before connecting.
+import fs from 'fs'
+import os from 'os'
+import path from 'path'
+import { startGateway } from '../../src/lib/infrastructure/build/main'
+import { RunningGateway } from '../../src/lib/infrastructure/build/dataGatewayBuilder'
+import { YamlFileConfigSource } from '../../src/lib/infrastructure/output/config/yamlFileConfigSource'
+import { ConsoleLogger } from '../../src/lib/infrastructure/output/logger/loggers'
+import { call, freePort } from '../helpers/net'
+
+const WORKSPACE = path.join(__dirname, '../fixtures/northwind')
+
+const writeConfig = (yaml: string): string => {
+	const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'data-gateway-'))
+	const file = path.join(dir, 'data-gateway.config.yaml')
+	fs.writeFileSync(file, yaml)
+	return file
+}
+
+describe('gateway from its configuration file', () => {
+	let gateway: RunningGateway
+	let base: string
+
+	beforeAll(async () => {
+		const port = await freePort()
+		const file = writeConfig(`
+orm:
+  workspacePath: $WORKSPACE
+logger: { level: error }
+authentication:
+  adapter: local
+  type: apikey
+  keys:
+    - { name: agent, value: $AGENT_KEY, permissions: [ read ] }
+    - { name: backend, value: backend-key }
+rateLimit: { max: 0 }
+transports:
+  http:
+    port: $PORT
+    host: 127.0.0.1
+`)
+		const env = { WORKSPACE, PORT: String(port), AGENT_KEY: 'agent-key' }
+		gateway = await startGateway({ source: new YamlFileConfigSource(file, env), bootLogger: new ConsoleLogger('error') })
+		base = `http://127.0.0.1:${port}`
+	})
+	afterAll(() => gateway?.stop())
+
+	test('answers with the schema of the workspace', async () => {
+		expect((await call(base, '/ping')).status).toBe(200)
+		const entities = await call(base, '/entities', { headers: { 'X-Api-Key': 'agent-key' } })
+		expect(entities.status).toBe(200)
+		expect(entities.body.map((e: any) => e.name)).toEqual(expect.arrayContaining(['Products', 'Orders', 'Customers']))
+		expect((await call(base, '/entities', { headers: { 'X-Api-Key': 'wrong' } })).status).toBe(401)
+	})
+
+	test('plan and metadata with real λORM', async () => {
+		const plan = await call(base, '/plan', { body: { query: 'Products.filter(p => p.price > 10)' }, headers: { 'X-Api-Key': 'agent-key' } })
+		expect(plan.status).toBe(200)
+		expect(plan.body).toMatchObject({ entity: 'Products', dialect: 'PostgreSQL', source: 'main' })
+		const metadata = await call(base, '/metadata', { body: { query: 'Orders.insert().include(p => p.details)' }, headers: { 'X-Api-Key': 'agent-key' } })
+		expect(metadata.body).toMatchObject({ classtype: 'Sentence', name: 'insert', entity: 'Orders' })
+	})
+
+	test('a read credential is refused a write before λORM connects (real metadata classification)', async () => {
+		for (const query of ['Products.insert()', 'Products.delete().filter(p => p.id == 1)', 'Orders.insert().include(p => p.details)']) {
+			const res = await call(base, '/execute', { body: { query, data: {} }, headers: { 'X-Api-Key': 'agent-key' } })
+			expect([query, res.status, res.body.error]).toEqual([query, 403, 'ForbiddenError'])
+		}
+	})
+
+	test('scripts are disabled by default', async () => {
+		const res = await call(base, '/script', { body: { script: '1' }, headers: { 'X-Api-Key': 'backend-key' } })
+		expect(res).toMatchObject({ status: 403, body: { error: 'ScriptDisabledError' } })
+	})
+})
+
+describe('configuration problems stop the start', () => {
+	test('missing file', async () => {
+		await expect(startGateway({ source: new YamlFileConfigSource('/nope/data-gateway.config.yaml', {}), bootLogger: new ConsoleLogger('error') }))
+			.rejects.toMatchObject({ name: 'ConfigError', issues: ['configuration file not found: /nope/data-gateway.config.yaml (mount it, or set DATA_GATEWAY_CONFIG_PATH)'] })
+	})
+
+	test('every problem is listed: a local credential whose variable is not defined, no transport', async () => {
+		const file = writeConfig(`
+orm: { workspacePath: ${WORKSPACE} }
+authentication: { adapter: local, type: bearer, token: $SERVICE_TOKEN }
+transports: { http: { port: $PORT } }
+`)
+		await expect(startGateway({ source: new YamlFileConfigSource(file, {}), bootLogger: new ConsoleLogger('error') }))
+			.rejects.toMatchObject({
+				name: 'ConfigError',
+				issues: [
+					'authentication: token is not defined (a local credential without its secret would leave the gateway open)',
+					'no transport exposed: configure transports.<name>.port'
+				]
+			})
+	})
+
+	test('a workspace without lambdaORM.yaml', async () => {
+		const port = await freePort()
+		const file = writeConfig(`
+orm: { workspacePath: ${os.tmpdir()} }
+transports: { http: { port: ${port} } }
+`)
+		await expect(startGateway({ source: new YamlFileConfigSource(file, {}), bootLogger: new ConsoleLogger('error') }))
+			.rejects.toMatchObject({ name: 'ConfigError' })
+	})
+})

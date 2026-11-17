@@ -1,0 +1,225 @@
+import express from 'express'
+import cors from 'cors'
+import http from 'http'
+import path from 'path'
+import fs from 'fs'
+import { AddressInfo } from 'net'
+import { rateLimit } from 'express-rate-limit'
+import swaggerUi from 'swagger-ui-express'
+import { DataGatewayPort, RequestContext } from '../../../application/ports/input/dataGatewayPort'
+import { AuthenticatorPort, LoggerPort, MetricsPort } from '../../../application/ports/output/supportPorts'
+import { Principal } from '../../../domain/auth/principal'
+import { Transport } from '../transport'
+import { toHttpError } from './httpErrors'
+const YAML = require('js-yaml')
+
+export interface HttpTransportOptions {
+	port: number
+	host: string
+	basePath: string
+	requestBodySize: string
+	rateLimit: { windowMs: number, max: number }
+	swaggerEnabled: boolean
+}
+
+export interface HttpTransportDeps {
+	gateway: DataGatewayPort
+	authenticator: AuthenticatorPort
+	metrics: MetricsPort
+	logger: LoggerPort
+}
+
+/** Paths that never need a credential: Kubernetes probes and Prometheus. */
+const OPEN_PATHS = ['/ping', '/health', '/metrics']
+export const TRANSPORT_NAME = 'http'
+
+type Handler = (req: express.Request, ctx: RequestContext) => Promise<unknown>
+
+/** The REST API (the endpoints of the former service) on its own port. */
+export class HttpTransport implements Transport {
+	public readonly name = TRANSPORT_NAME
+	public readonly app: express.Express
+	private server: http.Server | undefined
+
+	constructor (private readonly options: HttpTransportOptions, private readonly deps: HttpTransportDeps) {
+		this.app = this.createApp()
+	}
+
+	public get address () {
+		const info = this.server?.address() as AddressInfo | null | undefined
+		return info ? { host: info.address, port: info.port } : undefined
+	}
+
+	public async start (): Promise<void> {
+		await new Promise<void>((resolve, reject) => {
+			const server = http.createServer(this.app)
+			server.once('error', reject)
+			server.listen(this.options.port, this.options.host, () => {
+				server.off('error', reject)
+				resolve()
+			})
+			this.server = server
+		})
+		const address = this.address
+		this.deps.logger.info(`[data-gateway] http listening on ${address?.host}:${address?.port}${this.options.basePath || '/'}`)
+	}
+
+	public async stop (): Promise<void> {
+		const server = this.server
+		this.server = undefined
+		if (!server) return
+		await new Promise<void>(resolve => server.close(() => resolve()))
+		server.closeAllConnections?.()
+	}
+
+	// ─── app ─────────────────────────────────────────────────────────────────
+
+	private createApp (): express.Express {
+		const app = express()
+		const { metrics } = this.deps
+		app.disable('x-powered-by')
+		app.use((req, res, next) => {
+			const end = metrics.startTimer()
+			res.on('finish', () => end({
+				method: req.method,
+				route: req.route?.path ?? 'unmatched',
+				code: res.statusCode,
+				credential: (res.locals.principal as Principal | undefined)?.name ?? '-'
+			}))
+			next()
+		})
+		app.use(cors())
+		app.use(express.json({ limit: this.options.requestBodySize }))
+		app.use(express.urlencoded({ extended: true, limit: this.options.requestBodySize }))
+		if (this.options.rateLimit.max > 0) {
+			app.use(rateLimit({ windowMs: this.options.rateLimit.windowMs, max: this.options.rateLimit.max, standardHeaders: true, legacyHeaders: false }))
+		}
+		app.use(this.beautify)
+		// the documentation is public (it holds no data): its "Authorize" button takes the credential
+		if (this.options.swaggerEnabled) this.swagger(app)
+		const router = express.Router()
+		this.generalRoutes(router)
+		router.use(this.authenticate)
+		this.queryRoutes(router)
+		this.schemaRoutes(router)
+		this.stageRoutes(router)
+		app.use(this.options.basePath || '/', router)
+		app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+			if (res.headersSent) return next(err)
+			// body too large / invalid JSON (body-parser), with its own status
+			const status = Number.isInteger(err?.status) ? err.status : 500
+			res.status(status).json({ error: err?.type ?? err?.name ?? 'Error', message: err?.message ?? String(err) })
+		})
+		return app
+	}
+
+	/** ?format=beautiful: indented JSON */
+	private readonly beautify = (req: express.Request, res: express.Response, next: express.NextFunction) => {
+		const format = req.query.format
+		if (typeof format === 'string' && format.toLowerCase() === 'beautiful') {
+			res.json = (body: unknown) => res.type('application/json').send(JSON.stringify(body, null, 2))
+		}
+		next()
+	}
+
+	private readonly authenticate = async (req: express.Request, res: express.Response, next: express.NextFunction) => {
+		if (OPEN_PATHS.includes(req.path)) return next()
+		try {
+			const result = await this.deps.authenticator.authenticate(req.headers)
+			if (!result.valid || !result.principal) {
+				res.status(401).json({ error: 'Unauthorized', message: result.reason ?? 'a valid credential is required' })
+				return
+			}
+			res.locals.principal = result.principal
+			next()
+		} catch (error) {
+			next(error)
+		}
+	}
+
+	private handle (handler: Handler) {
+		return async (req: express.Request, res: express.Response) => {
+			try {
+				const ctx: RequestContext = { principal: res.locals.principal as Principal, transport: TRANSPORT_NAME }
+				const payload = await handler(req, ctx)
+				if (payload === undefined) {
+					res.status(204).end()
+					return
+				}
+				// JSON for every value, also numbers (affected rows), 0, strings, booleans and null
+				res.status(200).json(payload)
+			} catch (error: any) {
+				const httpError = toHttpError(error)
+				if (httpError.status >= 500) this.deps.logger.error(error)
+				res.status(httpError.status).json(httpError.body)
+			}
+		}
+	}
+
+	// ─── routes ──────────────────────────────────────────────────────────────
+
+	private generalRoutes (router: express.Router): void {
+		const gw = this.deps.gateway
+		router.get('/version', this.handle(() => gw.version()))
+		router.get('/health', this.handle(() => gw.health()))
+		router.get('/ping', this.handle(() => gw.ping()))
+		router.get('/metrics', async (_req, res) => {
+			const { contentType, body } = await this.deps.metrics.render()
+			res.status(200).type(contentType).send(body)
+		})
+	}
+
+	private queryRoutes (router: express.Router): void {
+		const gw = this.deps.gateway
+		const body = (req: express.Request): any => req.body ?? {}
+		router.post('/constraints', this.handle((req, ctx) => gw.constraints(ctx, body(req))))
+		router.post('/metadata', this.handle((req, ctx) => gw.metadata(ctx, body(req))))
+		router.post('/model', this.handle((req, ctx) => gw.model(ctx, body(req))))
+		router.post('/parameters', this.handle((req, ctx) => gw.parameters(ctx, body(req))))
+		router.post('/plan', this.handle((req, ctx) => gw.plan(ctx, body(req))))
+		router.post('/execute', this.handle((req, ctx) => gw.execute(ctx, body(req))))
+		router.post('/script', this.handle((req, ctx) => gw.executeScript(ctx, body(req))))
+		// answers the id of the execution as a string, like the former service
+		router.post('/execute-queued', this.handle(async (req, ctx) => (await gw.executeQueued(ctx, body(req))).queueId))
+	}
+
+	private schemaRoutes (router: express.Router): void {
+		const gw = this.deps.gateway
+		router.get('/schema', this.handle((_req, ctx) => gw.schema(ctx)))
+		router.get('/schema/version', this.handle((_req, ctx) => gw.schemaVersion(ctx)))
+		router.get('/domain', this.handle((_req, ctx) => gw.domain(ctx)))
+		router.get('/sources', this.handle((_req, ctx) => gw.sources(ctx)))
+		router.get('/sources/:source', this.handle((req, ctx) => gw.source(ctx, String(req.params.source))))
+		router.get('/entities', this.handle((_req, ctx) => gw.entities(ctx)))
+		router.get('/entities/:entity', this.handle((req, ctx) => gw.entity(ctx, String(req.params.entity))))
+		router.get('/enums', this.handle((_req, ctx) => gw.enums(ctx)))
+		router.get('/enums/:enum', this.handle((req, ctx) => gw.enum(ctx, String(req.params.enum))))
+		router.get('/mappings', this.handle((_req, ctx) => gw.mappings(ctx)))
+		router.get('/mappings/:mapping', this.handle((req, ctx) => gw.mapping(ctx, String(req.params.mapping))))
+		router.get('/mappings/:mapping/:entity', this.handle((req, ctx) => gw.entityMapping(ctx, String(req.params.mapping), String(req.params.entity))))
+		router.get('/stages', this.handle((_req, ctx) => gw.stages(ctx)))
+		router.get('/stages/:stage', this.handle((req, ctx) => gw.stage(ctx, String(req.params.stage))))
+		router.get('/views', this.handle((_req, ctx) => gw.views(ctx)))
+	}
+
+	private stageRoutes (router: express.Router): void {
+		const gw = this.deps.gateway
+		router.get('/stages/:stage/exists', this.handle((req, ctx) => gw.stageExists(ctx, String(req.params.stage))))
+		router.get('/stages/:stage/export', this.handle((req, ctx) => gw.stageExport(ctx, String(req.params.stage))))
+		router.post('/stages/:stage/import', this.handle((req, ctx) => gw.stageImport(ctx, String(req.params.stage), req.body)))
+	}
+
+	private swagger (app: express.Express): void {
+		const file = path.join(__dirname, 'swagger.yaml')
+		if (!fs.existsSync(file)) {
+			this.deps.logger.warn(`swagger.yaml not found next to the http transport (${file}): /doc not served`)
+			return
+		}
+		const document = YAML.load(fs.readFileSync(file, 'utf8'))
+		document.servers = [{ description: 'this gateway', url: this.options.basePath || '/' }]
+		const base = this.options.basePath
+		app.use(`${base}/api-docs`, swaggerUi.serve, swaggerUi.setup(document))
+		app.use(`${base}/doc`, swaggerUi.serve, swaggerUi.setup(document))
+		app.get(base || '/', (_req, res) => res.redirect(`${base}/doc/`))
+	}
+}

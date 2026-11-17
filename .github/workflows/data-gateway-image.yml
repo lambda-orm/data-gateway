@@ -48,6 +48,8 @@ jobs:
           CLI=$(node -p "require('./packages/cli/package.json').version")
           echo "version=$V" >> "$GITHUB_OUTPUT"
           echo "cli=$CLI" >> "$GITHUB_OUTPUT"
+          # a prerelease (3.0.0-rc.1) is published without moving latest: nobody gets it without asking for it
+          case "$V" in *-*) echo "latest=false" >> "$GITHUB_OUTPUT" ;; *) echo "latest=true" >> "$GITHUB_OUTPUT" ;; esac
           if [ "${V%%.*}" -lt 3 ]; then
             echo "exists=true" >> "$GITHUB_OUTPUT"
             echo "::notice::$V < 3.0.0: published as flaviorita/lambdaorm-svc, nothing to publish as $IMAGE"
@@ -94,7 +96,8 @@ jobs:
         working-directory: packages/data-gateway
         run: >-
           docker build --build-arg CLI_VERSION=${{ steps.version.outputs.cli }}
-          -t $IMAGE:${{ steps.version.outputs.version }} -t $IMAGE:latest .
+          -t $IMAGE:${{ steps.version.outputs.version }}
+          ${{ steps.version.outputs.latest == 'true' && format('-t {0}:latest', env.IMAGE) || '' }} .
       - name: Lab database
         if: steps.version.outputs.exists == 'false'
         run: |
@@ -109,6 +112,7 @@ jobs:
           LAB=$(realpath src/dev/labs/ilusor-cloud)
           docker run -d --name svc --network host --env-file $LAB/.env -e WORKSPACE=/workspace -e PORT=18292 \
             -e RATE_LIMIT_MAX=0 -e SCRIPT_ENABLED=true -e SERVICE_TOKEN=lab-token -v $LAB:/workspace \
+            -v $LAB/data-gateway.config.yaml:/config/data-gateway.config.yaml:ro \
             $IMAGE:${{ steps.version.outputs.version }}
           up=0
           for i in $(seq 1 90); do curl -sf http://127.0.0.1:18292/ping > /dev/null && up=1 && break; sleep 1; done
@@ -128,8 +132,12 @@ jobs:
         if: steps.version.outputs.exists == 'false'
         run: |
           docker push $IMAGE:${{ steps.version.outputs.version }}
-          docker push $IMAGE:latest
-          echo "::notice::published $IMAGE:${{ steps.version.outputs.version }} and latest"
+          if [ "${{ steps.version.outputs.latest }}" = "true" ]; then
+            docker push $IMAGE:latest
+            echo "::notice::published $IMAGE:${{ steps.version.outputs.version }} and latest"
+          else
+            echo "::notice::published $IMAGE:${{ steps.version.outputs.version }} (prerelease: latest not moved)"
+          fi
       - name: Tag data-gateway-v${{ steps.version.outputs.version }}
         if: steps.version.outputs.exists == 'false'
         run: |

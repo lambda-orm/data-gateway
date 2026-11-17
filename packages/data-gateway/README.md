@@ -5,6 +5,47 @@
 
 Gateway that exposes the functionality of the [LambdaOrm](https://github.com/lambda-orm/lambdaorm) library
 
+## Configuration
+
+Everything is configured in one mounted YAML file, `DATA_GATEWAY_CONFIG_PATH` (default
+`/config/data-gateway.config.yaml`). It is mandatory: without it the gateway doesn't start. `$VAR` / `${VAR}` take the
+environment variables; one that is not defined counts as not set.
+
+```yaml
+orm:
+  workspacePath: /workspace          # folder with lambdaORM.yaml
+authentication:                      # none (default) or local: bearer | apikey | basic
+  adapter: local
+  type: apikey
+  header: X-Api-Key
+  keys:
+    - { name: agent,   value: $AGENT_KEY,   permissions: [ read ] }
+    - { name: backend, value: $BACKEND_KEY, permissions: [ read, write, script, queue, stageImport ] }
+scripts:
+  enabled: true                      # POST /script, off by default
+rateLimit:
+  max: 0                             # 0 = no rate limit
+transports:
+  http:
+    port: $DATA_GATEWAY_HTTP_PORT    # no port, no transport: there are no default ports
+```
+
+- **Permissions:** `read` (schema, plan, metadata, … and `execute` of queries that only select), `write` (`execute`
+  that inserts, updates, deletes, …), `script`, `queue`, `stageImport`. A single `token` / `value` / `username` +
+  `password` has every permission. A local credential whose secret is not defined stops the start.
+- **Audit:** every write (and every script, queued execution and stage import) leaves a JSON line with
+  `"type":"audit"` on stdout: credential, operation, actions, entities, query, rows, duration, result.
+- **Not used anymore:** `infrastructure.service` of `lambdaORM.yaml` and the variables `PORT`, `SERVICE_TOKEN`,
+  `RATE_LIMIT_*`, `SCRIPT_*` read directly. Migration table and every key: [`docs/DATA_GATEWAY.md`](../../docs/DATA_GATEWAY.md) §2.
+
+```sh
+docker run -v $(pwd)/workspace:/workspace -v $(pwd)/data-gateway.config.yaml:/config/data-gateway.config.yaml:ro \
+  -e DATA_GATEWAY_HTTP_PORT=8080 -e AGENT_KEY=… -e BACKEND_KEY=… --network host flaviorita/data-gateway
+```
+
+Tests: `npm test` (unit), `npm run test:integration` (real sockets and λORM, no database). The service tests of the
+[ilusor-cloud lab](../lib/src/dev/labs/ilusor-cloud/README.md) run against it with Postgres.
+
 ## Service
 
 The service exposes the following endpoints:
