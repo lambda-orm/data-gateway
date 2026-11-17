@@ -16,4 +16,4 @@
     * [Lambda ORM](https://github.com/lambda-orm/lambdaorm)
     * [Lambda ORM CLI](https://github.com/lambda-orm/lambdaorm-cli)
     * [Labs](https://github.com/lambda-orm/lambdaorm-labs)
-  * [Change log](https://github.com/lambda-orm/lambdaorm-svc/blob/main/CHANGELOG.md)  
+  * [Change log](https://github.com/lambda-orm/core/blob/main/packages/data-gateway/CHANGELOG.md)  

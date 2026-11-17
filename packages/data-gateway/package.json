@@ -1,7 +1,7 @@
 {
-  "name": "@lambdaorm/service",
+  "name": "@lambdaorm/data-gateway",
   "version": "2.4.0",
-  "description": "Service that exposes the functionality of the LambdaOrm library",
+  "description": "Gateway that exposes the functionality of the λORM library",
   "license": "MIT",
   "engines": {
     "node": ">=20"
@@ -11,7 +11,8 @@
   "private": true,
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lambda-orm/lambdaorm-svc.git"
+    "url": "git+https://github.com/lambda-orm/core.git",
+    "directory": "packages/data-gateway"
   },
   "standard-version": {
     "header": "# Changelog\n\nAll notable changes to this project will be documented in this file.\n\n## Versions\n"
@@ -19,14 +20,14 @@
   "keywords": [
     "orm",
     "lambdaorm",
-    "lambdaorm-svc",
-    "service"
+    "data-gateway",
+    "gateway"
   ],
   "author": "Flavio Lionel Rita <flaviolrita@proton.me>",
   "bugs": {
     "url": "https://github.com/lambda-orm/lambdaorm/issues"
   },
-  "homepage": "https://github.com/lambda-orm/lambdaorm-svc/readme",
+  "homepage": "https://github.com/lambda-orm/core/tree/main/packages/data-gateway#readme",
   "dependencies": {
     "@lambdaorm/base": "workspace:*",
     "@lambdaorm/lib": "workspace:*",
