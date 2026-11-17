@@ -3,7 +3,7 @@ info:
   contact:
     email: flaviolrita@hotmail.com
     name: 'Flavio Lionel Rita'
-  description: Service that exposes the functionality of the [@lambdaorm/lib](https://www.npmjs.com/package/@lambdaorm/lib) npm library. With SERVICE_TOKEN set, every request but /ping, /health and /metrics needs `Authorization: Bearer <token>`
+  description: 'Service that exposes the functionality of the [@lambdaorm/lib](https://www.npmjs.com/package/@lambdaorm/lib) npm library. With SERVICE_TOKEN set, every request but /ping, /health and /metrics needs `Authorization: Bearer <token>`'
   license:
     name: MIT
     url: https://opensource.org/license/mit/
