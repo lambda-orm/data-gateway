@@ -4,6 +4,29 @@ All notable changes to this project will be documented in this file.
 
 ## Versions
 
+### 2.3.0 (2026-11-17)
+
+Uses `@lambdaorm/lib` 3.2.0 (transactions, scripts, listeners, `json` type, upsert, stage push/fetch against the
+database — see `docs/LAMBDAORM_FEATURES.md` in the repository).
+
+**Features:**
+
+* `POST /script`: a 3xpr script whose `orm.execute` calls run in one transaction; off unless `SCRIPT_ENABLED=true`,
+  limits `SCRIPT_MAX_LENGTH` (413) and `SCRIPT_TIMEOUT_MS` (rollback) (L32)
+* optional service token: with `SERVICE_TOKEN` every request but `/ping`, `/health` and `/metrics` needs
+  `Authorization: Bearer <token>` (L12)
+* `RATE_LIMIT_MAX=0` turns the rate limit off (L9)
+* errors answer `{ error, code, message }` with a status a client can map: unique / foreign key → 409, not null /
+  check / invalid data / invalid query → 400, a script's `throw { status, message }` → that status (L30)
+
+**Bug Fixes:**
+
+* every result is answered as JSON: `delete`/`update` answered 500 or 204 for a number (L5, L4)
+* `/execute` takes `data` and `options` as objects or as JSON text (L14)
+* a setting left as an undefined `$VARIABLE` falls back to its default instead of stopping the service
+* image on Node 24 with `@lambdaorm/cli` 1.6.0 (the CLI did not start on Node 18) (L8); the dist starts with
+  `npm start` and includes `swagger.yaml`
+
 ### [2.2.1](https://github.com/lambda-orm/lambdaorm-svc/compare/v2.2.0...v2.2.1) (2025-06-01)
 
 ## [2.2.0](https://github.com/lambda-orm/lambdaorm-svc/compare/v0.8.35...v2.2.0) (2025-05-30)

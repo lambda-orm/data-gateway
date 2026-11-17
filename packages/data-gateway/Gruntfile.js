@@ -47,7 +47,6 @@ module.exports = function (grunt) {
 			license: { expand: true, src: path.join(repoRoot, "LICENSE"), dest: path.join(baseDir, "dist", "LICENSE") },
 			changeLog: { expand: true, src: './CHANGELOG.md', dest: 'dist/' },
 			jest: { expand: true, src: './jest-config.json', dest: 'dist/' },
-			npmrc: { expand: false, src: path.join(repoRoot, ".npmrc"), dest: path.join(baseDir, "dist", ".npmrc") },
 			npmignore: { expand: false, src: path.join(repoRoot, ".npmignore"), dest: path.join(baseDir, "dist", ".npmignore") }
 		}
 	})
@@ -102,7 +101,7 @@ module.exports = function (grunt) {
 	grunt.registerTask('build', ['lint', 'clean:build', 'exec:tsc', 'copy:swagger'])
 	grunt.registerTask('test', ['build', 'exec:test'])
 	grunt.registerTask('docs', ['exec:doc'])
-	grunt.registerTask('dist', ['build', 'clean:dist', 'copy:lib', 'copy:jest', 'copy:readme', 'copy:license', 'copy:npmrc', 'copy:npmignore', 'create-package',])
+	grunt.registerTask('dist', ['build', 'clean:dist', 'copy:lib', 'copy:jest', 'copy:readme', 'copy:license', 'copy:npmignore', 'create-package',])
 	grunt.registerTask('release-manual', ['dist', 'docs', 'exec:standardVersion', 'changelog-format', 'copy:changeLog', 'create-package', 'get-version', 'exec:publish'])
 	grunt.registerTask('release', ['dist', 'docs', 'exec:getOriginalBranch', 'run-release-if-applicable'])
 	grunt.registerTask('default', [])
