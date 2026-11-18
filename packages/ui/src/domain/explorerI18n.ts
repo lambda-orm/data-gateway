@@ -41,6 +41,49 @@ export interface ExplorerMessages {
 	readOnly: string
 	nothingSaved: string
 	openQuery: string
+	properties: string
+	relations: string
+	keysIndexes: string
+	data: string
+	diagram: string
+	referencedBy: string
+	primaryKey: string
+	uniqueKey: string
+	indexes: string
+	constraints: string
+	type: string
+	length: string
+	required: string
+	auto: string
+	defaultValue: string
+	references: string
+	expressions: string
+	entity: string
+	from: string
+	to: string
+	cardinality: string
+	weak: string
+	fields: string
+	message: string
+	condition: string
+	queryIt: string
+	previous: string
+	next: string
+	page: string
+	none: string
+	abstract: string
+	viewEntity: string
+	extendsEntity: string
+	openEntity: string
+	readOnlyData: string
+	search: string
+	addNeighbours: string
+	clearSelection: string
+	selectedCount: string
+	chooseEntities: string
+	editEntities: string
+	saveDiagram: string
+	nothingOpen: string
 }
 
 type Row = [keyof ExplorerMessages, string, string, string, string, string, string, string, string, string, string]
@@ -85,7 +128,50 @@ const ROWS: Row[] = [
 	['saved', 'saved', 'guardado', 'salvo', 'enregistré', 'salvato', 'gespeichert', 'opgeslagen', 'desat', 'gardado', 'gordeta'],
 	['readOnly', 'read only', 'solo lectura', 'somente leitura', 'lecture seule', 'sola lettura', 'schreibgeschützt', 'alleen-lezen', 'només lectura', 'só lectura', 'irakurtzeko soilik'],
 	['nothingSaved', 'Nothing saved yet', 'Todavía no hay nada guardado', 'Ainda não há nada salvo', "Rien d'enregistré pour l'instant", 'Ancora niente di salvato', 'Noch nichts gespeichert', 'Nog niets opgeslagen', 'Encara no hi ha res desat', 'Aínda non hai nada gardado', 'Oraindik ez dago ezer gordeta'],
-	['openQuery', 'double click: query it', 'doble clic: consultar', 'duplo clique: consultar', 'double clic : interroger', 'doppio clic: interroga', 'Doppelklick: abfragen', 'dubbelklik: opvragen', 'doble clic: consulta', 'dobre clic: consultar', 'klik bikoitza: kontsultatu']
+	['openQuery', 'double click: query it', 'doble clic: consultar', 'duplo clique: consultar', 'double clic : interroger', 'doppio clic: interroga', 'Doppelklick: abfragen', 'dubbelklik: opvragen', 'doble clic: consulta', 'dobre clic: consultar', 'klik bikoitza: kontsultatu'],
+	['properties', 'Properties', 'Propiedades', 'Propriedades', 'Propriétés', 'Proprietà', 'Eigenschaften', 'Eigenschappen', 'Propietats', 'Propiedades', 'Propietateak'],
+	['relations', 'Relations', 'Relaciones', 'Relações', 'Relations', 'Relazioni', 'Beziehungen', 'Relaties', 'Relacions', 'Relacións', 'Erlazioak'],
+	['keysIndexes', 'Keys and indexes', 'Claves e índices', 'Chaves e índices', 'Clés et index', 'Chiavi e indici', 'Schlüssel und Indizes', 'Sleutels en indexen', 'Claus i índexs', 'Claves e índices', 'Gakoak eta indizeak'],
+	['data', 'Data', 'Datos', 'Dados', 'Données', 'Dati', 'Daten', 'Gegevens', 'Dades', 'Datos', 'Datuak'],
+	['diagram', 'Diagram', 'Diagrama', 'Diagrama', 'Diagramme', 'Diagramma', 'Diagramm', 'Diagram', 'Diagrama', 'Diagrama', 'Diagrama'],
+	['referencedBy', 'Referenced by', 'Referenciada por', 'Referenciada por', 'Référencée par', 'Referenziata da', 'Referenziert von', 'Verwezen door', 'Referenciada per', 'Referenciada por', 'Hauek erreferentziatzen dute'],
+	['primaryKey', 'Primary key', 'Clave primaria', 'Chave primária', 'Clé primaire', 'Chiave primaria', 'Primärschlüssel', 'Primaire sleutel', 'Clau primària', 'Clave primaria', 'Gako nagusia'],
+	['uniqueKey', 'Unique key', 'Clave única', 'Chave única', 'Clé unique', 'Chiave univoca', 'Eindeutiger Schlüssel', 'Unieke sleutel', 'Clau única', 'Clave única', 'Gako bakarra'],
+	['indexes', 'Indexes', 'Índices', 'Índices', 'Index', 'Indici', 'Indizes', 'Indexen', 'Índexs', 'Índices', 'Indizeak'],
+	['constraints', 'Constraints', 'Restricciones', 'Restrições', 'Contraintes', 'Vincoli', 'Einschränkungen', 'Beperkingen', 'Restriccions', 'Restricións', 'Murriztapenak'],
+	['type', 'Type', 'Tipo', 'Tipo', 'Type', 'Tipo', 'Typ', 'Type', 'Tipus', 'Tipo', 'Mota'],
+	['length', 'Length', 'Largo', 'Tamanho', 'Longueur', 'Lunghezza', 'Länge', 'Lengte', 'Llargada', 'Lonxitude', 'Luzera'],
+	['required', 'Required', 'Obligatoria', 'Obrigatória', 'Obligatoire', 'Obbligatoria', 'Pflicht', 'Verplicht', 'Obligatòria', 'Obrigatoria', 'Derrigorrezkoa'],
+	['auto', 'Auto', 'Auto', 'Auto', 'Auto', 'Auto', 'Auto', 'Auto', 'Auto', 'Auto', 'Auto'],
+	['defaultValue', 'Default', 'Por defecto', 'Padrão', 'Par défaut', 'Predefinito', 'Standard', 'Standaard', 'Per defecte', 'Por defecto', 'Lehenetsia'],
+	['references', 'References', 'Referencia a', 'Referencia', 'Référence', 'Riferimento', 'Verweist auf', 'Verwijst naar', 'Referència a', 'Referencia a', 'Erreferentzia'],
+	['expressions', 'Expressions', 'Expresiones', 'Expressões', 'Expressions', 'Espressioni', 'Ausdrücke', 'Expressies', 'Expressions', 'Expresións', 'Adierazpenak'],
+	['entity', 'Entity', 'Entidad', 'Entidade', 'Entité', 'Entità', 'Entität', 'Entiteit', 'Entitat', 'Entidade', 'Entitatea'],
+	['from', 'From', 'Desde', 'De', 'De', 'Da', 'Von', 'Van', 'Des de', 'Desde', 'Nondik'],
+	['to', 'To', 'Hasta', 'Para', 'Vers', 'A', 'Nach', 'Naar', 'Fins a', 'Ata', 'Nora'],
+	['cardinality', 'Cardinality', 'Cardinalidad', 'Cardinalidade', 'Cardinalité', 'Cardinalità', 'Kardinalität', 'Kardinaliteit', 'Cardinalitat', 'Cardinalidade', 'Kardinaltasuna'],
+	['weak', 'Weak', 'Débil', 'Fraca', 'Faible', 'Debole', 'Schwach', 'Zwak', 'Feble', 'Débil', 'Ahula'],
+	['fields', 'Fields', 'Campos', 'Campos', 'Champs', 'Campi', 'Felder', 'Velden', 'Camps', 'Campos', 'Eremuak'],
+	['message', 'Message', 'Mensaje', 'Mensagem', 'Message', 'Messaggio', 'Meldung', 'Bericht', 'Missatge', 'Mensaxe', 'Mezua'],
+	['condition', 'Condition', 'Condición', 'Condição', 'Condition', 'Condizione', 'Bedingung', 'Voorwaarde', 'Condició', 'Condición', 'Baldintza'],
+	['queryIt', 'Query', 'Consultar', 'Consultar', 'Interroger', 'Interroga', 'Abfragen', 'Opvragen', 'Consulta', 'Consultar', 'Kontsultatu'],
+	['previous', 'Previous', 'Anterior', 'Anterior', 'Précédente', 'Precedente', 'Zurück', 'Vorige', 'Anterior', 'Anterior', 'Aurrekoa'],
+	['next', 'Next', 'Siguiente', 'Próxima', 'Suivante', 'Successiva', 'Weiter', 'Volgende', 'Següent', 'Seguinte', 'Hurrengoa'],
+	['page', 'Page {n}', 'Página {n}', 'Página {n}', 'Page {n}', 'Pagina {n}', 'Seite {n}', 'Pagina {n}', 'Pàgina {n}', 'Páxina {n}', '{n}. orria'],
+	['none', 'none', 'ninguno', 'nenhum', 'aucun', 'nessuno', 'keine', 'geen', 'cap', 'ningún', 'bat ere ez'],
+	['abstract', 'abstract', 'abstracta', 'abstrata', 'abstraite', 'astratta', 'abstrakt', 'abstract', 'abstracta', 'abstracta', 'abstraktua'],
+	['viewEntity', 'view', 'vista', 'visão', 'vue', 'vista', 'Sicht', 'view', 'vista', 'vista', 'ikuspegia'],
+	['extendsEntity', 'extends {name}', 'extiende {name}', 'estende {name}', 'étend {name}', 'estende {name}', 'erweitert {name}', 'breidt {name} uit', 'estén {name}', 'estende {name}', '{name} hedatzen du'],
+	['openEntity', 'double click: open its form', 'doble clic: abrir su formulario', 'duplo clique: abrir o formulário', 'double clic : ouvrir son formulaire', 'doppio clic: apri la scheda', 'Doppelklick: Formular öffnen', 'dubbelklik: formulier openen', 'doble clic: obre el formulari', 'dobre clic: abrir o formulario', 'klik bikoitza: ireki inprimakia'],
+	['readOnlyData', 'Read only: rows are not changed here.', 'Solo lectura: acá no se modifican filas.', 'Somente leitura: aqui não se alteram linhas.', 'Lecture seule : les lignes ne sont pas modifiées ici.', 'Sola lettura: qui non si modificano righe.', 'Nur lesen: Zeilen werden hier nicht geändert.', 'Alleen-lezen: rijen worden hier niet gewijzigd.', 'Només lectura: aquí no es modifiquen files.', 'Só lectura: aquí non se modifican filas.', 'Irakurtzeko soilik: hemen ez dira errenkadak aldatzen.'],
+	['search', 'search…', 'buscar…', 'buscar…', 'rechercher…', 'cerca…', 'suchen…', 'zoeken…', 'cerca…', 'buscar…', 'bilatu…'],
+	['addNeighbours', 'Add their neighbours', 'Agregar sus vecinas', 'Adicionar as vizinhas', 'Ajouter leurs voisines', 'Aggiungi le vicine', 'Nachbarn hinzufügen', 'Buren toevoegen', 'Afegeix les veïnes', 'Engadir as veciñas', 'Gehitu auzokideak'],
+	['clearSelection', 'Clear', 'Limpiar', 'Limpar', 'Effacer', 'Pulisci', 'Leeren', 'Wissen', 'Neteja', 'Limpar', 'Garbitu'],
+	['selectedCount', '{n} selected', '{n} seleccionadas', '{n} selecionadas', '{n} sélectionnées', '{n} selezionate', '{n} ausgewählt', '{n} geselecteerd', '{n} seleccionades', '{n} seleccionadas', '{n} hautatuta'],
+	['chooseEntities', 'Choose at least one entity.', 'Elegí al menos una entidad.', 'Escolha pelo menos uma entidade.', 'Choisissez au moins une entité.', 'Scegli almeno un’entità.', 'Wähle mindestens eine Entität.', 'Kies minstens één entiteit.', 'Tria almenys una entitat.', 'Escolle polo menos unha entidade.', 'Aukeratu entitate bat gutxienez.'],
+	['editEntities', 'Entities…', 'Entidades…', 'Entidades…', 'Entités…', 'Entità…', 'Entitäten…', 'Entiteiten…', 'Entitats…', 'Entidades…', 'Entitateak…'],
+	['saveDiagram', 'Save the diagram', 'Guardar el diagrama', 'Salvar o diagrama', 'Enregistrer le diagramme', 'Salva il diagramma', 'Diagramm speichern', 'Diagram opslaan', 'Desa el diagrama', 'Gardar o diagrama', 'Gorde diagrama'],
+	['nothingOpen', 'Open a query, an entity or a diagram from the explorer, or start a query with +.', 'Abrí una consulta, una entidad o un diagrama desde el explorador, o empezá una consulta con +.', 'Abra uma consulta, uma entidade ou um diagrama no explorador, ou comece uma consulta com +.', "Ouvrez une requête, une entité ou un diagramme depuis l'explorateur, ou commencez une requête avec +.", "Apri una query, un'entità o un diagramma dall'esplora, o inizia una query con +.", 'Öffne eine Abfrage, eine Entität oder ein Diagramm im Explorer oder beginne eine Abfrage mit +.', 'Open een query, een entiteit of een diagram vanuit de verkenner, of begin een query met +.', "Obre una consulta, una entitat o un diagrama des de l'explorador, o comença una consulta amb +.", 'Abre unha consulta, unha entidade ou un diagrama desde o explorador, ou comeza unha consulta con +.', 'Ireki kontsulta, entitate edo diagrama bat arakatzailetik, edo hasi kontsulta bat + erabiliz.']
 ]
 
 const ORDER: Locale[] = ['en', 'es', 'pt', 'fr', 'it', 'de', 'nl', 'ca', 'gl', 'eu']

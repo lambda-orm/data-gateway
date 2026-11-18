@@ -15,6 +15,14 @@ vi.mock('../src/infrastructure/monaco/monacoSetup', () => ({
 
 afterEach(cleanup)
 
+// jsdom has no PointerEvent: without it the coordinates of a drag are lost
+if (!(globalThis as any).PointerEvent) {
+	(globalThis as any).PointerEvent = class extends MouseEvent {
+		pointerId: number
+		constructor (type: string, init: PointerEventInit = {}) { super(type, init); this.pointerId = init.pointerId ?? 1 }
+	}
+}
+
 const at = '2026-11-18T10:00:00.000Z'
 const folder = (id: string, name: string, parentId?: string, schema = 's'): SavedItem => ({ id, kind: 'folder', schema, parentId, name, createdAt: at, updatedAt: at })
 const query = (id: string, name: string, parentId?: string): SavedItem => ({ id, kind: 'query', schema: 's', parentId, name, mode: 'query', query: 'A', script: '', data: '{}', options: '{}', createdAt: at, updatedAt: at })
@@ -90,7 +98,8 @@ describe('WorkspaceController', () => {
 
 const DOMAIN: DomainInfo = {
 	entities: [
-		{ name: 'Orders', primaryKey: ['id'], properties: [{ name: 'id', type: 'integer' }, { name: 'customerId', type: 'string' }], relations: [] },
+		{ name: 'Customers', primaryKey: ['id'], properties: [{ name: 'id', type: 'string' }, { name: 'name', type: 'string' }], relations: [] },
+		{ name: 'Orders', primaryKey: ['id'], properties: [{ name: 'id', type: 'integer' }, { name: 'customerId', type: 'string' }], relations: [{ name: 'customer', type: 'oneToMany', from: 'customerId', entity: 'Customers', to: 'id' }] },
 		{ name: 'Products', primaryKey: ['id'], properties: [{ name: 'id', type: 'integer' }], relations: [] }
 	]
 }
@@ -104,7 +113,7 @@ const add = (rowName: string, label: string) => { fireEvent.click(action(rowName
 describe('Workspace', () => {
 	test('folders, a query saved into one, its changes and Ctrl+S; entities and the domain as YAML', async () => {
 		const store = new MemoryWorkspaceStore([], true)
-		render(<Workspace api={new DomainApi()} store={store} history={false} diagram={false} locale="es" />)
+		render(<Workspace api={new DomainApi()} store={store} history={false} locale="es" />)
 		await waitFor(() => expect(row('northwind/v1')).toBeTruthy())
 		await screen.findByText('Todavía no hay nada guardado')
 
@@ -143,14 +152,29 @@ describe('Workspace', () => {
 		expect((await screen.findByRole('alert')).textContent).toBe('Ya hay uno con ese nombre acá.')
 		fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancelar' }))
 
-		// entities: expanded with their properties; a double click queries one
+		// entities: their properties and relations; a double click opens the form, which queries it
 		fireEvent.click(row('Entidades'))
 		await waitFor(() => expect(row('Orders')).toBeTruthy())
 		fireEvent.click(row('Orders'))
+		fireEvent.click(row('Propiedades (2)'))
 		expect(screen.getByText('customerId')).toBeTruthy()
+		fireEvent.click(row('Relaciones (1)'))
+		expect(screen.getAllByRole('treeitem').some(r => r.textContent === 'customer→ Customers · N — 1')).toBe(true)
 		fireEvent.doubleClick(row('Orders'))
 		await waitFor(() => expect(screen.getByRole('tab', { selected: true }).textContent).toContain('Orders'))
-		expect((within(panel()).getByRole('textbox', { name: 'query' }) as HTMLTextAreaElement).value).toBe('Orders.page(1, 10)')
+		expect(within(panel()).getByRole('heading', { name: 'Orders' })).toBeTruthy()
+		expect(within(panel()).getAllByRole('row').map(r => r.textContent)).toContain('2customerIdstringCustomers.id')
+		fireEvent.click(within(panel()).getByRole('tab', { name: 'Relaciones (1)' }))
+		expect(within(panel()).getByRole('button', { name: 'Customers' })).toBeTruthy()
+		fireEvent.click(within(panel()).getByRole('tab', { name: 'Datos' }))
+		await waitFor(() => expect(within(panel()).getByRole('status').textContent).toContain('3 filas'))
+		// the relation takes to the other entity's form
+		fireEvent.click(within(panel()).getByRole('tab', { name: 'Relaciones (1)' }))
+		fireEvent.click(within(panel()).getByRole('button', { name: 'Customers' }))
+		await waitFor(() => expect(within(panel()).getByRole('heading', { name: 'Customers' })).toBeTruthy())
+		expect(within(panel()).getByRole('tab', { name: 'Relaciones (1)' })).toBeTruthy()
+		fireEvent.click(within(panel()).getByRole('button', { name: 'Consultar' }))
+		await waitFor(() => expect((within(panel()).getByRole('textbox', { name: 'query' }) as HTMLTextAreaElement).value).toBe('Customers.page(1, 10)'))
 
 		// the domain as YAML, read only
 		fireEvent.click(row('Dominio (YAML)'))
@@ -164,5 +188,40 @@ describe('Workspace', () => {
 		expect(screen.getByRole('dialog').textContent).toContain('los 1 elementos')
 		fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Eliminar' }))
 		await waitFor(async () => expect(await store.all()).toEqual([]))
+	}, 30000)
+})
+
+describe('saved diagrams', () => {
+	test('created from the explorer with the chosen entities; a box moved by hand is saved with its place', async () => {
+		const store = new MemoryWorkspaceStore([], true)
+		const { container } = render(<Workspace api={new DomainApi()} store={store} history={false} locale="es" />)
+		await waitFor(() => expect(row('northwind/v1')).toBeTruthy())
+		add('northwind/v1', 'Nuevo diagrama')
+		const dialog = await screen.findByRole('dialog')
+		fireEvent.change(within(dialog).getByRole('textbox', { name: 'name' }), { target: { value: 'Ventas' } })
+		fireEvent.click(within(dialog).getByRole('button', { name: 'Crear' }))
+		expect((await within(dialog).findByRole('alert')).textContent).toBe('Elegí al menos una entidad.')
+		await waitFor(() => expect(within(dialog).getByRole('checkbox', { name: 'Orders' })).toBeTruthy())
+		fireEvent.click(within(dialog).getByRole('checkbox', { name: 'Orders' }))
+		fireEvent.click(within(dialog).getByRole('button', { name: 'Agregar sus vecinas' }))
+		expect((within(dialog).getByRole('checkbox', { name: 'Customers' }) as HTMLInputElement).checked).toBe(true)
+		expect((within(dialog).getByRole('checkbox', { name: 'Products' }) as HTMLInputElement).checked).toBe(false)
+		fireEvent.click(within(dialog).getByRole('button', { name: 'Crear' }))
+		await waitFor(() => expect(screen.getByRole('tab', { selected: true }).textContent).toContain('Ventas'))
+		expect(row('Ventas')).toBeTruthy()
+		expect((await store.all()).find(i => i.name === 'Ventas')).toMatchObject({ kind: 'diagram', entities: ['Customers', 'Orders'] })
+		await waitFor(() => expect(container.querySelectorAll('[role=tabpanel]:not([hidden]) [data-entity]')).toHaveLength(2), { timeout: 20000 })
+
+		// drag Orders 120 px to the right
+		const box = container.querySelector('[role=tabpanel]:not([hidden]) [data-entity=Orders]')!
+		const before = box.getAttribute('transform')
+		fireEvent.pointerDown(box, { clientX: 100, clientY: 100, button: 0, buttons: 1, pointerId: 1 })
+		fireEvent.pointerMove(box, { clientX: 220, clientY: 100, buttons: 1, pointerId: 1 })
+		fireEvent.pointerUp(box, { clientX: 220, clientY: 100, pointerId: 1 })
+		await waitFor(() => expect(container.querySelector('[role=tabpanel]:not([hidden]) [data-entity=Orders]')!.getAttribute('transform')).not.toBe(before))
+		await waitFor(() => expect(screen.getByRole('tab', { selected: true }).textContent).toContain('•'))
+		fireEvent.click(within(screen.getAllByRole('tabpanel').find(p => !p.hidden)!).getByRole('button', { name: 'Guardar' }))
+		await waitFor(async () => expect((await store.all()).find(i => i.name === 'Ventas')).toMatchObject({ positions: { Orders: expect.any(Object), Customers: expect.any(Object) } }))
+		await waitFor(() => expect(screen.getByRole('tab', { selected: true }).textContent).not.toContain('•'))
 	}, 30000)
 })

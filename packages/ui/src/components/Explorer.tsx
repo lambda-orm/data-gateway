@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { QueryApiPort, SchemaInfo } from '../application/ports'
 import { WorkspaceController, WorkspaceError } from '../application/workspaceController'
-import { DomainInfo, typeText } from '../domain/diagram'
+import { cardinalityOf, DomainInfo, typeText } from '../domain/diagram'
 import { ExplorerMessages, explorerMessagesOf, format } from '../domain/explorerI18n'
 import { Locale } from '../domain/i18n'
 import { childrenOf, folderPaths, SavedItem, subtreeOf } from '../domain/savedItems'
@@ -16,7 +16,10 @@ export interface ExplorerProps {
 	/** The saved item of the active tab, marked */
 	activeId?: string
 	onOpen: (item: SavedItem) => void
+	/** Open the form of an entity */
 	onOpenEntity: (schema: string, entity: string) => void
+	/** The domain of a schema, read once (the Workspace shares it with the forms); by default api.domain */
+	loadDomain?: (schema: string) => Promise<DomainInfo>
 	onOpenDomain: (schema: string) => void
 	onNewQuery: (schema: string, parentId?: string) => void
 	/** Without it, no diagrams are offered */
@@ -83,7 +86,7 @@ const Action: React.FC<{ label: string, onClick: () => void, children: React.Rea
  * saved in it (folders, queries, diagrams) with a name and a description. Folders nest; items are dragged into them.
  * The whole workspace is exported to and imported from a JSON file.
  */
-export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, locale, theme, activeId, onOpen, onOpenEntity, onOpenDomain, onNewQuery, onNewDiagram }) => {
+export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, locale, theme, activeId, onOpen, onOpenEntity, onOpenDomain, onNewQuery, onNewDiagram, loadDomain: domainOf }) => {
 	const m = explorerMessagesOf(locale)
 	const state = useSyncExternalStore(controller.subscribe, controller.getState)
 	const [expanded, setExpanded] = useState<Set<string>>(new Set())
@@ -102,9 +105,10 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 
 	const loadDomain = (schema: string) => {
 		if (domains[schema] !== undefined) return
-		if (!api.domain) { setDomains(d => ({ ...d, [schema]: 'no domain' })); return }
+		const read = domainOf ?? (api.domain ? (path: string) => api.domain!(path) : undefined)
+		if (!read) { setDomains(d => ({ ...d, [schema]: 'no domain' })); return }
 		setDomains(d => ({ ...d, [schema]: m.loading }))
-		api.domain(schema).then(domain => setDomains(d => ({ ...d, [schema]: domain })), e => setDomains(d => ({ ...d, [schema]: e?.message ?? String(e) })))
+		read(schema).then(domain => setDomains(d => ({ ...d, [schema]: domain })), e => setDomains(d => ({ ...d, [schema]: e?.message ?? String(e) })))
 	}
 
 	const move = (id: string, parentId: string | undefined) => { controller.move(id, parentId).catch(e => setMessage(problemText(e, m))) }
@@ -166,16 +170,33 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 		if (typeof domain === 'string') return [<Row key="e-status" level={3} label={domain} icon={null} muted />]
 		return [...domain.entities].sort((a, b) => a.name.localeCompare(b.name)).flatMap(entity => {
 			const key = `en:${schema}:${entity.name}`
+			const propertiesKey = `ep:${schema}:${entity.name}`
+			const relationsKey = `er:${schema}:${entity.name}`
 			const keys = new Set(entity.primaryKey ?? [])
-			const row = (
-				<Row key={key} level={3} label={entity.name} icon={<Icons.entity />} title={`${entity.name} — ${m.openQuery}`}
-					expanded={expanded.has(key)} onToggle={() => toggle(key)} onOpen={entity.abstract ? undefined : () => onOpenEntity(schema, entity.name)} />
-			)
-			if (!expanded.has(key)) return [row]
-			return [row, ...(entity.properties ?? []).map(p => (
-				<Row key={`${key}.${p.name}`} level={4} icon={null} muted={!keys.has(p.name)}
-					label={<span className="lw-property"><span className={keys.has(p.name) ? 'lw-pk' : ''}>{p.name}</span><span className="lw-type">{typeText(p)}</span></span>} />
-			))]
+			const relations = entity.relations ?? []
+			const rows: React.ReactNode[] = [
+				<Row key={key} level={3} label={entity.name} icon={<Icons.entity />} title={`${entity.name} — ${m.openEntity}`}
+					expanded={expanded.has(key)} onToggle={() => toggle(key)} onOpen={() => onOpenEntity(schema, entity.name)} />
+			]
+			if (!expanded.has(key)) return rows
+			rows.push(<Row key={propertiesKey} level={4} label={`${m.properties} (${entity.properties?.length ?? 0})`} icon={null}
+				expanded={expanded.has(propertiesKey)} onToggle={() => toggle(propertiesKey)} />)
+			if (expanded.has(propertiesKey)) {
+				rows.push(...(entity.properties ?? []).map(p => (
+					<Row key={`${propertiesKey}.${p.name}`} level={5} icon={null} muted={!keys.has(p.name)}
+						label={<span className="lw-property"><span className={keys.has(p.name) ? 'lw-pk' : ''}>{p.name}</span><span className="lw-type">{typeText(p)}</span></span>} />
+				)))
+			}
+			rows.push(<Row key={relationsKey} level={4} label={`${m.relations} (${relations.length})`} icon={null}
+				expanded={expanded.has(relationsKey)} onToggle={() => toggle(relationsKey)} />)
+			if (expanded.has(relationsKey)) {
+				rows.push(...relations.map(r => (
+					<Row key={`${relationsKey}.${r.name}`} level={5} icon={null} title={`${r.name}: ${r.from} → ${r.entity}.${r.to} (${r.type})`}
+						onOpen={() => onOpenEntity(schema, r.entity)}
+						label={<span className="lw-property"><span>{r.name}</span><span className="lw-type">→ {r.entity} · {cardinalityOf(r)}</span></span>} />
+				)))
+			}
+			return rows
 		})
 	}
 

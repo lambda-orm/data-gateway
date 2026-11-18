@@ -49,17 +49,23 @@ can show 2 levels or the whole model, names only, and export SVG and PNG. The bo
 [ELK](https://github.com/kieler/elkjs) (`elkjs`, loaded on first use; `layout` takes another `LayoutPort`). An
 `api` of your own gives the domain with `QueryApiPort.domain`.
 
-## Workspace: explorer and saved queries
+## Workspace: explorer, entities, saved queries and diagrams
 
 ```tsx
 <Workspace baseUrl={url} headers={headers} locale="es" workspaceKey={`${url}|${user}`} />
 ```
 
-An explorer of the schemas on the left and tabs on the right. Each schema shows its domain as YAML (read only: only
-GET `/{schema}/domain`, never the sources nor the connections), its entities with their properties (a double click
-queries one), and what was saved in it: folders, which nest, and queries with a name and a description, moved by
-dragging them. A query tab saves with Save, Save as… or Ctrl+S, and shows • while it has unsaved changes. The first
-tab is the model (`diagram={false}` hides it).
+An explorer of the schemas on the left and tabs on the right. Each schema shows:
+
+- its domain as YAML, read only (only GET `/{schema}/domain`: never the sources nor the connections);
+- its entities, each with its properties and its relations; a double click opens the form of the entity, as a
+  database IDE shows a table: properties (type, length, required, PK, auto, default, the entity a foreign key
+  references, expressions), relations and what references it, keys, indexes and constraints, its rows (read only, by
+  pages) and its diagram;
+- what was saved in it: folders, which nest, queries and diagrams, each with a name and a description, moved by
+  dragging them. A query tab saves with Save, Save as… or Ctrl+S and shows • while it has unsaved changes. A diagram
+  is created choosing its entities (one by one, or adding the neighbours of the chosen ones); its boxes are laid out
+  by themselves, can be dragged, and are saved where they were left ("lay out again" goes back to the automatic places).
 
 What is saved stays in this browser: IndexedDB, one database per `workspaceKey` (for example the gateway and the
 user). It doesn't reach other browsers or devices, and it goes if the site data is cleared; the explorer exports the

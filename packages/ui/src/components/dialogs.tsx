@@ -140,3 +140,96 @@ export const MenuButton: React.FC<{ label: string, icon: React.ReactNode, items:
 		</span>
 	)
 }
+
+export interface DiagramDialogTexts extends ItemDialogTexts {
+	entities: string
+	search: string
+	addNeighbours: string
+	clearSelection: string
+	selectedCount: string
+	chooseEntities: string
+	loading: string
+}
+
+/**
+ * A diagram: its name, description and folder (unless only the entities are edited) and the entities in it, chosen
+ * with a search, one by one, or adding the neighbours of the chosen ones.
+ */
+export const DiagramDialog: React.FC<{
+	title: string
+	submit: string
+	texts: DiagramDialogTexts
+	/** The entities of the schema and, for each, the ones related to it */
+	domain: () => Promise<{ names: string[], neighbours: (name: string) => string[] }>
+	initial?: { name?: string, description?: string, parentId?: string, entities?: string[] }
+	/** Without folders, only the entities are asked */
+	folders?: { id: string, path: string }[]
+	theme?: 'light' | 'dark'
+	onSubmit: (value: { name: string, description?: string, parentId?: string, entities: string[] }) => Promise<string | undefined | void>
+	onClose: () => void
+}> = ({ title, submit, texts, domain, initial = {}, folders, theme, onSubmit, onClose }) => {
+	const [name, setName] = useState(initial.name ?? '')
+	const [description, setDescription] = useState(initial.description ?? '')
+	const [parentId, setParentId] = useState(initial.parentId ?? '')
+	const [chosen, setChosen] = useState<Set<string>>(new Set(initial.entities ?? []))
+	const [all, setAll] = useState<{ names: string[], neighbours: (name: string) => string[] }>()
+	const [search, setSearch] = useState('')
+	const [error, setError] = useState<string>()
+	const [busy, setBusy] = useState(false)
+	useEffect(() => { domain().then(setAll, e => setError(e?.message ?? String(e))) }, [domain])
+	const shown = (all?.names ?? []).filter(n => n.toLowerCase().includes(search.trim().toLowerCase()))
+	const flip = (n: string) => setChosen(c => { const next = new Set(c); if (next.has(n)) next.delete(n); else next.add(n); return next })
+	const send = async (e: React.FormEvent) => {
+		e.preventDefault()
+		if (chosen.size === 0) { setError(texts.chooseEntities); return }
+		setBusy(true)
+		try {
+			const entities = (all?.names ?? []).filter(n => chosen.has(n))
+			const problem = await onSubmit({ name: name.trim(), description: description.trim() || undefined, parentId: parentId || undefined, entities })
+			if (problem) setError(problem)
+			else onClose()
+		} catch (err: any) {
+			setError(err?.message ?? String(err))
+		} finally {
+			setBusy(false)
+		}
+	}
+	return (
+		<Modal title={title} onClose={onClose} theme={theme}>
+			<form className="lw-form" onSubmit={send}>
+				{folders && (
+					<>
+						<label>{texts.name}<input aria-label="name" value={name} onChange={e => { setName(e.target.value); setError(undefined) }} maxLength={120} /></label>
+						<label>{texts.description}<textarea aria-label="description" value={description} onChange={e => setDescription(e.target.value)} rows={2} maxLength={2000} /></label>
+						<label>{texts.folder}
+							<select aria-label="folder" value={parentId} onChange={e => setParentId(e.target.value)}>
+								<option value="">{texts.top}</option>
+								{folders.map(f => <option key={f.id} value={f.id}>{f.path}</option>)}
+							</select>
+						</label>
+					</>
+				)}
+				<fieldset className="lw-picker">
+					<legend>{texts.entities} · {texts.selectedCount.replace('{n}', String(chosen.size))}</legend>
+					<div className="lw-picker-bar">
+						<input aria-label="search entities" placeholder={texts.search} value={search} onChange={e => setSearch(e.target.value)} />
+						<button type="button" disabled={!all || chosen.size === 0}
+							onClick={() => setChosen(c => new Set([...c, ...[...c].flatMap(n => all!.neighbours(n))]))}>{texts.addNeighbours}</button>
+						<button type="button" disabled={chosen.size === 0} onClick={() => setChosen(new Set())}>{texts.clearSelection}</button>
+					</div>
+					<div className="lw-picker-list" role="group" aria-label={texts.entities}>
+						{!all && <span className="lw-muted">{texts.loading}</span>}
+						{shown.map(n => (
+							<label key={n} className="lw-check"><input type="checkbox" checked={chosen.has(n)} onChange={() => { flip(n); setError(undefined) }} /> {n}</label>
+						))}
+					</div>
+				</fieldset>
+				{error && <div className="lw-notice" role="alert">{error}</div>}
+				<div className="lw-form-actions">
+					<button type="button" onClick={onClose}>{texts.cancel}</button>
+					<button type="submit" className="lw-primary" disabled={busy}>{submit}</button>
+				</div>
+			</form>
+		</Modal>
+	)
+}

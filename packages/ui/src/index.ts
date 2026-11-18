@@ -41,3 +41,6 @@ export { parseExport, toExport, childrenOf, folderPaths, canMove, nameProblem } 
 export type { SavedItem, SavedFolder, SavedQuery, SavedDiagram, SavedQueryContent, WorkspaceExport } from './domain/savedItems'
 export { explorerMessagesOf } from './domain/explorerI18n'
 export type { ExplorerMessages } from './domain/explorerI18n'
+export { EntityView } from './components/EntityView'
+export type { EntityViewProps } from './components/EntityView'
+export { routeOrthogonal, referencesTo, cardinalityOf } from './domain/diagram'
