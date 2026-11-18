@@ -118,3 +118,4 @@
 .lw-form-table td code { font-size: 12px; }
 .lw-workbench button.lw-link { background: none; border: 0; padding: 0; color: var(--lw-accent); cursor: pointer; text-decoration: underline; }
 .lw-tree-row { user-select: none; }
+.lw-line-handle { cursor: col-resize; pointer-events: stroke; }

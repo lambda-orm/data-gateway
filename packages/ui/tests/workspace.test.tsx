@@ -223,5 +223,20 @@ describe('saved diagrams', () => {
 		fireEvent.click(within(screen.getAllByRole('tabpanel').find(p => !p.hidden)!).getByRole('button', { name: 'Guardar' }))
 		await waitFor(async () => expect((await store.all()).find(i => i.name === 'Ventas')).toMatchObject({ positions: { Orders: expect.any(Object), Customers: expect.any(Object) } }))
 		await waitFor(() => expect(screen.getByRole('tab', { selected: true }).textContent).not.toContain('•'))
+
+		// the line sideways, and the names of the relations: saved with the diagram
+		const handle = container.querySelector('[role=tabpanel]:not([hidden]) [data-edge] .lw-line-handle')!
+		fireEvent.pointerDown(handle, { clientX: 50, clientY: 50, button: 0, buttons: 1, pointerId: 2 })
+		fireEvent.pointerMove(handle, { clientX: 777, clientY: 60, buttons: 1, pointerId: 2 })
+		fireEvent.pointerUp(handle, { clientX: 777, clientY: 60, pointerId: 2 })
+		await waitFor(() => expect(container.querySelector('[role=tabpanel]:not([hidden]) [data-edge] path')!.getAttribute('d')).toContain('777'))
+		const visible = () => within(screen.getAllByRole('tabpanel').find(p => !p.hidden)!)
+		fireEvent.click(visible().getByRole('checkbox', { name: 'nombres de relaciones' }))
+		expect(container.querySelector('[role=tabpanel]:not([hidden]) .lw-line-name')!.textContent).toBe('customer')
+		fireEvent.click(visible().getByRole('button', { name: 'Guardar' }))
+		await waitFor(async () => expect((await store.all()).find(i => i.name === 'Ventas')).toMatchObject({ relationNames: true, bends: { 'rel:Customers.id>Orders.customerId': 777 } }))
+		// a double click puts the line back
+		fireEvent.doubleClick(container.querySelector('[role=tabpanel]:not([hidden]) [data-edge] .lw-line-handle')!)
+		await waitFor(() => expect(container.querySelector('[role=tabpanel]:not([hidden]) [data-edge] path')!.getAttribute('d')).not.toContain('777'))
 	}, 30000)
 })

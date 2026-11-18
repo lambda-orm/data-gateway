@@ -82,7 +82,7 @@ export class WorkspaceController {
 		return query
 	}
 
-	public async createDiagram (item: NewItem, content: Pick<SavedDiagram, 'entities' | 'positions' | 'compact'>): Promise<SavedDiagram> {
+	public async createDiagram (item: NewItem, content: Pick<SavedDiagram, 'entities' | 'positions' | 'bends' | 'compact' | 'relationNames'>): Promise<SavedDiagram> {
 		const diagram: SavedDiagram = { id: newId(), kind: 'diagram', ...item, name: item.name.trim(), ...content, ...this.stamp() }
 		this.check(diagram)
 		await this.save([diagram])
@@ -96,7 +96,7 @@ export class WorkspaceController {
 	}
 
 	/** Name, description and, for a query or a diagram, its content */
-	public async update (id: string, patch: Partial<Omit<SavedFolder, 'id' | 'kind' | 'schema' | 'parentId'>> | Partial<SavedQueryContent> | Partial<Pick<SavedDiagram, 'entities' | 'positions' | 'compact'>>): Promise<SavedItem> {
+	public async update (id: string, patch: Partial<Omit<SavedFolder, 'id' | 'kind' | 'schema' | 'parentId'>> | Partial<SavedQueryContent> | Partial<Pick<SavedDiagram, 'entities' | 'positions' | 'bends' | 'compact' | 'relationNames'>>): Promise<SavedItem> {
 		const item = this.find(id)
 		const updated = { ...item, ...patch, id: item.id, kind: item.kind, schema: item.schema, parentId: item.parentId, updatedAt: this.clock().toISOString() } as SavedItem
 		updated.name = updated.name.trim()

@@ -32,7 +32,11 @@ export interface SavedDiagram extends SavedBase {
 	entities: string[]
 	/** Where each box was left; without them, the layout places them */
 	positions?: Record<string, { x: number, y: number }>
+	/** Where each line moved by hand has its vertical stretch (x), by the id of the line */
+	bends?: Record<string, number>
 	compact?: boolean
+	/** The names of the relations on their lines */
+	relationNames?: boolean
 }
 
 export type SavedItem = SavedFolder | SavedQuery | SavedDiagram
@@ -129,7 +133,7 @@ export const parseExport = (text: string): SavedItem[] | undefined => {
 			})
 		} else {
 			if (!Array.isArray(raw.entities) || !raw.entities.every(isString)) return undefined
-			items.push({ ...base, kind: 'diagram', entities: raw.entities, positions: raw.positions && typeof raw.positions === 'object' ? raw.positions : undefined, compact: raw.compact === true })
+			items.push({ ...base, kind: 'diagram', entities: raw.entities, positions: raw.positions && typeof raw.positions === 'object' ? raw.positions : undefined, bends: raw.bends && typeof raw.bends === 'object' ? raw.bends : undefined, compact: raw.compact === true, relationNames: raw.relationNames === true })
 		}
 	}
 	// an item whose folder isn't in the file goes to the top of its schema

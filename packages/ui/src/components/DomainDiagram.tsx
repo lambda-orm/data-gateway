@@ -27,6 +27,12 @@ export interface DomainDiagramProps {
 	positions?: Record<string, { x: number, y: number }>
 	/** The boxes can be dragged; every move gives all the places (undefined: lay them out again) */
 	onPositionsChange?: (positions: Record<string, { x: number, y: number }> | undefined) => void
+	/** Where the lines moved by hand have their vertical stretch, by line (editable) */
+	bends?: Record<string, number>
+	onBendsChange?: (bends: Record<string, number> | undefined) => void
+	/** The names of the relations on their lines */
+	relationNames?: boolean
+	onRelationNamesChange?: (show: boolean) => void
 	/** Names only at the start */
 	compact?: boolean
 	onCompactChange?: (compact: boolean) => void
@@ -123,7 +129,22 @@ const Box: React.FC<{
 	)
 }
 
-const Line: React.FC<{ edge: DiagramEdge, points: Point[], highlighted: boolean, colors: typeof PALETTES.light }> = ({ edge, points, highlighted, colors }) => {
+/** The longest stretch of a line: where its name goes */
+const middleOf = (points: Point[]): Point => {
+	let best = { x: points[0].x, y: points[0].y }
+	let length = -1
+	for (let i = 1; i < points.length; i++) {
+		const l = Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y)
+		if (l > length) { length = l; best = { x: (points[i].x + points[i - 1].x) / 2, y: (points[i].y + points[i - 1].y) / 2 } }
+	}
+	return best
+}
+
+const Line: React.FC<{
+	edge: DiagramEdge, points: Point[], highlighted: boolean, colors: typeof PALETTES.light, showName?: boolean
+	/** The line can be dragged sideways (and a double click puts it back) */
+	onPointerDown?: (e: React.PointerEvent) => void, onReset?: () => void
+}> = ({ edge, points, highlighted, colors, showName, onPointerDown, onReset }) => {
 	if (points.length < 2) return null
 	const d = points.map((p, i) => `${i ? 'L' : 'M'}${p.x},${p.y}`).join(' ')
 	const stroke = highlighted ? colors.accent : colors.line
@@ -151,7 +172,12 @@ const Line: React.FC<{ edge: DiagramEdge, points: Point[], highlighted: boolean,
 		<g data-edge={edge.id}>
 			<title>{title}</title>
 			<path d={d} fill="none" stroke={stroke} strokeWidth={highlighted ? 2 : 1.2} />
+			{onPointerDown && <path d={d} fill="none" stroke="transparent" strokeWidth={10} className="lw-line-handle" onPointerDown={onPointerDown} onDoubleClick={onReset} />}
 			<circle cx={last.x} cy={last.y} r={2.5} fill={stroke} />
+			{showName && (() => {
+				const at = middleOf(points)
+				return <text x={at.x + 4} y={at.y - 4} fontFamily={SANS} fontSize={11} fill={stroke} stroke={colors.canvas} strokeWidth={4} paintOrder="stroke" className="lw-line-name">{edge.names.map(n => n.slice(n.indexOf('.') + 1)).join(' / ')}</text>
+			})()}
 			<text x={one.x} y={one.y} fontFamily={SANS} fontSize={11} fontWeight={700} fill={stroke} textAnchor="middle">1</text>
 			<text x={many.x} y={many.y} fontFamily={SANS} fontSize={11} fontWeight={700} fill={stroke} textAnchor="middle">{edge.childCardinality}</text>
 		</g>
@@ -182,6 +208,11 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 	const setCompact = (value: boolean) => { setCompactState(value); props.onCompactChange?.(value) }
 	// the places while a box is dragged (the saved ones come back in positions)
 	const [moving, setMoving] = useState<Record<string, { x: number, y: number }>>()
+	const [movingBends, setMovingBends] = useState<Record<string, number>>()
+	const lineDrag = useRef<{ id: string, all: Record<string, number>, moved: boolean }>()
+	const [namesState, setNamesState] = useState(props.relationNames ?? false)
+	const relationNames = props.relationNames ?? namesState
+	const setRelationNames = (value: boolean) => { setNamesState(value); props.onRelationNamesChange?.(value) }
 	const boxDrag = useRef<{ name: string, x: number, y: number, from: { x: number, y: number }, all: Record<string, { x: number, y: number }>, moved: boolean }>()
 	const [laid, setLaid] = useState<LayoutResult>()
 	const [drawing, setDrawing] = useState(false)
@@ -242,20 +273,21 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 	const [base, setBase] = useState<LayoutResult>()
 	const entityMap = useMemo(() => new Map((domain?.entities ?? []).map(e => [e.name, e])), [domain])
 	const placed = moving ?? positions
+	const bends = movingBends ?? props.bends
 	// with places by hand (saved or while dragging), the boxes go there and the lines are routed between them
 	useEffect(() => {
 		if (!base) { setLaid(undefined); return }
-		if (!placed) { setLaid(base); return }
+		if (!placed && !bends) { setLaid(base); return }
 		const boxes = new Map<string, Placed>()
 		for (const e of shownEntities) {
-			const at = placed[e.name] ?? base.nodes.get(e.name)
+			const at = placed?.[e.name] ?? base.nodes.get(e.name)
 			if (at) boxes.set(e.name, { ...at, ...boxSize(e, compact) })
 		}
 		let width = 0
 		let height = 0
 		for (const b of boxes.values()) { width = Math.max(width, b.x + b.width); height = Math.max(height, b.y + b.height) }
-		setLaid({ nodes: new Map([...boxes].map(([name, b]) => [name, { x: b.x, y: b.y }])), edges: routeOrthogonal(shownEdges, boxes, entityMap, compact), width, height })
-	}, [base, placed, shownEntities, shownEdges, compact, entityMap])
+		setLaid({ nodes: new Map([...boxes].map(([name, b]) => [name, { x: b.x, y: b.y }])), edges: routeOrthogonal(shownEdges, boxes, entityMap, compact, bends), width, height })
+	}, [base, placed, bends, shownEntities, shownEdges, compact, entityMap])
 
 	useEffect(() => {
 		if (!shownEntities.length) { setBase(undefined); return }
@@ -364,7 +396,45 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 		setMoving(undefined)
 		return true
 	}
-	const relayout = () => { setMoving(undefined); onPositionsChange?.(undefined) }
+	// a line dragged sideways: its vertical stretch follows the pointer; the boxes stay where they are drawn
+	const lineDown = (id: string) => (e: React.PointerEvent) => {
+		if (!editable || !laid || e.button !== 0) return
+		e.stopPropagation()
+		lineDrag.current = { id, all: { ...(props.bends ?? {}) }, moved: false }
+		;(e.currentTarget as Element).setPointerCapture?.(e.pointerId)
+	}
+	const lineMove = (e: React.PointerEvent): boolean => {
+		const d = lineDrag.current
+		if (!d) return false
+		const rect = viewport.current?.getBoundingClientRect()
+		const x = Math.round((e.clientX - (rect?.left ?? 0) - view.x) / view.k)
+		d.moved = true
+		d.all = { ...d.all, [d.id]: x }
+		setMovingBends(d.all)
+		return true
+	}
+	const lineUp = (): boolean => {
+		const d = lineDrag.current
+		if (!d) return false
+		lineDrag.current = undefined
+		if (d.moved && laid) {
+			if (!positions) {
+				const all: Record<string, { x: number, y: number }> = {}
+				for (const [n, at] of laid.nodes) all[n] = { x: Math.round(at.x), y: Math.round(at.y) }
+				onPositionsChange?.(all)
+			}
+			props.onBendsChange?.(d.all)
+			drag.current = { x: 0, y: 0, view, moved: true }
+		}
+		setMovingBends(undefined)
+		return true
+	}
+	const resetLine = (id: string) => {
+		if (props.bends?.[id] === undefined) return
+		const rest = Object.fromEntries(Object.entries(props.bends).filter(([key]) => key !== id))
+		props.onBendsChange?.(Object.keys(rest).length ? rest : undefined)
+	}
+	const relayout = () => { setMoving(undefined); setMovingBends(undefined); onPositionsChange?.(undefined); props.onBendsChange?.(undefined) }
 	useEffect(() => () => clearTimeout(clickTimer.current), [])
 
 	const exportAs = (kind: 'svg' | 'png') => {
@@ -397,7 +467,7 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 		drag.current = { x: e.clientX, y: e.clientY, view, moved: false }
 	}
 	const pointerMove = (e: React.PointerEvent) => {
-		if (boxMove(e)) return
+		if (boxMove(e) || lineMove(e)) return
 		const start = drag.current
 		if (!start || (e.buttons & 1) === 0) return
 		const dx = e.clientX - start.x
@@ -406,7 +476,7 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 		if (!start.moved) { start.moved = true; (e.currentTarget as Element).setPointerCapture?.(e.pointerId) }
 		setView({ ...start.view, x: start.view.x + dx, y: start.view.y + dy })
 	}
-	const pointerUp = () => { boxUp(); setTimeout(() => { drag.current = undefined }, 0) }
+	const pointerUp = () => { boxUp(); lineUp(); setTimeout(() => { drag.current = undefined }, 0) }
 
 	const relations = shownEdges.filter(e => e.kind === 'relation').length
 	return (
@@ -426,8 +496,9 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 					<option value="all">{m.wholeModel}</option>
 				</select>}
 				<label className="lw-check"><input type="checkbox" checked={compact} onChange={e => setCompact(e.target.checked)} /> {m.namesOnly}</label>
+				<label className="lw-check"><input type="checkbox" checked={relationNames} onChange={e => setRelationNames(e.target.checked)} /> {m.relationNames}</label>
 				<button onClick={() => fit()}>{m.fit}</button>
-				{editable && <button onClick={relayout} disabled={!positions}>{m.relayout}</button>}
+				{editable && <button onClick={relayout} disabled={!positions && !props.bends}>{m.relayout}</button>}
 				<button onClick={() => exportAs('svg')} disabled={!laid}>SVG</button>
 				<button onClick={() => exportAs('png')} disabled={!laid}>PNG</button>
 				<span className="lw-who">{domain && format(m.summary, { entities: shownEntities.length, relations })}</span>
@@ -439,7 +510,8 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 				<svg ref={svg} className="lw-diagram-svg" role="img" aria-label={m.model}>
 					<g data-view="" transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
 						{laid && shownEdges.map(edge => (
-							<Line key={edge.id} edge={edge} points={laid.edges.get(edge.id) ?? []} colors={colors} highlighted={edge.parent === focus || edge.child === focus} />
+							<Line key={edge.id} edge={edge} points={laid.edges.get(edge.id) ?? []} colors={colors} highlighted={edge.parent === focus || edge.child === focus}
+								showName={relationNames} onPointerDown={editable && edge.kind === 'relation' ? lineDown(edge.id) : undefined} onReset={() => resetLine(edge.id)} />
 						))}
 						{laid && shownEntities.map(entity => {
 							const at = laid.nodes.get(entity.name)

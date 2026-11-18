@@ -1,7 +1,7 @@
 import React from 'react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
-import { DomainInfo, edgesOf, foreignKeysOf, hubOf, neighbourhood, typeText, boxSize } from '../src/domain/diagram'
+import { DomainInfo, edgesOf, foreignKeysOf, hubOf, neighbourhood, typeText, boxSize, routeOrthogonal } from '../src/domain/diagram'
 import { elkLayout, LayoutPort } from '../src/infrastructure/elkLayout'
 import { DomainDiagram } from '../src/components/DomainDiagram'
 import { QueryTabs } from '../src/components/QueryTabs'
@@ -64,6 +64,16 @@ describe('diagram (domain)', () => {
 		expect(typeText({ name: 'id', type: 'integer', autoIncrement: true })).toBe('integer · auto')
 		expect(typeText({ name: 'name', type: 'string', length: 80 })).toBe('string(80)')
 		expect(boxSize(DOMAIN.entities[0], true).height).toBeLessThan(boxSize(DOMAIN.entities[0], false).height)
+	})
+
+	test('lines between boxes placed by hand: at the rows of the fields, and where a line was moved to', () => {
+		const edges = edgesOf(DOMAIN).filter(e => e.id === 'rel:Customers.id>Orders.customerId')
+		const entities = new Map(DOMAIN.entities.map(e => [e.name, e]))
+		const boxes = new Map([['Customers', { x: 0, y: 0, width: 150, height: 70 }], ['Orders', { x: 300, y: 100, width: 150, height: 70 }]])
+		// from the right of Customers at its row "id" (1st) to the left of Orders at "customerId" (2nd)
+		expect(routeOrthogonal(edges, boxes, entities, false).get(edges[0].id)).toEqual([{ x: 150, y: 39 }, { x: 225, y: 39 }, { x: 225, y: 157 }, { x: 300, y: 157 }])
+		// moved to x 500: it leaves Customers by the right and enters Orders by the right
+		expect(routeOrthogonal(edges, boxes, entities, false, { [edges[0].id]: 500 }).get(edges[0].id)).toEqual([{ x: 150, y: 39 }, { x: 500, y: 39 }, { x: 500, y: 157 }, { x: 450, y: 157 }])
 	})
 
 	test('ELK places every box and routes every line', async () => {

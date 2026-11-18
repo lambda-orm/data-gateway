@@ -154,9 +154,9 @@ const anchorY = (box: Placed, entity: EntityInfo | undefined, field: string | un
 /**
  * Lines for boxes placed by hand: from the side of the parent that faces the child to the facing side of the child,
  * at the rows of their fields, with a bend in the middle (orthogonal); boxes one above the other, top to bottom; an
- * entity related to itself, a loop on its right.
+ * entity related to itself, a loop on its right. A line with a bend (moved by hand) has its vertical stretch there.
  */
-export const routeOrthogonal = (edges: DiagramEdge[], boxes: Map<string, Placed>, entities: Map<string, EntityInfo>, compact: boolean): Map<string, { x: number, y: number }[]> => {
+export const routeOrthogonal = (edges: DiagramEdge[], boxes: Map<string, Placed>, entities: Map<string, EntityInfo>, compact: boolean, bends: Record<string, number> = {}): Map<string, { x: number, y: number }[]> => {
 	const routes = new Map<string, { x: number, y: number }[]>()
 	for (const edge of edges) {
 		const p = boxes.get(edge.parent)
@@ -164,7 +164,13 @@ export const routeOrthogonal = (edges: DiagramEdge[], boxes: Map<string, Placed>
 		if (!p || !c) continue
 		const py = anchorY(p, entities.get(edge.parent), edge.parentField, compact)
 		const cy = anchorY(c, entities.get(edge.child), edge.childField, compact)
-		if (edge.parent === edge.child) {
+		const bend = bends[edge.id]
+		if (bend !== undefined) {
+			// a line moved by hand: its vertical stretch where it was left; each end leaves its box by the side facing it
+			const from = bend >= p.x + p.width / 2 ? p.x + p.width : p.x
+			const to = bend >= c.x + c.width / 2 ? c.x + c.width : c.x
+			routes.set(edge.id, [{ x: from, y: py }, { x: bend, y: py }, { x: bend, y: cy }, { x: to, y: cy }])
+		} else if (edge.parent === edge.child) {
 			const x = p.x + p.width
 			routes.set(edge.id, [{ x, y: py }, { x: x + 24, y: py }, { x: x + 24, y: Math.max(cy, py + 18) }, { x, y: Math.max(cy, py + 18) }])
 		} else if (c.x >= p.x + p.width + 16 || c.x + c.width + 16 <= p.x) {

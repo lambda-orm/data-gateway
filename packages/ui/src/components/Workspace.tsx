@@ -26,7 +26,7 @@ export interface WorkspaceProps extends Omit<QueryWorkbenchProps, 'initial' | 'o
 
 type TabKind = 'query' | 'domain' | 'entity' | 'diagram'
 
-interface DiagramDraft { entities: string[], positions?: Record<string, { x: number, y: number }>, compact: boolean }
+interface DiagramDraft { entities: string[], positions?: Record<string, { x: number, y: number }>, bends?: Record<string, number>, compact: boolean, relationNames: boolean }
 
 interface Tab {
 	id: number
@@ -47,8 +47,9 @@ interface Tab {
 
 const SAME = (a: SavedQueryContent, b: SavedQueryContent) => a.mode === b.mode && a.query === b.query && a.script === b.script && a.data === b.data && a.options === b.options
 const contentOf = (q: SavedQuery): SavedQueryContent => ({ mode: q.mode, query: q.query, script: q.script, data: q.data, options: q.options })
-const draftOf = (d: SavedDiagram): DiagramDraft => ({ entities: d.entities, positions: d.positions, compact: d.compact ?? false })
-const sameDraft = (a: DiagramDraft, b: DiagramDraft) => a.compact === b.compact && a.entities.join('\n') === b.entities.join('\n') && JSON.stringify(a.positions ?? null) === JSON.stringify(b.positions ?? null)
+const draftOf = (d: SavedDiagram): DiagramDraft => ({ entities: d.entities, positions: d.positions, bends: d.bends, compact: d.compact ?? false, relationNames: d.relationNames ?? false })
+const sameDraft = (a: DiagramDraft, b: DiagramDraft) => a.compact === b.compact && a.relationNames === b.relationNames && a.entities.join('\n') === b.entities.join('\n') &&
+	JSON.stringify(a.positions ?? null) === JSON.stringify(b.positions ?? null) && JSON.stringify(a.bends ?? null) === JSON.stringify(b.bends ?? null)
 
 const DomainYaml: React.FC<{ domain: () => Promise<DomainInfo>, schema: string, theme: 'light' | 'dark', loading: string, readOnly: string }> = ({ domain, schema, theme, loading, readOnly }) => {
 	const [text, setText] = useState<string>()
@@ -173,7 +174,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 		const saved = savedOf(tab)
 		if (tab.kind === 'diagram') {
 			if (saved?.kind !== 'diagram' || !tab.draft) return
-			try { await controller.update(saved.id, { entities: tab.draft.entities, positions: tab.draft.positions, compact: tab.draft.compact }) } catch (e) { setNotice(problemText(e, x)) }
+			try { await controller.update(saved.id, { entities: tab.draft.entities, positions: tab.draft.positions, bends: tab.draft.bends, compact: tab.draft.compact, relationNames: tab.draft.relationNames }) } catch (e) { setNotice(problemText(e, x)) }
 			return
 		}
 		const content = contents.current.get(tab.id)
@@ -255,6 +256,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 									<div tabIndex={-1} className="lw-diagram-tab">
 										<DomainDiagram api={api} schema={tab.schema ?? ''} theme={theme} locale={workbench.locale} entities={tab.draft.entities}
 											positions={tab.draft.positions} onPositionsChange={positions => setDraft(tab.id, { positions })}
+											bends={tab.draft.bends} onBendsChange={bends => setDraft(tab.id, { bends })}
+											relationNames={tab.draft.relationNames} onRelationNamesChange={relationNames => setDraft(tab.id, { relationNames })}
 											compact={tab.draft.compact} onCompactChange={compact => setDraft(tab.id, { compact })}
 											onOpenEntity={openEntity} exportName={saved?.name ?? tab.title}
 											toolbar={(
@@ -303,7 +306,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 					onClose={() => setCreatingDiagram(undefined)}
 					onSubmit={async v => {
 						try {
-							const diagram = await controller.createDiagram({ schema: creatingDiagram.schema, name: v.name, description: v.description, parentId: v.parentId }, { entities: v.entities, compact: false })
+							const diagram = await controller.createDiagram({ schema: creatingDiagram.schema, name: v.name, description: v.description, parentId: v.parentId }, { entities: v.entities, compact: false, relationNames: false })
 							openSaved(diagram)
 						} catch (e) { return problemText(e, x) }
 					}} />

@@ -65,7 +65,8 @@ An explorer of the schemas on the left and tabs on the right. Each schema shows:
 - what was saved in it: folders, which nest, queries and diagrams, each with a name and a description, moved by
   dragging them. A query tab saves with Save, Save as… or Ctrl+S and shows • while it has unsaved changes. A diagram
   is created choosing its entities (one by one, or adding the neighbours of the chosen ones); its boxes are laid out
-  by themselves, can be dragged, and are saved where they were left ("lay out again" goes back to the automatic places).
+  by themselves and can be dragged, its lines can be moved sideways (a double click puts one back), the names of the
+  relations can be shown on them, and all of it is saved ("lay out again" goes back to the automatic places).
 
 What is saved stays in this browser: IndexedDB, one database per `workspaceKey` (for example the gateway and the
 user). It doesn't reach other browsers or devices, and it goes if the site data is cleared; the explorer exports the
