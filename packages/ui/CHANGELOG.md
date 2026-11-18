@@ -1,5 +1,11 @@
 # @lambdaorm/ui
 
+## 0.3.0
+
+### Minor Changes
+
+- 3477dc3: `Workspace`: an explorer of the schemas on the left and tabs on the right. Each schema shows its domain as YAML (read only), its entities with their properties and relations, and what is saved in it: folders, queries and diagrams with a name and a description, moved by dragging. `EntityView`: the form of an entity (properties, relations and references, keys, indexes and constraints, rows read only by pages, diagram). Saved diagrams: the entities are chosen (or their neighbours added), the boxes are laid out and can be dragged, the boxes are taken out with their × or the Delete key, the lines can be moved sideways (a double click puts one back), the names of the relations can be shown, and all of it is saved. What is saved stays in the browser (`IndexedDbWorkspaceStore`, per `workspaceKey`) or in another `WorkspaceStore`; the workspace is exported to and imported from a JSON file. `DomainDiagram`: `entities`, `focus`, `positions` / `onPositionsChange`, `bends` / `onBendsChange`, `relationNames`, `onRemoveEntity`, `compact`, `toolbar`, `onOpenEntity`. `CodeEditor` `yaml` and `readOnly`; `QueryWorkbench` `initial`, `onContentChange`, `toolbar`, `showWho`; `ResultViewer` `initialView`.
+
 ## 0.2.0
 
 ### Minor Changes
