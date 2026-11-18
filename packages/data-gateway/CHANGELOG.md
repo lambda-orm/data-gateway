@@ -4,7 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## Versions
 
-### Unreleased
+### 3.0.0-rc.2 (2026-11-18)
+
+Prerelease: it doesn't move `latest`.
 
 Uses `@lambdaorm/lib` 3.5.2.
 
