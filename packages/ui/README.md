@@ -49,6 +49,23 @@ can show 2 levels or the whole model, names only, and export SVG and PNG. The bo
 [ELK](https://github.com/kieler/elkjs) (`elkjs`, loaded on first use; `layout` takes another `LayoutPort`). An
 `api` of your own gives the domain with `QueryApiPort.domain`.
 
+## Workspace: explorer and saved queries
+
+```tsx
+<Workspace baseUrl={url} headers={headers} locale="es" workspaceKey={`${url}|${user}`} />
+```
+
+An explorer of the schemas on the left and tabs on the right. Each schema shows its domain as YAML (read only: only
+GET `/{schema}/domain`, never the sources nor the connections), its entities with their properties (a double click
+queries one), and what was saved in it: folders, which nest, and queries with a name and a description, moved by
+dragging them. A query tab saves with Save, Save as… or Ctrl+S, and shows • while it has unsaved changes. The first
+tab is the model (`diagram={false}` hides it).
+
+What is saved stays in this browser: IndexedDB, one database per `workspaceKey` (for example the gateway and the
+user). It doesn't reach other browsers or devices, and it goes if the site data is cleared; the explorer exports the
+whole workspace to a JSON file and imports it back (added to what there is, or instead of everything). `store` takes
+another `WorkspaceStore` (`MemoryWorkspaceStore`, or a backend of your own).
+
 ## Monaco
 
 Monaco is loaded on first use and its workers come from your bundler. With Vite:
