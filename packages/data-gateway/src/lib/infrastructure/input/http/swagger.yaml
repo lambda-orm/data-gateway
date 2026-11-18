@@ -3,12 +3,12 @@ info:
   contact:
     email: flaviolrita@hotmail.com
     name: 'Flavio Lionel Rita'
-  description: 'Service that exposes the functionality of the [@lambdaorm/lib](https://www.npmjs.com/package/@lambdaorm/lib) npm library. With SERVICE_TOKEN set, every request but /ping, /health and /metrics needs `Authorization: Bearer <token>`'
+  description: 'Data Gateway: the schemas of this instance through [λORM](https://lambda-orm.github.io/wiki/) queries (lambda expressions over the domain). Every request but /ping, /health, /metrics and /schemas needs a credential, as configured in data-gateway.config.yaml (bearer token, API key or basic).'
   license:
     name: MIT
     url: https://opensource.org/license/mit/
-  title: λORM Service
-  version: 2.3.1
+  title: Data Gateway
+  version: 3.0.0
 externalDocs:
   description: Find out more about lambdaorm npm library
   url: https://lambda-orm.github.io/wiki/

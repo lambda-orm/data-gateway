@@ -1,4 +1,5 @@
 import { WhoAmI } from '../domain/operations'
+import { DomainInfo } from '../domain/diagram'
 import { HistoryEntry, QueryParameter } from '../domain/workspace'
 
 /** A schema the gateway serves (GET /schemas) */
@@ -19,6 +20,8 @@ export interface QueryApiPort {
 	whoami (schema: string): Promise<WhoAmI>
 	/** The domain as TypeScript declarations (GET /{schema}/typings) */
 	typings (schema: string): Promise<string>
+	/** The entities, their properties and relations (GET /{schema}/domain), for the diagram; optional for other adapters */
+	domain? (schema: string): Promise<DomainInfo>
 	plan (schema: string, query: string, options?: Options): Promise<unknown>
 	metadata (schema: string, query: string): Promise<unknown>
 	model (schema: string, query: string): Promise<unknown>
