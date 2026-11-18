@@ -3,8 +3,12 @@
 30 questions in natural language over northwind (filters, text, dates, aggregations, groups, relations, top-N and two
 writes), each with a reference query. Claude answers them only through the MCP of a running gateway, and its answer is
 compared with the result of the reference. It measures whether models use the λORM query language well with the guide
-(`lambdaorm://guide/expressions`), the description of `orm_execute` and the errors the gateway returns. Run it before a
-release and whenever the guide, the tool descriptions or the error messages change (docs/DATA_GATEWAY_PLAN.md, phase 3).
+(`lambdaorm://guide/expressions`), the description of `orm_execute` and the errors the gateway returns.
+
+**Optional.** For now no LLM consumes the MCP, so the set doesn't gate any release (docs/DATA_GATEWAY_PLAN.md, D23).
+`--check` uses no model (it only checks the references, the grader and the writes against the database); running the
+questions with a model is for when an LLM starts using the MCP, or the guide, the tool descriptions or the error
+messages change.
 
 **Target:** at least 80% right without a failed tool call (`firstTry`), and 95% right with at most two failed calls
 (`withUpToTwoRetries`).
