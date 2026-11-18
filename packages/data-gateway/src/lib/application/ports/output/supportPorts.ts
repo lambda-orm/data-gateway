@@ -37,8 +37,17 @@ export interface QueuePort {
 export type Headers = Record<string, string | string[] | undefined>
 
 /** Validates the credential of a request. Never throws for a bad credential: answers valid: false with a reason. */
+/** How a client sends the credential (for the OpenAPI document): none, a bearer token, an API key in a header, basic */
+export interface CredentialScheme {
+	type: 'none' | 'bearer' | 'apikey' | 'basic'
+	/** The header of an API key */
+	header?: string
+}
+
 export interface AuthenticatorPort {
 	authenticate (headers: Headers): Promise<AuthenticationResult>
+	/** How the credential is sent; without it, it is not described */
+	scheme? (): CredentialScheme
 }
 
 export interface LoggerPort {
