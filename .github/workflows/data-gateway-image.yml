@@ -141,9 +141,20 @@ jobs:
       - name: Push
         if: steps.version.outputs.exists == 'false'
         run: |
-          docker push $IMAGE:${{ steps.version.outputs.version }}
+          # Docker Hub sometimes drops an upload ("blob upload unknown"): each tag gets 3 tries, 15 s and 30 s apart
+          push() {
+            for attempt in 1 2 3; do
+              docker push "$1" && return 0
+              [ "$attempt" = 3 ] && break
+              echo "::warning::docker push $1 failed (attempt $attempt of 3), retrying in $((attempt * 15)) s"
+              sleep $((attempt * 15))
+            done
+            echo "::error::docker push $1 failed 3 times"
+            return 1
+          }
+          push $IMAGE:${{ steps.version.outputs.version }}
           if [ "${{ steps.version.outputs.latest }}" = "true" ]; then
-            docker push $IMAGE:latest
+            push $IMAGE:latest
             echo "::notice::published $IMAGE:${{ steps.version.outputs.version }} and latest"
           else
             echo "::notice::published $IMAGE:${{ steps.version.outputs.version }} (prerelease: latest not moved)"
