@@ -8,10 +8,11 @@ import { rateLimit } from 'express-rate-limit'
 import swaggerUi from 'swagger-ui-express'
 import { DataGatewayPort, RequestContext } from '../../../application/ports/input/dataGatewayPort'
 import { SchemaDirectoryPort, ServedSchema } from '../../../application/ports/input/schemaDirectoryPort'
-import { AuthenticatorPort, LoggerPort, MetricsPort } from '../../../application/ports/output/supportPorts'
+import { AuthenticatorPort, CredentialScheme, LoggerPort, MetricsPort } from '../../../application/ports/output/supportPorts'
 import { Principal } from '../../../domain/auth/principal'
 import { Transport } from '../transport'
 import { toHttpError } from './httpErrors'
+import { withSecurity } from './openApi'
 const YAML = require('js-yaml')
 
 export interface HttpTransportOptions {
@@ -294,9 +295,15 @@ export class HttpTransport implements Transport {
 		// the version of this gateway, not the one written in the file
 		document.info = { ...document.info, version: this.deps.directory.version().version }
 		document.servers = this.served.map(schema => ({ description: `schema ${schema.path || '/'}`, url: this.schemaBase(schema) || '/' }))
+		// Authorize offers how the credential of these schemas is sent (an API key in its header, a token, basic)
+		const schemes = this.served.map(schema => schema.authenticator(TRANSPORT_NAME).scheme?.()).filter((s): s is CredentialScheme => s !== undefined)
+		const secured = withSecurity(document, schemes)
+		document.components = secured.components
+		document.security = secured.security
 		const base = this.options.basePath
-		app.use(`${base}/api-docs`, swaggerUi.serve, swaggerUi.setup(document))
-		app.use(`${base}/doc`, swaggerUi.serve, swaggerUi.setup(document))
+		// serveFiles: the document of this transport (serve keeps one for the whole process: the last one set up)
+		app.use(`${base}/api-docs`, swaggerUi.serveFiles(document), swaggerUi.setup(document))
+		app.use(`${base}/doc`, swaggerUi.serveFiles(document), swaggerUi.setup(document))
 		app.get(base || '/', (_req, res) => res.redirect(`${base}/doc/`))
 	}
 }

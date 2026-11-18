@@ -624,7 +624,7 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-      description: The service's SERVICE_TOKEN (only when the service sets one)
+      description: Replaced when the gateway serves this document by the schemes of its configuration (bearer, API key, basic)
   examples: {}
   headers: {}
   parameters: {}

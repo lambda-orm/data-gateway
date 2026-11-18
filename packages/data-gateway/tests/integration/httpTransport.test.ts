@@ -3,12 +3,13 @@ import os from 'os'
 import path from 'path'
 // The REST transport over a real socket, with the real facade and use cases on fake λORM ports.
 import { HttpTransport } from '../../src/lib/infrastructure/input/http/httpTransport'
-import { BearerAuthenticator } from '../../src/lib/infrastructure/output/auth/authenticators'
+import { ApiKeyAuthenticator, BearerAuthenticator } from '../../src/lib/infrastructure/output/auth/authenticators'
 import { NoMetrics, PromClientMetrics } from '../../src/lib/infrastructure/output/metrics/promClientMetrics'
 import { ConsoleLogger } from '../../src/lib/infrastructure/output/logger/loggers'
 import { fakeGateway, FixedClock, GatewayFixture } from '../helpers/fakes'
 import { InlineSchemaDirectory } from '../../src/lib/application/runtime/inlineSchemaDirectory'
 import { call } from '../helpers/net'
+import { AuthenticatorPort } from '../../src/lib/application/ports/output/supportPorts'
 
 const credentials = [
 	{ name: 'agent', value: 'agent-token', permissions: ['read' as const] },
@@ -17,7 +18,7 @@ const credentials = [
 const agent = { Authorization: 'Bearer agent-token' }
 const backend = { Authorization: 'Bearer backend-token' }
 
-const start = async (fixture: GatewayFixture, options: Partial<{ basePath: string, rateLimit: { windowMs: number, max: number }, metrics: boolean, requestBodySize: string, uiDir: string }> = {}) => {
+const start = async (fixture: GatewayFixture, options: Partial<{ basePath: string, rateLimit: { windowMs: number, max: number }, metrics: boolean, requestBodySize: string, uiDir: string, authenticator: AuthenticatorPort }> = {}) => {
 	const transport = new HttpTransport({
 		port: 0,
 		host: '127.0.0.1',
@@ -29,7 +30,7 @@ const start = async (fixture: GatewayFixture, options: Partial<{ basePath: strin
 		uiDir: options.uiDir
 	}, {
 		directory: new InlineSchemaDirectory([{
-			path: '', gateway: fixture.gateway, mcp: undefined as any, transports: ['http'], authenticators: { http: new BearerAuthenticator(credentials) }
+			path: '', gateway: fixture.gateway, mcp: undefined as any, transports: ['http'], authenticators: { http: options.authenticator ?? new BearerAuthenticator(credentials) }
 		}], new FixedClock(), '9.9.9'),
 		metrics: options.metrics ? new PromClientMetrics() : new NoMetrics(),
 		logger: new ConsoleLogger('error')
@@ -167,6 +168,25 @@ describe('http transport options', () => {
 			expect(root.headers.get('location')).toBe('/doc/')
 		} finally {
 			await transport.stop()
+		}
+	})
+
+	test('Authorize offers the credential of the configuration: the bearer token, or the API key in its header', async () => {
+		const spec = async (base: string) => fetch(`${base}/doc/swagger-ui-init.js`).then(r => r.text())
+		const bearer = await start(fakeGateway())
+		const apikey = await start(fakeGateway(), { authenticator: new ApiKeyAuthenticator(credentials, 'x-api-key') })
+		try {
+			const withBearer = await spec(bearer.base)
+			expect(withBearer).toMatch(/"bearerAuth"/)
+			expect(withBearer).not.toMatch(/"apiKeyAuth"/)
+			const withKey = await spec(apikey.base)
+			expect(withKey).toMatch(/"apiKeyAuth": \{\s*"type": "apiKey",\s*"in": "header",\s*"name": "x-api-key"/)
+			expect(withKey).not.toMatch(/"bearerAuth"/)
+			// the key works on a real call
+			expect((await call(apikey.base, '/whoami', { headers: { 'x-api-key': 'agent-token' } })).status).toBe(200)
+		} finally {
+			await bearer.transport.stop()
+			await apikey.transport.stop()
 		}
 	})
 })
