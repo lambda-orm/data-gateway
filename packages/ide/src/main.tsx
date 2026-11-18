@@ -1,7 +1,7 @@
 import './monacoWorkers'
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react'
 import { createRoot } from 'react-dom/client'
-import { Locale, LOCALES, QueryTabs } from '@lambdaorm/ui'
+import { Locale, LOCALES, Workspace } from '@lambdaorm/ui'
 import '@lambdaorm/ui/styles.css'
 import './app.css'
 import { Texts, textsOf } from './texts'
@@ -186,7 +186,8 @@ const Queries: React.FC<{ version?: string, credential: Credential, who: Who, on
 				<a className="dg-link" href={docsUrl}>{t.apiDocs}</a>
 				<button onClick={onLogout}>{t.logout}</button>
 			</Header>
-			<QueryTabs baseUrl={baseUrl} headers={headers} theme={dark ? 'dark' : 'light'} locale={locale} diagram />
+			{/* what is saved is kept per gateway and per user of the credential */}
+			<Workspace baseUrl={baseUrl} headers={headers} theme={dark ? 'dark' : 'light'} locale={locale} workspaceKey={`${baseUrl}|${who.name}`} />
 		</div>
 	)
 }

@@ -4,6 +4,27 @@ All notable changes to this project will be documented in this file.
 
 ## Versions
 
+### 3.0.0-rc.3 (2026-11-18)
+
+Prerelease: it doesn't move `latest`. Uses `@lambdaorm/lib` 3.5.2.
+
+**Features** (the UI at `/ui`, built on `@lambdaorm/ui`):
+
+- Named Data Gateway: a home page with what it is and the schemas, a login page (show / hide the secret) and the
+  query page, with logout; the theme (system / light / dark) and the language (English, Español, Português,
+  Français, Italiano, Deutsch, Nederlands, Català, Galego, Euskara) are chosen at the top and kept in the browser. The
+  credential is never kept.
+- An explorer of the schemas on the left. For each schema: its domain as YAML, read only (only `GET /{schema}/domain`:
+  never the sources nor the connections); its entities with their properties and relations, and the form of each
+  entity (properties, relations and references, keys, indexes and constraints, rows read only by pages, diagram).
+- Folders, queries and diagrams saved with a name and a description, moved by dragging; queries in tabs with Save,
+  Save as… and Ctrl+S. Saved diagrams: the chosen entities laid out by themselves, boxes and lines moved by hand,
+  boxes taken out with their ×, the names of the relations, export to SVG and PNG.
+- What is saved stays in the browser (IndexedDB, per gateway and user of the credential) and is exported to and
+  imported from a JSON file.
+- Results: a copy icon and an export menu (JSON, YAML, tab-separated text).
+- The Swagger page says Data Gateway and the version of the instance.
+
 ### 3.0.0-rc.2 (2026-11-18)
 
 Prerelease: it doesn't move `latest`.
