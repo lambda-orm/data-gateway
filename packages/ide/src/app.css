@@ -1,7 +1,40 @@
-html, body { margin: 0; font: 13px system-ui, sans-serif; }
-.app { min-height: 100vh; background: #fff; color: #1d1f23; }
-.app.dark { background: #16181d; color: #e6e8eb; }
-.credential { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px; border-bottom: 1px solid #d6d9de; }
-.dark .credential { border-color: #2e323a; }
-.credential input, .credential select, .credential button { font: inherit; padding: 4px 6px; border-radius: 6px; border: 1px solid #d6d9de; }
-.hint { padding: 16px; color: #6b7280; }
+html, body { margin: 0; font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.dg-app { --bg: #fff; --fg: #1d1f23; --muted: #6b7280; --border: #d6d9de; --accent: #2563eb; --panel: #f6f7f9; --ok: #067647; --bad: #b42318; --warn: #b54708;
+  min-height: 100vh; background: var(--bg); color: var(--fg); }
+.dg-app.dark { --bg: #16181d; --fg: #e6e8eb; --muted: #9aa1ab; --border: #2e323a; --accent: #6ea0ff; --panel: #1e2128; --ok: #6fdc8c; --bad: #ff8a80; --warn: #f5b971; }
+.dg-app button, .dg-app select, .dg-app input { font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 5px 12px; }
+.dg-app button { cursor: pointer; }
+.dg-app button:disabled { opacity: .5; cursor: progress; }
+.dg-app .dg-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.dg-big { padding: 8px 20px !important; font-size: 15px !important; }
+.dg-header { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+.dg-brand { font-weight: 700; font-size: 17px; color: var(--fg); text-decoration: none; }
+.dg-version { color: var(--muted); font-size: 12px; border: 1px solid var(--border); border-radius: 10px; padding: 0 8px; }
+.dg-spacer { flex: 1; }
+.dg-who { color: var(--muted); }
+.dg-link { color: var(--accent); text-decoration: none; }
+.dg-muted { color: var(--muted); }
+.dg-home { max-width: 980px; margin: 0 auto; padding: 32px 16px 48px; }
+.dg-hero h1 { font-size: 34px; margin: 0 0 8px; }
+.dg-lead { font-size: 18px; color: var(--fg); }
+.dg-hero p { max-width: 760px; }
+.dg-hero code, .dg-schemas code { background: var(--panel); border-radius: 4px; padding: 1px 5px; font-size: 13px; }
+.dg-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 32px 0; }
+.dg-card { border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; background: var(--panel); }
+.dg-card h3 { margin: 4px 0 6px; font-size: 15px; }
+.dg-card p { margin: 0; color: var(--muted); }
+.dg-card a { color: var(--accent); }
+.dg-schemas table { border-collapse: collapse; width: 100%; max-width: 640px; }
+.dg-schemas th, .dg-schemas td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+.dg-status { font-weight: 600; }
+.dg-ready { color: var(--ok); } .dg-error { color: var(--bad); } .dg-starting, .dg-restarting { color: var(--warn); }
+.dg-login { display: flex; justify-content: center; padding: 48px 16px; }
+.dg-form { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 380px; }
+.dg-form h1 { margin: 0; }
+.dg-form label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); }
+.dg-form label input, .dg-form label select { color: var(--fg); }
+div.dg-error { border: 1px solid var(--bad); border-radius: 6px; padding: 6px 10px; }
+.dg-pref { padding: 4px 8px !important; font-size: 13px; }
+.dg-secret { display: flex; gap: 6px; }
+.dg-secret input { flex: 1; min-width: 0; }
+.dg-secret button { white-space: nowrap; }

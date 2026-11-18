@@ -1,4 +1,5 @@
 import { WhoAmI } from '../domain/operations'
+import { DomainInfo } from '../domain/diagram'
 import { QueryParameter } from '../domain/workspace'
 import { Options, QueryApiPort, SchemaInfo } from '../application/ports'
 
@@ -41,6 +42,7 @@ export class RestQueryApi implements QueryApiPort {
 	public schemas (): Promise<SchemaInfo[]> { return this.request(`${this.baseUrl}/schemas`) }
 	public whoami (schema: string): Promise<WhoAmI> { return this.request(this.url(schema, '/whoami')) }
 	public typings (schema: string): Promise<string> { return this.request(this.url(schema, '/typings'), undefined, 'text') }
+	public domain (schema: string): Promise<DomainInfo> { return this.request(this.url(schema, '/domain')) }
 	public plan (schema: string, query: string, options?: Options) { return this.request(this.url(schema, '/plan'), { query, options }) }
 	public metadata (schema: string, query: string) { return this.request(this.url(schema, '/metadata'), { query }) }
 	public model (schema: string, query: string) { return this.request(this.url(schema, '/model'), { query }) }

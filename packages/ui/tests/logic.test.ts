@@ -1,7 +1,7 @@
 // Domain and application of the library without React: actions by permission, results, parameters, history, workbench.
 import { describe, expect, test, vi } from 'vitest'
 import { availability } from '../src/domain/operations'
-import { columnsOf, fromYaml, isTable, measure, toYaml } from '../src/domain/results'
+import { columnsOf, fromYaml, isTable, measure, toTsv, toYaml } from '../src/domain/results'
 import { addToHistory, dataFromParameters, markerFromError, parseObject } from '../src/domain/workspace'
 import { WorkbenchController } from '../src/application/workbench'
 import { HistoryPort } from '../src/application/ports'
@@ -152,5 +152,14 @@ describe('infrastructure', () => {
 		const broken = new LocalStorageHistory('t:', () => { throw new Error('blocked') })
 		expect(broken.load('a')).toEqual([])
 		expect(() => broken.save('a', [])).not.toThrow()
+	})
+})
+
+describe('toTsv', () => {
+	test('a table, an object, a list of values and a value', () => {
+		expect(toTsv([{ a: 1, b: { c: 2 } }, { a: null, d: 'x\ny' }])).toBe('a\tb\td\n1\t{"c":2}\t\n\t\tx y\n')
+		expect(toTsv({ id: 7, name: 'n' })).toBe('id\tname\n7\tn\n')
+		expect(toTsv([1, 'two'])).toBe('value\n1\ntwo\n')
+		expect(toTsv(5)).toBe('5\n')
 	})
 })

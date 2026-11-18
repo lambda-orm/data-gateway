@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react'
-import { cellText, columnsOf, formatBytes, isTable, QueryResult, toJson, toYaml } from '../domain/results'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { format, Locale, messagesOf } from '../domain/i18n'
+import { cellText, columnsOf, formatBytes, isTable, QueryResult, toJson, toTsv, toYaml } from '../domain/results'
 
 type View = 'tree' | 'table' | 'json' | 'yaml'
 
@@ -9,6 +10,8 @@ export interface ResultViewerProps {
 	maxRows?: number
 	/** File name of the downloads, without extension */
 	fileName?: string
+	/** Language of the labels (default English) */
+	locale?: Locale
 }
 
 const download = (text: string, name: string, type: string) => {
@@ -20,6 +23,43 @@ const download = (text: string, name: string, type: string) => {
 	link.click()
 	link.remove()
 	URL.revokeObjectURL(url)
+}
+
+const CopyIcon: React.FC = () => (
+	<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+		<rect x="9" y="9" width="12" height="12" rx="2" /><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+	</svg>
+)
+const CheckIcon: React.FC = () => (
+	<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+		<path d="M20 6 9 17l-5-5" />
+	</svg>
+)
+
+type Format = 'json' | 'yaml' | 'tsv'
+
+/** Export: a button that opens the formats; a click outside or Escape closes it */
+const ExportMenu: React.FC<{ label: string, formats: { format: Format, label: string }[], onChoose: (format: Format) => void }> = ({ label, formats, onChoose }) => {
+	const [open, setOpen] = useState(false)
+	const ref = useRef<HTMLDivElement>(null)
+	useEffect(() => {
+		if (!open) return
+		const outside = (e: MouseEvent) => { if (!ref.current?.contains(e.target as Node)) setOpen(false) }
+		const escape = (e: KeyboardEvent) => { if (e.key === 'Escape') setOpen(false) }
+		document.addEventListener('mousedown', outside)
+		document.addEventListener('keydown', escape)
+		return () => { document.removeEventListener('mousedown', outside); document.removeEventListener('keydown', escape) }
+	}, [open])
+	return (
+		<div className="lw-menu" ref={ref}>
+			<button aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>{label} ▾</button>
+			{open && (
+				<div role="menu" className="lw-menu-list">
+					{formats.map(f => <button key={f.format} role="menuitem" onClick={() => { setOpen(false); onChoose(f.format) }}>{f.label}</button>)}
+				</div>
+			)}
+		</div>
+	)
 }
 
 const Tree: React.FC<{ value: unknown, name?: string, depth?: number }> = ({ value, name, depth = 0 }) => {
@@ -39,19 +79,22 @@ const Tree: React.FC<{ value: unknown, name?: string, depth?: number }> = ({ val
 }
 
 /** The result of an action: tree, table, JSON and YAML views, copy and download, status / time / rows / size */
-export const ResultViewer: React.FC<ResultViewerProps> = ({ result, maxRows = 200, fileName = 'result' }) => {
+export const ResultViewer: React.FC<ResultViewerProps> = ({ result, maxRows = 200, fileName = 'result', locale }) => {
+	const m = messagesOf(locale)
+	const [copied, setCopied] = useState(false)
+	useEffect(() => { if (!copied) return; const timer = setTimeout(() => setCopied(false), 1500); return () => clearTimeout(timer) }, [copied])
 	const table = result?.ok && isTable(result.value)
 	const [chosen, setView] = useState<View>('tree')
 	const view: View = chosen === 'table' && !table ? 'tree' : chosen
 	const json = useMemo(() => result?.ok ? toJson(result.value) : '', [result])
 	const yaml = useMemo(() => result?.ok && view === 'yaml' ? toYaml(result.value) : '', [result, view])
-	if (!result) return <div className="lw-result lw-empty">Run an action to see its result.</div>
+	if (!result) return <div className="lw-result lw-empty">{m.runToSee}</div>
 	const meta = (
 		<div className="lw-meta" role="status">
 			<span className={result.ok ? 'lw-ok' : 'lw-error'}>{result.status ?? (result.ok ? 200 : 'error')}</span>
 			<span>{result.operation}</span>
 			<span>{Math.round(result.durationMs)} ms</span>
-			{result.rows !== undefined && <span>{result.rows} rows</span>}
+			{result.rows !== undefined && <span>{format(m.rows, { n: result.rows })}</span>}
 			{result.ok && <span>{formatBytes(result.bytes)}</span>}
 		</div>
 	)
@@ -76,11 +119,19 @@ export const ResultViewer: React.FC<ResultViewerProps> = ({ result, maxRows = 20
 					<button key={v} role="tab" aria-selected={view === v} className={view === v ? 'lw-active' : ''} onClick={() => setView(v)}>{v}</button>
 				))}
 				<span className="lw-spacer" />
-				<button onClick={() => navigator.clipboard?.writeText(view === 'yaml' ? yaml : json)}>copy</button>
-				<button onClick={() => download(json, `${fileName}.json`, 'application/json')}>.json</button>
-				<button onClick={() => download(toYaml(value), `${fileName}.yaml`, 'application/yaml')}>.yaml</button>
+				<button className="lw-icon" aria-label={copied ? m.copied : m.copy} title={copied ? m.copied : m.copy}
+					onClick={() => navigator.clipboard?.writeText(view === 'yaml' ? yaml : view === 'table' ? toTsv(value) : json).then(() => setCopied(true), () => undefined)}>
+					{copied ? <CheckIcon /> : <CopyIcon />}
+				</button>
+				<ExportMenu label={m.export}
+					formats={[{ format: 'json', label: 'JSON' }, { format: 'yaml', label: 'YAML' }, { format: 'tsv', label: m.tsv }]}
+					onChoose={format => {
+						if (format === 'json') download(json, `${fileName}.json`, 'application/json')
+						else if (format === 'yaml') download(toYaml(value), `${fileName}.yaml`, 'application/yaml')
+						else download(toTsv(value), `${fileName}.txt`, 'text/tab-separated-values')
+					}} />
 			</div>
-			{cut && (view === 'tree' || view === 'table') && <div className="lw-notice">Showing {maxRows} of {(value as unknown[]).length} rows: the downloads have all of them.</div>}
+			{cut && (view === 'tree' || view === 'table') && <div className="lw-notice">{format(m.showing, { shown: maxRows, total: (value as unknown[]).length })}</div>}
 			<div className="lw-view">
 				{view === 'tree' && <Tree value={shown} />}
 				{view === 'table' && table && (
