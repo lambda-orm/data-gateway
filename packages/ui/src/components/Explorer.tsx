@@ -176,7 +176,8 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 			const relations = entity.relations ?? []
 			const rows: React.ReactNode[] = [
 				<Row key={key} level={3} label={entity.name} icon={<Icons.entity />} title={`${entity.name} — ${m.openEntity}`}
-					expanded={expanded.has(key)} onToggle={() => toggle(key)} onOpen={() => onOpenEntity(schema, entity.name)} />
+					expanded={expanded.has(key)} onToggle={() => toggle(key)} onOpen={() => onOpenEntity(schema, entity.name)}
+					actions={<Action label={m.open} onClick={() => onOpenEntity(schema, entity.name)}><Icons.open /></Action>} />
 			]
 			if (!expanded.has(key)) return rows
 			rows.push(<Row key={propertiesKey} level={4} label={`${m.properties} (${entity.properties?.length ?? 0})`} icon={null}
@@ -193,6 +194,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 				rows.push(...relations.map(r => (
 					<Row key={`${relationsKey}.${r.name}`} level={5} icon={null} title={`${r.name}: ${r.from} → ${r.entity}.${r.to} (${r.type})`}
 						onOpen={() => onOpenEntity(schema, r.entity)}
+						actions={<Action label={`${m.open} ${r.entity}`} onClick={() => onOpenEntity(schema, r.entity)}><Icons.open /></Action>}
 						label={<span className="lw-property"><span>{r.name}</span><span className="lw-type">→ {r.entity} · {cardinalityOf(r)}</span></span>} />
 				)))
 			}

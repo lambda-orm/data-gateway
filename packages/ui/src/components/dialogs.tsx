@@ -111,6 +111,7 @@ export const Icons = {
 	chevron: icon(<path d="M9 6l6 6-6 6" />),
 	upload: icon(<path d="M12 16V4M7 9l5-5 5 5M4 20h16" />),
 	download: icon(<path d="M12 4v12M7 11l5 5 5-5M4 20h16" />),
+	open: icon(<><path d="M14 4h6v6M20 4l-9 9" /><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" /></>),
 	plus: icon(<path d="M12 5v14M5 12h14" />),
 	panel: icon(<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></>)
 }
