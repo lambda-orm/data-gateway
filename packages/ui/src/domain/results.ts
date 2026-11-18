@@ -50,6 +50,23 @@ export const cellText = (value: unknown): string => {
 	return String(value)
 }
 
+/** A cell of a tab-separated text: its tabs and line breaks as spaces */
+const tsvCell = (value: unknown): string => cellText(value).replace(/[\t\r\n]+/g, ' ')
+
+/**
+ * A result as tab-separated text (spreadsheets open it): a table with its columns as the first line, an object as a
+ * table of one row, a list of values as one column "value", a value as itself.
+ */
+export const toTsv = (value: unknown): string => {
+	const rows = isTable(value) ? value : isRecord(value) ? [value] : undefined
+	if (rows) {
+		const columns = columnsOf(rows)
+		return [columns.map(tsvCell).join('\t'), ...rows.map(row => columns.map(c => tsvCell(row[c])).join('\t'))].join('\n') + '\n'
+	}
+	if (Array.isArray(value)) return ['value', ...value.map(tsvCell)].join('\n') + '\n'
+	return tsvCell(value) + '\n'
+}
+
 export const measure = (operation: Operation, value: unknown, durationMs: number, status = 200): QueryResult => {
 	const json = value === undefined ? '' : JSON.stringify(value)
 	return {

@@ -3,7 +3,7 @@ import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 import { resolve } from 'path'
 
-// library build: ESM + CJS, styles.css; React, Monaco and js-yaml stay dependencies of the application
+// library build: ESM + CJS, styles.css; React, Monaco, js-yaml and elkjs stay dependencies of the application
 export default defineConfig({
 	plugins: [react()],
 	build: {
@@ -17,7 +17,7 @@ export default defineConfig({
 			cssFileName: 'styles'
 		},
 		rollupOptions: {
-			external: ['react', 'react-dom', 'react/jsx-runtime', 'js-yaml', /^monaco-editor/]
+			external: ['react', 'react-dom', 'react/jsx-runtime', 'js-yaml', /^monaco-editor/, /^elkjs/]
 		}
 	},
 	test: {

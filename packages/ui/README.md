@@ -29,6 +29,25 @@ import '@lambdaorm/ui/styles.css'
   queries of each schema go to `localStorage`, never credentials nor results).
 - The parts are exported too: `QueryEditor`, `ScriptEditor`, `DataEditor`, `ResultViewer`, `SchemaSelector`,
   `WorkbenchController` (the state and actions, without React).
+- `locale="es"`: the labels and messages in `en`, `es`, `pt`, `fr`, `it`, `de`, `nl`, `ca`, `gl` or `eu` (`LOCALES`
+  lists them with their names); the action names stay the API's.
+
+## Tabs and the diagram of the domain
+
+```tsx
+<QueryTabs baseUrl={url} headers={headers} diagram locale="es" />
+```
+
+`QueryTabs` takes the props of `QueryWorkbench`: several workbenches in tabs (add, close, rename with a double click;
+`maxTabs`, 10 by default). With `diagram`, a first fixed tab draws the domain of the schema with `DomainDiagram`; a
+double click on an entity opens a tab that queries it.
+
+`DomainDiagram` (on its own too) draws the domain (GET `/{schema}/domain`) as a class / entity-relationship diagram:
+a box per entity with its properties, types, PK and FK (required ones in bold), a line per relation with its
+cardinality (1 — N) and a dashed one per inheritance. It starts on the most connected entity and its neighbours; it
+can show 2 levels or the whole model, names only, and export SVG and PNG. The boxes are laid out by
+[ELK](https://github.com/kieler/elkjs) (`elkjs`, loaded on first use; `layout` takes another `LayoutPort`). An
+`api` of your own gives the domain with `QueryApiPort.domain`.
 
 ## Monaco
 
