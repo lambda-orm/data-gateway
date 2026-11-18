@@ -1,0 +1,19 @@
+# northwind with data for the MCP evaluation set (eval/README.md)
+services:
+  northwind:
+    container_name: data-gateway-eval-northwind
+    image: mysql:8.4
+    environment:
+      - MYSQL_DATABASE=northwind
+      - MYSQL_USER=test
+      - MYSQL_PASSWORD=test
+      - MYSQL_ROOT_PASSWORD=root
+    volumes:
+      - ../../lib/src/dev/northwind/db/northwind-mysql.sql:/docker-entrypoint-initdb.d/northwind.sql:ro
+    ports:
+      - 127.0.0.1:53316:3306
+    healthcheck:
+      test: [ "CMD", "mysql", "-utest", "-ptest", "northwind", "-e", "select 1 from Products limit 1" ]
+      interval: 3s
+      timeout: 2s
+      retries: 60

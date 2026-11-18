@@ -7,9 +7,10 @@ module.exports = function (grunt) {
 	grunt.loadNpmTasks('grunt-contrib-copy');
 	grunt.initConfig({
 		exec: {
-			lint: { cmd: 'npx eslint -c ../../eslint.config.js "src/**/*.ts" --ignore-pattern "src/lib/repository/domain/queryable.ts"' },
+			lint: { cmd: 'npx eslint -c ../../eslint.config.js "src/**/*.ts"' },
 			test: { cmd: 'npx jest --config ./jest-config.json' },
 			tsc: { cmd: 'npx tsc ' },
+			ui: { cmd: 'npx vite build --config ui-app/vite.config.ts --logLevel warn' },
 			doc: { cmd: 'npx typedoc --plugin typedoc-plugin-markdown --out doc/source src/lib/index.ts' },
 			getOriginalBranch: {
 				cmd: 'git branch | sed -n -e \'s/^\\* \\(.*\\)/\\1/p\'',
@@ -41,8 +42,14 @@ module.exports = function (grunt) {
 		},
 		copy: {
 			lib: { expand: true, cwd: 'build/lib/', src: '**', dest: 'dist/' },
-			// tsc doesn't copy it and the server reads it next to infrastructure/server.js (L8)
-			swagger: { expand: true, cwd: 'src/lib/infrastructure/', src: 'swagger.yaml', dest: 'build/lib/infrastructure/' },
+			// tsc doesn't copy it and the http transport reads it next to its own .js (L8)
+			swagger: { expand: true, cwd: 'src/lib/infrastructure/input/http/', src: 'swagger.yaml', dest: 'build/lib/infrastructure/input/http/' },
+			asyncapi: { expand: true, cwd: 'src/lib/infrastructure/input/mcp/', src: 'asyncapi.yaml', dest: 'build/lib/infrastructure/input/mcp/' },
+			asyncapiWs: { expand: true, cwd: 'src/lib/infrastructure/input/websocket/', src: 'asyncapi.yaml', dest: 'build/lib/infrastructure/input/websocket/' },
+			// the query UI (ui-app, built with Vite), served at /ui when transports.http.ui.enabled
+			ui: { expand: true, cwd: 'ui-app/dist/', src: '**', dest: 'build/lib/infrastructure/input/http/ui/' },
+			// plain JavaScript (tsc doesn't copy it): the entry of every worker thread and process
+			bootstrap: { expand: true, cwd: 'src/lib/infrastructure/build/', src: 'workerBootstrap.js', dest: 'build/lib/infrastructure/build/' },
 			readme: { expand: true, src: './README.md', dest: 'dist/' },
 			license: { expand: true, src: path.join(repoRoot, "LICENSE"), dest: path.join(baseDir, "dist", "LICENSE") },
 			changeLog: { expand: true, src: './CHANGELOG.md', dest: 'dist/' },
@@ -98,7 +105,7 @@ module.exports = function (grunt) {
 		}
 	})
 	grunt.registerTask('lint', ['exec:lint'])
-	grunt.registerTask('build', ['lint', 'clean:build', 'exec:tsc', 'copy:swagger'])
+	grunt.registerTask('build', ['lint', 'clean:build', 'exec:tsc', 'copy:swagger', 'copy:asyncapi', 'copy:asyncapiWs', 'copy:bootstrap', 'exec:ui', 'copy:ui'])
 	grunt.registerTask('test', ['build', 'exec:test'])
 	grunt.registerTask('docs', ['exec:doc'])
 	grunt.registerTask('dist', ['build', 'clean:dist', 'copy:lib', 'copy:jest', 'copy:readme', 'copy:license', 'copy:npmignore', 'create-package',])
