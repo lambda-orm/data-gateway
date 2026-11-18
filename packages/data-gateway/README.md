@@ -1,6 +1,9 @@
-# Lambda ORM service
+# λORM data-gateway
 
-Service that exposes the functionality of the [LambdaOrm](https://github.com/lambda-orm/lambdaorm) library
+> Formerly `packages/service` (`@lambdaorm/service`, image `flaviorita/lambdaorm-svc`). It is being redesigned:
+> see [`docs/DATA_GATEWAY.md`](../../docs/DATA_GATEWAY.md) and [`docs/DATA_GATEWAY_PLAN.md`](../../docs/DATA_GATEWAY_PLAN.md).
+
+Gateway that exposes the functionality of the [LambdaOrm](https://github.com/lambda-orm/lambdaorm) library
 
 ## Service
 
@@ -8,19 +11,19 @@ The service exposes the following endpoints:
 
 ### queries endpoints
 
-![query-methods](https://raw.githubusercontent.com/lambda-orm/lambdaorm-svc/HEAD/images/query-methods.png)
+![query-methods](https://raw.githubusercontent.com/lambda-orm/core/HEAD/packages/data-gateway/images/query-methods.png)
 
 ### General endpoints
 
-![general-methods](https://raw.githubusercontent.com/lambda-orm/lambdaorm-svc/HEAD/images/general-methods.png)
+![general-methods](https://raw.githubusercontent.com/lambda-orm/core/HEAD/packages/data-gateway/images/general-methods.png)
 
 ### Schema endpoints
 
-![schema-methods](https://raw.githubusercontent.com/lambda-orm/lambdaorm-svc/HEAD/images/schema-methods.png)
+![schema-methods](https://raw.githubusercontent.com/lambda-orm/core/HEAD/packages/data-gateway/images/schema-methods.png)
 
 ### Stage endpoints
 
-![stage-methods](https://raw.githubusercontent.com/lambda-orm/lambdaorm-svc/HEAD/images/stage-methods.png)
+![stage-methods](https://raw.githubusercontent.com/lambda-orm/core/HEAD/packages/data-gateway/images/stage-methods.png)
 
 ## Usage
 

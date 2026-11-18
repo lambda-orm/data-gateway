@@ -3,7 +3,7 @@
 ## Start
 
 ```sh
-docker-compose -p lambdaorm-svc up -d
+docker-compose -p data-gateway up -d
 docker exec mysql  mysql --host 127.0.0.1 --port 3306 -uroot -proot -e "ALTER DATABASE test CHARACTER SET utf8 COLLATE utf8_general_ci;"
 docker exec mysql  mysql --host 127.0.0.1 --port 3306 -uroot -proot -e "GRANT ALL ON *.* TO 'test'@'%' with grant option; FLUSH PRIVILEGES;"
 docker exec postgres psql -U test -c "CREATE DATABASE insights" -W test
@@ -40,7 +40,7 @@ curl -X POST "http://localhost:9291/execute?format=beautiful" -H "Content-Type: 
 ```sh
 lambdaorm drop -e .env -s default
 lambdaorm drop -e .env -s insights
-docker-compose -p lambdaorm-svc down
+docker-compose -p data-gateway down
 ```
 
 ## References

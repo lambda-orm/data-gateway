@@ -48,7 +48,7 @@ jobs:
         working-directory: packages/lib
         run: npm run lab:ilusor:test -- --verbose
       - name: Lab (service)
-        working-directory: packages/service
+        working-directory: packages/data-gateway
         run: |
           LAB=$(realpath ../lib/src/dev/labs/ilusor-cloud)
           # a port below Linux's ephemeral range (32768-60999): an outgoing connection of the runner can hold one in it
@@ -62,5 +62,5 @@ jobs:
             npx jest -c src/dev/labs/ilusor-cloud/jest.config.json --verbose src/dev/labs/ilusor-cloud/tests/service.spec.ts
       - name: Service log
         if: always()
-        working-directory: packages/service
+        working-directory: packages/data-gateway
         run: cat service.log || true

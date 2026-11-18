@@ -2,7 +2,7 @@
 
 General endpoints are used to get information about the service.
 
-![general-methods](https://raw.githubusercontent.com/lambda-orm/lambdaorm-svc/HEAD/images/general-methods.png)
+![general-methods](https://raw.githubusercontent.com/lambda-orm/core/HEAD/packages/data-gateway/images/general-methods.png)
 
 ## Ping
 

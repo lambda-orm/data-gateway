@@ -8,19 +8,19 @@ The service exposes the following endpoints:
 
 ### Queries endpoints
 
-![query-methods](https://raw.githubusercontent.com/lambda-orm/lambdaorm-svc/HEAD/images/query-methods.png)
+![query-methods](https://raw.githubusercontent.com/lambda-orm/core/HEAD/packages/data-gateway/images/query-methods.png)
 
 ### General endpoints
 
-![general-methods](https://raw.githubusercontent.com/lambda-orm/lambdaorm-svc/HEAD/images/general-methods.png)
+![general-methods](https://raw.githubusercontent.com/lambda-orm/core/HEAD/packages/data-gateway/images/general-methods.png)
 
 ### Schema endpoints
 
-![schema-methods](https://raw.githubusercontent.com/lambda-orm/lambdaorm-svc/HEAD/images/schema-methods.png)
+![schema-methods](https://raw.githubusercontent.com/lambda-orm/core/HEAD/packages/data-gateway/images/schema-methods.png)
 
 ### Stage endpoints
 
-![stage-methods](https://raw.githubusercontent.com/lambda-orm/lambdaorm-svc/HEAD/images/stage-methods.png)
+![stage-methods](https://raw.githubusercontent.com/lambda-orm/core/HEAD/packages/data-gateway/images/stage-methods.png)
 
 ## Usage
 

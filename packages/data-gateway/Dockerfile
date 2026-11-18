@@ -1,5 +1,5 @@
 # λORM service (L8): Node 24 LTS like CI; the CLI is this project's @lambdaorm/cli (the old unscoped lambdaorm-cli
-# is not maintained). Build: `npx grunt dist` in packages/service, then `docker build .` — the dist installs the
+# is not maintained). Build: `npx grunt dist` in packages/data-gateway, then `docker build .` — the dist installs the
 # published @lambdaorm/base and @lambdaorm/lib of the versions in this repo, so publish them first.
 FROM node:24-bookworm-slim
 RUN npm config set loglevel warn \
