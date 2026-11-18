@@ -1,5 +1,5 @@
 import { timingSafeEqual } from 'crypto'
-import { AuthenticatorPort, Headers } from '../../../application/ports/output/supportPorts'
+import { AuthenticatorPort, CredentialScheme, Headers } from '../../../application/ports/output/supportPorts'
 import { CredentialConfig } from '../../../domain/config/dataGatewayConfig'
 import { ANONYMOUS, AuthenticationResult, principal } from '../../../domain/auth/principal'
 
@@ -34,6 +34,8 @@ export class NoneAuthenticator implements AuthenticatorPort {
 	public async authenticate (): Promise<AuthenticationResult> {
 		return { valid: true, principal: ANONYMOUS }
 	}
+
+	public scheme (): CredentialScheme { return { type: 'none' } }
 }
 
 /** Authorization: Bearer <token> */
@@ -46,6 +48,8 @@ export class BearerAuthenticator implements AuthenticatorPort {
 		const token = authorization.startsWith('Bearer ') ? authorization.substring(7) : ''
 		return result(match(this.credentials, c => secretEquals(token, c.value ?? '')), 'a valid token is required (Authorization: Bearer <token>)')
 	}
+
+	public scheme (): CredentialScheme { return { type: 'bearer' } }
 }
 
 /** <header>: <key> (default X-Api-Key) */
@@ -57,6 +61,8 @@ export class ApiKeyAuthenticator implements AuthenticatorPort {
 		const key = header(headers, this.headerName)
 		return result(match(this.credentials, c => secretEquals(key, c.value ?? '')), `a valid API key is required (${this.headerName})`)
 	}
+
+	public scheme (): CredentialScheme { return { type: 'apikey', header: this.headerName } }
 }
 
 /** Authorization: Basic base64(username:password) */
@@ -75,4 +81,6 @@ export class BasicAuthenticator implements AuthenticatorPort {
 			'a valid user and password are required (Authorization: Basic)'
 		)
 	}
+
+	public scheme (): CredentialScheme { return { type: 'basic' } }
 }
