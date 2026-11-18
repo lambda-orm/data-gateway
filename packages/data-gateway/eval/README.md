@@ -55,9 +55,12 @@ calls and errors, and the tokens.
 
 ## Limits of λORM found while writing it
 
-The guide steers around them; they are bugs of `@lambdaorm/lib`, not of the gateway:
+`like` with a literal pattern, `includes` of a text ("contains"), `startsWith` / `includes` with a variable and the
+date functions on PostgreSQL were fixed in `@lambdaorm/lib` 3.5.1 / 3.5.2. Still open (the guide steers around the
+first one):
 
-- `like(p.name, 'Ch%')` with a literal pattern generates `LIKE Ch%` (not quoted): pass the pattern as a variable.
-- `includes(text, 'x')` / `p.name.includes('x')` generates `'x' IN (p.name)`, not "contains".
 - An expression next to an aggregate (`map(p => ({ year: year(p.orderDate), n: count(1) }))`) groups by the field
   (`GROUP BY o.OrderDate`), not by the expression.
+- Date functions on a column fail on SQL Server, Oracle and MongoDB; text matching fails on MongoDB (the engines lab
+  marks them `test.failing`).
+- The `sql.js` (SQLite) adapter doesn't work.

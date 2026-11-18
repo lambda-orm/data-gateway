@@ -20,9 +20,9 @@ Products
 - Clause order is free, but use each clause once.
 - Conditions: \`== != > >= < <=\`, \`&& || !\`, \`between(p.price, 10, 20)\`, \`isNull(p.region)\`, \`isNotNull(p.region)\`.
 - A value in a list: \`in(p.id, [1, 2, 3])\` or \`[1, 2, 3].includes(p.id)\` (\`in(p.id, ids)\` with \`"ids"\` in data).
-- Text: \`startsWith(p.name, 'Ch')\`; patterns with \`like(p.name, pattern)\` and the pattern in data
-  (\`{ "pattern": "%ch%" }\`: a literal pattern inside the query is not quoted). There is no "contains" function:
-  use \`like\` with \`%text%\`.
+- Text: \`startsWith(p.name, 'Ch')\`, contains \`p.name.includes('ch')\`, patterns \`like(p.name, 'Ch%')\` (\`%\` any text,
+  \`_\` one character); the value can also come from data (\`startsWith(p.name, prefix)\`). Whether upper and lower case
+  match depends on the database (PostgreSQL tells them apart; MySQL and SQL Server usually don't).
 - Literals: strings with quotes \`'France'\`, numbers, \`true\` / \`false\`, dates as \`'1997-01-31'\`.
 
 ## Aggregations (group by)
