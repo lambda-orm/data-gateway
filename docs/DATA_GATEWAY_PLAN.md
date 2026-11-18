@@ -11,7 +11,8 @@ configuración**:
   esquema y auditoría de escrituras;
 - con una **UI web de consultas** (Monaco con autocompletado del modelo) construida como librería React reutilizable
   `@lambdaorm/ui` y servida por el gateway en `/ui`;
-- con un MCP cuya utilidad real (que los modelos usen bien el lenguaje de λORM) se mide con un conjunto de evaluación.
+- con un MCP expuesto por configuración; cuánto lo aprovechan los modelos se podrá medir con un conjunto de evaluación
+  cuando un LLM lo consuma (por ahora ninguno: decisión del 2026-11-18).
 
 Implementación propia en TypeScript con arquitectura limpia / hexagonal y SOLID, sin depender de blazedpath. **Todo
 el desarrollo está en este paquete; `@lambdaorm/lib` y `@lambdaorm/base` no se modifican.** Los otros paquetes
@@ -73,7 +74,7 @@ Verificado en `lib` / `base` (sin cambios necesarios):
 | D20 | Se mantiene Grunt en esta migración | migrar a `scripts/dist.mjs` es independiente |
 | D21 | **`server.maxConcurrent` por esquema** (por defecto 64): el edge responde `429` por encima | una ráfaga a un esquema no llena su cola y su pool hasta el timeout |
 | D22 | **Auditoría de escrituras** por `AuditPort` (línea JSON `type: audit` en 3.0.0), sin datos salvo `audit.includeData` | saber qué escribió cada credencial, en especial los agentes |
-| D23 | **Conjunto de evaluación del MCP** como condición de `3.0.0-rc.2` y de la 3.0.0 | los modelos no conocen el lenguaje de λORM; la guía y las descripciones se ajustan midiendo |
+| D23 | **Conjunto de evaluación del MCP** opcional: no condiciona ninguna release mientras ningún LLM consuma el MCP (2026-11-18) | el MCP se expone pero por ahora no lo usa ningún modelo; el set (`--check` sin modelo) queda listo para cuando se use |
 | D24 | **UI como librería React separada (`@lambdaorm/ui`, `packages/ui`)**, publicada en npm por Changesets y consumida por una app mínima del gateway | reutilizable como componente en otros proyectos (Portal) |
 | D25 | React **web** (Vite) + Monaco empaquetado sin CDN; la librería depende de un puerto `QueryApiPort` con adaptador REST por defecto e inyectable | Monaco necesita DOM; redes cerradas y CSP; un Portal puede usar su propio backend |
 | D26 | Tipos del esquema generados por el gateway (`GET /{esquema}/typings`, `TypingsGenerator` propio, sin depender del CLI), comparados con el CLI en un test | autocompletado del modelo sin acoplar el gateway al CLI |
@@ -288,10 +289,10 @@ credencial `read` → `isError`; 401 sin credenciales.
 **Smoke test en el workflow:** MCP Streamable HTTP y WebSocket contra la imagen; dos instancias detrás de un
 balanceador sin afinidad de sesión (docker-compose) atendiendo Streamable HTTP.
 
-**Terminado:** el conjunto de evaluación resuelve al menos el **80%** de las preguntas en el primer intento y el
-**95%** con hasta dos reintentos del agente tras un error; Claude Code conectado con `claude mcp add --transport http`
-a `/mcp` del laboratorio lista las tools según la credencial y responde consultas, incluida una escritura y un
-`orm_execute_script` con una credencial que lo permite; `3.0.0-rc.2` publicada.
+**Terminado:** un cliente MCP (el del SDK o MCP Inspector, sin LLM) conectado a `/mcp` del laboratorio lista las tools
+según la credencial y ejecuta consultas, incluida una escritura y un `orm_execute_script` con una credencial que lo
+permite; `3.0.0-rc.2` publicada. El conjunto de evaluación con un modelo (objetivo 80% en el primer intento, 95% con
+hasta dos reintentos) es opcional mientras ningún LLM consuma el MCP (D23).
 
 **Hecho (2026-11-17).** `@modelcontextprotocol/sdk` 1.32.2, `ws` 8.18.3. Tests: 72 unitarios (catálogo por
 credencial, anotaciones, include / exclude, paginación, `maxRows`, `isError` vs error JSON-RPC, recursos, descripción
@@ -305,8 +306,8 @@ del dominio) y 27 de integración (clientes del SDK con Streamable HTTP sin y co
 - Ya en la fase 3: `/status` y `/health` abiertos en los dos transportes MCP; en `stateful` y en SSE una sesión solo
   acepta mensajes de la credencial que la abrió (404 si no).
 - El **conjunto de evaluación** (`packages/data-gateway/eval/`, 30 preguntas sobre northwind con datos en MySQL) tiene
-  runner y modo `--check` (sin modelo: referencias, comparador, escrituras y limpieza; 30/30). **La medición con Claude
-  (80% / 95%) está pendiente:** no hay credenciales de la API en el equipo donde se implementó.
+  runner y modo `--check` (sin modelo: referencias, comparador, escrituras y limpieza; 30/30). La medición con un modelo
+  no se hace: por ahora ningún LLM consume el MCP (D23).
 - Al escribir la guía y el set aparecieron tres errores de `@lambdaorm/lib` (no se corrigen acá, la lib no se toca):
   `like` con patrón literal no lo pone entre comillas; `includes` sobre texto genera `IN`; una expresión junto a un
   agregado agrupa por el campo y no por la expresión. La guía los evita; están en `eval/README.md`.
@@ -369,9 +370,8 @@ nueva. Documentación externa (PRs aparte): wiki (`docs/api/index.md`, `docs/api
 `labs/svc/**`, `labs/client-node/**`, `labs/cli/09-client`). `DATA_GATEWAY.md`: estado con la versión publicada.
 
 **Terminado:** laboratorio igual que en la fase 2; `config/multi-schema` sirve `/northwind/v1` y `/northwind/v2` con
-`@lambdaorm/client` apuntando a cada URL y con Claude Code conectado a `/northwind/v1/mcp` y `/northwind/v2/mcp`;
-benchmark dentro del criterio; conjunto de evaluación sigue en el objetivo; imagen `3.0.0` verificada descargándola de
-Docker Hub.
+`@lambdaorm/client` apuntando a cada URL y un cliente MCP (sin LLM) conectado a `/northwind/v1/mcp` y
+`/northwind/v2/mcp`; benchmark dentro del criterio; imagen `3.0.0` verificada descargándola de Docker Hub.
 
 **Hecho (2026-11-17).** Supervisor en el hilo principal, edge (todos los transportes) en un worker thread, un worker
 por esquema en `thread` o `process`, canal directo edge ↔ esquema (`MessagePort` con el resultado transferido como
@@ -547,7 +547,7 @@ por debajo de 250 ms. Desvíos:
 | Threadpool de libuv compartido en `thread` | `threadpoolSize` dimensionado; `process` para esquemas críticos |
 | Crash nativo u OOM del contenedor en `thread` | `process` por esquema o instancia aparte; tabla de garantías documentada |
 | Memoria con muchos esquemas | `maxMemoryMb` por worker; repartir esquemas entre instancias |
-| Los modelos no usan bien el lenguaje de λORM (lo conocen mucho menos que SQL) | conjunto de evaluación como condición de la 3.0.0; guía, ejemplos en descripciones y mensajes de error ajustados midiendo |
+| Los modelos no usan bien el lenguaje de λORM (lo conocen mucho menos que SQL) | guía, ejemplos en las descripciones y mensajes de error; el conjunto de evaluación queda listo para medir cuando un LLM consuma el MCP |
 | Ráfaga de operaciones sobre un esquema | `server.maxConcurrent` por esquema con `429` |
 | Tipos de la UI que divergen del generador del CLI | test que compara ambas salidas para northwind |
 | Tamaño del bundle (Monaco pesa varios MB) | carga diferida del editor y de sus workers; caché larga con nombres con hash |
