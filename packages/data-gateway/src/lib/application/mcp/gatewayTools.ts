@@ -16,7 +16,7 @@ const canWrite = (principal: Principal): boolean => principal.permissions.has('w
 /** How to write a query: the part of the description of orm_execute that teaches the language (with the domain). */
 export const QUERY_LANGUAGE_SUMMARY = `Queries are lambda expressions over the entities of the domain (not SQL):
 - Entity.filter(p => <condition>).map(p => ({ alias: p.field, other: p.relation.field })).sort(p => desc(p.field)).page(1, 20)
-- Conditions: == != > >= < <= && || !, between(p.price, 1, 9), in(p.id, [1, 2]), startsWith(p.name, 'A'), like(p.name, pattern) with the pattern in "data"; variables (minPrice) come from "data".
+- Conditions: == != > >= < <= && || !, between(p.price, 1, 9), in(p.id, [1, 2]), startsWith(p.name, 'A'), p.name.includes('text') (contains), like(p.name, 'A%'); variables (minPrice) come from "data".
 - Relations are navigated with dots in filter/map: Products.filter(p => p.category.name == 'Beverages').
 - Aggregates in map group by the other fields: Products.map(p => ({ category: p.category.name, total: count(1), top: max(p.price) })); having(p => ...) filters groups.
 - first(p => ...) / last(p => ...) return one row; distinct(p => ...) removes duplicates; page(page, size) paginates (page from 1).
