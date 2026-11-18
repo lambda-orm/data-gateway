@@ -33,6 +33,8 @@ export interface DomainDiagramProps {
 	/** The names of the relations on their lines */
 	relationNames?: boolean
 	onRelationNamesChange?: (show: boolean) => void
+	/** A × on each box (and the Delete key on the chosen one) takes an entity out of the diagram (editable) */
+	onRemoveEntity?: (entity: string) => void
 	/** Names only at the start */
 	compact?: boolean
 	onCompactChange?: (compact: boolean) => void
@@ -81,6 +83,8 @@ const standaloneSvg = (svg: SVGSVGElement, laid: LayoutResult, background: strin
 	copy.removeAttribute('class')
 	copy.removeAttribute('style')
 	copy.querySelector('[data-view]')?.setAttribute('transform', `translate(${MARGIN},${MARGIN})`)
+	// the controls of the screen are not part of the drawing
+	copy.querySelectorAll('.lw-box-remove, .lw-line-handle').forEach(control => control.remove())
 	const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect')
 	rect.setAttribute('width', '100%')
 	rect.setAttribute('height', '100%')
@@ -100,7 +104,9 @@ const labelAt = (from: Point, toward: Point): Point => {
 const Box: React.FC<{
 	entity: EntityInfo, at: Point, compact: boolean, focused: boolean, foreignKeys?: Set<string>, colors: typeof PALETTES.light
 	onClick: () => void, onDoubleClick: () => void, onPointerDown?: (e: React.PointerEvent) => void
-}> = ({ entity, at, compact, focused, foreignKeys, colors, onClick, onDoubleClick, onPointerDown }) => {
+	/** A × in the title that takes the box out of the diagram */
+	onRemove?: () => void, removeLabel?: string
+}> = ({ entity, at, compact, focused, foreignKeys, colors, onClick, onDoubleClick, onPointerDown, onRemove, removeLabel }) => {
 	const { width, height } = boxSize(entity, compact)
 	const keys = new Set(entity.primaryKey ?? [])
 	return (
@@ -125,6 +131,14 @@ const Box: React.FC<{
 					</g>
 				)
 			})}
+			{onRemove && (
+				<g className="lw-box-remove" role="button" aria-label={`${removeLabel ?? 'remove'} ${entity.name}`} transform={`translate(${width - 20},4)`}
+					onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onRemove() }} onDoubleClick={e => e.stopPropagation()}>
+					<title>{removeLabel}</title>
+					<rect width={16} height={16} rx={3} fill={colors.box} stroke={colors.border} />
+					<path d="M4.5 4.5l7 7M11.5 4.5l-7 7" stroke={colors.muted} strokeWidth={1.6} />
+				</g>
+			)}
 		</g>
 	)
 }
@@ -504,7 +518,10 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 				<span className="lw-who">{domain && format(m.summary, { entities: shownEntities.length, relations })}</span>
 			</div>
 			{error && <div className="lw-notice" role="alert">{error}</div>}
-			<div ref={viewport} className="lw-diagram-view" style={{ height, background: colors.canvas }}
+			<div ref={viewport} className="lw-diagram-view" style={{ height, background: colors.canvas }} tabIndex={props.onRemoveEntity ? 0 : undefined}
+				onKeyDown={props.onRemoveEntity ? e => {
+					if ((e.key === 'Delete' || e.key === 'Backspace') && focus && visible.has(focus) && shownEntities.length > 1) { e.preventDefault(); props.onRemoveEntity!(focus) }
+				} : undefined}
 				onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp}>
 				{(drawing || (!laid && !error)) && <div className="lw-diagram-status">{m.loadingModel}</div>}
 				<svg ref={svg} className="lw-diagram-svg" role="img" aria-label={m.model}>
@@ -517,7 +534,8 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 							const at = laid.nodes.get(entity.name)
 							return at && (
 								<Box key={entity.name} entity={entity} at={at} compact={compact} focused={entity.name === focus} foreignKeys={foreignKeys.get(entity.name)}
-									colors={colors} onClick={() => click(entity.name)} onDoubleClick={() => doubleClick(entity)} onPointerDown={editable ? boxDown(entity.name) : undefined} />
+									colors={colors} onClick={() => click(entity.name)} onDoubleClick={() => doubleClick(entity)} onPointerDown={editable ? boxDown(entity.name) : undefined}
+									onRemove={props.onRemoveEntity && shownEntities.length > 1 ? () => props.onRemoveEntity!(entity.name) : undefined} removeLabel={m.removeFromDiagram} />
 							)
 						})}
 					</g>

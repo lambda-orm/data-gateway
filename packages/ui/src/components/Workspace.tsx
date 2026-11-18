@@ -168,6 +168,14 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 	const openDomain = (schema: string) => {
 		if (!reuse(t => t.kind === 'domain' && t.schema === schema)) add({ kind: 'domain', title: `${x.domainYaml} ${schema || '/'}`, schema })
 	}
+	// a box out of a diagram: its place and the lines that touched it go too
+	const removeFromDiagram = (tab: Tab, entity: string) => {
+		const draft = tab.draft
+		if (!draft || draft.entities.length <= 1) return
+		const positions = draft.positions ? Object.fromEntries(Object.entries(draft.positions).filter(([name]) => name !== entity)) : undefined
+		const bends = draft.bends ? Object.fromEntries(Object.entries(draft.bends).filter(([id]) => !id.split(/[>=:]/).some(part => part.split('.')[0] === entity))) : undefined
+		setDraft(tab.id, { entities: draft.entities.filter(e => e !== entity), positions, bends: bends && Object.keys(bends).length ? bends : undefined })
+	}
 	const setDraft = (id: number, patch: Partial<DiagramDraft>) => setTabs(t => t.map(tab => tab.id === id && tab.draft ? { ...tab, draft: { ...tab.draft, ...patch } } : tab))
 
 	const save = async (tab: Tab, as = false) => {
@@ -260,6 +268,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 											relationNames={tab.draft.relationNames} onRelationNamesChange={relationNames => setDraft(tab.id, { relationNames })}
 											compact={tab.draft.compact} onCompactChange={compact => setDraft(tab.id, { compact })}
 											onOpenEntity={openEntity} exportName={saved?.name ?? tab.title}
+											onRemoveEntity={entity => removeFromDiagram(tab, entity)}
 											toolbar={(
 												<span className="lw-save">
 													<button onClick={() => save(tab)} disabled={!dirty(tab)} title="Ctrl+S">{x.save}</button>

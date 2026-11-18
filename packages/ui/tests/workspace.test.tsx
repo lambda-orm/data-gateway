@@ -238,5 +238,14 @@ describe('saved diagrams', () => {
 		// a double click puts the line back
 		fireEvent.doubleClick(container.querySelector('[role=tabpanel]:not([hidden]) [data-edge] .lw-line-handle')!)
 		await waitFor(() => expect(container.querySelector('[role=tabpanel]:not([hidden]) [data-edge] path')!.getAttribute('d')).not.toContain('777'))
+
+		// the × of a box takes it out (with its line); the last one stays
+		fireEvent.click(visible().getByRole('button', { name: 'quitar del diagrama Customers' }))
+		await waitFor(() => expect(container.querySelectorAll('[role=tabpanel]:not([hidden]) [data-entity]')).toHaveLength(1))
+		expect(container.querySelectorAll('[role=tabpanel]:not([hidden]) [data-edge]')).toHaveLength(0)
+		expect(visible().queryByRole('button', { name: 'quitar del diagrama Orders' })).toBeNull()
+		fireEvent.click(visible().getByRole('button', { name: 'Guardar' }))
+		await waitFor(async () => expect((await store.all()).find(i => i.name === 'Ventas')).toMatchObject({ entities: ['Orders'], bends: undefined }))
+		expect(Object.keys((await store.all()).find(i => i.name === 'Ventas')!.kind === 'diagram' ? ((await store.all()).find(i => i.name === 'Ventas') as any).positions : {})).toEqual(['Orders'])
 	}, 30000)
 })
