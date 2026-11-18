@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## Versions
 
+### 3.0.0-rc.4 (2026-11-18)
+
+Prerelease: it doesn't move `latest`. Uses `@lambdaorm/lib` 3.5.3.
+
+**Bug Fixes:**
+
+- Swagger (`/doc`): Authorize offers the credential the served schemas are configured with (an API key in its header,
+  a bearer token or basic); it offered a fixed bearer token, so it didn't work with an API key. Each http transport
+  serves its own document.
+- From `@lambdaorm/lib` 3.5.3: a PostgreSQL `bytea` column is read as `buffer` (`lambdaorm pull`, `fetch` and
+  `introspect` failed with `error with type: bytea`), and a `buffer` property is created as `BYTEA`.
+
 ### 3.0.0-rc.3 (2026-11-18)
 
 Prerelease: it doesn't move `latest`. Uses `@lambdaorm/lib` 3.5.2.
