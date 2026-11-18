@@ -1,7 +1,10 @@
 # @lambdaorm/ui
 
-React components to write, check and run [λORM](https://github.com/lambda-orm/core) queries against a λORM
-data-gateway: a Monaco editor with the autocompletion of the schema's domain, data and options, the actions plan /
+[![npm version](https://img.shields.io/npm/v/@lambdaorm/ui.svg)](https://www.npmjs.com/package/@lambdaorm/ui)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+
+React components to write, check and run [λORM](https://lambda-orm.github.io/wiki/) queries against a
+[λORM Data Gateway](https://lambda-orm.github.io/wiki/data-gateway/): a Monaco editor with the autocompletion of the schema's domain, data and options, the actions plan /
 metadata / model / parameters / constraints / execute / executeQueued / executeScript (enabled by the permissions of
 the credential), and the result as tree, table, JSON or YAML, with downloads. The data-gateway serves it at `/ui`
 (`transports.http.ui.enabled`); any React application can mount it too.
@@ -16,7 +19,7 @@ import '@lambdaorm/ui/styles.css'
 
 <QueryWorkbench
   baseUrl="https://gateway.example.com"     // the REST transport of the data-gateway
-  schema="iot/v1"                           // optional: without it, a selector of the ready schemas
+  schema="iot/v1"                           // optional: without it, a selector of the ready schemas (the only one, chosen)
   headers={() => ({ 'X-Api-Key': token })}  // how to authenticate; the library keeps no credential
   theme="dark"
   onResult={result => console.log(result.operation, result.durationMs)}
@@ -94,9 +97,19 @@ The autocompletion comes from `GET /{schema}/typings` of the gateway (the domain
 `Queryable` declarations of `@lambdaorm/base`, embedded at build time. While writing, the query is checked with λORM
 (`metadata`) and its errors are marked in the editor.
 
+## Documentation
+
+- [The UI in the λORM wiki](https://lambda-orm.github.io/wiki/data-gateway/Ui/), with screenshots, and how to put it in
+  an application of your own
+- [Change log](CHANGELOG.md)
+
 ## Development
 
 ```bash
 npm run build   # declarations of base, Vite (ESM + CJS + styles.css), types
 npm test        # Vitest + Testing Library
 ```
+
+## License
+
+MIT

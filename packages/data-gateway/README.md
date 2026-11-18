@@ -1,284 +1,131 @@
-# λORM data-gateway
+# λORM Data Gateway
 
-> Formerly `packages/service` (`@lambdaorm/service`, image `flaviorita/lambdaorm-svc`). It is being redesigned:
-> see [`docs/DATA_GATEWAY.md`](../../docs/DATA_GATEWAY.md) and [`docs/DATA_GATEWAY_PLAN.md`](../../docs/DATA_GATEWAY_PLAN.md).
+[![Docker image](https://img.shields.io/docker/v/flaviorita/data-gateway?label=flaviorita%2Fdata-gateway&sort=semver)](https://hub.docker.com/r/flaviorita/data-gateway)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-Gateway that exposes the functionality of the [LambdaOrm](https://github.com/lambda-orm/lambdaorm) library
+Governed access to the data of [λORM](https://lambda-orm.github.io/wiki/) schemas over the network, by configuration,
+without writing a backend:
+
+- **applications** query and write a schema through a **REST API** (or a **WebSocket** connection), with the same
+  lambda queries they would run in Node;
+- **AI agents** explore the domain and query it through **MCP**;
+- **people** explore the schemas, read each entity as a form, try queries and draw diagrams in a **web UI**;
+
+and **who can do what** is decided in one place: every credential has permissions, the same on every transport, and
+every change is audited.
+
+It is published as the Docker image [`flaviorita/data-gateway`](https://hub.docker.com/r/flaviorita/data-gateway)
+(not on npm). It replaces the former `lambdaorm-svc` service (`packages/service`, image `flaviorita/lambdaorm-svc`).
+
+**Documentation:** [Data Gateway in the λORM wiki](https://lambda-orm.github.io/wiki/data-gateway/) — the
+[getting started guide](https://lambda-orm.github.io/wiki/data-gateway/GettingStarted/) goes from an empty folder to
+the REST API, the UI, MCP and WebSocket in about ten minutes.
+
+## What it does
+
+- Serves **one or several λORM schemas** per instance, each at a route (`/iot/v1`, `/accounts`; a single schema can be
+  at the root). Each schema runs in **its own worker**, with its own environment and connections: one that fails
+  doesn't affect the others.
+- Every operation of λORM: queries (`execute`, `plan`, `metadata`, `model`, `parameters`, `constraints`), **scripts**
+  (several queries in one transaction), **queued executions** (Kafka), the schema and its domain, and stages (export,
+  import).
+- **Authentication** (API key, bearer token, basic) and **permissions** per credential (`read`, `write`, `script`,
+  `queue`, `stageImport`), globally, per transport or per schema. `execute` of a query that only selects needs `read`;
+  one that writes needs `write`.
+- **Audit** of every write, **metrics** (Prometheus), **health** (Kubernetes probes), limits (rate, concurrency,
+  sizes, time).
+
+It doesn't accept SQL (only λORM queries) and doesn't migrate the databases: that is the
+[CLI](https://www.npmjs.com/package/@lambdaorm/cli) (`push`, `pull`, …).
 
 ## Configuration
 
-Everything is configured in one mounted YAML file, `DATA_GATEWAY_CONFIG_PATH` (default
-`/config/data-gateway.config.yaml`). It is mandatory: without it the gateway doesn't start. `$VAR` / `${VAR}` take the
-environment variables; one that is not defined counts as not set.
+One mounted YAML file, `DATA_GATEWAY_CONFIG_PATH` (default `/config/data-gateway.config.yaml`), says where the schemas
+are, how they are exposed and who can use them. `$VAR` / `${VAR}` take environment variables. The schemas stay in
+their λORM workspaces (`lambdaORM.yaml`).
 
 ```yaml
 orm:
-  workspacePath: /workspace          # folder with lambdaORM.yaml
-authentication:                      # none (default) or local: bearer | apikey | basic
+  workspacePath: /workspace            # the folder with lambdaORM.yaml (a single schema: served at the root)
+  schemas:
+    - path: ""                         # that schema: it receives only the variables given here
+      env: { NORTHWIND_DB: $NORTHWIND_DB }
+authentication:                        # none (default) or local: apikey | bearer | basic
   adapter: local
   type: apikey
   header: X-Api-Key
   keys:
-    - { name: agent,   value: $AGENT_KEY,   permissions: [ read ] }
+    - { name: reader,  value: $READER_KEY,  permissions: [ read ] }
     - { name: backend, value: $BACKEND_KEY, permissions: [ read, write, script, queue, stageImport ] }
 scripts:
-  enabled: true                      # POST /script, off by default
-rateLimit:
-  max: 0                             # 0 = no rate limit
-mcp:
-  maxRows: 500                       # rows of orm_execute for a model; 0 = no limit
-  tools: { exclude: [ orm_execute_script ] }
-transports:
+  enabled: true                        # POST /script, off by default
+transports:                            # a transport is on only when it has a port
   http:
-    port: $DATA_GATEWAY_HTTP_PORT    # no port, no transport: there are no default ports
-  mcpHttp:                           # MCP Streamable HTTP at /mcp (stateless), and the deprecated SSE at /sse
-    port: $DATA_GATEWAY_MCP_PORT
-  mcpWebSocket:                      # MCP over WebSocket at /mcp (not standard), /asyncapi
-    port: $DATA_GATEWAY_MCP_WS_PORT
+    port: 8080
+    ui: { enabled: true }              # the web UI at /ui
+  mcpHttp:
+    port: 8081
+  webSocket:
+    port: 8083
 ```
 
-- **Permissions:** `read` (schema, plan, metadata, … and `execute` of queries that only select), `write` (`execute`
-  that inserts, updates, deletes, …), `script`, `queue`, `stageImport`. A single `token` / `value` / `username` +
-  `password` has every permission. A local credential whose secret is not defined stops the start.
-- **MCP:** 22 tools, one per operation of the REST API (`orm_execute`, `orm_plan`, `schema_entities`, `stage_import`,
-  …), with `readOnlyHint` / `destructiveHint`. `tools/list` shows a credential only the tools it can use; the
-  description of `orm_execute` carries the domain of the schema; resources `lambdaorm://guide/expressions` (the query
-  language) and `lambdaorm://schema/domain`. Results longer than `mcp.maxRows` are cut with a hint. With Claude Code:
-  `claude mcp add --transport http northwind http://localhost:8081/mcp --header "X-Api-Key: …"`. How well models use
-  it is measured with the [evaluation set](eval/README.md).
-- **Audit:** every write (and every script, queued execution and stage import) leaves a JSON line with
-  `"type":"audit"` on stdout: credential, operation, actions, entities, query, rows, duration, result.
-- **Not used anymore:** `infrastructure.service` of `lambdaORM.yaml` and the variables `PORT`, `SERVICE_TOKEN`,
-  `RATE_LIMIT_*`, `SCRIPT_*` read directly. Migration table and every key: [`docs/DATA_GATEWAY.md`](../../docs/DATA_GATEWAY.md) §2.
+Every key: [Configuration](https://lambda-orm.github.io/wiki/data-gateway/Configuration/).
+
+## Run it
 
 ```sh
-docker run -v $(pwd)/workspace:/workspace -v $(pwd)/data-gateway.config.yaml:/config/data-gateway.config.yaml:ro \
-  -e DATA_GATEWAY_HTTP_PORT=8080 -e AGENT_KEY=… -e BACKEND_KEY=… --network host flaviorita/data-gateway
+docker run --rm \
+  -v $(pwd)/data-gateway.config.yaml:/config/data-gateway.config.yaml:ro \
+  -v $(pwd)/workspace:/workspace \
+  -e NORTHWIND_DB='{"host":"…","port":5432,"user":"…","password":"…","database":"northwind"}' \
+  -e READER_KEY=… -e BACKEND_KEY=… \
+  -p 8080:8080 -p 8081:8081 -p 8083:8083 \
+  flaviorita/data-gateway
 ```
 
-Tests: `npm test` (unit), `npm run test:integration` (real sockets, the MCP SDK clients and λORM, no database). The service tests of the
-[ilusor-cloud lab](../lib/src/dev/labs/ilusor-cloud/README.md) run against it with Postgres.
+A complete example with PostgreSQL and Docker Compose is in the
+[getting started guide](https://lambda-orm.github.io/wiki/data-gateway/GettingStarted/). Kubernetes, health, metrics
+and logs: [Operations](https://lambda-orm.github.io/wiki/data-gateway/Operations/).
 
-## Service
+## Transports
 
-The service exposes the following endpoints:
-
-### queries endpoints
-
-![query-methods](https://raw.githubusercontent.com/lambda-orm/core/HEAD/packages/data-gateway/images/query-methods.png)
-
-### General endpoints
-
-![general-methods](https://raw.githubusercontent.com/lambda-orm/core/HEAD/packages/data-gateway/images/general-methods.png)
-
-### Schema endpoints
-
-![schema-methods](https://raw.githubusercontent.com/lambda-orm/core/HEAD/packages/data-gateway/images/schema-methods.png)
-
-### Stage endpoints
-
-![stage-methods](https://raw.githubusercontent.com/lambda-orm/core/HEAD/packages/data-gateway/images/stage-methods.png)
-
-## Usage
-
-### Ping
+| Transport | What it serves | Docs |
+| --- | --- | --- |
+| `http` | the REST API, the OpenAPI document (`/doc`, `/api-docs`) and the web UI (`/ui`) | [REST API](https://lambda-orm.github.io/wiki/data-gateway/Rest/), [UI](https://lambda-orm.github.io/wiki/data-gateway/Ui/) |
+| `mcpHttp` | MCP Streamable HTTP (`/mcp`) for AI agents | [MCP](https://lambda-orm.github.io/wiki/data-gateway/Mcp/) |
+| `mcpWebSocket` | MCP over WebSocket | [MCP](https://lambda-orm.github.io/wiki/data-gateway/Mcp/) |
+| `webSocket` | the same API as JSON-RPC over one connection, with notifications | [WebSocket API](https://lambda-orm.github.io/wiki/data-gateway/WebSocket/) |
 
 ```sh
-curl -X GET "http://localhost:9291/ping?format=beautiful"
+# REST
+curl -X POST http://localhost:8080/execute -H "X-Api-Key: $READER_KEY" -H "Content-Type: application/json" \
+  -d '{"query": "Products.filter(p => p.price > minPrice).map(p => [p.name, p.price])", "data": {"minPrice": 50}}'
+
+# an AI agent (Claude Code)
+claude mcp add --transport http northwind http://localhost:8081/mcp --header "X-Api-Key: $READER_KEY"
 ```
 
-Result:
+From Node.js, [`@lambdaorm/client`](https://www.npmjs.com/package/@lambdaorm/client) has the interface of the library
+(`orm.execute`, `orm.plan`, …) over REST or WebSocket; the [CLI](https://www.npmjs.com/package/@lambdaorm/cli) runs
+its commands on the gateway with `-u <url>`; and [`@lambdaorm/ui`](https://www.npmjs.com/package/@lambdaorm/ui) puts
+the UI in an application of your own. See [Clients](https://lambda-orm.github.io/wiki/data-gateway/Clients/).
 
-```json
-{
-  "message": "pong",
-  "time": "2023-12-08T19:41:00.543Z"
-}
-```
+## Development
 
-### Model
+The gateway builds with Grunt; from `packages/data-gateway`:
 
 ```sh
-curl -X POST "http://localhost:9291/model?format=beautiful" -H "Content-Type: application/json" -d '{"query": "Orders.filter(p=>p.customerId==customerId).include(p=>p.details)"}'
+npm run build                 # tsc
+npm test                      # unit tests
+npm run test:integration      # real sockets, the MCP SDK clients and λORM, no database
 ```
 
-Result:
+- The image is published by `.github/workflows/data-gateway-image.yml` when a new version of `package.json` reaches
+  `main` (see [DEPLOY.md](../../DEPLOY.md)).
+- How well AI models use the MCP tools is measured with the [evaluation set](eval/README.md).
+- Design notes: [`docs/DATA_GATEWAY.md`](../../docs/DATA_GATEWAY.md).
+- [Change log](CHANGELOG.md)
 
-```json
-[
-  {
-    "name": "id",
-    "type": "integer"
-  },
-  {
-    "name": "customerId",
-    "type": "string"
-  },
-  {
-    "name": "orderDate",
-    "type": "dateTime"
-  },
-  {
-    "name": "details",
-    "type": "Orders.details[]",
-    "children": [
-      {
-        "name": "orderId",
-        "type": "integer"
-      },
-      {
-        "name": "productId",
-        "type": "integer"
-      },
-      {
-        "name": "unitPrice",
-        "type": "decimal"
-      },
-      {
-        "name": "quantity",
-        "type": "decimal"
-      },
-      {
-        "name": "LambdaOrmParentId",
-        "type": "integer"
-      }
-    ]
-  }
-]
-```
+## License
 
-### Parameters
-
-```sh
-curl -X POST "http://localhost:9291/parameters?format=beautiful" -H "Content-Type: application/json" -d '{"query": "Orders.filter(p=>p.customerId==customerId).include(p=>p.details)"}'
-```
-
-Result:
-
-```json
-[
-  {
-    "name": "customerId",
-    "type": "string"
-  },
-  {
-    "name": "details",
-    "type": "Orders.details",
-    "children": [
-      {
-        "name": "LambdaOrmParentId",
-        "type": "any"
-      }
-    ]
-  }
-]
-```
-
-### Constraints
-
-```sh
-curl -X POST "http://localhost:9291/constraints?format=beautiful" -H "Content-Type: application/json" -d '{"query": "Orders.filter(p=>p.customerId==customerId).include(p=>p.details)"}'
-```
-
-Result:
-
-```json
-{
-  "entity": "Orders",
-  "constraints": [],
-  "children": [
-    {
-      "entity": "Orders.details",
-      "constraints": []
-    }
-  ]
-}
-```
-
-### Plan
-
-```sh
-curl -X POST "http://localhost:9291/plan?format=beautiful" -H "Content-Type: application/json" -d '{"query": "Orders.filter(p=>p.customerId==customerId).include(p=>p.details)"}'
-```
-
-Result:
-
-```json
-{
-  "entity": "Orders",
-  "dialect": "PostgreSQL",
-  "source": "default",
-  "sentence": "SELECT o.OrderID AS \"id\", o.CustomerID AS \"customerId\", o.OrderDate AS \"orderDate\", o.OrderID AS \"__id\" FROM Orders o  WHERE o.CustomerID = $1 ",
-  "children": [
-    {
-      "entity": "Orders.details",
-      "dialect": "PostgreSQL",
-      "source": "default",
-      "sentence": "SELECT o1.OrderID AS \"orderId\", o1.ProductID AS \"productId\", o1.UnitPrice AS \"unitPrice\", o1.Quantity AS \"quantity\", o1.OrderID AS \"LambdaOrmParentId\" FROM \"Order Details\" o1  WHERE  o1.OrderID IN ($1) "
-    }
-  ]
-}
-```
-
-### Import
-
-```sh
-curl -X POST -H "Content-Type: application/json" -d @data.json http://localhost:9291/stages/default/import
-```
-
-### Execute
-
-```sh
-curl -X POST "http://localhost:9291/execute?format=beautiful" -H "Content-Type: application/json" -d '{"query": "Orders.filter(p=>p.customerId==customerId).include(p=>p.details)", "data": "{\"customerId\": \"CENTC\"}" }'
-```
-
-Result:
-
-```json
-[
-  {
-    "id": 12,
-    "customerId": "CENTC",
-    "orderDate": "1996-07-18T00:00:00.000Z",
-    "details": [
-      {
-        "orderId": 12,
-        "productId": 21,
-        "unitPrice": 8,
-        "quantity": 10
-      },
-      {
-        "orderId": 12,
-        "productId": 37,
-        "unitPrice": 20.8,
-        "quantity": 1
-      }
-    ]
-  }
-]
-```
-
-## Documentation
-
-Full documentation is available in the [Wiki](https://github.com/lambda-orm/lambdaorm-svc/wiki).
-
-## Docker Image
-
-You can access to image at [flaviorita/lambdaorm-svc](https://hub.docker.com/repository/docker/flaviorita/lambdaorm-svc/general)
-
-## Clients
-
-The following clients allow consuming this service
-
-- [Node Client](https://github.com/lambda-orm/lambdaorm-client-node)
-- [Kotlin Client](https://github.com/lambda-orm/lambdaorm-client-kotlin)
-
-Soon:
-
-- Python Client
-- CSharp Client
-- Go Client
-
-## Labs
-
-You can access various labs at [github.com/lambda-orm/lambdaorm-labs](https://github.com/lambda-orm/lambdaorm-labs)
+MIT
