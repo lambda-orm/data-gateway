@@ -4,6 +4,18 @@ All notable changes to this project will be documented in this file.
 
 ## Versions
 
+### Unreleased
+
+Uses `@lambdaorm/lib` 3.5.2.
+
+**Bug Fixes (from `@lambdaorm/lib` 3.5.1 / 3.5.2):**
+
+- `like(p.name, 'Ch%')` with the pattern written in the query, `p.name.includes('ch')` ("contains"), and
+  `startsWith` / `includes` with the value in a variable work on every SQL engine.
+- The date functions (`year`, `month`, `day`, `addDay`, `dayDiff`, …) on a column work on PostgreSQL.
+- The MCP guide (`lambdaorm://guide/expressions`) and the description of `orm_execute` teach them; the evaluation set
+  has two more questions (contains, `like` with `_`).
+
 ### 3.0.0-rc.1 (2026-11-18)
 
 First release as `@lambdaorm/data-gateway` (formerly `packages/service` / `@lambdaorm/service`), published as the

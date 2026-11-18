@@ -14,6 +14,8 @@
   { "id": "customers-no-region", "question": "How many customers have no region?", "reference": { "query": "Customers.filter(p => isNull(p.region)).map(p => ({ total: count(1) }))" } },
   { "id": "products-starting-ch", "question": "Names of the products whose name starts with 'Ch'.", "reference": { "query": "Products.filter(p => startsWith(p.name, 'Ch')).map(p => ({ name: p.name }))" } },
   { "id": "products-containing-sauce", "question": "Names of the products whose name contains the word 'Sauce'.", "reference": { "query": "Products.filter(p => like(p.name, pattern)).map(p => ({ name: p.name }))", "data": { "pattern": "%Sauce%" } } },
+  { "id": "products-containing-coffee", "question": "Names of the products whose name contains 'Coffee'.", "reference": { "query": "Products.filter(p => p.name.includes('Coffee')).map(p => ({ name: p.name }))" } },
+  { "id": "customers-name-a-a", "question": "Names of the customers that match the pattern 'A_a%' (an A, any one character, an a, then anything).", "reference": { "query": "Customers.filter(p => like(p.name, 'A_a%')).map(p => ({ name: p.name }))" } },
   { "id": "orders-1997", "question": "How many orders were placed in 1997?", "reference": { "query": "Orders.filter(p => year(p.orderDate) == 1997).map(p => ({ total: count(1) }))" } },
   { "id": "orders-january-1998", "question": "How many orders were placed in January 1998?", "reference": { "query": "Orders.filter(p => year(p.orderDate) == 1998 && month(p.orderDate) == 1).map(p => ({ total: count(1) }))" } },
   { "id": "orders-alfki", "question": "Ids of the orders of the customer with id ALFKI.", "reference": { "query": "Orders.filter(p => p.customerId == 'ALFKI').map(p => ({ id: p.id }))" } },
