@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { format, Locale, messagesOf } from '../domain/i18n'
 import { cellText, columnsOf, formatBytes, isTable, QueryResult, toJson, toTsv, toYaml } from '../domain/results'
 
-type View = 'tree' | 'table' | 'json' | 'yaml'
+export type View = 'tree' | 'table' | 'json' | 'yaml'
 
 export interface ResultViewerProps {
 	result?: QueryResult
@@ -12,6 +12,8 @@ export interface ResultViewerProps {
 	fileName?: string
 	/** Language of the labels (default English) */
 	locale?: Locale
+	/** The view at the start (default tree) */
+	initialView?: View
 }
 
 const download = (text: string, name: string, type: string) => {
@@ -79,12 +81,12 @@ const Tree: React.FC<{ value: unknown, name?: string, depth?: number }> = ({ val
 }
 
 /** The result of an action: tree, table, JSON and YAML views, copy and download, status / time / rows / size */
-export const ResultViewer: React.FC<ResultViewerProps> = ({ result, maxRows = 200, fileName = 'result', locale }) => {
+export const ResultViewer: React.FC<ResultViewerProps> = ({ result, maxRows = 200, fileName = 'result', locale, initialView = 'tree' }) => {
 	const m = messagesOf(locale)
 	const [copied, setCopied] = useState(false)
 	useEffect(() => { if (!copied) return; const timer = setTimeout(() => setCopied(false), 1500); return () => clearTimeout(timer) }, [copied])
 	const table = result?.ok && isTable(result.value)
-	const [chosen, setView] = useState<View>('tree')
+	const [chosen, setView] = useState<View>(initialView)
 	const view: View = chosen === 'table' && !table ? 'tree' : chosen
 	const json = useMemo(() => result?.ok ? toJson(result.value) : '', [result])
 	const yaml = useMemo(() => result?.ok && view === 'yaml' ? toYaml(result.value) : '', [result, view])

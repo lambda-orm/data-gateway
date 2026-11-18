@@ -12,6 +12,9 @@ export interface EntityInfo {
 	uniqueKey?: string[]
 	properties?: PropertyInfo[]
 	relations?: RelationInfo[]
+	view?: boolean
+	indexes?: { name: string, fields: string[] }[]
+	constraints?: { message: string, condition: string }[]
 }
 
 export interface PropertyInfo {
@@ -21,6 +24,10 @@ export interface PropertyInfo {
 	autoIncrement?: boolean
 	length?: number
 	enum?: string
+	default?: string
+	view?: boolean
+	readExp?: string
+	writeExp?: string
 }
 
 export interface RelationInfo {
@@ -29,6 +36,8 @@ export interface RelationInfo {
 	from: string
 	entity: string
 	to: string
+	weak?: boolean
+	composite?: boolean
 }
 
 /**
@@ -124,4 +133,61 @@ export const boxSize = (entity: EntityInfo, compact: boolean): { width: number, 
 	const title = (entity.name.length + (entity.extends ? entity.extends.length + 3 : 0)) * 8 + 24
 	const rows = compact ? [] : (entity.properties ?? []).map(p => (p.name.length + 2 + typeText(p).length) * CHAR + 44)
 	return { width: Math.ceil(Math.max(140, title, ...rows)), height: HEADER + (compact ? 0 : Math.max(1, entity.properties?.length ?? 0) * ROW + 6) }
+}
+
+/** The relations of other entities that point to this one (what references it) */
+export const referencesTo = (domain: DomainInfo, entity: string): { entity: string, relation: RelationInfo }[] =>
+	domain.entities.filter(e => e.name !== entity).flatMap(e => (e.relations ?? []).filter(r => r.entity === entity).map(relation => ({ entity: e.name, relation })))
+
+/** "1 — N" from the side of the entity that has the relation */
+export const cardinalityOf = (relation: RelationInfo): string =>
+	relation.type === 'manyToOne' ? '1 — N' : relation.type === 'oneToMany' ? 'N — 1' : '1 — 1'
+
+export interface Placed { x: number, y: number, width: number, height: number }
+
+/** Where a line meets a box: the row of the field when the box shows its properties, else the middle of the title */
+const anchorY = (box: Placed, entity: EntityInfo | undefined, field: string | undefined, compact: boolean): number => {
+	const index = !compact && field ? (entity?.properties ?? []).findIndex(p => p.name === field) : -1
+	return index >= 0 ? box.y + HEADER + 4 + index * ROW + 9 : box.y + HEADER / 2
+}
+
+/**
+ * Lines for boxes placed by hand: from the side of the parent that faces the child to the facing side of the child,
+ * at the rows of their fields, with a bend in the middle (orthogonal); boxes one above the other, top to bottom; an
+ * entity related to itself, a loop on its right. A line with a bend (moved by hand) has its vertical stretch there.
+ */
+export const routeOrthogonal = (edges: DiagramEdge[], boxes: Map<string, Placed>, entities: Map<string, EntityInfo>, compact: boolean, bends: Record<string, number> = {}): Map<string, { x: number, y: number }[]> => {
+	const routes = new Map<string, { x: number, y: number }[]>()
+	for (const edge of edges) {
+		const p = boxes.get(edge.parent)
+		const c = boxes.get(edge.child)
+		if (!p || !c) continue
+		const py = anchorY(p, entities.get(edge.parent), edge.parentField, compact)
+		const cy = anchorY(c, entities.get(edge.child), edge.childField, compact)
+		const bend = bends[edge.id]
+		if (bend !== undefined) {
+			// a line moved by hand: its vertical stretch where it was left; each end leaves its box by the side facing it
+			const from = bend >= p.x + p.width / 2 ? p.x + p.width : p.x
+			const to = bend >= c.x + c.width / 2 ? c.x + c.width : c.x
+			routes.set(edge.id, [{ x: from, y: py }, { x: bend, y: py }, { x: bend, y: cy }, { x: to, y: cy }])
+		} else if (edge.parent === edge.child) {
+			const x = p.x + p.width
+			routes.set(edge.id, [{ x, y: py }, { x: x + 24, y: py }, { x: x + 24, y: Math.max(cy, py + 18) }, { x, y: Math.max(cy, py + 18) }])
+		} else if (c.x >= p.x + p.width + 16 || c.x + c.width + 16 <= p.x) {
+			const right = c.x >= p.x + p.width
+			const from = right ? p.x + p.width : p.x
+			const to = right ? c.x : c.x + c.width
+			const mid = (from + to) / 2
+			routes.set(edge.id, [{ x: from, y: py }, { x: mid, y: py }, { x: mid, y: cy }, { x: to, y: cy }])
+		} else {
+			const below = c.y >= p.y
+			const from = below ? p.y + p.height : p.y
+			const to = below ? c.y : c.y + c.height
+			const px = p.x + p.width / 2
+			const cx = c.x + c.width / 2
+			const mid = (from + to) / 2
+			routes.set(edge.id, [{ x: px, y: from }, { x: px, y: mid }, { x: cx, y: mid }, { x: cx, y: to }])
+		}
+	}
+	return routes
 }

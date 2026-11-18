@@ -1,5 +1,6 @@
 import { WhoAmI } from '../domain/operations'
 import { DomainInfo } from '../domain/diagram'
+import { SavedItem } from '../domain/savedItems'
 import { HistoryEntry, QueryParameter } from '../domain/workspace'
 
 /** A schema the gateway serves (GET /schemas) */
@@ -37,4 +38,17 @@ export interface HistoryPort {
 	load (schema: string): HistoryEntry[]
 	save (schema: string, entries: HistoryEntry[]): void
 	clear (schema: string): void
+}
+
+/**
+ * Where the saved folders, queries and diagrams are kept: IndexedDB in the browser (IndexedDbWorkspaceStore), memory
+ * (MemoryWorkspaceStore), or a backend of your own.
+ */
+export interface WorkspaceStore {
+	all (): Promise<SavedItem[]>
+	put (items: SavedItem[]): Promise<void>
+	remove (ids: string[]): Promise<void>
+	clear (): Promise<void>
+	/** Whether what is put survives closing the page (false when the browser doesn't allow storing) */
+	durable (): Promise<boolean>
 }

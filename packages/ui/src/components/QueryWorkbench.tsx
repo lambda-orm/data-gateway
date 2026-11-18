@@ -4,6 +4,7 @@ import { QueryResult } from '../domain/results'
 import { HistoryPort, QueryApiPort } from '../application/ports'
 import { WorkbenchController } from '../application/workbench'
 import { localize, Locale, messagesOf } from '../domain/i18n'
+import { SavedQueryContent } from '../domain/savedItems'
 import { HeadersProvider, RestQueryApi } from '../infrastructure/restQueryApi'
 import { LocalStorageHistory } from '../infrastructure/localStorageHistory'
 import { setSchemaTypings } from '../infrastructure/monaco/monacoSetup'
@@ -31,6 +32,14 @@ export interface QueryWorkbenchProps {
 	initialQuery?: string
 	/** Schema chosen at the start in the selector (it can be changed); schema fixes one instead */
 	initialSchema?: string
+	/** First content of the editors (a saved query); initialQuery is the query alone */
+	initial?: Partial<SavedQueryContent>
+	/** Every change of the content or the schema (to save it, to know it changed) */
+	onContentChange?: (content: SavedQueryContent & { schema?: string }) => void
+	/** Buttons of the application next to the mode (Save) */
+	toolbar?: React.ReactNode
+	/** Who the credential is, next to the mode (default true; false when the application shows it) */
+	showWho?: boolean
 	/** Language of the labels and messages (default English); the names of the actions stay the API's */
 	locale?: Locale
 }
@@ -61,7 +70,7 @@ export const QueryWorkbench: React.FC<QueryWorkbenchProps> = props => {
 	const m = messagesOf(locale)
 	const api = useMemo(() => props.api ?? new RestQueryApi(props.baseUrl ?? '', props.headers), [props.api, props.baseUrl, props.headers])
 	const controller = useMemo(
-		() => new WorkbenchController(api, props.history === false ? undefined : props.history ?? new LocalStorageHistory(), { query: props.initialQuery ?? '' }, onResult),
+		() => new WorkbenchController(api, props.history === false ? undefined : props.history ?? new LocalStorageHistory(), { query: props.initialQuery ?? '', ...props.initial }, onResult),
 		// a new gateway (or credential) is a new workbench
 		[api]
 	)
@@ -74,6 +83,10 @@ export const QueryWorkbench: React.FC<QueryWorkbenchProps> = props => {
 	}, [controller, fixedSchema])
 
 	useEffect(() => { setSchemaTypings(s.typings).catch(() => undefined) }, [s.typings])
+	const contentChange = props.onContentChange
+	useEffect(() => {
+		contentChange?.({ mode: s.mode, query: s.query, script: s.script, data: s.data, options: s.options, schema: s.schema })
+	}, [contentChange, s.mode, s.query, s.script, s.data, s.options, s.schema])
 
 	const queryActions = operations.filter(o => o !== 'executeScript')
 	const actions = s.mode === 'query' ? queryActions : operations.filter(o => o === 'executeScript')
@@ -90,7 +103,8 @@ export const QueryWorkbench: React.FC<QueryWorkbenchProps> = props => {
 						<button role="radio" aria-checked={s.mode === 'script'} className={s.mode === 'script' ? 'lw-active' : ''} onClick={() => controller.update({ mode: 'script' })}>{m.script}</button>
 					)}
 				</div>
-				{s.whoami && <span className="lw-who">{s.whoami.name} · {s.whoami.permissions.join(', ')}</span>}
+				{props.toolbar}
+				{s.whoami && props.showWho !== false && <span className="lw-who">{s.whoami.name} · {s.whoami.permissions.join(', ')}</span>}
 			</div>
 			{s.notice && <div className="lw-notice" role="alert">{localize(s.notice, m)}</div>}
 			{s.mode === 'query'
