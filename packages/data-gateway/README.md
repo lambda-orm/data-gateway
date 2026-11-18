@@ -3,6 +3,8 @@
 [![Docker image](https://img.shields.io/docker/v/flaviorita/data-gateway?label=flaviorita%2Fdata-gateway&sort=semver)](https://hub.docker.com/r/flaviorita/data-gateway)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+📖 **Documentation:** [lambda-orm.github.io/wiki](https://lambda-orm.github.io/wiki) (English, Deutsch, Español, Português)
+
 Governed access to the data of [λORM](https://lambda-orm.github.io/wiki/) schemas over the network, by configuration,
 without writing a backend:
 
@@ -17,7 +19,7 @@ every change is audited.
 It is published as the Docker image [`flaviorita/data-gateway`](https://hub.docker.com/r/flaviorita/data-gateway)
 (not on npm). It replaces the former `lambdaorm-svc` service (`packages/service`, image `flaviorita/lambdaorm-svc`).
 
-**Documentation:** [Data Gateway in the λORM wiki](https://lambda-orm.github.io/wiki/data-gateway/) — the
+The [Data Gateway section](https://lambda-orm.github.io/wiki/data-gateway/) of the wiki covers it in full; its
 [getting started guide](https://lambda-orm.github.io/wiki/data-gateway/GettingStarted/) goes from an empty folder to
 the REST API, the UI, MCP and WebSocket in about ten minutes.
 

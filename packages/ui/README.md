@@ -3,6 +3,8 @@
 [![npm version](https://img.shields.io/npm/v/@lambdaorm/ui.svg)](https://www.npmjs.com/package/@lambdaorm/ui)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
+📖 **Documentation:** [lambda-orm.github.io/wiki](https://lambda-orm.github.io/wiki) (English, Deutsch, Español, Português)
+
 React components to write, check and run [λORM](https://lambda-orm.github.io/wiki/) queries against a
 [λORM Data Gateway](https://lambda-orm.github.io/wiki/data-gateway/): a Monaco editor with the autocompletion of the schema's domain, data and options, the actions plan /
 metadata / model / parameters / constraints / execute / executeQueued / executeScript (enabled by the permissions of
