@@ -1,27 +1,103 @@
+<div align="center">
+
 # λORM Data Gateway
+
+**Your databases as a governed data API — REST, WebSocket, MCP for AI agents and a web UI — in one container, by
+configuration.**
 
 [![Docker image](https://img.shields.io/docker/v/flaviorita/data-gateway?label=flaviorita%2Fdata-gateway&sort=semver)](https://hub.docker.com/r/flaviorita/data-gateway)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 📖 **Documentation:** [lambda-orm.github.io/wiki](https://lambda-orm.github.io/wiki) (English, Deutsch, Español, Português)
 
-Governed access to the data of [λORM](https://lambda-orm.github.io/wiki/) schemas over the network, by configuration,
-without writing a backend:
+</div>
 
-- **applications** query and write a schema through a **REST API** (or a **WebSocket** connection), with the same
-  lambda queries they would run in Node;
-- **AI agents** explore the domain and query it through **MCP**;
-- **people** explore the schemas, read each entity as a form, try queries and draw diagrams in a **web UI**;
+![Data Gateway](https://raw.githubusercontent.com/lambda-orm/wiki/main/docs/data-gateway/images/overview.svg)
 
-and **who can do what** is decided in one place: every credential has permissions, the same on every transport, and
-every change is audited.
+You describe your domain once in a [λORM](https://lambda-orm.github.io/wiki/) schema — entities, relations, and in
+which databases they live (MySQL, MariaDB, PostgreSQL, SQL Server, Oracle, MongoDB, SQLite). The Data Gateway
+publishes it, and then:
 
-It is published as the Docker image [`flaviorita/data-gateway`](https://hub.docker.com/r/flaviorita/data-gateway)
-(not on npm). It replaces the former `lambdaorm-svc` service (`packages/service`, image `flaviorita/lambdaorm-svc`).
+- **applications in any language** query and write it over **REST** (OpenAPI 3) or **WebSocket**, with lambda
+  queries — no backend to write, no SQL over the wire;
+- **AI agents** explore the domain and query it through **MCP**, with the permissions you give them, never more;
+- **people** browse the schemas, read each entity as a form, run queries with autocompletion and draw diagrams in a
+  **web UI**.
 
-The [Data Gateway section](https://lambda-orm.github.io/wiki/data-gateway/) of the wiki covers it in full; its
-[getting started guide](https://lambda-orm.github.io/wiki/data-gateway/GettingStarted/) goes from an empty folder to
-the REST API, the UI, MCP and WebSocket in about ten minutes.
+**Who can do what** is decided in one place: each credential has permissions (`read`, `write`, `script`, `queue`,
+`stageImport`), the same on every transport, and every change is audited.
+
+## Try it in two minutes
+
+The [northwind example](https://lambda-orm.github.io/wiki/data-gateway/GettingStarted/): PostgreSQL and the gateway
+with Docker Compose.
+
+```sh
+mkdir -p northwind/workspace && cd northwind
+W=https://lambda-orm.github.io/wiki/data-gateway/northwind
+curl -sO $W/docker-compose.yml && curl -sO $W/data-gateway.config.yaml && curl -sO $W/data.json
+curl -s $W/lambdaORM.yaml -o workspace/lambdaORM.yaml
+
+docker compose up -d
+docker compose exec data-gateway lambdaorm push -w /workspace -s default      # create the tables
+curl -X POST http://localhost:8080/stages/default/import -H "X-Api-Key: backend-demo-key" \
+  -H "Content-Type: application/json" -d @data.json                         # import the rows
+```
+
+Query it — the join with `Categories` is implicit, the parameter is bound:
+
+```sh
+curl -X POST "http://localhost:8080/execute?format=beautiful" -H "X-Api-Key: reader-demo-key" \
+  -H "Content-Type: application/json" -d '{
+    "query": "Products.filter(p => p.price > minPrice).map(p => ({ name: p.name, category: p.category.name, price: p.price })).sort(p => desc(p.price)).page(1, 3)",
+    "data": { "minPrice": 50 }
+  }'
+```
+
+```json
+[
+  { "name": "Côte de Blaye", "category": "Beverages", "price": 263.5 },
+  { "name": "Thüringer Rostbratwurst", "category": "Meat/Poultry", "price": 123.79 },
+  { "name": "Mishi Kobe Niku", "category": "Meat/Poultry", "price": 97 }
+]
+```
+
+The `reader` credential can't write:
+
+```json
+{ "error": "ForbiddenError", "message": "the credential \"reader\" does not have the \"stageImport\" permission" }
+```
+
+Then open **http://localhost:8080/ui**, or connect an AI agent:
+
+```sh
+claude mcp add --transport http northwind http://localhost:8081/mcp --header "X-Api-Key: reader-demo-key"
+```
+
+![The UI](https://raw.githubusercontent.com/lambda-orm/wiki/main/docs/data-gateway/images/ui-diagram.png)
+
+## From any language
+
+It is plain HTTP and JSON: the OpenAPI document is served at `/api-docs` (Swagger UI at `/doc`).
+
+```python
+import requests
+
+rows = requests.post("http://localhost:8080/execute", headers={"X-Api-Key": key}, json={
+    "query": "Orders.filter(p => p.customerId == id).include(p => p.details)",
+    "data": {"id": "ALFKI"},
+}).json()
+```
+
+```typescript
+import { orm } from '@lambdaorm/client'      // Node: the same interface as the library
+
+await orm.init('http://localhost:8080', { headers: { 'X-Api-Key': key } })
+const rows = await orm.execute('Orders.filter(p => p.customerId == id).include(p => p.details)', { id: 'ALFKI' })
+```
+
+The [CLI](https://www.npmjs.com/package/@lambdaorm/cli) runs its commands on a gateway with `-u <url>` (with bearer
+authentication, the token in `SERVICE_TOKEN`). See [Clients](https://lambda-orm.github.io/wiki/data-gateway/Clients/).
 
 ## What it does
 
@@ -37,7 +113,8 @@ the REST API, the UI, MCP and WebSocket in about ten minutes.
 - **Audit** of every write, **metrics** (Prometheus), **health** (Kubernetes probes), limits (rate, concurrency,
   sizes, time).
 
-It doesn't accept SQL (only λORM queries) and doesn't migrate the databases: that is the
+It is published as the Docker image [`flaviorita/data-gateway`](https://hub.docker.com/r/flaviorita/data-gateway)
+(not on npm) and replaces the former `lambdaorm-svc` service. It doesn't accept SQL (only λORM queries) and doesn't migrate the databases: that is the
 [CLI](https://www.npmjs.com/package/@lambdaorm/cli) (`push`, `pull`, …).
 
 ## Configuration
@@ -97,20 +174,6 @@ and logs: [Operations](https://lambda-orm.github.io/wiki/data-gateway/Operations
 | `mcpHttp` | MCP Streamable HTTP (`/mcp`) for AI agents | [MCP](https://lambda-orm.github.io/wiki/data-gateway/Mcp/) |
 | `mcpWebSocket` | MCP over WebSocket | [MCP](https://lambda-orm.github.io/wiki/data-gateway/Mcp/) |
 | `webSocket` | the same API as JSON-RPC over one connection, with notifications | [WebSocket API](https://lambda-orm.github.io/wiki/data-gateway/WebSocket/) |
-
-```sh
-# REST
-curl -X POST http://localhost:8080/execute -H "X-Api-Key: $READER_KEY" -H "Content-Type: application/json" \
-  -d '{"query": "Products.filter(p => p.price > minPrice).map(p => [p.name, p.price])", "data": {"minPrice": 50}}'
-
-# an AI agent (Claude Code)
-claude mcp add --transport http northwind http://localhost:8081/mcp --header "X-Api-Key: $READER_KEY"
-```
-
-From Node.js, [`@lambdaorm/client`](https://www.npmjs.com/package/@lambdaorm/client) has the interface of the library
-(`orm.execute`, `orm.plan`, …) over REST or WebSocket; the [CLI](https://www.npmjs.com/package/@lambdaorm/cli) runs
-its commands on the gateway with `-u <url>`; and [`@lambdaorm/ui`](https://www.npmjs.com/package/@lambdaorm/ui) puts
-the UI in an application of your own. See [Clients](https://lambda-orm.github.io/wiki/data-gateway/Clients/).
 
 ## Development
 
