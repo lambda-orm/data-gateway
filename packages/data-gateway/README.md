@@ -1,6 +1,63 @@
-# Lambda ORM service
+# λORM data-gateway
 
-Service that exposes the functionality of the [LambdaOrm](https://github.com/lambda-orm/lambdaorm) library
+> Formerly `packages/service` (`@lambdaorm/service`, image `flaviorita/lambdaorm-svc`). It is being redesigned:
+> see [`docs/DATA_GATEWAY.md`](../../docs/DATA_GATEWAY.md) and [`docs/DATA_GATEWAY_PLAN.md`](../../docs/DATA_GATEWAY_PLAN.md).
+
+Gateway that exposes the functionality of the [LambdaOrm](https://github.com/lambda-orm/lambdaorm) library
+
+## Configuration
+
+Everything is configured in one mounted YAML file, `DATA_GATEWAY_CONFIG_PATH` (default
+`/config/data-gateway.config.yaml`). It is mandatory: without it the gateway doesn't start. `$VAR` / `${VAR}` take the
+environment variables; one that is not defined counts as not set.
+
+```yaml
+orm:
+  workspacePath: /workspace          # folder with lambdaORM.yaml
+authentication:                      # none (default) or local: bearer | apikey | basic
+  adapter: local
+  type: apikey
+  header: X-Api-Key
+  keys:
+    - { name: agent,   value: $AGENT_KEY,   permissions: [ read ] }
+    - { name: backend, value: $BACKEND_KEY, permissions: [ read, write, script, queue, stageImport ] }
+scripts:
+  enabled: true                      # POST /script, off by default
+rateLimit:
+  max: 0                             # 0 = no rate limit
+mcp:
+  maxRows: 500                       # rows of orm_execute for a model; 0 = no limit
+  tools: { exclude: [ orm_execute_script ] }
+transports:
+  http:
+    port: $DATA_GATEWAY_HTTP_PORT    # no port, no transport: there are no default ports
+  mcpHttp:                           # MCP Streamable HTTP at /mcp (stateless), and the deprecated SSE at /sse
+    port: $DATA_GATEWAY_MCP_PORT
+  mcpWebSocket:                      # MCP over WebSocket at /mcp (not standard), /asyncapi
+    port: $DATA_GATEWAY_MCP_WS_PORT
+```
+
+- **Permissions:** `read` (schema, plan, metadata, … and `execute` of queries that only select), `write` (`execute`
+  that inserts, updates, deletes, …), `script`, `queue`, `stageImport`. A single `token` / `value` / `username` +
+  `password` has every permission. A local credential whose secret is not defined stops the start.
+- **MCP:** 22 tools, one per operation of the REST API (`orm_execute`, `orm_plan`, `schema_entities`, `stage_import`,
+  …), with `readOnlyHint` / `destructiveHint`. `tools/list` shows a credential only the tools it can use; the
+  description of `orm_execute` carries the domain of the schema; resources `lambdaorm://guide/expressions` (the query
+  language) and `lambdaorm://schema/domain`. Results longer than `mcp.maxRows` are cut with a hint. With Claude Code:
+  `claude mcp add --transport http northwind http://localhost:8081/mcp --header "X-Api-Key: …"`. How well models use
+  it is measured with the [evaluation set](eval/README.md).
+- **Audit:** every write (and every script, queued execution and stage import) leaves a JSON line with
+  `"type":"audit"` on stdout: credential, operation, actions, entities, query, rows, duration, result.
+- **Not used anymore:** `infrastructure.service` of `lambdaORM.yaml` and the variables `PORT`, `SERVICE_TOKEN`,
+  `RATE_LIMIT_*`, `SCRIPT_*` read directly. Migration table and every key: [`docs/DATA_GATEWAY.md`](../../docs/DATA_GATEWAY.md) §2.
+
+```sh
+docker run -v $(pwd)/workspace:/workspace -v $(pwd)/data-gateway.config.yaml:/config/data-gateway.config.yaml:ro \
+  -e DATA_GATEWAY_HTTP_PORT=8080 -e AGENT_KEY=… -e BACKEND_KEY=… --network host flaviorita/data-gateway
+```
+
+Tests: `npm test` (unit), `npm run test:integration` (real sockets, the MCP SDK clients and λORM, no database). The service tests of the
+[ilusor-cloud lab](../lib/src/dev/labs/ilusor-cloud/README.md) run against it with Postgres.
 
 ## Service
 
@@ -8,19 +65,19 @@ The service exposes the following endpoints:
 
 ### queries endpoints
 
-![query-methods](https://raw.githubusercontent.com/lambda-orm/lambdaorm-svc/HEAD/images/query-methods.png)
+![query-methods](https://raw.githubusercontent.com/lambda-orm/core/HEAD/packages/data-gateway/images/query-methods.png)
 
 ### General endpoints
 
-![general-methods](https://raw.githubusercontent.com/lambda-orm/lambdaorm-svc/HEAD/images/general-methods.png)
+![general-methods](https://raw.githubusercontent.com/lambda-orm/core/HEAD/packages/data-gateway/images/general-methods.png)
 
 ### Schema endpoints
 
-![schema-methods](https://raw.githubusercontent.com/lambda-orm/lambdaorm-svc/HEAD/images/schema-methods.png)
+![schema-methods](https://raw.githubusercontent.com/lambda-orm/core/HEAD/packages/data-gateway/images/schema-methods.png)
 
 ### Stage endpoints
 
-![stage-methods](https://raw.githubusercontent.com/lambda-orm/lambdaorm-svc/HEAD/images/stage-methods.png)
+![stage-methods](https://raw.githubusercontent.com/lambda-orm/core/HEAD/packages/data-gateway/images/stage-methods.png)
 
 ## Usage
 

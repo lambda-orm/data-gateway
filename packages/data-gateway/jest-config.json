@@ -1,11 +1,14 @@
 {
 	"transform": {
-		"^.+\\.(t|j)sx?$": ["ts-jest", {
-			"tsconfig": "tsconfig.json"
-		}]
+		"^.+\\.ts$": [
+			"ts-jest",
+			{
+				"tsconfig": "tsconfig.json"
+			}
+		]
 	},
 	"testMatch": [
-		"**/*.test.ts"
+		"<rootDir>/tests/unit/**/*.test.ts"
 	],
 	"moduleFileExtensions": [
 		"ts",
@@ -18,5 +21,9 @@
 		"^@lambdaorm/base/(.*)$": "<rootDir>/../../packages/base/build/lib/$1",
 		"^@lambdaorm/lib$": "<rootDir>/../../packages/lib/build/lib",
 		"^@lambdaorm/lib/(.*)$": "<rootDir>/../../packages/lib/build/lib/$1"
-	}
+	},
+	"modulePathIgnorePatterns": [
+		"<rootDir>/dist/",
+		"<rootDir>/build/"
+	]
 }

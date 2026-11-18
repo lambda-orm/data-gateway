@@ -4,6 +4,47 @@ All notable changes to this project will be documented in this file.
 
 ## Versions
 
+### 3.0.0-rc.1 (2026-11-18)
+
+First release as `@lambdaorm/data-gateway` (formerly `packages/service` / `@lambdaorm/service`), published as the
+Docker image `flaviorita/data-gateway` (up to 2.4.0, `flaviorita/lambdaorm-svc`). Prerelease: it doesn't move `latest`.
+Uses `@lambdaorm/lib` 3.5.0. Design: `docs/DATA_GATEWAY.md`; plan: `docs/DATA_GATEWAY_PLAN.md`.
+
+**BREAKING CHANGES:**
+
+- The configuration is one mandatory YAML file (`DATA_GATEWAY_CONFIG_PATH`, default
+  `/config/data-gateway.config.yaml`): `infrastructure.service` of `lambdaORM.yaml` and the variables `PORT`,
+  `SERVICE_TOKEN`, `RATE_LIMIT_*`, `SCRIPT_*` are no longer read (migration table: `docs/DATA_GATEWAY.md` §2.7).
+- There are no default ports: a transport without `port` is not exposed.
+- Each schema worker receives only its own variables (`orm.schemas[].env`, the `.env` of its workspace, the base
+  variables and `runtime.env.passthrough`); `runtime.env.isolate: false` gives them the whole environment.
+- At start each schema opens a connection of each source (`runtime.checkConnections`): a database down leaves the
+  schema in `error` (and retried) instead of failing in the first query.
+- The image runs `node index.js` (it stops on `SIGTERM`).
+
+**Features:**
+
+- Transports by configuration, each on its own port: `http` (the REST API), `mcpHttp` (MCP Streamable HTTP, stateless
+  or stateful, plus the deprecated HTTP+SSE), `mcpWebSocket` and `webSocket` (JSON-RPC with notifications).
+- MCP: 22 tools (one per operation, writes included) listed by the credential's permissions, with `readOnlyHint` /
+  `destructiveHint`, the domain in the description of `orm_execute`, resources (`lambdaorm://guide/expressions`,
+  the domain, each entity) and `mcp.maxRows`.
+- Several schemas: discovered under `orm.workspacePath` (the folder is the route: `/iot/v1`) and declared in
+  `orm.schemas`, with overrides per schema (transports, authentication, env, scripts, mcp, server, runtime).
+- Runtime: a supervisor, an edge worker with the transports and a worker per schema (`thread` or `process`); heartbeat,
+  restarts with a growing wait, `server.maxConcurrent` (429) and `server.maxResponseBytes` (413). A schema that
+  doesn't start or falls doesn't affect the others.
+- Credentials with permissions (`read`, `write`, `script`, `queue`, `stageImport`) for bearer, API key and basic; a
+  write with only `read` is refused before connecting.
+- Audit of writes, scripts, queued executions and stage imports (a JSON line `"type":"audit"` on stdout).
+- The query UI at `/ui` (`transports.http.ui.enabled`, off by default), built on `@lambdaorm/ui`; `GET /typings` and
+  `GET /whoami` per schema.
+- Metrics of every worker in `/metrics` (and `/{schema}/metrics`): operations by transport / schema / method / status
+  / credential, forbidden, throttled, connections, schema states and restarts, event loop lag; logs labeled by worker.
+
+**Known limits** (bugs of `@lambdaorm/lib`, avoided by the MCP guide): `like` with a literal pattern, `includes` over
+text, grouping by an expression, the `sql.js` adapter.
+
 ### 2.4.0 (2026-11-17)
 
 Uses `@lambdaorm/lib` 3.5.0.

@@ -1,5 +1,5 @@
-# λORM service (L8): Node 24 LTS like CI; the CLI is this project's @lambdaorm/cli (the old unscoped lambdaorm-cli
-# is not maintained). Build: `npx grunt dist` in packages/service, then `docker build .` — the dist installs the
+# λORM data-gateway (L8): Node 24 LTS like CI; the CLI is this project's @lambdaorm/cli (the old unscoped lambdaorm-cli
+# is not maintained). Build: `npx grunt dist` in packages/data-gateway, then `docker build .` — the dist installs the
 # published @lambdaorm/base and @lambdaorm/lib of the versions in this repo, so publish them first.
 FROM node:24-bookworm-slim
 RUN npm config set loglevel warn \
@@ -26,7 +26,10 @@ RUN npm install -g @lambdaorm/cli@${CLI_VERSION}
 WORKDIR /usr/src/app
 COPY ./dist .
 RUN npm install --omit=dev
-VOLUME ["/workspace"]
+# The configuration is mounted, never baked in (docs/DATA_GATEWAY.md §2); no EXPOSE: the ports exist only in it.
+ENV DATA_GATEWAY_CONFIG_PATH=/config/data-gateway.config.yaml
+VOLUME ["/workspace", "/config"]
 USER 1000
-CMD ["npm","run","start"]
+# node directly (not npm): SIGTERM reaches the gateway, which stops its transports, queue and pools before exiting
+CMD ["node","index.js"]
 LABEL maintainer="flaviolrita@hotmail.com"
