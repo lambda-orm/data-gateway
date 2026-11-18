@@ -291,6 +291,8 @@ export class HttpTransport implements Transport {
 			return
 		}
 		const document = YAML.load(fs.readFileSync(file, 'utf8'))
+		// the version of this gateway, not the one written in the file
+		document.info = { ...document.info, version: this.deps.directory.version().version }
 		document.servers = this.served.map(schema => ({ description: `schema ${schema.path || '/'}`, url: this.schemaBase(schema) || '/' }))
 		const base = this.options.basePath
 		app.use(`${base}/api-docs`, swaggerUi.serve, swaggerUi.setup(document))
