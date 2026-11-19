@@ -1,6 +1,6 @@
 {
   "name": "@lambdaorm/data-gateway",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Gateway that exposes the functionality of the λORM library",
   "license": "MIT",
   "engines": {
