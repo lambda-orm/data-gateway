@@ -1,5 +1,16 @@
 # @lambdaorm/ui
 
+## 0.3.2
+
+### Patch Changes
+
+- 8be132e: The declarations of the query functions (the types of typed queries and the autocompletion of the UI's editor) match
+  the language: `hour`, `minute`, `second`, `addHour`, `addMinute`, `addSecond` instead of `hours`, `minutes`, `seconds`,
+  `addHours`, `addMinutes`, `addSeconds`, which don't exist; the differences (`dayDiff`, …) return a number;
+  `millisecond`, `addMillisecond`, `subtractTime`, `dayDiff`, `hourDiff`, `secondDiff`, `millisecondDiff`, the
+  `…ToDate` functions, `dateToString`, `log10`, `length`, `strCount` and `mask` are declared (`length` not in the lib's global `syntax.d.ts`, where it would clash with the DOM's `length`); `toDateTime`, `toTime`, `toJson`,
+  `user`, `source`, `dateDiff` and `timeDiff`, which the language doesn't have (or no SQL engine translates), are not.
+
 ## 0.3.1
 
 ### Patch Changes
