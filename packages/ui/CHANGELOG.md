@@ -1,5 +1,13 @@
 # @lambdaorm/ui
 
+## 0.3.3
+
+### Patch Changes
+
+- 67cd58c: READMEs: the one of `@lambdaorm/lib` is about the library (installation, getting started, queries across databases,
+  dialects, stages), with the CLI, the Data Gateway, the client and the UI as related projects at the end; no emojis,
+  and only the npm and license badges.
+
 ## 0.3.2
 
 ### Patch Changes
