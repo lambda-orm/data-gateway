@@ -8,7 +8,7 @@ configuration.**
 [![Docker image](https://img.shields.io/docker/v/flaviorita/data-gateway?label=flaviorita%2Fdata-gateway&sort=semver)](https://hub.docker.com/r/flaviorita/data-gateway)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-📖 **Documentation:** [lambda-orm.github.io/wiki](https://lambda-orm.github.io/wiki) (English, Deutsch, Español, Português)
+**Documentation:** [lambda-orm.github.io/wiki](https://lambda-orm.github.io/wiki) (English, Deutsch, Español, Português)
 
 </div>
 

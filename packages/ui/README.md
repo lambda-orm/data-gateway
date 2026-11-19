@@ -3,7 +3,7 @@
 [![npm version](https://img.shields.io/npm/v/@lambdaorm/ui.svg)](https://www.npmjs.com/package/@lambdaorm/ui)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-📖 **Documentation:** [lambda-orm.github.io/wiki](https://lambda-orm.github.io/wiki) (English, Deutsch, Español, Português)
+**Documentation:** [lambda-orm.github.io/wiki](https://lambda-orm.github.io/wiki) (English, Deutsch, Español, Português)
 
 A database IDE for your [λORM](https://lambda-orm.github.io/wiki/) schemas, as React components you can put in your
 own application — the same one the [Data Gateway](https://lambda-orm.github.io/wiki/data-gateway/) serves at `/ui`:
