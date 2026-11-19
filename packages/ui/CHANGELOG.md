@@ -1,5 +1,17 @@
 # @lambdaorm/ui
 
+## 0.3.1
+
+### Patch Changes
+
+- cd0044e: `includes` has two meanings, as in JavaScript: a list includes a value (`["USA", "Mexico"].includes(p.country)`, an
+  `IN`) and a text includes a text (`p.name.includes("fre")`, contains). Which one applied depended on the order of the
+  functions in the configuration of each dialect: on SQL Server a list became a `LIKE`, and on MongoDB the pipeline was
+  invalid. Now the type of the first operand decides, on every engine: a list, or a variable, is an `IN`; a text (a
+  column or any expression of text, such as `upper(p.name)`) is a contains. On MongoDB the text is searched literally
+  (`$indexOfCP`), not as a regular expression. The declaration of `includes` for lists is `includes(list, value)`, as it
+  works and as the wiki documents.
+
 ## 0.3.0
 
 ### Minor Changes
