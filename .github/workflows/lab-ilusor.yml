@@ -1,12 +1,16 @@
 name: Lab ilusor-cloud
 # The ilusor-cloud lab (packages/lib/src/dev/labs/ilusor-cloud) on a real Postgres: lib specs and the REST service.
 # Required: every item of docs/LAMBDAORM_PENDING.md has a test here and they all pass (docs/PLAN.md B6).
+# It runs when lib, base or the gateway reach main, and by hand; the release of the gateway's image runs its tests too.
 on:
   push:
-    branches: [develop, main]
-  pull_request:
-    branches: [develop, main]
+    branches: [main]
+    paths: [packages/lib/**, packages/base/**, packages/data-gateway/**, .github/workflows/lab-ilusor.yml]
   workflow_dispatch:
+concurrency:
+  # a newer push to the same branch or pull request cancels the run in progress
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 jobs:
   lab:
     name: Lab
