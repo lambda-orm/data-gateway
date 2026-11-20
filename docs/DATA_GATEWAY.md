@@ -608,7 +608,9 @@ MCP, pero es una decisión explícita: el agente puede hacer lo mismo que una ap
   Si no hace falta recortar, el resultado va tal cual (sin envoltorio). Solo aplica a MCP. El recorte es posterior a
   la ejecución: protege el contexto del modelo, no la base (para eso, `server.maxResponseBytes` y `server.timeout`).
 - Error de λORM (sintaxis, entidad inexistente, constraint, script deshabilitado o fuera de límites, timeout) o falta
-  de permiso: `isError: true` con el mensaje en `text`, para que el modelo pueda leerlo y corregir.
+  de permiso: `isError: true` con el mensaje en `text`, para que el modelo pueda leerlo y corregir, y desde 3.0.4
+  `structuredContent: { error, status, code?, message }`, el mismo nombre, status y código de la base que REST y
+  WebSocket, para un programa que usa el MCP como transporte (docs/DATA_GATEWAY_CLIENTS_PLAN.md §5).
 - Esquema no disponible, error de protocolo, tool inexistente, argumentos inválidos, no autenticado: error JSON-RPC.
 
 ### 5.3 Escrituras por MCP

@@ -1,0 +1,47 @@
+[
+	{
+		"name": "schema: entities, and an entity by its name",
+		"steps": [
+			{ "operation": "entities", "expect": { "length": 5 } },
+			{ "operation": "entity", "args": { "entity": "Categories" }, "expect": { "match": { "name": "Categories", "primaryKey": [ "id" ], "uniqueKey": [ "name" ] } } }
+		]
+	},
+	{
+		"name": "schema: an entity that does not exist is null",
+		"operation": "entity",
+		"args": { "entity": "Nope" },
+		"expect": { "result": null }
+	},
+	{
+		"name": "schema: sources, stages, views and enums",
+		"steps": [
+			{ "operation": "sources", "expect": { "result": [ { "name": "Northwind", "dialect": "PostgreSQL" } ] } },
+			{ "operation": "source", "args": { "source": "Northwind" }, "expect": { "result": { "name": "Northwind", "dialect": "PostgreSQL" } } },
+			{ "operation": "stages", "expect": { "result": [ { "name": "default", "sources": [ { "name": "Northwind" } ] } ] } },
+			{ "operation": "stage", "args": { "stage": "default" }, "expect": { "result": { "name": "default", "sources": [ { "name": "Northwind" } ] } } },
+			{ "operation": "views", "expect": { "result": [ "default" ] } },
+			{ "operation": "enums", "expect": { "result": [] } }
+		]
+	},
+	{
+		"name": "schema: version, domain and mappings",
+		"steps": [
+			{ "operation": "schemaVersion", "expect": { "keys": [ "version" ] } },
+			{ "operation": "domain", "expect": { "keys": [ "entities" ] } },
+			{ "operation": "mappings", "expect": { "match": [ { "name": "default" } ] } }
+		]
+	},
+	{
+		"name": "stage: exists",
+		"operation": "stageExists",
+		"args": { "stage": "default" },
+		"expect": { "result": { "exists": true } }
+	},
+	{
+		"name": "gateway: version and health",
+		"steps": [
+			{ "operation": "version", "expect": { "keys": [ "version" ] } },
+			{ "operation": "health", "expect": { "keys": [ "message", "time", "uptime" ] } }
+		]
+	}
+]

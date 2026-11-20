@@ -83,7 +83,7 @@ https://api.example.com/data/accounts/v1        # basePath "data" detrás de un 
 ```
 
 - **La ruta es la del esquema** (`iot/v1`). Sin ruta (o `/`), el cliente queda a nivel gateway: solo `version`,
-  `health`, `schemas`, `whoami`. Con un esquema en la raíz (`path: ""`), `?schema=` vacío lo indica; se resuelve en la
+  `health`, `schemas`. Con un esquema en la raíz (`path: ""`), `?schema=` vacío lo indica; se resuelve en la
   fase 1 con la gateway real.
 - **Opciones en la query, solo sin secretos:** `timeout` (ms), `stage`. Una credencial en la URL (`apiKey=`,
   `token=`, `user:pass@`) es un **error**, no una advertencia.
@@ -105,13 +105,14 @@ es la misma.
 | `schema.get`, `.version`, `.domain`, `.entities`, `.enums`, `.sources`, `.mappings`, `.views`, `.stages` | según el caso | `GET /schema`, … | `schema.*` | `schema_*` |
 | `stage.exists`, `.export`, `.import` | `stage`, `data?` | `GET/POST /stages/:stage/…` | `stage.*` | `stage_*` |
 | `version`, `health` | — | `GET /version`, `/health` | `general.*` | `gateway_version`, `gateway_health` |
-| `schemas`, `whoami` | — | `GET /schemas`, `/whoami` (nivel gateway) | `gateway.schemas` | — (por REST o WebSocket) |
+| `schemas` | — | `GET /schemas` (nivel gateway) | `gateway.schemas` (conexión a la raíz) | — |
+| `whoami` | — | `GET {ruta}/whoami` | — | — |
 | `on(evento, listener)` | `queue.completed`, `queue.failed`, `schema.statusChanged` | — | notificaciones | — |
 | `close` | — | — | cierra el socket | cierra la sesión MCP |
 
 - Los nombres exactos de los métodos JSON-RPC se toman de la gateway en la fase 1, no de esta tabla.
 - **Resultados tipados:** Go `ExecuteInto[T]`, Rust `execute_as::<T>()` con `serde`, Node genéricos de TypeScript.
-- **Operación no disponible en un transporte** (`on` por REST o MCP, `whoami` por MCP): error
+- **Operación no disponible en un transporte** (`on` por REST o MCP, `whoami` fuera de REST): error
   `UnsupportedOperation` que nombra el transporte que sí la tiene.
 
 ## 4. Opciones de conexión
@@ -127,13 +128,18 @@ es la misma.
 
 ## 5. Errores
 
-Un tipo de error común: `GatewayError { status, code, message, transport, operation }`.
+Un tipo de error común: `GatewayError { code, name, status, dbCode, message, transport, operation }`. El `code` es
+el mismo por los cinco transportes y en los cuatro clientes; la tabla de códigos (`invalid`, `unauthorized`,
+`forbidden`, `not_found`, `unique`, `foreign_key`, `conflict`, `timeout`, `too_large`, `rate_limited`,
+`unavailable`, `internal`, `truncated`, `unsupported`, `transport`) y dónde trae cada transporte el status, el nombre
+y el código de la base están en el [README de la suite](../packages/data-gateway-conformance/README.md#errors), y su
+implementación de referencia en `packages/data-gateway-conformance/runner/errors.mjs`.
 
-- **REST y WebSocket:** el cuerpo `{ error, code, message }` de la gateway (L30): `not_found`, `unique`,
-  `foreign_key`, `invalid`, `unauthorized`, `forbidden`, `timeout`, `rate_limited`, `unavailable`.
-- **MCP:** un `isError: true` trae `"<Nombre>: <mensaje>"`. El cliente mapea el nombre (`SintaxisError`,
-  `ValidationError`, `SchemaError`, `LanguageError` → `invalid`; permisos → `forbidden`; …). La tabla exacta sale de
-  `httpErrors.ts` de la gateway.
+- **REST:** el status HTTP y el cuerpo `{ error, code, message }` (L30).
+- **WebSocket:** `error.data` con `name`, `status` y `code`.
+- **MCP:** un resultado `isError: true` trae el texto `"<Nombre>: <mensaje>"` para el modelo y, desde la gateway
+  3.0.4, `structuredContent` con `error`, `status`, `code` y `message` para un programa (la 3.0.3 solo traía el texto:
+  no se podía distinguir una clave única de una foránea).
 - Errores del transporte (conexión, handshake, sesión SSE perdida): `code: "transport"`.
 
 ## 6. MCP como transporte de un cliente
@@ -157,13 +163,18 @@ del MCP hace lo mismo que por REST.
 Un paquete con:
 
 - un `docker-compose.yml`: la imagen `flaviorita/data-gateway` (versión fija), northwind en Postgres, y **los
-  cuatro transportes encendidos** con `legacySse: true` y una credencial de prueba;
-- `cases/*.yaml`: cada caso tiene operación, argumentos y resultado esperado (o error esperado con su `code`), por
-  ejemplo un `execute` con filtro, un `include`, un insert/update/delete con sus filas afectadas, un script con
-  rollback, un error de sintaxis, uno de clave única, `plan`, `metadata`, `schema.entities`, `on('queue.completed')`
-  (solo `ws`), etc.;
-- la imagen se puede reemplazar por la del build local de `packages/data-gateway`, para probar un cambio de la
-  gateway y de los clientes juntos.
+  cuatro transportes encendidos** con `legacySse: true` y dos credenciales de prueba (`reader`, `backend`);
+- `cases/*.json` (JSON y no YAML: Go y Rust lo leen sin dependencias): cada caso tiene pasos con operación,
+  argumentos y lo esperado (resultado, coincidencia parcial, largo, o error con su `code`): consultas con filtro,
+  `include`, agregados, insert/update/delete con sus filas afectadas, scripts con rollback, cada código de error,
+  `plan`, `metadata`, el esquema, la lista cortada por `mcp.maxRows`. Formato: el README de la suite;
+- la gateway puede ser una imagen o la del código de `packages/data-gateway` (`scripts/ci-local.sh clients`), para
+  probar un cambio de la gateway y de los clientes juntos;
+- un **runner de referencia** en Node sin dependencias (`runner/`), que habla los cinco transportes: valida los casos
+  contra la gateway antes de que exista un cliente, y muestra cómo viaja cada operación y cada error.
+
+Faltan casos de las notificaciones (`on('queue.completed')`, solo `ws`): necesitan una cola en el entorno; se suman
+con el cliente de Node.
 
 Cada cliente tiene un runner que lee los casos y los corre **por cada uno de los cinco esquemas de URL**: la matriz
 caso × transporte sale en verde en `scripts/ci-local.sh clients`. Es la garantía (y el mensaje) de que la misma consulta da lo
@@ -209,7 +220,7 @@ mismo por cualquier vía.
 
 | Fase | Contenido | Se publica |
 | --- | --- | --- |
-| 0 | Este plan; `packages/data-gateway-conformance` con el compose y los primeros casos; `ci-local.sh clients` | — |
+| 0 | Este plan; `packages/data-gateway-conformance` con el compose, 27 casos y el runner de referencia (135 en verde: 27 × 5 transportes); `ci-local.sh clients`; los arreglos que la suite encontró en lib y en la gateway | lib 3.7.1, gateway 3.0.4 |
 | 1 | Node: mover el código, sumar MCP (los tres esquemas `mcp+…`), la cadena de conexión, los errores, el runner de la suite; documentación en la wiki | `@lambdaorm/data-gateway-client` 0.1.0 |
 | 2 | Migrar `@lambdaorm/cli` al cliente nuevo; `@lambdaorm/client` 1.0.0 como alias deprecado | `@lambdaorm/cli`, `@lambdaorm/client` |
 | 3 | Go: los cinco transportes, la suite en verde; `release-go` y el espejo público | `v0.1.0` |
