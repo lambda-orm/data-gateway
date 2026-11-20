@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## Versions
 
+### 3.0.3 (2026-11-20)
+
+Uses `@lambdaorm/lib` 3.7.0 and `@lambdaorm/ui` 0.3.4. Nothing changes in the configuration or the API.
+
+**Bug Fixes:**
+
+- From `@lambdaorm/ui` 0.3.4, in the UI at `/ui`: a new query tab picks the schema by itself when only one is ready
+  (it asked even with one), and the checkboxes of the diagram dialog sit next to their names.
+
 ### 3.0.2 (2026-11-20)
 
 Uses `@lambdaorm/lib` 3.7.0 and `@lambdaorm/ui` 0.3.3. Nothing changes in the configuration or the API.
