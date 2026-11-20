@@ -137,7 +137,7 @@ transports:
 			expect(await ws.metadata(query)).toEqual(await rest.metadata(query))
 			expect(await ws.parameters(query)).toEqual(await rest.parameters(query))
 			expect((await ws.schema.entities()).map(e => e.name)).toEqual((await rest.schema.entities()).map(e => e.name))
-			expect(await ws.schema.entity('Nope')).toBeUndefined()
+			await expect(ws.schema.entity('Nope')).rejects.toMatchObject({ name: 'NotFoundError', status: 404 })
 			expect((await ws.general.version()).version).toBe((await rest.general.version()).version)
 			await expect(ws.execute('Products.delete().filter(p => p.id == 1)', {})).rejects.toMatchObject({ name: 'ForbiddenError', status: 403, rpcCode: -32000 })
 			await expect(new Orm().init(`ws://127.0.0.1:${wsPort}`, { headers: { 'X-Api-Key': 'wrong' } })).rejects.toThrow()

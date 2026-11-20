@@ -71,7 +71,8 @@ export class LambdaOrmAdapter implements OrmQueryPort, OrmScriptPort, OrmSchemaP
 	public version () { return this.orm.state.getSchemaVersion() }
 	public domain () { return this.orm.state.getSchemaDomain() }
 	public sources () { return this.orm.state.getSchemaSources() }
-	public source (name: string) { return this.orm.state.getSchemaSource(name) }
+	// only a source of the schema (getSchemaSource answers { name, dialect: 'unknown' } for any other name)
+	public source (name: string) { return this.orm.state.getSchemaSources()?.find(source => source.name === name) }
 	public entities () { return this.orm.state.getSchemaEntities() }
 	public entity (name: string) { return this.orm.state.getSchemaEntity(name) }
 	public enums () { return this.orm.state.getSchemaEnums() }

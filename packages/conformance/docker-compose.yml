@@ -1,0 +1,40 @@
+# The environment of the conformance suite (README.md): northwind on Postgres, published on 127.0.0.1:19432, and a
+# Data Gateway with its four transports on 19080 (http), 19081 (mcpHttp), 19082 (mcpWebSocket) and 19083 (webSocket).
+#   docker compose --profile image up -d --wait   the gateway of an image (DATA_GATEWAY_IMAGE, default the version the
+#                                                 suite is written for)
+#   docker compose up -d --wait                   only Postgres, for a gateway run from source on the same ports
+name: data-gateway-conformance
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: northwind
+      POSTGRES_PASSWORD: northwind
+      POSTGRES_DB: northwind
+    ports:
+      - "127.0.0.1:19432:5432"
+    healthcheck:
+      test: [ "CMD", "pg_isready", "-U", "northwind" ]
+      interval: 2s
+      retries: 30
+
+  data-gateway:
+    profiles: [ image ]
+    image: ${DATA_GATEWAY_IMAGE:-flaviorita/data-gateway:3.0.3}
+    depends_on:
+      postgres: { condition: service_healthy }
+    environment:
+      CONFORMANCE_WORKSPACE: /workspace
+      NORTHWIND_DB: '{"host":"postgres","port":5432,"user":"northwind","password":"northwind","database":"northwind"}'
+      CONFORMANCE_HTTP_PORT: 19080
+      CONFORMANCE_MCP_HTTP_PORT: 19081
+      CONFORMANCE_MCP_WS_PORT: 19082
+      CONFORMANCE_WS_PORT: 19083
+    volumes:
+      - ./data-gateway.config.yaml:/config/data-gateway.config.yaml:ro
+      - ./workspace:/workspace   # the import writes the state of the stage (orm_state)
+    ports:
+      - "127.0.0.1:19080:19080"
+      - "127.0.0.1:19081:19081"
+      - "127.0.0.1:19082:19082"
+      - "127.0.0.1:19083:19083"

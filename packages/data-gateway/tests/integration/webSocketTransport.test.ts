@@ -78,7 +78,7 @@ describe('webSocket transport (schema at a route)', () => {
 			expect(await c.request('query.execute', { query: 'Products.filter(p => p.id == id)', data: { id: 1 } })).toEqual({ jsonrpc: '2.0', id: 1, result: [{ id: 1 }] })
 			expect((await c.request('query.plan', { query: 'Products' })).result).toMatchObject({ dialect: 'PostgreSQL' })
 			expect((await c.request('schema.entity', { entity: 'Products' })).result).toEqual({ name: 'Products' })
-			expect((await c.request('schema.entity', { entity: 'Nope' })).result).toBeNull()
+			expect((await c.request('schema.entity', { entity: 'Nope' })).error).toEqual({ code: -32000, message: 'entity Nope not found', data: { name: 'NotFoundError', status: 404 } })
 			expect((await c.request('general.version')).result).toEqual({ version: '9.9.9' })
 			expect((await c.request('stage.exists', { stage: 'default' })).result).toEqual({ exists: true })
 		} finally {

@@ -93,12 +93,15 @@ describe('http transport', () => {
 		expect((await call(base, '/plan', { body: {}, headers: agent })).status).toBe(400)
 	})
 
-	test('schema and stage endpoints; an unknown name answers 204', async () => {
+	test('schema and stage endpoints; an unknown name answers 404', async () => {
 		for (const path of ['/schema', '/schema/version', '/domain', '/sources', '/sources/main', '/entities', '/entities/Products', '/enums', '/mappings', '/mappings/default', '/stages', '/stages/default', '/views', '/stages/default/exists', '/stages/default/export']) {
 			const res = await call(base, path, { headers: agent })
 			expect([path, res.status]).toEqual([path, 200])
 		}
-		expect((await call(base, '/entities/Nope', { headers: agent })).status).toBe(204)
+		for (const path of ['/entities/Nope', '/enums/Nope', '/sources/Nope', '/mappings/Nope', '/mappings/default/Nope', '/stages/Nope']) {
+			const res = await call(base, path, { headers: agent })
+			expect([path, res.status, res.body?.error]).toEqual([path, 404, 'NotFoundError'])
+		}
 		expect((await call(base, '/stages/default/import', { body: { entities: [] }, headers: backend })).status).toBe(204)
 	})
 
