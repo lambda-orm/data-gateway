@@ -1,5 +1,12 @@
 # @lambdaorm/ui
 
+## 0.3.4
+
+### Patch Changes
+
+- 9b81b4f: The entities of the diagram dialog: each checkbox next to its name (they were above it).
+- 48e8712: `QueryWorkbench` (and the tabs of `QueryTabs` and `Workspace`): when there is a single ready schema it is chosen by itself, instead of asking to choose it.
+
 ## 0.3.3
 
 ### Patch Changes
