@@ -19,14 +19,14 @@ clientes).
   `orm.init` (`http://` o `ws://`), `execute`, `executeQueued`, `executeScript`, `plan`, `metadata`, `model`,
   `parameters`, `constraints`, `schema.*`, `stage.*`, `general.*` y las notificaciones por WebSocket. `@lambdaorm/cli`
   depende de él.
-- El repo `core` es privado y GitHub Actions está pausado en él (sin presupuesto). Los repos públicos tienen Actions
-  gratis.
+- El repo `core` es privado (y lo sigue siendo) y GitHub Actions está pausado en él (sin presupuesto): el CI es
+  `scripts/ci-local.sh`.
 
 ## 1. Decisiones
 
 | Tema | Decisión |
 | --- | --- |
-| Repos | uno **público** por proyecto en `lambda-orm`: `data-gateway-client-node`, `data-gateway-client-go`, `data-gateway-client-rust`, `data-gateway-cli`, y `data-gateway-conformance` (la suite común, §7) |
+| Repo | **todo en este monorepo** (decisión del usuario, 2026-11-20), como paquetes: `packages/data-gateway-client-node`, `packages/data-gateway-client-go`, `packages/data-gateway-client-rust`, `packages/data-gateway-cli` y `packages/data-gateway-conformance` (la suite común, §7). Lo de Go se publica además en espejos públicos de solo lectura (§1.1) |
 | Nombres de paquete | según el ecosistema: npm `@lambdaorm/data-gateway-client`, Go `github.com/lambda-orm/data-gateway-client-go` (paquete `gateway`), crates.io `lambdaorm-data-gateway-client` (crate `lambdaorm_gateway`), binario `dgw` |
 | Transporte | el **esquema de la URL** de la cadena de conexión (§2); nunca una opción aparte |
 | Credenciales | aparte de la URL (opciones o variables de entorno), para que no queden en logs ni en el historial |
@@ -35,6 +35,27 @@ clientes).
 | CLI | en Go, sobre el cliente de Go: un binario sin Node, para terminales, scripts y CI. No reemplaza `@lambdaorm/cli` (el ORM local: `sync`, `push`, `pull`, …), que sigue igual |
 | Python | fuera de este plan; se suma después con el mismo contrato |
 | Versionado | `0.x` hasta pasar la suite de conformidad por los cinco transportes; entonces `1.0.0` |
+
+### 1.1 Monorepo privado y publicación
+
+| Proyecto | Se desarrolla en | Se publica en | ¿Necesita algo público además? |
+| --- | --- | --- | --- |
+| Node | `packages/data-gateway-client-node` (workspace de pnpm, Changesets) | npm | no: npm publica el `dist/`, como `@lambdaorm/lib` |
+| Rust | `packages/data-gateway-client-rust` (`cargo`) | crates.io (`cargo publish` sube el código del crate) | no |
+| Go | `packages/data-gateway-client-go` | **espejo público** `lambda-orm/data-gateway-client-go` | **sí**: Go no tiene registro; `go get` baja el código del repo de la ruta del módulo, y un repo privado no se puede bajar |
+| CLI | `packages/data-gateway-cli` | binarios en las releases del espejo público `lambda-orm/data-gateway-cli`, tap de Homebrew, `go install` | **sí**, por lo mismo (y las releases de un repo privado no se pueden bajar) |
+| Conformidad | `packages/data-gateway-conformance` | — (la usan los paquetes de acá) | no |
+
+- **Espejos de Go:** repos públicos que solo reciben lo que publica `scripts/ci-local.sh`: el contenido de
+  `packages/data-gateway-client-go` (o `-cli`) en la raíz (`git subtree split`), su commit y su tag `v<versión>`.
+  Nadie desarrolla en ellos; los issues se reciben en el espejo y se resuelven en el monorepo. El `go.mod` del
+  paquete ya declara la ruta del espejo, así que dentro del monorepo la CLI lo usa con un `replace` local
+  (`go.work`).
+- **CI:** como el resto del monorepo, local: `scripts/ci-local.sh` suma `clients` (build, lint y tests de Node, Go y
+  Rust, y la suite de conformidad contra la gateway en Docker por los cinco transportes) y `release-go`,
+  `release-cli`, `release-rust`. El build de Node entra en `check`.
+- pnpm ignora los paquetes de Go y Rust (no tienen `package.json`), salvo un `package.json` mínimo con scripts si
+  hace falta para `pnpm -r`.
 
 ## 2. Cadena de conexión
 
@@ -131,9 +152,9 @@ del MCP hace lo mismo que por REST.
 - La sesión: Streamable HTTP sin estado (cada `POST` vale solo); HTTP+SSE viejo mantiene el `GET /sse` abierto y
   reintenta si se cae.
 
-## 7. Suite de conformidad (`data-gateway-conformance`)
+## 7. Suite de conformidad (`packages/data-gateway-conformance`)
 
-Un repo público con:
+Un paquete con:
 
 - un `docker-compose.yml`: la imagen `flaviorita/data-gateway` (versión fija), northwind en Postgres, y **los
   cuatro transportes encendidos** con `legacySse: true` y una credencial de prueba;
@@ -141,15 +162,16 @@ Un repo público con:
   ejemplo un `execute` con filtro, un `include`, un insert/update/delete con sus filas afectadas, un script con
   rollback, un error de sintaxis, uno de clave única, `plan`, `metadata`, `schema.entities`, `on('queue.completed')`
   (solo `ws`), etc.;
-- una versión (tag) que cada cliente fija.
+- la imagen se puede reemplazar por la del build local de `packages/data-gateway`, para probar un cambio de la
+  gateway y de los clientes juntos.
 
 Cada cliente tiene un runner que lee los casos y los corre **por cada uno de los cinco esquemas de URL**: la matriz
-caso × transporte sale en verde en el CI de cada repo. Es la garantía (y el mensaje) de que la misma consulta da lo
+caso × transporte sale en verde en `scripts/ci-local.sh clients`. Es la garantía (y el mensaje) de que la misma consulta da lo
 mismo por cualquier vía.
 
 ## 8. Cada proyecto
 
-### Node — `data-gateway-client-node` → `@lambdaorm/data-gateway-client`
+### Node — `packages/data-gateway-client-node` → `@lambdaorm/data-gateway-client`
 
 - TypeScript, ESM + CJS, Node ≥ 20; `fetch` nativo en lugar de axios; WebSocket de Node 22 o `ws`.
 - Parte del código de `packages/client` (API y adaptador WebSocket) y le suma los transportes MCP.
@@ -157,14 +179,15 @@ mismo por cualquier vía.
 - Migración: `@lambdaorm/client` 1.0.0 reexporta el nuevo y queda deprecado (`npm deprecate`, lo corre el usuario);
   `@lambdaorm/cli` pasa a depender de `@lambdaorm/data-gateway-client`.
 
-### Go — `data-gateway-client-go`
+### Go — `packages/data-gateway-client-go`
 
 - Go ≥ 1.22, sin dependencias salvo un cliente WebSocket (`github.com/coder/websocket`).
 - `gateway.Connect(url, opts...)` con opciones funcionales (`WithAPIKey`, `WithToken`, `WithTimeout`);
   `context.Context` en cada operación; `ExecuteInto[T]`.
-- Versión por tag (`v0.1.0`): no hay registro que publicar.
+- Go 1.22 (la del entorno local).
+- Versión por tag (`v0.1.0`) en el espejo público (§1.1): no hay registro que publicar.
 
-### CLI — `data-gateway-cli` → `dgw`
+### CLI — `packages/data-gateway-cli` → `dgw`
 
 - Go con `cobra`, sobre el cliente de Go.
 - Comandos: `dgw execute <query> [-d json|@archivo]`, `script`, `queued`, `plan`, `metadata`, `schema <entities|…>`,
@@ -172,9 +195,10 @@ mismo por cualquier vía.
 - `--url` (o `DATA_GATEWAY_URL`), perfiles en `~/.config/dgw/config.yaml` (URL y nombre de la variable que tiene la
   credencial, nunca la credencial), salida `json` (por defecto), `yaml` o `table`.
 - Códigos de salida: 0 ok, 1 error de la consulta, 2 uso, 3 conexión.
-- Releases con GoReleaser: binarios Linux/macOS/Windows en GitHub Releases, tap de Homebrew, `go install`.
+- Releases con GoReleaser, corrido local: binarios Linux/macOS/Windows en las releases del espejo público, tap de
+  Homebrew, `go install`.
 
-### Rust — `data-gateway-client-rust` → `lambdaorm-data-gateway-client`
+### Rust — `packages/data-gateway-client-rust` → `lambdaorm-data-gateway-client`
 
 - Async con `tokio`; `reqwest` (rustls); `tokio-tungstenite` y el MCP detrás de features (`ws`, `mcp`, encendidas
   por defecto) para quien quiera solo REST.
@@ -185,16 +209,19 @@ mismo por cualquier vía.
 
 | Fase | Contenido | Se publica |
 | --- | --- | --- |
-| 0 | Este plan; crear los repos (el usuario o con su OK); `data-gateway-conformance` con el compose y los primeros casos | — |
+| 0 | Este plan; `packages/data-gateway-conformance` con el compose y los primeros casos; `ci-local.sh clients` | — |
 | 1 | Node: mover el código, sumar MCP (los tres esquemas `mcp+…`), la cadena de conexión, los errores, el runner de la suite; documentación en la wiki | `@lambdaorm/data-gateway-client` 0.1.0 |
 | 2 | Migrar `@lambdaorm/cli` al cliente nuevo; `@lambdaorm/client` 1.0.0 como alias deprecado | `@lambdaorm/cli`, `@lambdaorm/client` |
-| 3 | Go: los cinco transportes, la suite en verde | `v0.1.0` |
-| 4 | CLI `dgw` | `v0.1.0` (binarios, Homebrew) |
-| 5 | Rust | crates.io 0.1.0 |
-| 6 | Con la suite en verde en los cuatro: `1.0.0`; página de la wiki "Clients" (en los cuatro idiomas) y README de cada repo con el mismo ejemplo en cada lenguaje | `1.0.0` de cada uno |
+| 3 | Go: los cinco transportes, la suite en verde; `release-go` y el espejo público | `v0.1.0` |
+| 4 | CLI `dgw`; `release-cli` y su espejo | `v0.1.0` (binarios, Homebrew) |
+| 5 | Rust; `release-rust` | crates.io 0.1.0 |
+| 6 | Con la suite en verde en los cuatro: `1.0.0`; página de la wiki "Clients" (en los cuatro idiomas) y README de cada paquete con el mismo ejemplo en cada lenguaje | `1.0.0` de cada uno |
 
-Cada fase es un PR por repo; cada publicación (npm, crates.io, Homebrew, tags) con el OK del usuario. Los secrets de
-publicación de los repos públicos (token de npm, de crates.io, de Homebrew) los carga el usuario en GitHub.
+Cada fase es un PR contra `develop` (rama `feature/data-gateway-client-<fase>`); cada publicación (npm, crates.io,
+espejos de Go, Homebrew) con el OK del usuario. Las credenciales, como las de npm y Docker Hub, por variables de
+entorno en `~/.profile` que el usuario define: `LAMBDA_ORM_CRATES_TOKEN` (crates.io) y el acceso SSH a los espejos
+(o `LAMBDA_ORM_GITHUB_TOKEN` para crear sus releases). Los espejos los crea el usuario (o con su OK) al llegar a la
+fase 3.
 
 ## 10. Riesgos
 
@@ -203,6 +230,8 @@ publicación de los repos públicos (token de npm, de crates.io, de Homebrew) lo
 | Los transportes divergen en detalles (formato de errores, resultados cortados) | la suite de conformidad corre cada caso por los cinco; el cliente normaliza (§5, §6) |
 | El HTTP+SSE viejo es obsoleto en la especificación MCP | se soporta porque la gateway lo expone; se documenta como compatibilidad, no como recomendado |
 | MCP por WebSocket no es estándar | igual que en la gateway: documentado como no estándar |
+| Un PR de la comunidad en un espejo de Go se pisaría con la próxima publicación | el README del espejo dice que es de solo lectura y a dónde mandar issues; los PRs se pasan a mano al monorepo |
+| Sin CI en GitHub (core privado, Actions pausado) | `scripts/ci-local.sh clients` antes de cada push, como el resto |
 | Cuatro bases de código que mantener | contrato único (§3), casos compartidos (§7), sin lógica de λORM en los clientes (solo transporte) |
 | La gateway cambia su API | la suite fija la versión de la imagen; un cambio de API es un cambio de la suite |
 | Romper a quien usa `@lambdaorm/client` | alias deprecado que reexporta el nuevo; misma API |
