@@ -1,6 +1,6 @@
 {
 	"name": "@lambdaorm/ui",
-	"version": "0.3.3",
+	"version": "0.3.4",
 	"description": "React components to write, check and run λORM queries against a λORM data-gateway",
 	"author": "Flavio Lionel Rita <flaviolrita@proton.me>",
 	"license": "MIT",
