@@ -78,7 +78,14 @@ export const QueryWorkbench: React.FC<QueryWorkbenchProps> = props => {
 
 	useEffect(() => {
 		if (fixedSchema !== undefined) controller.selectSchema(fixedSchema)
-		else controller.loadSchemas().then(() => { if (props.initialSchema !== undefined) controller.selectSchema(props.initialSchema) })
+		else {
+			controller.loadSchemas().then(() => {
+				const { schemas, schema } = controller.getState()
+				if (props.initialSchema !== undefined) controller.selectSchema(props.initialSchema)
+				// a single ready schema: nothing to choose
+				else if (schema === undefined && schemas.length === 1) controller.selectSchema(schemas[0].path)
+			})
+		}
 		// the initial schema only counts at the start
 	}, [controller, fixedSchema])
 

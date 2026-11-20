@@ -122,3 +122,4 @@
 .lw-box-remove { cursor: pointer; opacity: 0; transition: opacity .1s; }
 .lw-entity:hover .lw-box-remove, .lw-box-remove:focus { opacity: 1; }
 .lw-diagram-view:focus-visible { outline: 2px solid var(--lw-accent); outline-offset: -2px; }
+.lw-picker-list .lw-check { flex-direction: row; align-items: center; gap: 6px; color: var(--lw-fg); cursor: pointer; }
