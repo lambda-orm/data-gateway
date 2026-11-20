@@ -30,7 +30,7 @@ describe('QueryWorkbench', () => {
 		render(<QueryWorkbench api={api} history={false} onResult={onResult} />)
 		const select = await screen.findByRole('combobox', { name: 'schema' })
 		expect(within(select).getAllByRole('option').map(o => o.textContent)).toEqual(['choose…', 'northwind/v1'])
-		fireEvent.change(select, { target: { value: 'northwind/v1' } })
+		// the only ready schema is chosen by itself
 		await screen.findByText(/backend ·/)
 		expect((select as HTMLSelectElement).value).toBe('northwind/v1')
 		fireEvent.change(screen.getByRole('textbox', { name: 'query' }), { target: { value: 'Products' } })
@@ -68,6 +68,18 @@ describe('QueryWorkbench', () => {
 		fireEvent.click(button('plan'))
 		expect((await screen.findByRole('alert')).textContent).toBe('SchemaError: Entity Nope not found')
 		expect(screen.getByRole('status').textContent).toMatch(/^400plan/)
+	})
+})
+
+describe('QueryWorkbench schemas', () => {
+	test('with several ready schemas none is chosen by itself', async () => {
+		class TwoSchemas extends FakeApi { async schemas () { return [{ path: 'northwind/v1', status: 'ready' }, { path: 'northwind/v2', status: 'ready' }] } }
+		const api = new TwoSchemas()
+		render(<QueryWorkbench api={api} history={false} />)
+		const select = await screen.findByRole('combobox', { name: 'schema' })
+		await waitFor(() => expect(within(select).getAllByRole('option')).toHaveLength(3))
+		expect(api.calls.filter(c => c.operation === 'whoami')).toHaveLength(0)
+		expect(screen.queryByText(/backend ·/)).toBeNull()
 	})
 })
 
