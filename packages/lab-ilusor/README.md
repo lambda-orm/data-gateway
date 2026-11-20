@@ -56,6 +56,7 @@ and in any order (`--randomize`).
 | `script.spec.ts` | `orm.executeScript`: several queries in one transaction across sources, throw, try/catch, for (L32) |
 | `stage.spec.ts` | push -o, fetch, pull, renames, catch-all source, string length (L1, L2, L6, L19–L22, L24, L25, L27) |
 | `service.spec.ts` | the REST service as Ilusor's clients call it (L4, L5, L9, L12, L14) |
+| `documents.spec.ts` | FerretDB (MongoDB API) next to Postgres: no transactions, UUIDs and Decimal128 (L35, L37); FerretDB on 127.0.0.1:57017 (`lab:ilusor:up` starts it) |
 | `uuid.spec.ts` | `uuid` columns, with a model and tables of its own (schema `lab_uuid`, `tests/uuid/lambdaORM.yaml`) so the lab's drift check is untouched (L36, L38) |
 
 ### Adding a test
