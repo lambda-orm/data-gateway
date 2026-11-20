@@ -38,16 +38,16 @@ export interface DataGatewayPort {
 	schemaVersion (ctx: RequestContext): Promise<{ version: string }>
 	domain (ctx: RequestContext): Promise<DomainSchema>
 	sources (ctx: RequestContext): Promise<{ name: string, dialect: string }[]>
-	source (ctx: RequestContext, name: string): Promise<{ name: string, dialect: string } | undefined>
+	source (ctx: RequestContext, name: string): Promise<{ name: string, dialect: string }>
 	entities (ctx: RequestContext): Promise<Entity[]>
-	entity (ctx: RequestContext, name: string): Promise<Entity | undefined>
+	entity (ctx: RequestContext, name: string): Promise<Entity>
 	enums (ctx: RequestContext): Promise<Enum[]>
-	enum (ctx: RequestContext, name: string): Promise<Enum | undefined>
+	enum (ctx: RequestContext, name: string): Promise<Enum>
 	mappings (ctx: RequestContext): Promise<Mapping[]>
-	mapping (ctx: RequestContext, name: string): Promise<Mapping | undefined>
-	entityMapping (ctx: RequestContext, mapping: string, entity: string): Promise<EntityMapping | undefined>
+	mapping (ctx: RequestContext, name: string): Promise<Mapping>
+	entityMapping (ctx: RequestContext, mapping: string, entity: string): Promise<EntityMapping>
 	stages (ctx: RequestContext): Promise<Stage[]>
-	stage (ctx: RequestContext, name: string): Promise<Stage | undefined>
+	stage (ctx: RequestContext, name: string): Promise<Stage>
 	views (ctx: RequestContext): Promise<string[]>
 	/** The domain as TypeScript declarations for an editor (docs/DATA_GATEWAY.md §10.3) */
 	typings (ctx: RequestContext): Promise<string>

@@ -7,10 +7,14 @@
 		]
 	},
 	{
-		"name": "schema: an entity that does not exist is null",
-		"operation": "entity",
-		"args": { "entity": "Nope" },
-		"expect": { "result": null }
+		"name": "error not_found: a name that does not exist in the schema",
+		"steps": [
+			{ "operation": "entity", "args": { "entity": "Nope" }, "expect": { "error": { "code": "not_found", "name": "NotFoundError" } } },
+			{ "operation": "enum", "args": { "enum": "Nope" }, "expect": { "error": { "code": "not_found", "name": "NotFoundError" } } },
+			{ "operation": "source", "args": { "source": "Nope" }, "expect": { "error": { "code": "not_found", "name": "NotFoundError" } } },
+			{ "operation": "mapping", "args": { "mapping": "Nope" }, "expect": { "error": { "code": "not_found", "name": "NotFoundError" } } },
+			{ "operation": "stage", "args": { "stage": "Nope" }, "expect": { "error": { "code": "not_found", "name": "NotFoundError" } } }
+		]
 	},
 	{
 		"name": "schema: sources, stages, views and enums",

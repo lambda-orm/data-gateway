@@ -82,7 +82,7 @@ Every client gives an error with the same `code` on every transport, from what t
 | `invalid` | 400 or 422: the query, the model or a value (`SchemaError`, `SintaxisError`, `ValidationError`, `LanguageError`, a script's `throw { status: 400 }`) |
 | `unauthorized` | 401: no credential, or a wrong one |
 | `forbidden` | 403: the credential lacks the permission |
-| `not_found` | 404 |
+| `not_found` | 404: a name that doesn't exist in the schema (an entity, an enum, a source, a mapping, a stage), or a script's `throw { status: 404 }` |
 | `unique` | 409 with the database's code of a unique key (Postgres `23505`, MySQL `ER_DUP_ENTRY` / `1062`, Oracle `ORA-00001`, SQL Server `2627` / `2601`, MongoDB `11000`) |
 | `foreign_key` | 409 with the database's code of a foreign key (Postgres `23503`, MySQL `ER_NO_REFERENCED_ROW_2` / `ER_ROW_IS_REFERENCED_2` / `1451` / `1452`, Oracle `ORA-02291` / `ORA-02292`, SQL Server `547`) |
 | `conflict` | any other 409 |
