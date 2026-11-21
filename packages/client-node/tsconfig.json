@@ -1,0 +1,42 @@
+{
+  "compilerOptions": {
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "resolveJsonModule": true,
+    "esModuleInterop": true,
+    "strict": true,
+    "declaration": true,
+    "declarationMap": true,
+    "noImplicitAny": false,
+    "moduleResolution": "node",
+    "sourceMap": true,
+    "target": "ES2022",
+    "module": "commonjs",
+    "typeRoots": [
+      "../../node_modules/@types"
+    ],
+    "composite": true,
+    "lib": ["ES2022", "DOM"],
+    "rootDir": "./src",
+    "outDir": "./build",
+    "baseUrl": "./src",
+    "tsBuildInfoFile": "./build/.tsbuildinfo",
+    "paths": {
+      "@lambdaorm/base": ["../../packages/base/build/lib"],
+      "@lambdaorm/base/*": ["../../packages/base/build/lib/*"]
+    }
+  },
+  "references": [
+    { "path": "../../packages/base" }
+  ],
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "build",
+    "**/__jest__/**",
+    "**/__tests__/**"
+  ]
+}

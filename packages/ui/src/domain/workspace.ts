@@ -80,3 +80,31 @@ export const markerFromError = (message: string, text: string): EditorMarker => 
 	}
 	return { message, startLineNumber: 1, startColumn: 1, endLineNumber: lines.length, endColumn: (lines[lines.length - 1]?.length ?? 0) + 1 }
 }
+
+/**
+ * The query with a name replaced by a suggestion of the gateway (`p.nme` → `p.name`, `Area.map` → `Areas.map`): every
+ * occurrence as a whole word, outside quoted text.
+ */
+export const applySuggestion = (query: string, name: string, replacement: string): string => {
+	let out = ''
+	let i = 0
+	const word = /[\w$]/
+	while (i < query.length) {
+		const c = query[i]
+		if (c === "'" || c === '"' || c === '`') {
+			const end = query.indexOf(c, i + 1)
+			const stop = end === -1 ? query.length : end + 1
+			out += query.slice(i, stop)
+			i = stop
+			continue
+		}
+		if (query.startsWith(name, i) && (i === 0 || !word.test(query[i - 1])) && !word.test(query[i + name.length] ?? '')) {
+			out += replacement
+			i += name.length
+			continue
+		}
+		out += c
+		i++
+	}
+	return out
+}

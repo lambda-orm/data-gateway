@@ -541,6 +541,18 @@ Cada esquema se alcanza por su ruta en todos los transportes que lo exponen (`{b
 - **`GET /health`:** `200` mientras al menos un esquema esté `ready`, con el detalle de cada uno; `503` si ninguno.
 - Esquema en la raíz (único): todo como hoy (`/execute`, `/entities`, …).
 - Ruta de un esquema que no se expone por ese transporte: `404`. Esquema no `ready`: `503` con el motivo.
+- **`GET /{esquema}/search?q=`** y **`GET /{esquema}/describe?entities=A,B`** (3.1.0): lo mismo que `schema_search` y
+  `schema_describe` de MCP (§5.1), y `schema.search` / `schema.describe` del WebSocket: entidades, propiedades y
+  relaciones por parte del nombre, y algunas entidades en dos líneas cada una. Requieren `read`.
+- **Sugerencias de un error de la consulta** (3.1.0): un nombre que no existe (`p.nme`, `Area`) responde `400` con
+  `suggestions: [{ name: "nme", didYouMean: ["name"] }]` además del mensaje, en el cuerpo de REST, en `error.data` del
+  WebSocket y en `structuredContent` de MCP (λORM L41). La UI ofrece reemplazarlo con un clic.
+- **Una ruta que no existe** (3.1.0): `404` en JSON como el resto (`{ error: "NotFoundError", message }`), con las
+  rutas más parecidas (`GET /iot/v1/schema/entities is not a route of this gateway; did you mean GET /iot/v1/entities?`).
+- **Una fuente sin su variable de conexión** (3.1.0): con `runtime.checkConnections`, el esquema no arranca y su motivo
+  nombra todas las variables que faltan (`source salesDocuments needs ORM_SALES_DOCUMENTS_CNX, which is not set: give it
+  in orm.schemas[].env …`), antes de abrir ninguna conexión. Sin la comprobación, la primera consulta a esa fuente
+  responde `503` (`ConnectionError`, λORM L43) con el mismo nombre de variable.
 
 ## 5. MCP
 
@@ -573,6 +585,8 @@ MCP, pero es una decisión explícita: el agente puede hacer lo mismo que una ap
 | `schema_version` | — | `GET /schema/version` | `read` | `readOnlyHint: true` |
 | `schema_domain` | — | `GET /domain` | `read` | `readOnlyHint: true` |
 | `schema_entities` | `entity?` | `GET /entities`, `GET /entities/:entity` | `read` | `readOnlyHint: true` |
+| `schema_search` | `text` | — (para un modelo: texto compacto) | `read` | `readOnlyHint: true` |
+| `schema_describe` | `entities` | — (para un modelo: texto compacto) | `read` | `readOnlyHint: true` |
 | `schema_enums` | `enum?` | `GET /enums`, `GET /enums/:enum` | `read` | `readOnlyHint: true` |
 | `schema_sources` | `source?` | `GET /sources`, `GET /sources/:source` | `read` | `readOnlyHint: true` |
 | `schema_mappings` | `mapping?`, `entity?` | `GET /mappings…` | `read` | `readOnlyHint: true` |
@@ -592,6 +606,13 @@ MCP, pero es una decisión explícita: el agente puede hacer lo mismo que una ap
 - Mismas reglas que REST: `orm_execute_script` responde error si `scripts.enabled` es `false`; `orm_execute_queued`
   responde error si el esquema no tiene cola.
 - `mcp.tools.include` / `exclude` (global o por esquema) restringen además la lista.
+- **Un esquema grande (desde 3.1.0).** Si el dominio descrito no entra en la descripción de `orm_execute` (12.000
+  caracteres), esta lleva solo los nombres de las entidades y apunta a `schema_search` y `schema_describe`, en vez de
+  cortar el dominio y mandar a leerlo entero. Con el modelo de Ilusor (192 entidades): el dominio en JSON pesa 389 KB;
+  la parte de dominio de `orm_execute`, 4 KB; `schema_describe` de dos entidades, 2 KB; y una búsqueda, de 0,1 a 8 KB
+  (40 resultados como máximo, con `more` y una pista para acotarla). `schema_search` encuentra por parte del nombre
+  (`Areas.type` solo en `Areas`) y, si nada lo contiene, da los nombres más parecidos (`didYouMean`).
+  `schema_entities` y `schema_domain` siguen devolviendo el JSON de REST: los clientes los usan como equivalentes.
 
 ### 5.2 Resultados y errores
 
@@ -608,7 +629,9 @@ MCP, pero es una decisión explícita: el agente puede hacer lo mismo que una ap
   Si no hace falta recortar, el resultado va tal cual (sin envoltorio). Solo aplica a MCP. El recorte es posterior a
   la ejecución: protege el contexto del modelo, no la base (para eso, `server.maxResponseBytes` y `server.timeout`).
 - Error de λORM (sintaxis, entidad inexistente, constraint, script deshabilitado o fuera de límites, timeout) o falta
-  de permiso: `isError: true` con el mensaje en `text`, para que el modelo pueda leerlo y corregir.
+  de permiso: `isError: true` con el mensaje en `text`, para que el modelo pueda leerlo y corregir, y desde 3.1.0
+  `structuredContent: { error, status, code?, message }`, el mismo nombre, status y código de la base que REST y
+  WebSocket, para un programa que usa el MCP como transporte (docs/DATA_GATEWAY_CLIENTS_PLAN.md §5).
 - Esquema no disponible, error de protocolo, tool inexistente, argumentos inválidos, no autenticado: error JSON-RPC.
 
 ### 5.3 Escrituras por MCP

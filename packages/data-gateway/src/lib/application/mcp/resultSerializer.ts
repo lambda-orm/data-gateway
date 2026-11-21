@@ -1,4 +1,5 @@
 import { ToolResult } from '../../domain/mcp/mcpTypes'
+import { toHttpError } from '../../domain/errors/errorStatus'
 
 /** structuredContent duplicates the payload: only for small results */
 export const STRUCTURED_CONTENT_MAX_BYTES = 1024 * 1024
@@ -35,9 +36,15 @@ export const toolSuccess = (result: unknown): ToolResult => {
 	return toolResult
 }
 
-/** An error the model can read and correct (λORM syntax, permission, script disabled, timeout…) */
+/**
+ * An error the model can read and correct (λORM syntax, permission, script disabled, timeout…), as text; and for a
+ * program, structuredContent with the same name, status and code that REST and WebSocket answer
+ */
 export const toolError = (error: unknown): ToolResult => {
-	const name = (error as any)?.name ?? 'Error'
-	const message = (error as any)?.message ?? String(error)
-	return { content: [{ type: 'text', text: `${name}: ${message}` }], isError: true }
+	const { status, body } = toHttpError(error)
+	const structured: Record<string, unknown> = { error: body.error, status }
+	if (body.code !== undefined) structured.code = body.code
+	structured.message = body.message
+	if (body.suggestions) structured.suggestions = body.suggestions
+	return { content: [{ type: 'text', text: `${body.error}: ${body.message}` }], structuredContent: structured, isError: true }
 }

@@ -14,6 +14,8 @@ export interface ResultViewerProps {
 	locale?: Locale
 	/** The view at the start (default tree) */
 	initialView?: View
+	/** A name of the error replaced by one the gateway suggests (`nme` → `name`): without it, no buttons */
+	onSuggestion?: (name: string, replacement: string) => void
 }
 
 const download = (text: string, name: string, type: string) => {
@@ -81,7 +83,7 @@ const Tree: React.FC<{ value: unknown, name?: string, depth?: number }> = ({ val
 }
 
 /** The result of an action: tree, table, JSON and YAML views, copy and download, status / time / rows / size */
-export const ResultViewer: React.FC<ResultViewerProps> = ({ result, maxRows = 200, fileName = 'result', locale, initialView = 'tree' }) => {
+export const ResultViewer: React.FC<ResultViewerProps> = ({ result, maxRows = 200, fileName = 'result', locale, initialView = 'tree', onSuggestion }) => {
 	const m = messagesOf(locale)
 	const [copied, setCopied] = useState(false)
 	useEffect(() => { if (!copied) return; const timer = setTimeout(() => setCopied(false), 1500); return () => clearTimeout(timer) }, [copied])
@@ -107,6 +109,15 @@ export const ResultViewer: React.FC<ResultViewerProps> = ({ result, maxRows = 20
 				<div className="lw-error-box" role="alert">
 					<strong>{result.error?.name}</strong>{result.error?.code ? ` (${result.error.code})` : ''}: {result.error?.message}
 				</div>
+				{onSuggestion && result.error?.suggestions && result.error.suggestions.length > 0 && (
+					<div className="lw-suggestions">
+						<span className="lw-muted">{m.didYouMean}</span>
+						{result.error.suggestions.flatMap(suggestion => suggestion.didYouMean.map(replacement => (
+							<button key={`${suggestion.name}→${replacement}`} title={`${suggestion.name} → ${replacement}`}
+								onClick={() => onSuggestion(suggestion.name, replacement)}>{format(m.useName, { name: replacement })}</button>
+						)))}
+					</div>
+				)}
 			</div>
 		)
 	}

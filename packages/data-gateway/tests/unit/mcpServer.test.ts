@@ -1,6 +1,6 @@
 // The MCP server of a schema over the real facade with fake λORM ports: catalog per credential, results, errors.
 import { DataGatewayMcpServer } from '../../src/lib/application/mcp/dataGatewayMcpServer'
-import { describeDomain } from '../../src/lib/application/mcp/domainDescription'
+import { describeDomain, describeEntities, searchDomain } from '../../src/lib/application/mcp/domainDescription'
 import { gatewayTools } from '../../src/lib/application/mcp/gatewayTools'
 import { ToolCatalog, ToolFilter } from '../../src/lib/application/mcp/toolCatalog'
 import { TOOL_NAMES } from '../../src/lib/domain/config/configReader'
@@ -76,7 +76,12 @@ describe('tools/call', () => {
 	test('a write with a read credential: isError for the model, nothing executed, audited nowhere', async () => {
 		const { mcp, orm, audit } = server()
 		const result = await mcp.callTool(ctx(['read']), 'orm_execute', { query: 'Products.insert()', data: { name: 'x' } })
-		expect(result).toEqual({ content: [{ type: 'text', text: 'ForbiddenError: the credential "tester" does not have the "write" permission' }], isError: true })
+		const message = 'the credential "tester" does not have the "write" permission'
+		expect(result).toEqual({
+			content: [{ type: 'text', text: `ForbiddenError: ${message}` }],
+			structuredContent: { error: 'ForbiddenError', status: 403, message },
+			isError: true
+		})
 		expect(orm.executed).toHaveLength(0)
 		expect(audit.entries).toHaveLength(0)
 	})
@@ -88,13 +93,28 @@ describe('tools/call', () => {
 		expect(audit.entries[0]).toMatchObject({ credential: 'agent', transport: 'mcpHttp', operation: 'execute', actions: ['insert'] })
 	})
 
-	test('an error of λORM: isError with its name and message', async () => {
+	test('an error of λORM: isError with its name and message, and the status REST would answer', async () => {
 		const { mcp, orm } = server()
 		const error = new Error('Products.nope not found')
 		error.name = 'SchemaError'
 		orm.executeResult = error
 		expect(await mcp.callTool(ctx(['read']), 'orm_execute', { query: 'Products.map(p => p.nope)' }))
-			.toEqual({ content: [{ type: 'text', text: 'SchemaError: Products.nope not found' }], isError: true })
+			.toEqual({
+				content: [{ type: 'text', text: 'SchemaError: Products.nope not found' }],
+				structuredContent: { error: 'SchemaError', status: 400, message: 'Products.nope not found' },
+				isError: true
+			})
+	})
+
+	test('an error of the database: structuredContent keeps its code (unique, foreign key) for a program', async () => {
+		const { mcp, orm } = server()
+		const error: any = new Error('duplicate key value violates unique constraint')
+		error.name = 'ExecutionError'
+		error.code = '23505'
+		orm.executeResult = error
+		const result = await mcp.callTool(ctx(['read', 'write']), 'orm_execute', { query: 'Products.insert()', data: { name: 'x' } })
+		expect(result.isError).toBe(true)
+		expect(result.structuredContent).toEqual({ error: 'ExecutionError', status: 409, code: '23505', message: error.message })
 	})
 
 	test('maxRows cuts and tells how to ask for less; 0 = no limit; only tools that return rows', async () => {
@@ -125,7 +145,8 @@ describe('tools/call', () => {
 		const text = async (name: string, args: Record<string, unknown> = {}) => JSON.parse((await mcp.callTool(ctx(['read']), name, args)).content[0].text)
 		expect(await text('schema_entities')).toEqual([{ name: 'Products' }])
 		expect(await text('schema_entities', { entity: 'Products' })).toEqual({ name: 'Products' })
-		expect(await text('schema_entities', { entity: 'Nope' })).toBeNull()
+		const missing = await mcp.callTool(ctx(['read']), 'schema_entities', { entity: 'Nope' })
+		expect(missing).toMatchObject({ isError: true, structuredContent: { error: 'NotFoundError', status: 404, message: 'entity Nope not found' } })
 		expect(await text('schema_mappings', { mapping: 'default' })).toEqual({ name: 'default' })
 		expect(await text('gateway_version')).toEqual({ version: '9.9.9' })
 		expect(await text('stage_exists', { stage: 'default' })).toEqual({ exists: true })
@@ -174,6 +195,27 @@ describe('domain description', () => {
 			'Enums:',
 			'- Status: open="O"'
 		].join('\n'))
-		expect(describeDomain(domain, 80)).toMatch(/domain cut: read it whole with schema_domain/)
+		// too large: the names, and the tools that describe a part
+		expect(describeDomain(domain, 150)).toBe('Domain: 1 entities, too many to describe here. Find what a question needs with ' +
+			'schema_search { text } (entities, properties and relations by name) and read them with schema_describe ' +
+			'{ entities: [...] } (properties and relations, compact) before writing the query.\nEntities: … (schema_search finds the rest)')
+	})
+
+	test('search: entities whole, properties and relations by part of their name, the closest when nothing contains it', () => {
+		const domain: any = {
+			entities: [
+				{ name: 'Orders', primaryKey: ['id'], properties: [{ name: 'id', type: 'integer' }, { name: 'customerId', type: 'string' }], relations: [{ name: 'customer', type: 'oneToMany', entity: 'Customers' }] },
+				{ name: 'Customers', primaryKey: ['id'], properties: [{ name: 'id', type: 'string' }, { name: 'name', type: 'string' }] }
+			]
+		}
+		expect(searchDomain(domain, 'customer').matches).toEqual([
+			'Orders.customerId: string', 'Orders.customer → Customers', '- Customers: id: string (pk); name: string'
+		])
+		expect(searchDomain(domain, 'Orders.id').matches).toEqual(['Orders.id: integer (pk)', 'Orders.customerId: string'])
+		expect(searchDomain(domain, 'Ordrs')).toEqual({ matches: [], didYouMean: ['Orders'] })
+		expect(searchDomain(domain, 'id', 2)).toMatchObject({ matches: ['Orders.id: integer (pk)', 'Orders.customerId: string'], more: 1 })
+		expect(describeEntities(domain, ['Customers', 'Customer'])).toEqual({
+			entities: ['- Customers: id: string (pk); name: string'], notFound: [{ name: 'Customer', didYouMean: ['Customers'] }]
+		})
 	})
 })

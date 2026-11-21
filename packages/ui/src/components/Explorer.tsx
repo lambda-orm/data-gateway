@@ -3,6 +3,7 @@ import { QueryApiPort, SchemaInfo } from '../application/ports'
 import { WorkspaceController, WorkspaceError } from '../application/workspaceController'
 import { cardinalityOf, DomainInfo, typeText } from '../domain/diagram'
 import { ExplorerMessages, explorerMessagesOf, format } from '../domain/explorerI18n'
+import { filterEntities } from '../domain/entityFilter'
 import { Locale } from '../domain/i18n'
 import { childrenOf, folderPaths, SavedItem, subtreeOf } from '../domain/savedItems'
 import { ConfirmDialog, Icons, ItemDialog, MenuButton, Modal } from './dialogs'
@@ -90,6 +91,8 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 	const m = explorerMessagesOf(locale)
 	const state = useSyncExternalStore(controller.subscribe, controller.getState)
 	const [expanded, setExpanded] = useState<Set<string>>(new Set())
+	// the text that narrows the entities of each schema
+	const [filters, setFilters] = useState<Record<string, string>>({})
 	const [domains, setDomains] = useState<Record<string, DomainInfo | string>>({})
 	const [dialog, setDialog] = useState<Dialog>()
 	const [message, setMessage] = useState<string>()
@@ -168,38 +171,54 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 		const domain = domains[schema]
 		if (domain === undefined) return []
 		if (typeof domain === 'string') return [<Row key="e-status" level={3} label={domain} icon={null} muted />]
-		return [...domain.entities].sort((a, b) => a.name.localeCompare(b.name)).flatMap(entity => {
+		const filter = filters[schema] ?? ''
+		const found = filterEntities(domain.entities, filter)
+		const propertyRow = (entity: typeof domain.entities[number], name: string, key: string, level: number) => {
+			const p = (entity.properties ?? []).find(q => q.name === name)!
+			const isKey = (entity.primaryKey ?? []).includes(name)
+			return <Row key={key} level={level} icon={null} muted={!isKey}
+				label={<span className="lw-property"><span className={isKey ? 'lw-pk' : ''}>{p.name}</span><span className="lw-type">{typeText(p)}</span></span>} />
+		}
+		const relationRow = (entity: typeof domain.entities[number], name: string, key: string, level: number) => {
+			const r = (entity.relations ?? []).find(q => q.name === name)!
+			return <Row key={key} level={level} icon={null} title={`${r.name}: ${r.from} → ${r.entity}.${r.to} (${r.type})`}
+				onOpen={() => onOpenEntity(schema, r.entity)}
+				actions={<Action label={`${m.open} ${r.entity}`} onClick={() => onOpenEntity(schema, r.entity)}><Icons.open /></Action>}
+				label={<span className="lw-property"><span>{r.name}</span><span className="lw-type">→ {r.entity} · {cardinalityOf(r)}</span></span>} />
+		}
+		const head = (
+			<div key="e-filter" className="lw-tree-filter" style={{ paddingLeft: 6 + 2 * 14 }}>
+				<input type="search" value={filter} placeholder={m.filterEntities} aria-label={m.filterEntities} spellCheck={false}
+					onChange={e => setFilters(f => ({ ...f, [schema]: e.target.value }))}
+					onKeyDown={e => { if (e.key === 'Escape') setFilters(f => ({ ...f, [schema]: '' })) }} />
+				{filter.trim() !== '' && <span className="lw-type" role="status">{format(m.matchesOf, { n: found.length, total: domain.entities.length })}</span>}
+			</div>
+		)
+		if (found.length === 0) return [head, <Row key="e-none" level={3} label={m.noMatches} icon={null} muted />]
+		return [head, ...found.flatMap(({ entity, properties: matchedProperties, relations: matchedRelations }) => {
 			const key = `en:${schema}:${entity.name}`
 			const propertiesKey = `ep:${schema}:${entity.name}`
 			const relationsKey = `er:${schema}:${entity.name}`
-			const keys = new Set(entity.primaryKey ?? [])
 			const relations = entity.relations ?? []
 			const rows: React.ReactNode[] = [
 				<Row key={key} level={3} label={entity.name} icon={<Icons.entity />} title={`${entity.name} — ${m.openEntity}`}
 					expanded={expanded.has(key)} onToggle={() => toggle(key)} onOpen={() => onOpenEntity(schema, entity.name)}
 					actions={<Action label={m.open} onClick={() => onOpenEntity(schema, entity.name)}><Icons.open /></Action>} />
 			]
-			if (!expanded.has(key)) return rows
+			if (!expanded.has(key)) {
+				// what the filter found in it, without opening it
+				rows.push(...matchedProperties.map(name => propertyRow(entity, name, `${key}.p.${name}`, 4)))
+				rows.push(...matchedRelations.map(name => relationRow(entity, name, `${key}.r.${name}`, 4)))
+				return rows
+			}
 			rows.push(<Row key={propertiesKey} level={4} label={`${m.properties} (${entity.properties?.length ?? 0})`} icon={null}
 				expanded={expanded.has(propertiesKey)} onToggle={() => toggle(propertiesKey)} />)
-			if (expanded.has(propertiesKey)) {
-				rows.push(...(entity.properties ?? []).map(p => (
-					<Row key={`${propertiesKey}.${p.name}`} level={5} icon={null} muted={!keys.has(p.name)}
-						label={<span className="lw-property"><span className={keys.has(p.name) ? 'lw-pk' : ''}>{p.name}</span><span className="lw-type">{typeText(p)}</span></span>} />
-				)))
-			}
+			if (expanded.has(propertiesKey)) rows.push(...(entity.properties ?? []).map(p => propertyRow(entity, p.name, `${propertiesKey}.${p.name}`, 5)))
 			rows.push(<Row key={relationsKey} level={4} label={`${m.relations} (${relations.length})`} icon={null}
 				expanded={expanded.has(relationsKey)} onToggle={() => toggle(relationsKey)} />)
-			if (expanded.has(relationsKey)) {
-				rows.push(...relations.map(r => (
-					<Row key={`${relationsKey}.${r.name}`} level={5} icon={null} title={`${r.name}: ${r.from} → ${r.entity}.${r.to} (${r.type})`}
-						onOpen={() => onOpenEntity(schema, r.entity)}
-						actions={<Action label={`${m.open} ${r.entity}`} onClick={() => onOpenEntity(schema, r.entity)}><Icons.open /></Action>}
-						label={<span className="lw-property"><span>{r.name}</span><span className="lw-type">→ {r.entity} · {cardinalityOf(r)}</span></span>} />
-				)))
-			}
+			if (expanded.has(relationsKey)) rows.push(...relations.map(r => relationRow(entity, r.name, `${relationsKey}.${r.name}`, 5)))
 			return rows
-		})
+		})]
 	}
 
 	const folders = (schema: string) => folderPaths(state.items, schema)
@@ -219,6 +238,16 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 			<div role="tree" aria-label={m.explorer} className="lw-tree">
 				{schemas.map(s => {
 					const key = `s:${s.path}`
+					if (s.status !== 'ready') {
+						// a schema that didn't start (a database down, a variable not set): its reason, nothing to do in it
+						return (
+							<React.Fragment key={s.path}>
+								<Row level={1} label={<span>{s.path || '/'} <span className="lw-type">{format(m.schemaStatus, { status: s.status })}</span></span>}
+									icon={<Icons.schema />} muted expanded={expanded.has(key)} onToggle={() => toggle(key)} title={s.reason ?? s.status} />
+								{expanded.has(key) && <div className="lw-schema-reason" role="note" style={{ paddingLeft: 6 + 14 + 22 }}>{s.reason ?? m.noReason}</div>}
+							</React.Fragment>
+						)
+					}
 					const entitiesKey = `e:${s.path}`
 					const saved = expanded.has(key) ? savedRows(s.path, undefined, 2) : []
 					return (

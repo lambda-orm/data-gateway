@@ -16,7 +16,7 @@ const matches = (schema: JsonSchema, value: unknown): boolean => {
 
 /**
  * Checks the arguments of a tool against its inputSchema (the subset the tools use): object, known properties,
- * required ones present, types, minLength / minimum. Every problem in one McpRequestError (JSON-RPC invalid params).
+ * required ones present, types, minLength / minimum, lists (minItems, maxItems, the type of their items). Every problem in one McpRequestError (JSON-RPC invalid params).
  */
 export const validateArguments = (tool: string, schema: JsonSchema, args: unknown): Record<string, unknown> => {
 	const value = args ?? {}
@@ -37,6 +37,11 @@ export const validateArguments = (tool: string, schema: JsonSchema, args: unknow
 		if (!matches(property, item)) problems.push(`"${key}" must be ${property.type}, not ${typeOf(item)}`)
 		else if (property.minLength !== undefined && typeof item === 'string' && item.trim().length < property.minLength) problems.push(`"${key}" must not be empty`)
 		else if (property.minimum !== undefined && typeof item === 'number' && item < property.minimum) problems.push(`"${key}" must be >= ${property.minimum}`)
+		else if (Array.isArray(item)) {
+			if (property.minItems !== undefined && item.length < property.minItems) problems.push(`"${key}" must have at least ${property.minItems} items`)
+			else if (property.maxItems !== undefined && item.length > property.maxItems) problems.push(`"${key}" must have at most ${property.maxItems} items`)
+			else if (property.items && item.some(element => !matches(property.items!, element))) problems.push(`"${key}" must be a list of ${property.items.type}`)
+		}
 	}
 	if (problems.length) throw new McpRequestError(`${tool}: ${problems.join('; ')}`)
 	return object

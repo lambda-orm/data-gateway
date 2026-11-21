@@ -111,6 +111,67 @@ const action = (rowName: string, label: string) => within(row(rowName)).getByRol
 const add = (rowName: string, label: string) => { fireEvent.click(action(rowName, 'Agregar')); fireEvent.click(screen.getByRole('menuitem', { name: new RegExp(label) })) }
 
 describe('Workspace', () => {
+	test('a schema that did not start: shown apart with its reason, nothing to create in it', async () => {
+		class WithError extends DomainApi {
+			async schemas () { return [...await super.schemas(), { path: 'iot', status: 'error', reason: 'source salesDocuments needs ORM_SALES_DOCUMENTS_CNX, which is not set' }] }
+		}
+		render(<Workspace api={new WithError()} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" />)
+		await waitFor(() => expect(row('iot (error)')).toBeTruthy())
+		expect(row('iot (error)').getAttribute('title')).toContain('ORM_SALES_DOCUMENTS_CNX')
+		expect(within(row('iot (error)')).queryByRole('button')).toBeNull()
+		fireEvent.click(row('iot (error)'))
+		expect(screen.getByRole('note').textContent).toBe('source salesDocuments needs ORM_SALES_DOCUMENTS_CNX, which is not set')
+		// the ready schema works as before
+		expect(row('northwind/v1')).toBeTruthy()
+	})
+
+	test('the explorer: its width by the keyboard, kept in the browser', async () => {
+		window.localStorage.removeItem('lambdaorm-ui.explorerWidth')
+		const first = render(<Workspace api={new DomainApi()} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" />)
+		const border = await screen.findByRole('separator', { name: /Drag to resize/ })
+		expect(border.getAttribute('aria-valuenow')).toBe('280')
+		fireEvent.keyDown(border, { key: 'ArrowRight' })
+		fireEvent.keyDown(border, { key: 'ArrowRight', shiftKey: true })
+		expect(border.getAttribute('aria-valuenow')).toBe('360')
+		for (let i = 0; i < 30; i++) fireEvent.keyDown(border, { key: 'ArrowLeft' })
+		expect(border.getAttribute('aria-valuenow')).toBe('180')
+		fireEvent.keyDown(border, { key: 'ArrowRight', shiftKey: true })
+		first.unmount()
+		render(<Workspace api={new DomainApi()} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" />)
+		expect((await screen.findByRole('separator', { name: /Drag to resize/ })).getAttribute('aria-valuenow')).toBe('240')
+		window.localStorage.removeItem('lambdaorm-ui.explorerWidth')
+	})
+
+	test('the entities of a large domain narrowed by a filter: by name, by a property or relation, and Entity.field', async () => {
+		render(<Workspace api={new DomainApi()} store={new MemoryWorkspaceStore([], true)} history={false} locale="es" />)
+		await waitFor(() => expect(row('northwind/v1')).toBeTruthy())
+		fireEvent.click(row('Entidades'))
+		await waitFor(() => expect(row('Orders')).toBeTruthy())
+		const filter = screen.getByRole('searchbox', { name: /Filtrar/ })
+		const labels = () => screen.getAllByRole('treeitem').map(r => r.querySelector('.lw-tree-label')?.textContent ?? '').filter(Boolean)
+		/** the rows from an entity on, n of them */
+		const from = (name: string, n: number) => labels().slice(labels().indexOf(name), labels().indexOf(name) + n)
+
+		fireEvent.change(filter, { target: { value: 'prod' } })
+		expect(labels()).toContain('Products')
+		expect(labels()).not.toContain('Orders')
+		expect(screen.getByRole('status').textContent).toBe('1 de 3')
+
+		// a property: the entity with the property under it, without opening it
+		fireEvent.change(filter, { target: { value: 'customerid' } })
+		expect(from('Orders', 2)).toEqual(['Orders', 'customerIdstring'])
+		expect(labels()).not.toContain('Customers')
+
+		fireEvent.change(filter, { target: { value: 'Orders.cust' } })
+		expect(from('Orders', 3)).toEqual(['Orders', 'customerIdstring', 'customer→ Customers · N — 1'])
+
+		fireEvent.change(filter, { target: { value: 'zzz' } })
+		expect(labels()).toContain('Nada coincide')
+		// Escape clears it
+		fireEvent.keyDown(filter, { key: 'Escape' })
+		expect(labels()).toEqual(expect.arrayContaining(['Customers', 'Orders', 'Products']))
+	})
+
 	test('folders, a query saved into one, its changes and Ctrl+S; entities and the domain as YAML', async () => {
 		const store = new MemoryWorkspaceStore([], true)
 		render(<Workspace api={new DomainApi()} store={store} history={false} locale="es" />)

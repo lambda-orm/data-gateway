@@ -71,6 +71,21 @@ describe('QueryWorkbench', () => {
 	})
 })
 
+describe('QueryWorkbench suggestions', () => {
+	test('an error with a suggestion offers it; a click replaces the name in the query', async () => {
+		const api = new FakeApi()
+		render(<QueryWorkbench api={api} history={false} />)
+		await screen.findByText(/backend ·/)
+		const editor = screen.getByRole('textbox', { name: 'query' }) as HTMLTextAreaElement
+		fireEvent.change(editor, { target: { value: "Products.filter(p => p.nme == 'p.nme').map(p => p.nme)" } })
+		fireEvent.click(button('plan'))
+		expect((await screen.findByRole('alert')).textContent).toContain('did you mean name?')
+		fireEvent.click(button('use name'))
+		// every p.nme as a word, not the text in quotes
+		await waitFor(() => expect(editor.value).toBe("Products.filter(p => p.name == 'p.nme').map(p => p.name)"))
+	})
+})
+
 describe('QueryWorkbench schemas', () => {
 	test('with several ready schemas none is chosen by itself', async () => {
 		class TwoSchemas extends FakeApi { async schemas () { return [{ path: 'northwind/v1', status: 'ready' }, { path: 'northwind/v2', status: 'ready' }] } }

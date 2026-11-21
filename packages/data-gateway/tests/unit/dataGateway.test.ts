@@ -112,11 +112,11 @@ describe('executeQueued', () => {
 })
 
 describe('schema and stages', () => {
-	test('schema needs read; unknown names answer undefined', async () => {
+	test('schema needs read; an unknown name is a NotFoundError (404)', async () => {
 		const { gateway } = fakeGateway()
 		await expect(gateway.domain(ctx(['write']))).rejects.toMatchObject({ status: 403 })
 		expect(await gateway.entity(ctx(['read']), 'Products')).toEqual({ name: 'Products' })
-		expect(await gateway.entity(ctx(['read']), 'Nope')).toBeUndefined()
+		await expect(gateway.entity(ctx(['read']), 'Nope')).rejects.toMatchObject({ name: 'NotFoundError', status: 404, message: 'entity Nope not found' })
 		expect(await gateway.schema(ctx(['read']))).toEqual({ version: '1.0.0', domain: { entities: [{ name: 'Products' }], enums: [] }, infrastructure: undefined, application: undefined })
 	})
 

@@ -74,6 +74,8 @@ export class DataGateway implements DataGatewayPort {
 	public stage (ctx: RequestContext, name: string) { return this.useCases.schema.stage(ctx, name) }
 	public views (ctx: RequestContext) { return this.useCases.schema.views(ctx) }
 	public typings (ctx: RequestContext) { return this.useCases.schema.typings(ctx) }
+	public search (ctx: RequestContext, text: string) { return this.useCases.schema.search(ctx, text) }
+	public describe (ctx: RequestContext, entities: string[]) { return this.useCases.schema.describe(ctx, entities) }
 
 	public stageExists (ctx: RequestContext, stage: string) { return this.limit(() => this.useCases.stages.exists(ctx, stage)) }
 	public stageExport (ctx: RequestContext, stage: string) { return this.limit(() => this.useCases.stages.export(ctx, stage)) }

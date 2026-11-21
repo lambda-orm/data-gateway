@@ -13,6 +13,7 @@ const fromWire = (wire: WireError): Error => {
 		? new GatewayError(wire.status, wire.name, wire.message, wire.code)
 		: Object.assign(new Error(wire.message), { name: wire.name, code: wire.code })
 	if (wire.value) error.value = wire.value
+	if (wire.suggestions) error.suggestions = wire.suggestions
 	return error
 }
 

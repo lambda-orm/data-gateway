@@ -7,7 +7,9 @@ export type HeadersProvider = () => Record<string, string> | Promise<Record<stri
 
 /** An answer of the gateway that is not 2xx, with its JSON error ({ error, message, code }) */
 export class GatewayRequestError extends Error {
-	constructor (public readonly status: number, name: string, message: string, public readonly code?: string) {
+	constructor (public readonly status: number, name: string, message: string, public readonly code?: string,
+		/** names of the query that don't exist, with the closest ones */
+		public readonly suggestions?: { name: string, didYouMean: string[] }[]) {
 		super(message)
 		this.name = name
 	}
@@ -33,7 +35,7 @@ export class RestQueryApi implements QueryApiPort {
 		if (!response.ok) {
 			let error: any = {}
 			try { error = JSON.parse(text) } catch { /* not JSON */ }
-			throw new GatewayRequestError(response.status, error.error ?? `HTTP ${response.status}`, error.message ?? (text || response.statusText), error.code)
+			throw new GatewayRequestError(response.status, error.error ?? `HTTP ${response.status}`, error.message ?? (text || response.statusText), error.code, error.suggestions)
 		}
 		if (accept === 'text') return text
 		return text ? JSON.parse(text) : undefined

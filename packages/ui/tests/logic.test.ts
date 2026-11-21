@@ -2,12 +2,13 @@
 import { describe, expect, test, vi } from 'vitest'
 import { availability } from '../src/domain/operations'
 import { columnsOf, fromYaml, isTable, measure, toTsv, toYaml } from '../src/domain/results'
-import { addToHistory, dataFromParameters, markerFromError, parseObject } from '../src/domain/workspace'
+import { addToHistory, applySuggestion, dataFromParameters, markerFromError, parseObject } from '../src/domain/workspace'
 import { WorkbenchController } from '../src/application/workbench'
 import { HistoryPort } from '../src/application/ports'
 import { RestQueryApi } from '../src/infrastructure/restQueryApi'
 import { LocalStorageHistory } from '../src/infrastructure/localStorageHistory'
 import { FakeApi, WHO_READS } from './fakes'
+import { filterEntities } from '../src/domain/entityFilter'
 
 describe('domain', () => {
 	test('actions by permission and scripts enabled', () => {
@@ -161,5 +162,34 @@ describe('toTsv', () => {
 		expect(toTsv({ id: 7, name: 'n' })).toBe('id\tname\n7\tn\n')
 		expect(toTsv([1, 'two'])).toBe('value\n1\ntwo\n')
 		expect(toTsv(5)).toBe('5\n')
+	})
+})
+
+describe('entity filter', () => {
+	const entities: any[] = [
+		{ name: 'Areas', properties: [{ name: 'code' }, { name: 'areaTypeId' }], relations: [{ name: 'areaType', entity: 'AreaTypes' }] },
+		{ name: 'AreaTypes', properties: [{ name: 'code' }, { name: 'name' }], relations: [] },
+		{ name: 'Devices', properties: [{ name: 'id' }, { name: 'areaId' }], relations: [{ name: 'area', entity: 'Areas' }] }
+	]
+	const names = (text: string) => filterEntities(entities, text).map(f => [f.entity.name, f.byName, f.properties, f.relations])
+	test('empty: all of them, sorted', () => {
+		expect(filterEntities(entities, '  ').map(f => f.entity.name)).toEqual(['Areas', 'AreaTypes', 'Devices'])
+	})
+	test('by name, or by the properties and relations that match', () => {
+		expect(names('type')).toEqual([['Areas', false, ['areaTypeId'], ['areaType']], ['AreaTypes', true, [], []]])
+		expect(names('AREA')).toEqual([['Areas', true, ['areaTypeId'], ['areaType']], ['AreaTypes', true, [], []], ['Devices', false, ['areaId'], ['area']]])
+	})
+	test('Entity.field: only in the entities named like it; Entity. alone keeps them whole', () => {
+		expect(names('dev.area')).toEqual([['Devices', false, ['areaId'], ['area']]])
+		expect(names('areatypes.')).toEqual([['AreaTypes', false, [], []]])
+		expect(names('nope')).toEqual([])
+	})
+})
+
+describe('apply a suggestion', () => {
+	test('whole words, outside quoted text', () => {
+		expect(applySuggestion("Area.filter(p => p.name == 'Area').map(p => p.areaName)", 'Area', 'Areas')).toBe("Areas.filter(p => p.name == 'Area').map(p => p.areaName)")
+		expect(applySuggestion('Areas.map(p => [p.nme, p.nmes, p.nme])', 'nme', 'name')).toBe('Areas.map(p => [p.name, p.nmes, p.name])')
+		expect(applySuggestion('A.map(p => `nme ${p.nme}`)', 'nme', 'name')).toBe('A.map(p => `nme ${p.nme}`)')
 	})
 })

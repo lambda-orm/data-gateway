@@ -148,7 +148,8 @@ const SPECS: ToolSpec[] = [
 	{
 		name: 'schema_domain',
 		title: 'Domain',
-		description: 'Returns the domain: entities (properties, relations, keys, constraints) and enums.',
+		description: 'Returns the domain as JSON: entities (properties, relations, keys, constraints) and enums. Large for a ' +
+			'big schema: to write a query, schema_search and schema_describe give the part it needs.',
 		permissions: ['read'],
 		annotations: READ_ONLY,
 		run: (gw, ctx) => gw.domain(ctx)
@@ -156,11 +157,35 @@ const SPECS: ToolSpec[] = [
 	{
 		name: 'schema_entities',
 		title: 'Entities',
-		description: 'Returns the entities, or one entity with its properties and relations.',
+		description: 'Returns the entities as JSON (the same as REST /entities), or one entity with its properties and relations. ' +
+			'All of them is large for a big schema: to write a query, schema_search and schema_describe are compact.',
 		properties: { entity: name('entity') },
 		permissions: ['read'],
 		annotations: READ_ONLY,
 		run: (gw, ctx, a) => a.entity ? gw.entity(ctx, a.entity) : gw.entities(ctx)
+	},
+	{
+		name: 'schema_search',
+		title: 'Search the schema',
+		description: 'Finds entities, properties and relations whose name contains a text (case-insensitive), compact: ' +
+			'`Entity.property: type (pk, required)`, `Entity.relation → Target[]`, or a whole entity when its name matches. ' +
+			'`Areas.name` searches only in Areas. When nothing contains it, the closest names (didYouMean).',
+		properties: { text: { type: 'string', minLength: 1, description: 'Part of a name: area, status, Devices.location' } },
+		required: ['text'],
+		permissions: ['read'],
+		annotations: READ_ONLY,
+		run: (gw, ctx, a) => gw.search(ctx, a.text)
+	},
+	{
+		name: 'schema_describe',
+		title: 'Describe entities',
+		description: 'Describes some entities compactly, two lines each: properties (type, pk, required, enum) and relations ' +
+			'(`relation → Target[]` when it is a list). What to read before writing a query over them.',
+		properties: { entities: { type: 'array', items: { type: 'string' }, minItems: 1, maxItems: 30, description: 'Names of the entities' } },
+		required: ['entities'],
+		permissions: ['read'],
+		annotations: READ_ONLY,
+		run: (gw, ctx, a) => gw.describe(ctx, a.entities)
 	},
 	{
 		name: 'schema_enums',

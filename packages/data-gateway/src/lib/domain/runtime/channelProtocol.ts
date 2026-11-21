@@ -30,6 +30,8 @@ export interface WireError {
 	status?: number
 	code?: string
 	value?: { status?: number, message?: string, code?: string }
+	/** names of the query that don't exist, with the closest ones (λORM L41) */
+	suggestions?: { name: string, didYouMean: string[] }[]
 }
 
 /**
@@ -56,7 +58,7 @@ export type ChannelMessage = ChannelRequest | ChannelResponse | ChannelEvent
 export const GATEWAY_OPERATIONS = [
 	'version', 'health', 'ping', 'plan', 'metadata', 'model', 'parameters', 'constraints', 'execute', 'executeScript',
 	'executeQueued', 'schema', 'schemaVersion', 'domain', 'sources', 'source', 'entities', 'entity', 'enums', 'enum',
-	'mappings', 'mapping', 'entityMapping', 'stages', 'stage', 'views', 'typings', 'stageExists', 'stageExport', 'stageImport'
+	'mappings', 'mapping', 'entityMapping', 'stages', 'stage', 'views', 'typings', 'search', 'describe', 'stageExists', 'stageExport', 'stageImport'
 ] as const
 
 /** Operations without a RequestContext (the first argument of the others) */

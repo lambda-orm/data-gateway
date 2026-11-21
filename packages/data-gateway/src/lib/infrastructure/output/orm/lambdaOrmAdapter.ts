@@ -22,6 +22,15 @@ export class LambdaOrmAdapter implements OrmQueryPort, OrmScriptPort, OrmSchemaP
 	public async checkConnections (timeoutMs: number): Promise<void> {
 		const connection = (this.orm as any).connection
 		const sources: { name: string, connection?: unknown }[] = this.infrastructure()?.sources ?? []
+		// first the variables that are not set, all of them at once and without the network (λORM L43)
+		const unset = sources.filter(s => typeof s.connection === 'string' && s.connection.includes('${'))
+		if (unset.length) {
+			const variables = [...new Set(unset.flatMap(s => [...(s.connection as string).matchAll(/\$\{([^}]+)\}/g)].map(m => m[1])))]
+			const several = variables.length > 1
+			throw new Error(`${unset.length > 1 ? 'sources' : 'source'} ${unset.map(s => s.name).join(', ')} ${unset.length > 1 ? 'need' : 'needs'} ` +
+				`${variables.join(', ')}, which ${several ? 'are' : 'is'} not set: give ${several ? 'them' : 'it'} in orm.schemas[].env of ` +
+				'data-gateway.config.yaml, or in the environment of the gateway')
+		}
 		for (const source of sources.filter(s => s.connection !== undefined && s.connection !== null && s.connection !== '')) {
 			let timer: ReturnType<typeof setTimeout> | undefined
 			try {
@@ -71,7 +80,8 @@ export class LambdaOrmAdapter implements OrmQueryPort, OrmScriptPort, OrmSchemaP
 	public version () { return this.orm.state.getSchemaVersion() }
 	public domain () { return this.orm.state.getSchemaDomain() }
 	public sources () { return this.orm.state.getSchemaSources() }
-	public source (name: string) { return this.orm.state.getSchemaSource(name) }
+	// only a source of the schema (getSchemaSource answers { name, dialect: 'unknown' } for any other name)
+	public source (name: string) { return this.orm.state.getSchemaSources()?.find(source => source.name === name) }
 	public entities () { return this.orm.state.getSchemaEntities() }
 	public entity (name: string) { return this.orm.state.getSchemaEntity(name) }
 	public enums () { return this.orm.state.getSchemaEnums() }

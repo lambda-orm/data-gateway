@@ -173,7 +173,7 @@ describe('mcpHttp: legacy SSE and stateful sessions', () => {
 		try {
 			const client = await connect(streamable(base, 'backend-token'))
 			try {
-				expect((await client.listTools()).tools).toHaveLength(22)
+				expect((await client.listTools()).tools).toHaveLength(24)
 				expect(transport.status().sessions.streamable).toBe(1)
 				await expect(connect(streamable(base, 'agent-token'))).rejects.toThrow()
 			} finally {
