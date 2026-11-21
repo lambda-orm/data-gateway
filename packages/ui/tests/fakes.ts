@@ -17,7 +17,11 @@ export class FakeApi implements QueryApiPort {
 	async schemas () { return [{ path: 'northwind/v1', status: 'ready' }, { path: 'northwind/v2', status: 'error', reason: 'down' }] }
 	async whoami (schema: string) { this.record('whoami', schema); return { ...this.who, schema } }
 	async typings () { return 'declare const Products: Queryable<QryProduct>' }
-	private check (query: string) { if (query.includes('Nope')) throw named('SchemaError', 'Entity Nope not found', 400) }
+	private check (query: string) {
+		if (query.includes('Nope')) throw named('SchemaError', 'Entity Nope not found', 400)
+		// a property with a typo, and the suggestion of the gateway as data
+		if (query.includes('p.nme')) throw Object.assign(named('SchemaError', 'nme is neither a property nor a relation of Products; did you mean name?', 400), { suggestions: [{ name: 'nme', didYouMean: ['name'] }] })
+	}
 	async plan (schema: string, query: string, options?: unknown) { this.record('plan', schema, query, options); this.check(query); return { entity: 'Products', sentence: 'SELECT 1' } }
 	async metadata (schema: string, query: string) { this.record('metadata', schema, query); this.check(query); return { name: 'select' } }
 	async model (schema: string, query: string) { this.record('model', schema, query); return [{ name: 'id', type: 'integer' }] }

@@ -88,6 +88,9 @@ export interface ExplorerMessages {
 	filterEntities: string
 	matchesOf: string
 	noMatches: string
+	resizeExplorer: string
+	schemaStatus: string
+	noReason: string
 }
 
 type Row = [keyof ExplorerMessages, string, string, string, string, string, string, string, string, string, string]
@@ -179,7 +182,10 @@ const ROWS: Row[] = [
 	['open', 'Open', 'Abrir', 'Abrir', 'Ouvrir', 'Apri', 'Öffnen', 'Openen', 'Obre', 'Abrir', 'Ireki'],
 	['filterEntities', 'Filter: entity, property, Entity.field', 'Filtrar: entidad, propiedad, Entidad.campo', 'Filtrar: entidade, propriedade, Entidade.campo', 'Filtrer : entité, propriété, Entité.champ', 'Filtra: entità, proprietà, Entità.campo', 'Filtern: Entität, Eigenschaft, Entität.Feld', 'Filteren: entiteit, eigenschap, Entiteit.veld', 'Filtra: entitat, propietat, Entitat.camp', 'Filtrar: entidade, propiedade, Entidade.campo', 'Iragazi: entitatea, propietatea, Entitatea.eremua'],
 	['matchesOf', '{n} of {total}', '{n} de {total}', '{n} de {total}', '{n} sur {total}', '{n} di {total}', '{n} von {total}', '{n} van {total}', '{n} de {total}', '{n} de {total}', '{n} / {total}'],
-	['noMatches', 'Nothing matches', 'Nada coincide', 'Nada corresponde', 'Aucun résultat', 'Nessun risultato', 'Keine Treffer', 'Geen resultaten', 'No hi ha coincidències', 'Nada coincide', 'Ez dago bat-etortzerik']
+	['noMatches', 'Nothing matches', 'Nada coincide', 'Nada corresponde', 'Aucun résultat', 'Nessun risultato', 'Keine Treffer', 'Geen resultaten', 'No hi ha coincidències', 'Nada coincide', 'Ez dago bat-etortzerik'],
+	['resizeExplorer', 'Drag to resize; double click fits the names', 'Arrastrá para cambiar el ancho; doble clic lo ajusta a los nombres', 'Arraste para mudar a largura; clique duplo ajusta aos nomes', 'Faites glisser pour redimensionner ; un double clic ajuste aux noms', 'Trascina per ridimensionare; doppio clic per adattare ai nomi', 'Ziehen zum Ändern der Breite; Doppelklick passt sie an die Namen an', 'Sleep om de breedte te wijzigen; dubbelklik past aan de namen', 'Arrossega per canviar l’amplada; doble clic l’ajusta als noms', 'Arrastra para cambiar o largo; dobre clic axústao aos nomes', 'Arrastatu zabalera aldatzeko; klik bikoitzak izenetara egokitzen du'],
+	['schemaStatus', '({status})', '({status})', '({status})', '({status})', '({status})', '({status})', '({status})', '({status})', '({status})', '({status})'],
+	['noReason', 'The gateway gives no reason: see its log.', 'La gateway no da el motivo: mirá su log.', 'A gateway não informa o motivo: veja o log.', 'La passerelle ne donne pas la raison : voyez son journal.', 'Il gateway non indica il motivo: guarda il suo log.', 'Das Gateway nennt keinen Grund: siehe sein Log.', 'De gateway geeft geen reden: bekijk het log.', 'La passarel·la no en dona el motiu: mira’n el registre.', 'A pasarela non dá o motivo: mira o seu rexistro.', 'Pasabideak ez du arrazoia ematen: begiratu bere erregistroa.']
 ]
 
 const ORDER: Locale[] = ['en', 'es', 'pt', 'fr', 'it', 'de', 'nl', 'ca', 'gl', 'eu']

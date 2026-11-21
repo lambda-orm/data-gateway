@@ -31,7 +31,8 @@ const errorOf = (error: any): ResultError => ({
 	name: error?.name ?? 'Error',
 	message: error?.message ?? String(error),
 	status: Number.isInteger(error?.status) ? error.status : undefined,
-	code: error?.code
+	code: error?.code,
+	suggestions: Array.isArray(error?.suggestions) && error.suggestions.length > 0 ? error.suggestions : undefined
 })
 
 /**

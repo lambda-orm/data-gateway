@@ -238,6 +238,16 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 			<div role="tree" aria-label={m.explorer} className="lw-tree">
 				{schemas.map(s => {
 					const key = `s:${s.path}`
+					if (s.status !== 'ready') {
+						// a schema that didn't start (a database down, a variable not set): its reason, nothing to do in it
+						return (
+							<React.Fragment key={s.path}>
+								<Row level={1} label={<span>{s.path || '/'} <span className="lw-type">{format(m.schemaStatus, { status: s.status })}</span></span>}
+									icon={<Icons.schema />} muted expanded={expanded.has(key)} onToggle={() => toggle(key)} title={s.reason ?? s.status} />
+								{expanded.has(key) && <div className="lw-schema-reason" role="note" style={{ paddingLeft: 6 + 14 + 22 }}>{s.reason ?? m.noReason}</div>}
+							</React.Fragment>
+						)
+					}
 					const entitiesKey = `e:${s.path}`
 					const saved = expanded.has(key) ? savedRows(s.path, undefined, 2) : []
 					return (

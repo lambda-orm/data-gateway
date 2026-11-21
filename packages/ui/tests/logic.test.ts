@@ -2,7 +2,7 @@
 import { describe, expect, test, vi } from 'vitest'
 import { availability } from '../src/domain/operations'
 import { columnsOf, fromYaml, isTable, measure, toTsv, toYaml } from '../src/domain/results'
-import { addToHistory, dataFromParameters, markerFromError, parseObject } from '../src/domain/workspace'
+import { addToHistory, applySuggestion, dataFromParameters, markerFromError, parseObject } from '../src/domain/workspace'
 import { WorkbenchController } from '../src/application/workbench'
 import { HistoryPort } from '../src/application/ports'
 import { RestQueryApi } from '../src/infrastructure/restQueryApi'
@@ -183,5 +183,13 @@ describe('entity filter', () => {
 		expect(names('dev.area')).toEqual([['Devices', false, ['areaId'], ['area']]])
 		expect(names('areatypes.')).toEqual([['AreaTypes', false, [], []]])
 		expect(names('nope')).toEqual([])
+	})
+})
+
+describe('apply a suggestion', () => {
+	test('whole words, outside quoted text', () => {
+		expect(applySuggestion("Area.filter(p => p.name == 'Area').map(p => p.areaName)", 'Area', 'Areas')).toBe("Areas.filter(p => p.name == 'Area').map(p => p.areaName)")
+		expect(applySuggestion('Areas.map(p => [p.nme, p.nmes, p.nme])', 'nme', 'name')).toBe('Areas.map(p => [p.name, p.nmes, p.name])')
+		expect(applySuggestion('A.map(p => `nme ${p.nme}`)', 'nme', 'name')).toBe('A.map(p => `nme ${p.nme}`)')
 	})
 })

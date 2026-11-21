@@ -7,6 +7,8 @@ export interface ResultError {
 	message: string
 	status?: number
 	code?: string
+	/** names of the query that don't exist, with the closest ones (gateway 3.1.0) */
+	suggestions?: { name: string, didYouMean: string[] }[]
 }
 
 /** The outcome of one action, with what the result viewer shows about it */

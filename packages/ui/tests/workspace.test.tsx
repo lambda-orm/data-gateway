@@ -111,6 +111,37 @@ const action = (rowName: string, label: string) => within(row(rowName)).getByRol
 const add = (rowName: string, label: string) => { fireEvent.click(action(rowName, 'Agregar')); fireEvent.click(screen.getByRole('menuitem', { name: new RegExp(label) })) }
 
 describe('Workspace', () => {
+	test('a schema that did not start: shown apart with its reason, nothing to create in it', async () => {
+		class WithError extends DomainApi {
+			async schemas () { return [...await super.schemas(), { path: 'iot', status: 'error', reason: 'source salesDocuments needs ORM_SALES_DOCUMENTS_CNX, which is not set' }] }
+		}
+		render(<Workspace api={new WithError()} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" />)
+		await waitFor(() => expect(row('iot (error)')).toBeTruthy())
+		expect(row('iot (error)').getAttribute('title')).toContain('ORM_SALES_DOCUMENTS_CNX')
+		expect(within(row('iot (error)')).queryByRole('button')).toBeNull()
+		fireEvent.click(row('iot (error)'))
+		expect(screen.getByRole('note').textContent).toBe('source salesDocuments needs ORM_SALES_DOCUMENTS_CNX, which is not set')
+		// the ready schema works as before
+		expect(row('northwind/v1')).toBeTruthy()
+	})
+
+	test('the explorer: its width by the keyboard, kept in the browser', async () => {
+		window.localStorage.removeItem('lambdaorm-ui.explorerWidth')
+		const first = render(<Workspace api={new DomainApi()} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" />)
+		const border = await screen.findByRole('separator', { name: /Drag to resize/ })
+		expect(border.getAttribute('aria-valuenow')).toBe('280')
+		fireEvent.keyDown(border, { key: 'ArrowRight' })
+		fireEvent.keyDown(border, { key: 'ArrowRight', shiftKey: true })
+		expect(border.getAttribute('aria-valuenow')).toBe('360')
+		for (let i = 0; i < 30; i++) fireEvent.keyDown(border, { key: 'ArrowLeft' })
+		expect(border.getAttribute('aria-valuenow')).toBe('180')
+		fireEvent.keyDown(border, { key: 'ArrowRight', shiftKey: true })
+		first.unmount()
+		render(<Workspace api={new DomainApi()} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" />)
+		expect((await screen.findByRole('separator', { name: /Drag to resize/ })).getAttribute('aria-valuenow')).toBe('240')
+		window.localStorage.removeItem('lambdaorm-ui.explorerWidth')
+	})
+
 	test('the entities of a large domain narrowed by a filter: by name, by a property or relation, and Entity.field', async () => {
 		render(<Workspace api={new DomainApi()} store={new MemoryWorkspaceStore([], true)} history={false} locale="es" />)
 		await waitFor(() => expect(row('northwind/v1')).toBeTruthy())

@@ -72,6 +72,15 @@ const DomainYaml: React.FC<{ domain: () => Promise<DomainInfo>, schema: string, 
  * Ctrl+S), the forms of the entities, saved diagrams (boxes placed by hand, saved with their places) and the domain
  * of a schema as YAML, read only. What is saved stays in the browser (IndexedDB) unless another store is given.
  */
+const MIN_WIDTH = 180
+const MAX_WIDTH = 720
+const WIDTH_KEY = 'lambdaorm-ui.explorerWidth'
+const clampWidth = (value: number) => Math.round(Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, value)))
+const storedWidth = (): number | undefined => {
+	try { const value = Number(window.localStorage.getItem(WIDTH_KEY)); return value > 0 ? clampWidth(value) : undefined } catch { return undefined }
+}
+const rememberWidth = (value: number) => { try { window.localStorage.setItem(WIDTH_KEY, String(value)) } catch { /* private window */ } }
+
 export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTabs = 20, ...workbench }) => {
 	const theme = workbench.theme ?? 'light'
 	const m = messagesOf(workbench.locale)
@@ -83,7 +92,10 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 	const [tabs, setTabs] = useState<Tab[]>([{ id: 1, kind: 'query', title: `${m.tabNamed} 1` }])
 	const [active, setActive] = useState(1)
 	const [next, setNext] = useState(2)
-	const [width, setWidth] = useState(280)
+	// the width of the explorer, remembered in this browser (a convenience: without storage it starts at 280)
+	const [width, setWidthState] = useState(() => storedWidth() ?? 280)
+	const setWidth = (value: number) => { const w = clampWidth(value); setWidthState(w); rememberWidth(w) }
+	const side = useRef<HTMLDivElement>(null)
 	const [collapsed, setCollapsed] = useState(false)
 	const [saving, setSaving] = useState<{ tab: Tab, as: boolean }>()
 	const [creatingDiagram, setCreatingDiagram] = useState<{ schema: string, parentId?: string }>()
@@ -121,7 +133,9 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 	}
 
 	useEffect(() => { controller.load() }, [controller])
-	useEffect(() => { api.schemas().then(all => setSchemas(all.filter(s => s.status === 'ready')), () => setSchemas([])) }, [api])
+	// the explorer also shows the schemas that didn't start, with their reason; the rest of the workspace only the ready ones
+	const [listed, setListed] = useState<SchemaInfo[]>([])
+	useEffect(() => { api.schemas().then(all => { setListed(all); setSchemas(all.filter(s => s.status === 'ready')) }, () => { setListed([]); setSchemas([]) }) }, [api])
 	useEffect(() => { if (!notice) return; const t = setTimeout(() => setNotice(undefined), 5000); return () => clearTimeout(t) }, [notice])
 
 	const savedOf = (tab: Tab): SavedItem | undefined => tab.savedId ? state.items.find(i => i.id === tab.savedId) : undefined
@@ -205,10 +219,27 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 	const startResize = (e: React.PointerEvent) => {
 		const start = e.clientX
 		const from = width
-		const move = (ev: PointerEvent) => setWidth(Math.min(600, Math.max(180, from + ev.clientX - start)))
+		const move = (ev: PointerEvent) => setWidth(from + ev.clientX - start)
 		const up = () => { window.removeEventListener('pointermove', move); window.removeEventListener('pointerup', up) }
 		window.addEventListener('pointermove', move)
 		window.addEventListener('pointerup', up)
+	}
+
+	/** a double click on the border: as wide as the longest row of the explorer (long names of a large schema) */
+	const fitWidth = () => {
+		const rows = [...(side.current?.querySelectorAll<HTMLElement>('.lw-tree-row') ?? [])]
+		// the label cuts its text (ellipsis): the row as wide as the whole text of its label
+		const widest = rows.reduce((w, row) => {
+			const label = row.querySelector<HTMLElement>('.lw-tree-label')
+			return Math.max(w, row.scrollWidth + (label ? label.scrollWidth - label.clientWidth : 0))
+		}, 0)
+		if (widest > 0) setWidth(widest + 24)
+	}
+	const resizeKeys = (e: React.KeyboardEvent) => {
+		const step = e.shiftKey ? 60 : 20
+		if (e.key === 'ArrowLeft') { e.preventDefault(); setWidth(width - step) }
+		if (e.key === 'ArrowRight') { e.preventDefault(); setWidth(width + step) }
+		if (e.key === 'Enter') { e.preventDefault(); fitWidth() }
 	}
 
 	const iconOf = (tab: Tab) => tab.kind === 'domain' ? <Icons.yaml /> : tab.kind === 'entity' ? <Icons.entity /> : tab.kind === 'diagram' ? <Icons.diagram /> : savedOf(tab) ? <Icons.query /> : null
@@ -220,13 +251,15 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 		<div className={`lw-space lw-${theme}`}>
 			{!collapsed && (
 				<>
-					<div className="lw-space-side" style={{ width }}>
-						<Explorer schemas={schemas} controller={controller} api={api} locale={workbench.locale} theme={theme} activeId={activeTab?.savedId}
+					<div className="lw-space-side" style={{ width }} ref={side}>
+						<Explorer schemas={listed} controller={controller} api={api} locale={workbench.locale} theme={theme} activeId={activeTab?.savedId}
 							loadDomain={domainOf} onOpen={openSaved} onOpenDomain={openDomain} onOpenEntity={openEntity}
 							onNewQuery={(schema, parentId) => newQuery(schema, parentId)}
 							onNewDiagram={(schema, parentId) => setCreatingDiagram({ schema, parentId })} />
 					</div>
-					<div className="lw-space-resizer" role="separator" aria-orientation="vertical" onPointerDown={startResize} />
+					<div className="lw-space-resizer" role="separator" aria-orientation="vertical" aria-label={x.resizeExplorer} title={x.resizeExplorer}
+						tabIndex={0} aria-valuenow={width} aria-valuemin={MIN_WIDTH} aria-valuemax={MAX_WIDTH}
+						onPointerDown={startResize} onDoubleClick={fitWidth} onKeyDown={resizeKeys} />
 				</>
 			)}
 			<div className="lw-space-main">
