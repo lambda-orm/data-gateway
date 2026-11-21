@@ -12,6 +12,8 @@ import { AuthenticatorPort, CredentialScheme, LoggerPort, MetricsPort } from '..
 import { Principal } from '../../../domain/auth/principal'
 import { Transport } from '../transport'
 import { toHttpError } from './httpErrors'
+import { closestNames } from '@lambdaorm/base'
+import { badRequest } from '../../../domain/errors/gatewayError'
 import { withSecurity } from './openApi'
 const YAML = require('js-yaml')
 
@@ -119,6 +121,7 @@ export class HttpTransport implements Transport {
 		const base = this.options.basePath
 		const directory = this.deps.directory
 		const root = this.served.find(s => s.path === '')
+		const routes: { method: string, path: string }[] = [{ method: 'GET', path: `${base}/schemas` }]
 		app.get(`${base}/metrics`, async (_req, res) => {
 			const { contentType, body } = await this.deps.metrics.render()
 			res.status(200).type(contentType).send(body)
@@ -159,7 +162,14 @@ export class HttpTransport implements Transport {
 			this.schemaRoutes(router, schema.gateway)
 			this.stageRoutes(router, schema.gateway)
 			app.use(this.schemaBase(schema) || '/', router)
+			routes.push(...this.routesOf(router, this.schemaBase(schema)))
 		}
+		// a route that doesn't exist: JSON like every other answer, with the closest routes (L42)
+		app.use((req: express.Request, res: express.Response) => {
+			const near = closestNames(req.path, routes.filter(r => r.method === req.method).map(r => r.path), 3)
+			const hint = near.length ? `; did you mean ${near.map(p => `${req.method} ${p}`).join(', ')}?` : `; the schemas are at ${base || ''}/schemas`
+			res.status(404).json({ error: 'NotFoundError', message: `${req.method} ${req.path} is not a route of this gateway${hint}` })
+		})
 		app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
 			if (res.headersSent) return next(err)
 			// body too large / invalid JSON (body-parser), with its own status
@@ -169,7 +179,21 @@ export class HttpTransport implements Transport {
 		return app
 	}
 
-	/** ?format=beautiful: indented JSON */
+	/** A required text of the query string: a BadRequest that says which, when it is missing */
+	private queryText (req: express.Request, name: string): string {
+		const value = req.query[name]
+		if (typeof value !== 'string' || value.trim() === '') throw badRequest('ValidationError', `the query string needs ${name} (?${name}=…)`)
+		return value
+	}
+
+	/** The routes of a router under its base: the ones a 404 suggests */
+	private routesOf (router: express.Router, base: string): { method: string, path: string }[] {
+		return (router.stack as any[])
+			.filter(layer => layer.route && typeof layer.route.path === 'string')
+			.flatMap(layer => Object.keys(layer.route.methods).map(method => ({ method: method.toUpperCase(), path: `${base}${layer.route.path}` })))
+	}
+
+		/** ?format=beautiful: indented JSON */
 	private readonly beautify = (req: express.Request, res: express.Response, next: express.NextFunction) => {
 		const format = req.query.format
 		if (typeof format === 'string' && format.toLowerCase() === 'beautiful') {
@@ -244,6 +268,9 @@ export class HttpTransport implements Transport {
 		router.get('/sources/:source', this.handle((req, ctx) => gw.source(ctx, String(req.params.source))))
 		router.get('/entities', this.handle((_req, ctx) => gw.entities(ctx)))
 		router.get('/entities/:entity', this.handle((req, ctx) => gw.entity(ctx, String(req.params.entity))))
+		// for a person or a model over a large schema: compact text (L42)
+		router.get('/search', this.handle((req, ctx) => gw.search(ctx, this.queryText(req, 'q'))))
+		router.get('/describe', this.handle((req, ctx) => gw.describe(ctx, this.queryText(req, 'entities').split(',').map(p => p.trim()).filter(Boolean))))
 		router.get('/enums', this.handle((_req, ctx) => gw.enums(ctx)))
 		router.get('/enums/:enum', this.handle((req, ctx) => gw.enum(ctx, String(req.params.enum))))
 		router.get('/mappings', this.handle((_req, ctx) => gw.mappings(ctx)))

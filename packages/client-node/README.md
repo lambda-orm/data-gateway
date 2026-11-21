@@ -56,6 +56,7 @@ credential goes in the options, or in the environment:
 | `plan(query, options?)` | the sentences it would run, without running them |
 | `metadata(query)`, `model(query)`, `parameters(query)`, `constraints(query)` | what the query reads, returns and needs |
 | `schema.entities()`, `schema.entity(name)`, `schema.enums()`, `schema.sources()`, `schema.mappings()`, `schema.stages()`, `schema.views()`, `schema.domain()`, `schema.version()`, … | the schema as the gateway loaded it |
+| `schema.search(text)`, `schema.describe(entities)` | a large schema as compact text: entities, properties and relations by part of their name (`Areas.type` only in Areas, the closest names when nothing matches), and some entities in two lines each |
 | `stage.exists(stage)`, `stage.export(stage)`, `stage.import(stage, data)` | the data of a stage |
 | `general.version()`, `general.health()` | the gateway |
 | `whoami()` | the credential and its permissions (REST) |

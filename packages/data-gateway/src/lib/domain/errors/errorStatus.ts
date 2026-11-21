@@ -40,5 +40,8 @@ export const toHttpError = (error: any): HttpError => {
 	} else if (CLIENT_ERRORS.includes(name)) {
 		status = 400
 	}
+	// a source the gateway can't reach or whose connection is not set (λORM L43): the service is unavailable, not the
+	// request wrong
+	if (status === 500 && name === 'ConnectionError') status = 503
 	return { status, body: { error: name, code, message } }
 }

@@ -15,6 +15,11 @@ import { WebSocketTransport } from './transports/webSocket'
 /** A query: the text of a λORM expression, or a function whose text is one (`p => Products.filter(...)`) */
 export type Query = string | Function
 
+/** What schema.search answers: one line per match; `more` beyond 40, `didYouMean` when nothing matches */
+export interface DomainSearch { matches: string[], more?: number, hint?: string, didYouMean?: string[] }
+/** What schema.describe answers */
+export interface DescribedEntities { entities: string[], notFound?: { name: string, didYouMean: string[] }[] }
+
 export interface Whoami { name: string, permissions: string[], schema: string, scripts: boolean }
 
 const TRANSPORTS: Record<TransportName, (target: ConnectionTarget) => Transport> = {
@@ -112,6 +117,10 @@ export class SchemaOperations {
 	public domain (): Promise<DomainSchema> { return this.client.call('domain') }
 	public entities (): Promise<Entity[]> { return this.client.call('entities') }
 	public entity (entity: string): Promise<Entity> { return this.client.call('entity', { entity }) }
+	/** entities, properties and relations whose name contains the text, as compact lines (`Areas.type` only in Areas) */
+	public search (text: string): Promise<DomainSearch> { return this.client.call('search', { text }) }
+	/** some entities, two lines each; the names that don't exist apart, with the closest ones */
+	public describe (entities: string[]): Promise<DescribedEntities> { return this.client.call('describe', { entities }) }
 	public enums (): Promise<Enum[]> { return this.client.call('enums') }
 	public enum (name: string): Promise<Enum> { return this.client.call('enum', { enum: name }) }
 	public sources (): Promise<{ name: string, dialect: string }[]> { return this.client.call('sources') }
