@@ -1,6 +1,6 @@
 // The MCP server of a schema over the real facade with fake λORM ports: catalog per credential, results, errors.
 import { DataGatewayMcpServer } from '../../src/lib/application/mcp/dataGatewayMcpServer'
-import { describeDomain } from '../../src/lib/application/mcp/domainDescription'
+import { describeDomain, describeEntities, searchDomain } from '../../src/lib/application/mcp/domainDescription'
 import { gatewayTools } from '../../src/lib/application/mcp/gatewayTools'
 import { ToolCatalog, ToolFilter } from '../../src/lib/application/mcp/toolCatalog'
 import { TOOL_NAMES } from '../../src/lib/domain/config/configReader'
@@ -195,6 +195,27 @@ describe('domain description', () => {
 			'Enums:',
 			'- Status: open="O"'
 		].join('\n'))
-		expect(describeDomain(domain, 80)).toMatch(/domain cut: read it whole with schema_domain/)
+		// too large: the names, and the tools that describe a part
+		expect(describeDomain(domain, 150)).toBe('Domain: 1 entities, too many to describe here. Find what a question needs with ' +
+			'schema_search { text } (entities, properties and relations by name) and read them with schema_describe ' +
+			'{ entities: [...] } (properties and relations, compact) before writing the query.\nEntities: … (schema_search finds the rest)')
+	})
+
+	test('search: entities whole, properties and relations by part of their name, the closest when nothing contains it', () => {
+		const domain: any = {
+			entities: [
+				{ name: 'Orders', primaryKey: ['id'], properties: [{ name: 'id', type: 'integer' }, { name: 'customerId', type: 'string' }], relations: [{ name: 'customer', type: 'oneToMany', entity: 'Customers' }] },
+				{ name: 'Customers', primaryKey: ['id'], properties: [{ name: 'id', type: 'string' }, { name: 'name', type: 'string' }] }
+			]
+		}
+		expect(searchDomain(domain, 'customer').matches).toEqual([
+			'Orders.customerId: string', 'Orders.customer → Customers', '- Customers: id: string (pk); name: string'
+		])
+		expect(searchDomain(domain, 'Orders.id').matches).toEqual(['Orders.id: integer (pk)', 'Orders.customerId: string'])
+		expect(searchDomain(domain, 'Ordrs')).toEqual({ matches: [], didYouMean: ['Orders'] })
+		expect(searchDomain(domain, 'id', 2)).toMatchObject({ matches: ['Orders.id: integer (pk)', 'Orders.customerId: string'], more: 1 })
+		expect(describeEntities(domain, ['Customers', 'Customer'])).toEqual({
+			entities: ['- Customers: id: string (pk); name: string'], notFound: [{ name: 'Customer', didYouMean: ['Customers'] }]
+		})
 	})
 })

@@ -14,7 +14,7 @@ const SCHEMA_KEYS = ['path', 'workspace', 'transports', 'authentication', 'env',
 /** The tools of docs/DATA_GATEWAY.md §5.1: mcp.tools.include / exclude must name them */
 export const TOOL_NAMES = [
 	'orm_execute', 'orm_execute_script', 'orm_execute_queued', 'orm_plan', 'orm_metadata', 'orm_model', 'orm_parameters',
-	'orm_constraints', 'schema_get', 'schema_version', 'schema_domain', 'schema_entities', 'schema_enums', 'schema_sources',
+	'orm_constraints', 'schema_get', 'schema_version', 'schema_domain', 'schema_entities', 'schema_search', 'schema_describe', 'schema_enums', 'schema_sources',
 	'schema_mappings', 'schema_views', 'schema_stages', 'stage_exists', 'stage_export', 'stage_import', 'gateway_version',
 	'gateway_health'
 ]

@@ -59,7 +59,8 @@ export class DataGatewayMcpServer implements McpServerPort {
 			name: this.settings.name,
 			version: this.settings.version,
 			instructions: 'λORM data gateway of one schema. Query its domain with orm_execute using λORM lambda expressions ' +
-				'(not SQL): read lambdaorm://guide/expressions first; the entities are in the description of orm_execute and in schema_domain.'
+				'(not SQL): read lambdaorm://guide/expressions first. The entities are in the description of orm_execute; in a ' +
+				'large schema, find them with schema_search and read them with schema_describe.'
 		}
 	}
 
