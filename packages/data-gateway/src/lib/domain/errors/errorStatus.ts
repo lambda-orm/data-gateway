@@ -1,7 +1,8 @@
 /** What the gateway answers when a request fails, on every transport: a status a client can map, the name and the code. */
 export interface HttpError {
 	status: number
-	body: { error: string, code?: string, message: string }
+	/** suggestions: names of the query that don't exist and the closest ones, for a client to offer (L41) */
+	body: { error: string, code?: string, message: string, suggestions?: { name: string, didYouMean: string[] }[] }
 }
 
 /**
@@ -43,5 +44,7 @@ export const toHttpError = (error: any): HttpError => {
 	// a source the gateway can't reach or whose connection is not set (λORM L43): the service is unavailable, not the
 	// request wrong
 	if (status === 500 && name === 'ConnectionError') status = 503
-	return { status, body: { error: name, code, message } }
+	const body: HttpError['body'] = { error: name, code, message }
+	if (Array.isArray(error?.suggestions) && error.suggestions.length > 0) body.suggestions = error.suggestions
+	return { status, body }
 }

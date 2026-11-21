@@ -34,7 +34,7 @@ export class WebSocketTransport implements Transport {
 			if (message.error.code === -32603 && data.status === undefined) throw transportError(this.name, message.error.message)
 			// a JSON-RPC error of its own (an unknown method, invalid params) has no status: the gateway's codes say which
 			const status = data.status ?? (message.error.code === -32601 ? 404 : message.error.code === -32602 ? 400 : 500)
-			throw gatewayError(this.name, { status, errorName: data.name, dbCode: data.code, message: message.error.message })
+			throw gatewayError(this.name, { status, errorName: data.name, dbCode: data.code, suggestions: data.suggestions, message: message.error.message })
 		}
 		return message.result ?? null
 	}

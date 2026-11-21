@@ -126,10 +126,16 @@ transports:
 		expect((await call(base, '/nothing/here/at/all/really', { headers: key })).body.message).toMatch(/the schemas are at \/schemas/)
 	})
 
+	test('REST: the suggestions as data, for a client to offer them', async () => {
+		const answer = await call(base, '/plan', { body: { query: 'Areas.filter(p => p.nme == "x")' }, headers: key })
+		expect(answer.body.suggestions).toEqual([{ name: 'nme', didYouMean: ['name'] }])
+		expect((await call(base, '/plan', { body: { query: 'Area.map(p => p.name)' }, headers: key })).body.suggestions).toEqual([{ name: 'Area', didYouMean: ['Areas'] }])
+	})
+
 	test('MCP: the same error, with its status', async () => {
 		const result: any = await mcp.callTool({ name: 'orm_plan', arguments: { query: 'Areas.map(p => p.nam)' } })
 		expect(result.isError).toBe(true)
-		expect(result.structuredContent).toMatchObject({ status: 400 })
+		expect(result.structuredContent).toMatchObject({ status: 400, suggestions: [{ name: 'nam', didYouMean: ['name'] }] })
 		expect(result.content[0].text).toContain('did you mean name?')
 	})
 })

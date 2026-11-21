@@ -36,6 +36,11 @@ describe('REST', () => {
 			.toMatchObject({ code: 'unique', errorName: 'ExecutionError', status: 409, dbCode: '23505', message: 'duplicate key', transport: 'http' })
 	})
 
+	test('the suggestions of an error of the query', async () => {
+		fakeFetch(answer(400, { error: 'SchemaError', message: 'nme is neither …; did you mean name?', suggestions: [{ name: 'nme', didYouMean: ['name'] }] }))
+		expect(await error(rest().call('execute', { query: 'Areas.map(p => p.nme)' }))).toMatchObject({ code: 'invalid', suggestions: [{ name: 'nme', didYouMean: ['name'] }] })
+	})
+
 	test('a refused connection: the code transport', async () => {
 		jest.spyOn(global, 'fetch').mockRejectedValue(Object.assign(new TypeError('fetch failed'), { cause: new Error('connect ECONNREFUSED') }))
 		expect(await error(rest().call('version', {}))).toMatchObject({ code: 'transport', message: expect.stringContaining('ECONNREFUSED') })

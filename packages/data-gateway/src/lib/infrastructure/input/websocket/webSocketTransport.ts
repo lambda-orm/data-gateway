@@ -48,6 +48,7 @@ export const toRpcError = (error: unknown): RpcResponse['error'] => {
 	const { status, body } = toHttpError(error)
 	const data: Record<string, unknown> = { name: body.error, status }
 	if (body.code !== undefined) data.code = body.code
+	if (body.suggestions) data.suggestions = body.suggestions
 	return { code: -32000, message: body.message, data }
 }
 

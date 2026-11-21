@@ -46,6 +46,7 @@ export class ChannelDispatcher {
 		const status = error?.status ?? error?.statusCode
 		if (Number.isInteger(status)) wire.status = status
 		if (error?.code !== undefined && error?.code !== null) wire.code = String(error.code)
+		if (Array.isArray(error?.suggestions) && error.suggestions.length > 0) wire.suggestions = error.suggestions
 		const thrown = error?.value
 		if (thrown && typeof thrown === 'object') {
 			wire.value = {}

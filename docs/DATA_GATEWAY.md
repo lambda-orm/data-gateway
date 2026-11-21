@@ -544,6 +544,9 @@ Cada esquema se alcanza por su ruta en todos los transportes que lo exponen (`{b
 - **`GET /{esquema}/search?q=`** y **`GET /{esquema}/describe?entities=A,B`** (3.1.0): lo mismo que `schema_search` y
   `schema_describe` de MCP (§5.1), y `schema.search` / `schema.describe` del WebSocket: entidades, propiedades y
   relaciones por parte del nombre, y algunas entidades en dos líneas cada una. Requieren `read`.
+- **Sugerencias de un error de la consulta** (3.1.0): un nombre que no existe (`p.nme`, `Area`) responde `400` con
+  `suggestions: [{ name: "nme", didYouMean: ["name"] }]` además del mensaje, en el cuerpo de REST, en `error.data` del
+  WebSocket y en `structuredContent` de MCP (λORM L41). La UI ofrece reemplazarlo con un clic.
 - **Una ruta que no existe** (3.1.0): `404` en JSON como el resto (`{ error: "NotFoundError", message }`), con las
   rutas más parecidas (`GET /iot/v1/schema/entities is not a route of this gateway; did you mean GET /iot/v1/entities?`).
 - **Una fuente sin su variable de conexión** (3.1.0): con `runtime.checkConnections`, el esquema no arranca y su motivo

@@ -30,6 +30,8 @@ export interface WireError {
 	status?: number
 	code?: string
 	value?: { status?: number, message?: string, code?: string }
+	/** names of the query that don't exist, with the closest ones (λORM L41) */
+	suggestions?: { name: string, didYouMean: string[] }[]
 }
 
 /**
