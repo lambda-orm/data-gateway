@@ -85,6 +85,9 @@ export interface ExplorerMessages {
 	saveDiagram: string
 	nothingOpen: string
 	open: string
+	filterEntities: string
+	matchesOf: string
+	noMatches: string
 }
 
 type Row = [keyof ExplorerMessages, string, string, string, string, string, string, string, string, string, string]
@@ -173,7 +176,10 @@ const ROWS: Row[] = [
 	['editEntities', 'Entities…', 'Entidades…', 'Entidades…', 'Entités…', 'Entità…', 'Entitäten…', 'Entiteiten…', 'Entitats…', 'Entidades…', 'Entitateak…'],
 	['saveDiagram', 'Save the diagram', 'Guardar el diagrama', 'Salvar o diagrama', 'Enregistrer le diagramme', 'Salva il diagramma', 'Diagramm speichern', 'Diagram opslaan', 'Desa el diagrama', 'Gardar o diagrama', 'Gorde diagrama'],
 	['nothingOpen', 'Open a query, an entity or a diagram from the explorer, or start a query with +.', 'Abrí una consulta, una entidad o un diagrama desde el explorador, o empezá una consulta con +.', 'Abra uma consulta, uma entidade ou um diagrama no explorador, ou comece uma consulta com +.', "Ouvrez une requête, une entité ou un diagramme depuis l'explorateur, ou commencez une requête avec +.", "Apri una query, un'entità o un diagramma dall'esplora, o inizia una query con +.", 'Öffne eine Abfrage, eine Entität oder ein Diagramm im Explorer oder beginne eine Abfrage mit +.', 'Open een query, een entiteit of een diagram vanuit de verkenner, of begin een query met +.', "Obre una consulta, una entitat o un diagrama des de l'explorador, o comença una consulta amb +.", 'Abre unha consulta, unha entidade ou un diagrama desde o explorador, ou comeza unha consulta con +.', 'Ireki kontsulta, entitate edo diagrama bat arakatzailetik, edo hasi kontsulta bat + erabiliz.'],
-	['open', 'Open', 'Abrir', 'Abrir', 'Ouvrir', 'Apri', 'Öffnen', 'Openen', 'Obre', 'Abrir', 'Ireki']
+	['open', 'Open', 'Abrir', 'Abrir', 'Ouvrir', 'Apri', 'Öffnen', 'Openen', 'Obre', 'Abrir', 'Ireki'],
+	['filterEntities', 'Filter: entity, property, Entity.field', 'Filtrar: entidad, propiedad, Entidad.campo', 'Filtrar: entidade, propriedade, Entidade.campo', 'Filtrer : entité, propriété, Entité.champ', 'Filtra: entità, proprietà, Entità.campo', 'Filtern: Entität, Eigenschaft, Entität.Feld', 'Filteren: entiteit, eigenschap, Entiteit.veld', 'Filtra: entitat, propietat, Entitat.camp', 'Filtrar: entidade, propiedade, Entidade.campo', 'Iragazi: entitatea, propietatea, Entitatea.eremua'],
+	['matchesOf', '{n} of {total}', '{n} de {total}', '{n} de {total}', '{n} sur {total}', '{n} di {total}', '{n} von {total}', '{n} van {total}', '{n} de {total}', '{n} de {total}', '{n} / {total}'],
+	['noMatches', 'Nothing matches', 'Nada coincide', 'Nada corresponde', 'Aucun résultat', 'Nessun risultato', 'Keine Treffer', 'Geen resultaten', 'No hi ha coincidències', 'Nada coincide', 'Ez dago bat-etortzerik']
 ]
 
 const ORDER: Locale[] = ['en', 'es', 'pt', 'fr', 'it', 'de', 'nl', 'ca', 'gl', 'eu']

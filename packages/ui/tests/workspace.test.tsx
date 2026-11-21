@@ -111,6 +111,36 @@ const action = (rowName: string, label: string) => within(row(rowName)).getByRol
 const add = (rowName: string, label: string) => { fireEvent.click(action(rowName, 'Agregar')); fireEvent.click(screen.getByRole('menuitem', { name: new RegExp(label) })) }
 
 describe('Workspace', () => {
+	test('the entities of a large domain narrowed by a filter: by name, by a property or relation, and Entity.field', async () => {
+		render(<Workspace api={new DomainApi()} store={new MemoryWorkspaceStore([], true)} history={false} locale="es" />)
+		await waitFor(() => expect(row('northwind/v1')).toBeTruthy())
+		fireEvent.click(row('Entidades'))
+		await waitFor(() => expect(row('Orders')).toBeTruthy())
+		const filter = screen.getByRole('searchbox', { name: /Filtrar/ })
+		const labels = () => screen.getAllByRole('treeitem').map(r => r.querySelector('.lw-tree-label')?.textContent ?? '').filter(Boolean)
+		/** the rows from an entity on, n of them */
+		const from = (name: string, n: number) => labels().slice(labels().indexOf(name), labels().indexOf(name) + n)
+
+		fireEvent.change(filter, { target: { value: 'prod' } })
+		expect(labels()).toContain('Products')
+		expect(labels()).not.toContain('Orders')
+		expect(screen.getByRole('status').textContent).toBe('1 de 3')
+
+		// a property: the entity with the property under it, without opening it
+		fireEvent.change(filter, { target: { value: 'customerid' } })
+		expect(from('Orders', 2)).toEqual(['Orders', 'customerIdstring'])
+		expect(labels()).not.toContain('Customers')
+
+		fireEvent.change(filter, { target: { value: 'Orders.cust' } })
+		expect(from('Orders', 3)).toEqual(['Orders', 'customerIdstring', 'customer→ Customers · N — 1'])
+
+		fireEvent.change(filter, { target: { value: 'zzz' } })
+		expect(labels()).toContain('Nada coincide')
+		// Escape clears it
+		fireEvent.keyDown(filter, { key: 'Escape' })
+		expect(labels()).toEqual(expect.arrayContaining(['Customers', 'Orders', 'Products']))
+	})
+
 	test('folders, a query saved into one, its changes and Ctrl+S; entities and the domain as YAML', async () => {
 		const store = new MemoryWorkspaceStore([], true)
 		render(<Workspace api={new DomainApi()} store={store} history={false} locale="es" />)
