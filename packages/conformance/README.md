@@ -10,7 +10,7 @@ Not published: the clients of this repository (Node, Go, Rust, the CLI) run it f
 
 ```sh
 scripts/ci-local.sh clients                                 # against the gateway from source
-scripts/ci-local.sh clients flaviorita/data-gateway:3.0.3   # against an image
+scripts/ci-local.sh clients flaviorita/data-gateway:3.1.0   # against an image
 ```
 
 or by hand, from this folder:
