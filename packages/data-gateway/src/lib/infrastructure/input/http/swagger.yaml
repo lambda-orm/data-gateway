@@ -328,6 +328,67 @@ paths:
       tags:
       - schema
       x-eov-operation-handler: controllers/SchemaController
+  /search:
+    get:
+      operationId: search
+      description: Entities, properties and relations whose name contains a text, as compact text lines (for a person
+        or a model over a large schema). `Areas.type` searches only in Areas; the closest names when nothing matches.
+      parameters:
+      - in: query
+        name: q
+        required: true
+        schema:
+          type: string
+        example: Areas.type
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  matches: { type: array, items: { type: string } }
+                  more: { type: integer, description: matches left out (40 at most) }
+                  hint: { type: string }
+                  didYouMean: { type: array, items: { type: string } }
+          description: Ok
+        "400":
+          description: Without q
+      tags:
+      - schema
+  /describe:
+    get:
+      operationId: describe
+      description: Some entities in two lines each (properties with type, pk, required, enum; relations), and the names
+        that don't exist with the closest ones.
+      parameters:
+      - in: query
+        name: entities
+        required: true
+        schema:
+          type: string
+        description: Names separated by commas
+        example: Areas,Devices
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  entities: { type: array, items: { type: string } }
+                  notFound:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        name: { type: string }
+                        didYouMean: { type: array, items: { type: string } }
+          description: Ok
+        "400":
+          description: Without entities
+      tags:
+      - schema
   /enums:
     get:
       operationId: enums

@@ -10,6 +10,7 @@ import { LocalStorageHistory } from '../infrastructure/localStorageHistory'
 import { setSchemaTypings } from '../infrastructure/monaco/monacoSetup'
 import { CodeEditor } from './CodeEditor'
 import { ResultViewer } from './ResultViewer'
+import { applySuggestion } from '../domain/workspace'
 
 export interface QueryWorkbenchProps {
 	/** URL of the data-gateway (its REST transport); or api */
@@ -145,7 +146,8 @@ export const QueryWorkbench: React.FC<QueryWorkbenchProps> = props => {
 					)
 				})}
 			</div>
-			<ResultViewer result={s.result} maxRows={maxViewRows} locale={locale} fileName={s.result ? `${(s.schema || 'root').replace(/\//g, '-')}-${s.result.operation}` : undefined} />
+			<ResultViewer result={s.result} maxRows={maxViewRows} locale={locale} fileName={s.result ? `${(s.schema || 'root').replace(/\//g, '-')}-${s.result.operation}` : undefined}
+				onSuggestion={s.mode === 'query' ? (name, replacement) => { controller.update({ query: applySuggestion(s.query, name, replacement) }); controller.scheduleValidation() } : undefined} />
 			{s.history.length > 0 && (
 				<details className="lw-history">
 					<summary>{m.history} ({s.history.length})</summary>

@@ -12,6 +12,7 @@ import { ConsoleLogger } from '../../src/lib/infrastructure/output/logger/logger
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { StreamableHTTPClientTransport } from '@modelcontextprotocol/sdk/client/streamableHttp.js'
 import { call, freePort } from '../helpers/net'
+import { LambdaOrmAdapter } from '../../src/lib/infrastructure/output/orm/lambdaOrmAdapter'
 
 const WORKSPACE = path.join(__dirname, '../fixtures/ilusor')
 const MODEL = fs.readFileSync(path.join(WORKSPACE, 'lambdaORM.yaml'), 'utf8')
@@ -108,10 +109,55 @@ transports:
 		expect(JSON.stringify(result).length).toBeLessThan(5000)
 	})
 
+	test('REST: /search and /describe answer what schema_search and schema_describe do', async () => {
+		const search = await call(base, '/search?q=Areas.type', { headers: key })
+		expect(search.status).toBe(200)
+		expect(search.body.matches).toEqual(expect.arrayContaining(['Areas.areaType → AreaTypes']))
+		const describe = await call(base, '/describe?entities=Areas,Area', { headers: key })
+		expect(describe.body).toMatchObject({ entities: [expect.stringMatching(/^- Areas: /)], notFound: [{ name: 'Area', didYouMean: ['Areas'] }] })
+		expect((await call(base, '/search', { headers: key })).status).toBe(400)
+		expect((await call(base, '/search?q=Areas', { headers: { 'X-Api-Key': 'wrong' } })).status).toBe(401)
+	})
+
+	test('REST: a route that does not exist is a 404 in JSON with the closest routes', async () => {
+		const answer = await call(base, '/schema/entities', { headers: key })
+		expect(answer.status).toBe(404)
+		expect(answer.body).toEqual({ error: 'NotFoundError', message: expect.stringMatching(/^GET \/schema\/entities is not a route of this gateway; did you mean .*GET \/entities/) })
+		expect((await call(base, '/nothing/here/at/all/really', { headers: key })).body.message).toMatch(/the schemas are at \/schemas/)
+	})
+
+	test('REST: the suggestions as data, for a client to offer them', async () => {
+		const answer = await call(base, '/plan', { body: { query: 'Areas.filter(p => p.nme == "x")' }, headers: key })
+		expect(answer.body.suggestions).toEqual([{ name: 'nme', didYouMean: ['name'] }])
+		expect((await call(base, '/plan', { body: { query: 'Area.map(p => p.name)' }, headers: key })).body.suggestions).toEqual([{ name: 'Area', didYouMean: ['Areas'] }])
+	})
+
 	test('MCP: the same error, with its status', async () => {
 		const result: any = await mcp.callTool({ name: 'orm_plan', arguments: { query: 'Areas.map(p => p.nam)' } })
 		expect(result.isError).toBe(true)
-		expect(result.structuredContent).toMatchObject({ status: 400 })
+		expect(result.structuredContent).toMatchObject({ status: 400, suggestions: [{ name: 'nam', didYouMean: ['name'] }] })
 		expect(result.content[0].text).toContain('did you mean name?')
+	})
+})
+
+describe('a connection whose variable is not set', () => {
+	test('checking the connections at start names the variable and where to give it (L43)', async () => {
+		const saved = { ...process.env }
+		for (const name of CONNECTIONS) process.env[name] = unreachable(name)
+		delete process.env.ORM_SALES_DOCUMENTS_CNX
+		const orm = new LambdaOrmAdapter()
+		try {
+			await orm.init(WORKSPACE)
+			await expect(orm.checkConnections(2000)).rejects.toThrow(
+				'source salesDocuments needs ORM_SALES_DOCUMENTS_CNX, which is not set: give it in orm.schemas[].env of data-gateway.config.yaml')
+			delete process.env.ORM_IAM_CNX
+			const other = new LambdaOrmAdapter()
+			await other.init(WORKSPACE)
+			await expect(other.checkConnections(2000)).rejects.toThrow('sources iam, salesDocuments need ORM_IAM_CNX, ORM_SALES_DOCUMENTS_CNX, which are not set: give them in')
+			await other.end()
+		} finally {
+			await orm.end()
+			process.env = saved
+		}
 	})
 })

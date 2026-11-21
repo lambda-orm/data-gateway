@@ -10,6 +10,12 @@ const text = (params: Params, name: string): string => {
 	return value
 }
 
+const names = (params: Params, name: string): string[] => {
+	const value = params[name]
+	if (!Array.isArray(value) || value.length === 0 || value.some(v => typeof v !== 'string')) throw new RpcCallError(-32602, `params.${name} is required (a list of names)`)
+	return value
+}
+
 /**
  * The methods of the WebSocket API (docs/DATA_GATEWAY.md §7): {section}.{method} → an operation of DataGatewayPort,
  * with the params of the equivalent REST body. A method is a line here: register adds more.
@@ -34,6 +40,8 @@ export class RpcDispatcher {
 		this.register('schema.source', (gw, ctx, p) => gw.source(ctx, text(p, 'source')))
 		this.register('schema.entities', (gw, ctx) => gw.entities(ctx))
 		this.register('schema.entity', (gw, ctx, p) => gw.entity(ctx, text(p, 'entity')))
+		this.register('schema.search', (gw, ctx, p) => gw.search(ctx, text(p, 'text')))
+		this.register('schema.describe', (gw, ctx, p) => gw.describe(ctx, names(p, 'entities')))
 		this.register('schema.enums', (gw, ctx) => gw.enums(ctx))
 		this.register('schema.enum', (gw, ctx, p) => gw.enum(ctx, text(p, 'enum')))
 		this.register('schema.mappings', (gw, ctx) => gw.mappings(ctx))

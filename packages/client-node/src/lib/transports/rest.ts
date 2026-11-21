@@ -41,6 +41,7 @@ export class RestTransport implements Transport {
 				status: response.status,
 				errorName: payload?.error,
 				dbCode: payload?.code,
+				suggestions: payload?.suggestions,
 				message: payload?.message ?? (text || response.statusText)
 			})
 		}

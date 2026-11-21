@@ -30,6 +30,8 @@ export interface Messages {
 	history: string
 	clearHistory: string
 	runToSee: string
+	useName: string
+	didYouMean: string
 	rows: string
 	copy: string
 	copied: string
@@ -65,7 +67,7 @@ export interface Messages {
 
 const en: Messages = {
 	schema: 'schema', choose: 'choose…', mode: 'mode', query: 'query', script: 'script', data: 'data', options: 'options', topic: 'topic', chunk: 'chunk',
-	runShortcut: 'Ctrl+Enter', history: 'history', clearHistory: 'clear history', runToSee: 'Run an action to see its result.', rows: '{n} rows', copy: 'copy', copied: 'copied', export: 'export', tsv: 'TXT (tab-separated)',
+	runShortcut: 'Ctrl+Enter', history: 'history', clearHistory: 'clear history', runToSee: 'Run an action to see its result.', useName: 'use {name}', didYouMean: 'Did you mean', rows: '{n} rows', copy: 'copy', copied: 'copied', export: 'export', tsv: 'TXT (tab-separated)',
 	showing: 'Showing {shown} of {total} rows: the downloads have all of them.',
 	reasonNoCredential: 'no credential yet', reasonScriptsDisabled: 'scripts are disabled on this schema',
 	reasonNoPermission: '"{name}" has no {permission} permission', noticeNoSchema: 'no schema is ready',
@@ -76,7 +78,7 @@ const MESSAGES: Record<Locale, Messages> = {
 	en,
 	es: {
 		schema: 'esquema', choose: 'elegir…', mode: 'modo', query: 'consulta', script: 'script', data: 'datos', options: 'opciones', topic: 'tópico', chunk: 'lote',
-		runShortcut: 'Ctrl+Enter', history: 'historial', clearHistory: 'borrar historial', runToSee: 'Ejecutá una acción para ver su resultado.', rows: '{n} filas', copy: 'copiar', copied: 'copiado', export: 'exportar', tsv: 'TXT (separado por tabulaciones)',
+		runShortcut: 'Ctrl+Enter', history: 'historial', clearHistory: 'borrar historial', runToSee: 'Ejecutá una acción para ver su resultado.', useName: 'usar {name}', didYouMean: '¿Quisiste decir', rows: '{n} filas', copy: 'copiar', copied: 'copiado', export: 'exportar', tsv: 'TXT (separado por tabulaciones)',
 		showing: 'Se muestran {shown} de {total} filas: las descargas tienen todas.',
 		reasonNoCredential: 'todavía no hay credencial', reasonScriptsDisabled: 'los scripts están deshabilitados en este esquema',
 		reasonNoPermission: '"{name}" no tiene el permiso {permission}', noticeNoSchema: 'ningún esquema está listo',
@@ -84,7 +86,7 @@ const MESSAGES: Record<Locale, Messages> = {
 	},
 	pt: {
 		schema: 'esquema', choose: 'escolher…', mode: 'modo', query: 'consulta', script: 'script', data: 'dados', options: 'opções', topic: 'tópico', chunk: 'lote',
-		runShortcut: 'Ctrl+Enter', history: 'histórico', clearHistory: 'limpar histórico', runToSee: 'Execute uma ação para ver o resultado.', rows: '{n} linhas', copy: 'copiar', copied: 'copiado', export: 'exportar', tsv: 'TXT (separado por tabulações)',
+		runShortcut: 'Ctrl+Enter', history: 'histórico', clearHistory: 'limpar histórico', runToSee: 'Execute uma ação para ver o resultado.', useName: 'usar {name}', didYouMean: 'Você quis dizer', rows: '{n} linhas', copy: 'copiar', copied: 'copiado', export: 'exportar', tsv: 'TXT (separado por tabulações)',
 		showing: 'Mostrando {shown} de {total} linhas: os downloads têm todas.',
 		reasonNoCredential: 'ainda sem credencial', reasonScriptsDisabled: 'os scripts estão desativados neste esquema',
 		reasonNoPermission: '"{name}" não tem a permissão {permission}', noticeNoSchema: 'nenhum esquema está pronto',
@@ -92,7 +94,7 @@ const MESSAGES: Record<Locale, Messages> = {
 	},
 	fr: {
 		schema: 'schéma', choose: 'choisir…', mode: 'mode', query: 'requête', script: 'script', data: 'données', options: 'options', topic: 'topic', chunk: 'lot',
-		runShortcut: 'Ctrl+Entrée', history: 'historique', clearHistory: "effacer l'historique", runToSee: 'Lancez une action pour voir son résultat.', rows: '{n} lignes', copy: 'copier', copied: 'copié', export: 'exporter', tsv: 'TXT (séparé par des tabulations)',
+		runShortcut: 'Ctrl+Entrée', history: 'historique', clearHistory: "effacer l'historique", runToSee: 'Lancez une action pour voir son résultat.', useName: 'utiliser {name}', didYouMean: 'Vouliez-vous dire', rows: '{n} lignes', copy: 'copier', copied: 'copié', export: 'exporter', tsv: 'TXT (séparé par des tabulations)',
 		showing: 'Affichage de {shown} lignes sur {total} : les téléchargements les contiennent toutes.',
 		reasonNoCredential: "pas encore d'identifiant", reasonScriptsDisabled: 'les scripts sont désactivés sur ce schéma',
 		reasonNoPermission: "« {name} » n'a pas la permission {permission}", noticeNoSchema: "aucun schéma n'est prêt",
@@ -100,7 +102,7 @@ const MESSAGES: Record<Locale, Messages> = {
 	},
 	it: {
 		schema: 'schema', choose: 'scegli…', mode: 'modalità', query: 'query', script: 'script', data: 'dati', options: 'opzioni', topic: 'topic', chunk: 'blocco',
-		runShortcut: 'Ctrl+Invio', history: 'cronologia', clearHistory: 'cancella cronologia', runToSee: "Esegui un'azione per vederne il risultato.", rows: '{n} righe', copy: 'copia', copied: 'copiato', export: 'esporta', tsv: 'TXT (separato da tabulazioni)',
+		runShortcut: 'Ctrl+Invio', history: 'cronologia', clearHistory: 'cancella cronologia', runToSee: "Esegui un'azione per vederne il risultato.", useName: 'usa {name}', didYouMean: 'Intendevi', rows: '{n} righe', copy: 'copia', copied: 'copiato', export: 'esporta', tsv: 'TXT (separato da tabulazioni)',
 		showing: 'Mostrate {shown} di {total} righe: i download le contengono tutte.',
 		reasonNoCredential: 'ancora nessuna credenziale', reasonScriptsDisabled: 'gli script sono disattivati in questo schema',
 		reasonNoPermission: '"{name}" non ha il permesso {permission}', noticeNoSchema: 'nessuno schema è pronto',
@@ -108,7 +110,7 @@ const MESSAGES: Record<Locale, Messages> = {
 	},
 	de: {
 		schema: 'Schema', choose: 'auswählen…', mode: 'Modus', query: 'Abfrage', script: 'Skript', data: 'Daten', options: 'Optionen', topic: 'Topic', chunk: 'Block',
-		runShortcut: 'Strg+Enter', history: 'Verlauf', clearHistory: 'Verlauf löschen', runToSee: 'Führe eine Aktion aus, um ihr Ergebnis zu sehen.', rows: '{n} Zeilen', copy: 'kopieren', copied: 'kopiert', export: 'exportieren', tsv: 'TXT (tabulatorgetrennt)',
+		runShortcut: 'Strg+Enter', history: 'Verlauf', clearHistory: 'Verlauf löschen', runToSee: 'Führe eine Aktion aus, um ihr Ergebnis zu sehen.', useName: '{name} verwenden', didYouMean: 'Meintest du', rows: '{n} Zeilen', copy: 'kopieren', copied: 'kopiert', export: 'exportieren', tsv: 'TXT (tabulatorgetrennt)',
 		showing: '{shown} von {total} Zeilen angezeigt: die Downloads enthalten alle.',
 		reasonNoCredential: 'noch keine Anmeldedaten', reasonScriptsDisabled: 'Skripte sind in diesem Schema deaktiviert',
 		reasonNoPermission: '„{name}“ hat die Berechtigung {permission} nicht', noticeNoSchema: 'kein Schema ist bereit',
@@ -116,7 +118,7 @@ const MESSAGES: Record<Locale, Messages> = {
 	},
 	nl: {
 		schema: 'schema', choose: 'kies…', mode: 'modus', query: 'query', script: 'script', data: 'gegevens', options: 'opties', topic: 'topic', chunk: 'blok',
-		runShortcut: 'Ctrl+Enter', history: 'geschiedenis', clearHistory: 'geschiedenis wissen', runToSee: 'Voer een actie uit om het resultaat te zien.', rows: '{n} rijen', copy: 'kopiëren', copied: 'gekopieerd', export: 'exporteren', tsv: 'TXT (tabgescheiden)',
+		runShortcut: 'Ctrl+Enter', history: 'geschiedenis', clearHistory: 'geschiedenis wissen', runToSee: 'Voer een actie uit om het resultaat te zien.', useName: '{name} gebruiken', didYouMean: 'Bedoelde je', rows: '{n} rijen', copy: 'kopiëren', copied: 'gekopieerd', export: 'exporteren', tsv: 'TXT (tabgescheiden)',
 		showing: '{shown} van {total} rijen getoond: de downloads bevatten ze allemaal.',
 		reasonNoCredential: 'nog geen inloggegevens', reasonScriptsDisabled: 'scripts zijn uitgeschakeld in dit schema',
 		reasonNoPermission: '"{name}" heeft de machtiging {permission} niet', noticeNoSchema: 'geen enkel schema is klaar',
@@ -124,7 +126,7 @@ const MESSAGES: Record<Locale, Messages> = {
 	},
 	ca: {
 		schema: 'esquema', choose: 'tria…', mode: 'mode', query: 'consulta', script: 'script', data: 'dades', options: 'opcions', topic: 'tòpic', chunk: 'lot',
-		runShortcut: 'Ctrl+Retorn', history: 'historial', clearHistory: "esborra l'historial", runToSee: "Executa una acció per veure'n el resultat.", rows: '{n} files', copy: 'copia', copied: 'copiat', export: 'exporta', tsv: 'TXT (separat per tabulacions)',
+		runShortcut: 'Ctrl+Retorn', history: 'historial', clearHistory: "esborra l'historial", runToSee: "Executa una acció per veure'n el resultat.", useName: 'fes servir {name}', didYouMean: 'Volies dir', rows: '{n} files', copy: 'copia', copied: 'copiat', export: 'exporta', tsv: 'TXT (separat per tabulacions)',
 		showing: 'Es mostren {shown} de {total} files: les baixades les tenen totes.',
 		reasonNoCredential: 'encara no hi ha credencial', reasonScriptsDisabled: 'els scripts estan desactivats en aquest esquema',
 		reasonNoPermission: '"{name}" no té el permís {permission}', noticeNoSchema: 'cap esquema no està a punt',
@@ -132,7 +134,7 @@ const MESSAGES: Record<Locale, Messages> = {
 	},
 	gl: {
 		schema: 'esquema', choose: 'escoller…', mode: 'modo', query: 'consulta', script: 'script', data: 'datos', options: 'opcións', topic: 'tópico', chunk: 'lote',
-		runShortcut: 'Ctrl+Intro', history: 'historial', clearHistory: 'borrar o historial', runToSee: 'Executa unha acción para ver o seu resultado.', rows: '{n} filas', copy: 'copiar', copied: 'copiado', export: 'exportar', tsv: 'TXT (separado por tabulacións)',
+		runShortcut: 'Ctrl+Intro', history: 'historial', clearHistory: 'borrar o historial', runToSee: 'Executa unha acción para ver o seu resultado.', useName: 'usar {name}', didYouMean: 'Quixeches dicir', rows: '{n} filas', copy: 'copiar', copied: 'copiado', export: 'exportar', tsv: 'TXT (separado por tabulacións)',
 		showing: 'Móstranse {shown} de {total} filas: as descargas teñen todas.',
 		reasonNoCredential: 'aínda non hai credencial', reasonScriptsDisabled: 'os scripts están desactivados neste esquema',
 		reasonNoPermission: '"{name}" non ten o permiso {permission}', noticeNoSchema: 'ningún esquema está listo',
@@ -140,7 +142,7 @@ const MESSAGES: Record<Locale, Messages> = {
 	},
 	eu: {
 		schema: 'eskema', choose: 'aukeratu…', mode: 'modua', query: 'kontsulta', script: 'scripta', data: 'datuak', options: 'aukerak', topic: 'gaia', chunk: 'sorta',
-		runShortcut: 'Ctrl+Sartu', history: 'historia', clearHistory: 'garbitu historia', runToSee: 'Exekutatu ekintza bat emaitza ikusteko.', rows: '{n} errenkada', copy: 'kopiatu', copied: 'kopiatuta', export: 'esportatu', tsv: 'TXT (tabulazioz bereizia)',
+		runShortcut: 'Ctrl+Sartu', history: 'historia', clearHistory: 'garbitu historia', runToSee: 'Exekutatu ekintza bat emaitza ikusteko.', useName: 'erabili {name}', didYouMean: 'Hau esan nahi zenuen', rows: '{n} errenkada', copy: 'kopiatu', copied: 'kopiatuta', export: 'esportatu', tsv: 'TXT (tabulazioz bereizia)',
 		showing: '{total} errenkadatik {shown} erakusten dira: deskargek guztiak dituzte.',
 		reasonNoCredential: 'oraindik ez dago kredentzialik', reasonScriptsDisabled: 'scriptak desgaituta daude eskema honetan',
 		reasonNoPermission: '"{name}"(e)k ez du {permission} baimena', noticeNoSchema: 'eskema bat ere ez dago prest',

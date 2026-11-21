@@ -7,6 +7,14 @@
 		]
 	},
 	{
+		"name": "schema: search by part of a name, and some entities described",
+		"steps": [
+			{ "operation": "search", "args": { "text": "Products.categ" }, "expect": { "result": { "matches": [ "Products.categoryId: integer", "Products.category → Categories" ] } } },
+			{ "operation": "search", "args": { "text": "Prodcts" }, "expect": { "result": { "matches": [], "didYouMean": [ "products", "Products", "product" ] } } },
+			{ "operation": "describe", "args": { "entities": [ "Categories", "Categorie" ] }, "expect": { "match": { "notFound": [ { "name": "Categorie", "didYouMean": [ "Categories" ] } ] } } }
+		]
+	},
+	{
 		"name": "error not_found: a name that does not exist in the schema",
 		"steps": [
 			{ "operation": "entity", "args": { "entity": "Nope" }, "expect": { "error": { "code": "not_found", "name": "NotFoundError" } } },

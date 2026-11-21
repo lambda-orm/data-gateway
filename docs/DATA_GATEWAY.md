@@ -541,6 +541,18 @@ Cada esquema se alcanza por su ruta en todos los transportes que lo exponen (`{b
 - **`GET /health`:** `200` mientras al menos un esquema esté `ready`, con el detalle de cada uno; `503` si ninguno.
 - Esquema en la raíz (único): todo como hoy (`/execute`, `/entities`, …).
 - Ruta de un esquema que no se expone por ese transporte: `404`. Esquema no `ready`: `503` con el motivo.
+- **`GET /{esquema}/search?q=`** y **`GET /{esquema}/describe?entities=A,B`** (3.1.0): lo mismo que `schema_search` y
+  `schema_describe` de MCP (§5.1), y `schema.search` / `schema.describe` del WebSocket: entidades, propiedades y
+  relaciones por parte del nombre, y algunas entidades en dos líneas cada una. Requieren `read`.
+- **Sugerencias de un error de la consulta** (3.1.0): un nombre que no existe (`p.nme`, `Area`) responde `400` con
+  `suggestions: [{ name: "nme", didYouMean: ["name"] }]` además del mensaje, en el cuerpo de REST, en `error.data` del
+  WebSocket y en `structuredContent` de MCP (λORM L41). La UI ofrece reemplazarlo con un clic.
+- **Una ruta que no existe** (3.1.0): `404` en JSON como el resto (`{ error: "NotFoundError", message }`), con las
+  rutas más parecidas (`GET /iot/v1/schema/entities is not a route of this gateway; did you mean GET /iot/v1/entities?`).
+- **Una fuente sin su variable de conexión** (3.1.0): con `runtime.checkConnections`, el esquema no arranca y su motivo
+  nombra todas las variables que faltan (`source salesDocuments needs ORM_SALES_DOCUMENTS_CNX, which is not set: give it
+  in orm.schemas[].env …`), antes de abrir ninguna conexión. Sin la comprobación, la primera consulta a esa fuente
+  responde `503` (`ConnectionError`, λORM L43) con el mismo nombre de variable.
 
 ## 5. MCP
 

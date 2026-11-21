@@ -1,3 +1,4 @@
+import { DescribedEntities, DomainSearch } from '../../usecases/domainText'
 import {
 	DomainSchema, Entity, EntityMapping, Enum, Mapping, Metadata, MetadataConstraint, MetadataModel, MetadataParameter,
 	QueryOptions, QueryPlan, Schema, SchemaData, ScriptOptions, Stage
@@ -51,6 +52,10 @@ export interface DataGatewayPort {
 	views (ctx: RequestContext): Promise<string[]>
 	/** The domain as TypeScript declarations for an editor (docs/DATA_GATEWAY.md §10.3) */
 	typings (ctx: RequestContext): Promise<string>
+	/** Entities, properties and relations by part of their name, compact (L42) */
+	search (ctx: RequestContext, text: string): Promise<DomainSearch>
+	/** Some entities, two lines each (L42) */
+	describe (ctx: RequestContext, entities: string[]): Promise<DescribedEntities>
 
 	stageExists (ctx: RequestContext, stage: string): Promise<{ exists: boolean }>
 	stageExport (ctx: RequestContext, stage: string): Promise<SchemaData>

@@ -2,7 +2,6 @@ import { Principal } from '../../domain/auth/principal'
 import { JsonSchema } from '../../domain/mcp/mcpTypes'
 import { DataGatewayPort } from '../ports/input/dataGatewayPort'
 import { GatewayTool, Tool, ToolContext, ToolSpec } from './tool'
-import { describeEntities, searchDomain } from './domainDescription'
 
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false }
 const DESTRUCTIVE = { readOnlyHint: false, destructiveHint: true, idempotentHint: false, openWorldHint: false }
@@ -175,7 +174,7 @@ const SPECS: ToolSpec[] = [
 		required: ['text'],
 		permissions: ['read'],
 		annotations: READ_ONLY,
-		run: async (gw, ctx, a) => searchDomain(await gw.domain(ctx), a.text)
+		run: (gw, ctx, a) => gw.search(ctx, a.text)
 	},
 	{
 		name: 'schema_describe',
@@ -186,7 +185,7 @@ const SPECS: ToolSpec[] = [
 		required: ['entities'],
 		permissions: ['read'],
 		annotations: READ_ONLY,
-		run: async (gw, ctx, a) => describeEntities(await gw.domain(ctx), a.entities)
+		run: (gw, ctx, a) => gw.describe(ctx, a.entities)
 	},
 	{
 		name: 'schema_enums',

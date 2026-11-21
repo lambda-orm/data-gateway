@@ -54,7 +54,7 @@ abstract class McpTransport implements Transport {
 		if (result?.isError) {
 			const s = result.structuredContent ?? {}
 			const errorName = s.error ?? (text && text.includes(':') ? text.slice(0, text.indexOf(':')) : undefined)
-			throw gatewayError(this.name, { status: s.status, errorName, dbCode: s.code, message: s.message ?? text ?? 'error' })
+			throw gatewayError(this.name, { status: s.status, errorName, dbCode: s.code, suggestions: s.suggestions, message: s.message ?? text ?? 'error' })
 		}
 		const value = text === undefined || text === '' ? null : JSON.parse(text)
 		if (value && typeof value === 'object' && value.truncated === true && Array.isArray(value.rows) && this.target.onTruncated === 'error') {

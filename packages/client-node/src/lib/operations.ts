@@ -4,7 +4,7 @@
  */
 export type Operation =
 	| 'execute' | 'executeScript' | 'executeQueued' | 'plan' | 'metadata' | 'model' | 'parameters' | 'constraints'
-	| 'schema' | 'schemaVersion' | 'domain' | 'entities' | 'entity' | 'enums' | 'enum' | 'sources' | 'source'
+	| 'schema' | 'schemaVersion' | 'domain' | 'entities' | 'entity' | 'search' | 'describe' | 'enums' | 'enum' | 'sources' | 'source'
 	| 'mappings' | 'mapping' | 'entityMapping' | 'stages' | 'stage' | 'views'
 	| 'stageExists' | 'stageExport' | 'stageImport' | 'version' | 'health' | 'whoami'
 
@@ -29,6 +29,8 @@ export const REST: Partial<Record<Operation, Route<[string, string, unknown?]>>>
 	domain: () => ['GET', '/domain'],
 	entities: () => ['GET', '/entities'],
 	entity: a => ['GET', `/entities/${enc(a.entity)}`],
+	search: a => ['GET', `/search?q=${enc(a.text)}`],
+	describe: a => ['GET', `/describe?entities=${(a.entities as string[]).map(enc).join(',')}`],
 	enums: () => ['GET', '/enums'],
 	enum: a => ['GET', `/enums/${enc(a.enum)}`],
 	sources: () => ['GET', '/sources'],
@@ -62,6 +64,8 @@ export const RPC: Partial<Record<Operation, Route<[string, Args]>>> = {
 	domain: () => ['schema.domain', {}],
 	entities: () => ['schema.entities', {}],
 	entity: a => ['schema.entity', { entity: a.entity }],
+	search: a => ['schema.search', { text: a.text }],
+	describe: a => ['schema.describe', { entities: a.entities }],
 	enums: () => ['schema.enums', {}],
 	enum: a => ['schema.enum', { enum: a.enum }],
 	sources: () => ['schema.sources', {}],
@@ -94,6 +98,8 @@ export const MCP: Partial<Record<Operation, Route<[string, Args]>>> = {
 	domain: () => ['schema_domain', {}],
 	entities: () => ['schema_entities', {}],
 	entity: a => ['schema_entities', { entity: a.entity }],
+	search: a => ['schema_search', { text: a.text }],
+	describe: a => ['schema_describe', { entities: a.entities }],
 	enums: () => ['schema_enums', {}],
 	enum: a => ['schema_enums', { enum: a.enum }],
 	sources: () => ['schema_sources', {}],

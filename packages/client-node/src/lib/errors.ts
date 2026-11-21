@@ -18,6 +18,8 @@ export interface GatewayErrorInfo {
 	/** the code of the database, for an error of the database (Postgres 23505, MySQL ER_DUP_ENTRY, …) */
 	dbCode?: string
 	message: string
+	/** names of the query that don't exist, with the closest ones: `[{ name: 'nme', didYouMean: ['name'] }]` */
+	suggestions?: { name: string, didYouMean: string[] }[]
 	transport?: TransportName
 	operation?: string
 }
@@ -28,6 +30,7 @@ export class GatewayError extends Error implements GatewayErrorInfo {
 	public readonly errorName?: string
 	public readonly status?: number
 	public readonly dbCode?: string
+	public readonly suggestions?: { name: string, didYouMean: string[] }[]
 	public readonly transport?: TransportName
 	public readonly operation?: string
 
@@ -38,6 +41,7 @@ export class GatewayError extends Error implements GatewayErrorInfo {
 		this.errorName = info.errorName
 		this.status = info.status
 		this.dbCode = info.dbCode
+		if (info.suggestions && info.suggestions.length > 0) this.suggestions = info.suggestions
 		this.transport = info.transport
 		this.operation = info.operation
 	}
@@ -69,7 +73,7 @@ export const errorCode = (status?: number, dbCode?: string): GatewayErrorCode =>
 /** An error the gateway answered, with its status, name and database code */
 export const gatewayError = (
 	transport: TransportName,
-	answer: { status?: number, errorName?: string, dbCode?: unknown, message: string }
+	answer: { status?: number, errorName?: string, dbCode?: unknown, message: string, suggestions?: { name: string, didYouMean: string[] }[] }
 ): GatewayError => {
 	const dbCode = answer.dbCode === undefined || answer.dbCode === null ? undefined : String(answer.dbCode)
 	return new GatewayError({
@@ -78,6 +82,7 @@ export const gatewayError = (
 		status: answer.status,
 		dbCode,
 		message: answer.message,
+		suggestions: Array.isArray(answer.suggestions) ? answer.suggestions : undefined,
 		transport
 	})
 }

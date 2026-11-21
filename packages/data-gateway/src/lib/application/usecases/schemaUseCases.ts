@@ -5,6 +5,7 @@ import { RequestContext } from '../ports/input/dataGatewayPort'
 import { OrmSchemaPort, OrmStagePort } from '../ports/output/ormPorts'
 import { Auditor } from './auditor'
 import { generateTypings } from '../typings/typingsGenerator'
+import { DescribedEntities, DomainSearch, describeEntities, searchDomain } from './domainText'
 
 /**
  * The schema as λORM loaded it. Everything needs `read`. A name that doesn't exist (an entity, an enum, a source, a
@@ -53,6 +54,10 @@ export class SchemaUseCases {
 	public stage (ctx: RequestContext, name: string) { return this.find(ctx, 'stage', name, () => this.orm.stage(name)) }
 	public views (ctx: RequestContext): Promise<string[]> { return this.read(ctx, () => this.orm.views()) }
 	public typings (ctx: RequestContext): Promise<string> { return this.read(ctx, () => generateTypings(this.orm.domain())) }
+	/** entities, properties and relations by part of their name, as compact text (L42) */
+	public search (ctx: RequestContext, text: string): Promise<DomainSearch> { return this.read(ctx, () => searchDomain(this.orm.domain(), text)) }
+	/** some entities, two lines each; the names that don't exist apart, with the closest ones */
+	public describe (ctx: RequestContext, names: string[]): Promise<DescribedEntities> { return this.read(ctx, () => describeEntities(this.orm.domain(), names)) }
 }
 
 /** Stages: exists and export need `read`; import needs `stageImport` and is audited. */

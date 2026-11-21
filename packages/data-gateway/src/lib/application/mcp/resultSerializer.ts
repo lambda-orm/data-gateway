@@ -45,5 +45,6 @@ export const toolError = (error: unknown): ToolResult => {
 	const structured: Record<string, unknown> = { error: body.error, status }
 	if (body.code !== undefined) structured.code = body.code
 	structured.message = body.message
+	if (body.suggestions) structured.suggestions = body.suggestions
 	return { content: [{ type: 'text', text: `${body.error}: ${body.message}` }], structuredContent: structured, isError: true }
 }
