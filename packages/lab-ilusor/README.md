@@ -56,6 +56,10 @@ and in any order (`--randomize`).
 | `script.spec.ts` | `orm.executeScript`: several queries in one transaction across sources, throw, try/catch, for (L32) |
 | `stage.spec.ts` | push -o, fetch, pull, renames, catch-all source, string length (L1, L2, L6, L19–L22, L24, L25, L27) |
 | `service.spec.ts` | the REST service as Ilusor's clients call it (L4, L5, L9, L12, L14) |
+| `composite.spec.ts` | relations of several fields, `(locationId, x)` as Ilusor's iot_location (schema `lab_composite`, created by push) (L34) |
+| `documents.spec.ts` | FerretDB (MongoDB API) next to Postgres: no transactions, UUIDs and Decimal128 (L35, L37); FerretDB on 127.0.0.1:57017 (`lab:ilusor:up` starts it) |
+| `model.spec.ts` | the relations of a model, without a database: pairs of existing fields of the same type, the one side a key, `locationId` never dropped, no relation of several fields to MongoDB (L34). The lab's models, and Ilusor's real one when it is on this machine (`ILUSOR_MODEL`, by default `~/ilusor/dev/cloud/data-gateway/workspace/lambdaORM.yaml`). `npm run lab:ilusor:model` runs it alone, without Postgres |
+| `uuid.spec.ts` | `uuid` columns, with a model and tables of its own (schema `lab_uuid`, `tests/uuid/lambdaORM.yaml`) so the lab's drift check is untouched (L36, L38) |
 
 ### Adding a test
 

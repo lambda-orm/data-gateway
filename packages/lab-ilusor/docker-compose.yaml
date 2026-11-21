@@ -20,6 +20,32 @@ services:
       test: ["CMD-SHELL", "pg_isready -U admin -d ilusor"]
       interval: 2s
       retries: 30
+  # FerretDB (MongoDB API on Postgres + DocumentDB) as Ilusor's Cloud keeps its documents: no transactions (L35),
+  # UUIDs as binary subtype 4 and money as Decimal128 (L37). Its own Postgres; FerretDB on 127.0.0.1:57017.
+  documents-postgres:
+    container_name: ilusor-cloud-lab-documents-postgres
+    image: ghcr.io/ferretdb/postgres-documentdb:17-0.107.0-ferretdb-2.7.0
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d postgres"]
+      interval: 2s
+      retries: 30
+  ferretdb:
+    container_name: ilusor-cloud-lab-ferretdb
+    image: ghcr.io/ferretdb/ferretdb:2.7.0
+    depends_on:
+      documents-postgres:
+        condition: service_healthy
+    environment:
+      FERRETDB_POSTGRESQL_URL: postgres://admin:admin@documents-postgres:5432/postgres
+      FERRETDB_TELEMETRY: disable
+    ports:
+      - 127.0.0.1:57017:27017
   # The published service, to compare with the one built from this repo
   # (packages/data-gateway: WORKSPACE=<this folder> PORT=59292 …, see README).
   orm:

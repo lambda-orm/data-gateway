@@ -1,0 +1,46 @@
+# Documents in FerretDB next to a Postgres table, as Ilusor's Cloud has them (docs/LAMBDAORM_PENDING.md L35, L37):
+# a quote (MongoDB, its id a UUID, its amounts Decimal128) and the installation that names it (Postgres, schema
+# lab_docs). A model of its own, so the lab's model and its drift check stay as they are.
+domain:
+  entities:
+    - name: DocInstallations
+      primaryKey: [id]
+      properties:
+        - { name: id, length: 36, required: true }
+        - { name: number, length: 32, required: true }
+        - { name: quoteId, length: 36 }
+      relations:
+        - { name: quote, from: quoteId, entity: DocQuotes, to: id, target: installations, weak: true }
+    - name: DocQuotes
+      primaryKey: [id]
+      properties:
+        - { name: id, length: 36, required: true }
+        - { name: number, length: 32, required: true }
+        - { name: companyId, length: 36 }
+        - { name: total, type: decimal }
+        - { name: lines, type: json }
+      relations:
+        - { name: installationRef, from: id, entity: DocInstallations, to: quoteId, weak: true }
+infrastructure:
+  mappings:
+    - name: docs
+      entities:
+        - name: DocInstallations
+          mapping: doc_installations
+          properties:
+            - { name: id, mapping: id, dbType: uuid }
+            - { name: quoteId, mapping: quote_id, dbType: uuid }
+    - name: documents
+      entities:
+        - name: DocQuotes
+          mapping: quotes
+          properties:
+            - { name: id, mapping: _id }
+  sources:
+    - { name: docs, dialect: PostgreSQL, mapping: docs, connection: "${ORM_DOCS_CNX}" }
+    - { name: documents, dialect: MongoDB, mapping: documents, connection: "${ORM_DOCUMENTS_CNX}" }
+  stages:
+    - name: default
+      sources:
+        - { name: documents, condition: 'entity.in(["DocQuotes"])' }
+        - { name: docs }
