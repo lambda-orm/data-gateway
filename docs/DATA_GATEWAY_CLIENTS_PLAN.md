@@ -138,7 +138,7 @@ implementación de referencia en `packages/data-gateway-conformance/runner/error
 - **REST:** el status HTTP y el cuerpo `{ error, code, message }` (L30).
 - **WebSocket:** `error.data` con `name`, `status` y `code`.
 - **MCP:** un resultado `isError: true` trae el texto `"<Nombre>: <mensaje>"` para el modelo y, desde la gateway
-  3.0.4, `structuredContent` con `error`, `status`, `code` y `message` para un programa (la 3.0.3 solo traía el texto:
+  3.1.0, `structuredContent` con `error`, `status`, `code` y `message` para un programa (la 3.0.3 solo traía el texto:
   no se podía distinguir una clave única de una foránea).
 - Errores del transporte (conexión, handshake, sesión SSE perdida): `code: "transport"`.
 
@@ -220,7 +220,7 @@ mismo por cualquier vía.
 
 | Fase | Contenido | Se publica |
 | --- | --- | --- |
-| 0 | Este plan; `packages/data-gateway-conformance` con el compose, 27 casos y el runner de referencia (135 en verde: 27 × 5 transportes); `ci-local.sh clients`; los arreglos que la suite encontró en lib y en la gateway | lib 3.7.1, gateway 3.0.4 |
+| 0 | Este plan; `packages/data-gateway-conformance` con el compose, 27 casos y el runner de referencia (135 en verde: 27 × 5 transportes); `ci-local.sh clients`; los arreglos que la suite encontró en lib y en la gateway | lib 3.7.1, gateway 3.1.0 |
 | 1 | Node: `packages/data-gateway-client-node`, los cinco transportes con `fetch` y el `WebSocket` de Node (sin axios), la cadena de conexión, los errores, la suite en verde con su API pública (135/135); documentación en la wiki al publicarlo | `@lambdaorm/data-gateway-client` 0.1.0 |
 | 2 | Migrar `@lambdaorm/cli` al cliente nuevo; `@lambdaorm/client` 1.0.0 como alias deprecado | `@lambdaorm/cli`, `@lambdaorm/client` |
 | 3 | Go: los cinco transportes, la suite en verde; `release-go` y el espejo público | `v0.1.0` |

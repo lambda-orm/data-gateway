@@ -573,6 +573,8 @@ MCP, pero es una decisión explícita: el agente puede hacer lo mismo que una ap
 | `schema_version` | — | `GET /schema/version` | `read` | `readOnlyHint: true` |
 | `schema_domain` | — | `GET /domain` | `read` | `readOnlyHint: true` |
 | `schema_entities` | `entity?` | `GET /entities`, `GET /entities/:entity` | `read` | `readOnlyHint: true` |
+| `schema_search` | `text` | — (para un modelo: texto compacto) | `read` | `readOnlyHint: true` |
+| `schema_describe` | `entities` | — (para un modelo: texto compacto) | `read` | `readOnlyHint: true` |
 | `schema_enums` | `enum?` | `GET /enums`, `GET /enums/:enum` | `read` | `readOnlyHint: true` |
 | `schema_sources` | `source?` | `GET /sources`, `GET /sources/:source` | `read` | `readOnlyHint: true` |
 | `schema_mappings` | `mapping?`, `entity?` | `GET /mappings…` | `read` | `readOnlyHint: true` |
@@ -592,6 +594,13 @@ MCP, pero es una decisión explícita: el agente puede hacer lo mismo que una ap
 - Mismas reglas que REST: `orm_execute_script` responde error si `scripts.enabled` es `false`; `orm_execute_queued`
   responde error si el esquema no tiene cola.
 - `mcp.tools.include` / `exclude` (global o por esquema) restringen además la lista.
+- **Un esquema grande (desde 3.1.0).** Si el dominio descrito no entra en la descripción de `orm_execute` (12.000
+  caracteres), esta lleva solo los nombres de las entidades y apunta a `schema_search` y `schema_describe`, en vez de
+  cortar el dominio y mandar a leerlo entero. Con el modelo de Ilusor (192 entidades): el dominio en JSON pesa 389 KB;
+  la parte de dominio de `orm_execute`, 4 KB; `schema_describe` de dos entidades, 2 KB; y una búsqueda, de 0,1 a 8 KB
+  (40 resultados como máximo, con `more` y una pista para acotarla). `schema_search` encuentra por parte del nombre
+  (`Areas.type` solo en `Areas`) y, si nada lo contiene, da los nombres más parecidos (`didYouMean`).
+  `schema_entities` y `schema_domain` siguen devolviendo el JSON de REST: los clientes los usan como equivalentes.
 
 ### 5.2 Resultados y errores
 
@@ -608,7 +617,7 @@ MCP, pero es una decisión explícita: el agente puede hacer lo mismo que una ap
   Si no hace falta recortar, el resultado va tal cual (sin envoltorio). Solo aplica a MCP. El recorte es posterior a
   la ejecución: protege el contexto del modelo, no la base (para eso, `server.maxResponseBytes` y `server.timeout`).
 - Error de λORM (sintaxis, entidad inexistente, constraint, script deshabilitado o fuera de límites, timeout) o falta
-  de permiso: `isError: true` con el mensaje en `text`, para que el modelo pueda leerlo y corregir, y desde 3.0.4
+  de permiso: `isError: true` con el mensaje en `text`, para que el modelo pueda leerlo y corregir, y desde 3.1.0
   `structuredContent: { error, status, code?, message }`, el mismo nombre, status y código de la base que REST y
   WebSocket, para un programa que usa el MCP como transporte (docs/DATA_GATEWAY_CLIENTS_PLAN.md §5).
 - Esquema no disponible, error de protocolo, tool inexistente, argumentos inválidos, no autenticado: error JSON-RPC.

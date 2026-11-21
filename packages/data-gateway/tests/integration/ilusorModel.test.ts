@@ -79,6 +79,35 @@ transports:
 		expect(answer.body.message).toContain(message)
 	})
 
+	// what a model reads to write a query over a large schema (L42): small, and enough to find the names
+	const tool = async (name: string, args: Record<string, unknown> = {}): Promise<any> => JSON.parse((await mcp.callTool({ name, arguments: args }) as any).content[0].text)
+
+	test('MCP: orm_execute describes a large domain by its names and points to schema_search / schema_describe', async () => {
+		const { tools } = await mcp.listTools()
+		const execute = tools.find(t => t.name === 'orm_execute')!
+		expect(execute.description).toMatch(/Domain: \d+ entities, too many to describe here/)
+		expect(execute.description).toContain('Areas, ')
+		expect(execute.description!.length).toBeLessThan(15000)
+		expect(JSON.stringify(tools).length).toBeLessThan(30000)
+	})
+
+	test('MCP: schema_search finds properties and relations by part of their name, compact', async () => {
+		const result = await tool('schema_search', { text: 'Areas.type' })
+		expect(result.matches).toEqual(expect.arrayContaining(['Areas.areaTypeId: text', 'Areas.areaType → AreaTypes']))
+		const all = await tool('schema_search', { text: 'threshold' })
+		expect(all.matches.length).toBeGreaterThan(5)
+		expect(JSON.stringify(all).length).toBeLessThan(12000)
+		expect(await tool('schema_search', { text: 'Aeras' })).toMatchObject({ matches: [], didYouMean: expect.arrayContaining(['Areas']) })
+	})
+
+	test('MCP: schema_describe gives some entities in two lines each, and the names it doesn\'t know apart', async () => {
+		const result = await tool('schema_describe', { entities: ['Areas', 'Devices', 'Area'] })
+		expect(result.entities).toHaveLength(2)
+		expect(result.entities[0]).toMatch(/^- Areas: code: text \(pk\); [^\n]*\n {2}relations: .*areaType → AreaTypes/)
+		expect(result.notFound).toEqual([{ name: 'Area', didYouMean: ['Areas'] }])
+		expect(JSON.stringify(result).length).toBeLessThan(5000)
+	})
+
 	test('MCP: the same error, with its status', async () => {
 		const result: any = await mcp.callTool({ name: 'orm_plan', arguments: { query: 'Areas.map(p => p.nam)' } })
 		expect(result.isError).toBe(true)

@@ -7,6 +7,9 @@ export interface JsonSchema {
 	additionalProperties?: boolean
 	minimum?: number
 	minLength?: number
+	items?: JsonSchema
+	minItems?: number
+	maxItems?: number
 }
 
 /** Hints for the client (they block nothing: what blocks are the permissions of the credential) */
