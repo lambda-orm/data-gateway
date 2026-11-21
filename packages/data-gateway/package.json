@@ -90,6 +90,6 @@
     "doc": "npx grunt doc",
     "dist": "npx grunt dist",
     "release": "npx grunt release",
-    "test:integration": "npx tsc -b ../base ../lib && npx jest --config ./jest-integration-config.json --runInBand --detectOpenHandles"
+    "test:integration": "npx tsc -b ../base ../lib ../client && npx jest --config ./jest-integration-config.json --runInBand --detectOpenHandles"
   }
 }
