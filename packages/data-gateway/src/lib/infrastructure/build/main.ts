@@ -1,3 +1,4 @@
+import path from 'path'
 import { ConfigSourcePort, LoggerPort } from '../../application/ports/output/supportPorts'
 import { Supervisor } from '../../application/runtime/supervisor'
 import { ConfigReader } from '../../domain/config/configReader'
@@ -7,6 +8,9 @@ import { HeartbeatPolicy, RestartPolicy } from '../../domain/runtime/policies'
 import { schemaEnv, threadpoolSize } from '../../domain/runtime/schemas'
 import { SystemClock } from '../output/clock/systemClock'
 import { DotEnvFileReader } from '../output/discovery/dotEnvFileReader'
+import { FileWorkspaceFiles, FsWorkspaceWatcher } from '../output/discovery/workspaceWatch'
+import { WorkspaceMonitor } from '../../application/runtime/workspaceMonitor'
+import { SchemaDescriptor, SchemaSettings } from '../../domain/runtime/schemas'
 import { ConsoleLogger } from '../output/logger/loggers'
 import { YamlFileConfigSource } from '../output/config/yamlFileConfigSource'
 import { EdgeWorkerRuntime, SchemaWorkerRuntime } from '../output/runtime/workerRuntimes'
@@ -49,23 +53,24 @@ export const startGateway = async (options: MainOptions = {}): Promise<RunningGa
  */
 export const startSupervisor = async (options: MainOptions = {}): Promise<Supervisor> => {
 	const { config, logger } = await readConfig(options)
-	const schemas = resolveConfiguredSchemas(config)
+	const schemas = resolveConfiguredSchemas(config, logger)
 	const threads = schemas.filter(s => s.settings.runtime.mode === 'thread').length
 	// before any worker (and anything of this thread) uses the libuv threadpool
 	if (process.env.UV_THREADPOOL_SIZE === undefined) process.env.UV_THREADPOOL_SIZE = String(threadpoolSize(config.runtime.threadpoolSize, threads))
 	const gatewayEnv = options.env ?? process.env
 	const dotEnv = new DotEnvFileReader()
-	const specs = schemas.map(({ descriptor, settings }) => ({
+	const specOf = ({ descriptor, settings }: { descriptor: SchemaDescriptor, settings: SchemaSettings }) => ({
 		descriptor,
 		settings,
 		env: schemaEnv(gatewayEnv, dotEnv.read(descriptor.workspace), descriptor, config.runtime.env)
-	}))
+	})
+	const specs = schemas.map(specOf)
 	const version = packageVersion()
 	const runtimeSettings = { config, version, logger }
 	const supervisor = new Supervisor(
 		specs,
 		new SchemaWorkerRuntime(runtimeSettings),
-		new EdgeWorkerRuntime(runtimeSettings, schemas),
+		new EdgeWorkerRuntime(runtimeSettings),
 		{
 			restart: new RestartPolicy(config.runtime.restart.initialDelayMs, config.runtime.restart.maxDelayMs),
 			heartbeat: new HeartbeatPolicy(config.runtime.heartbeat.intervalMs, config.runtime.heartbeat.timeoutMs),
@@ -77,6 +82,22 @@ export const startSupervisor = async (options: MainOptions = {}): Promise<Superv
 	logger.info(`[data-gateway] ${version}: schemas ${schemas.map(s => `/${s.descriptor.path} (${s.settings.runtime.mode})`).join(', ')}; ` +
 		`UV_THREADPOOL_SIZE ${process.env.UV_THREADPOOL_SIZE}; env ${config.runtime.env.isolate ? 'isolated' : 'shared'}; authentication ${config.authentication.adapter}`)
 	supervisor.start()
+	if (config.orm.watch.enabled) {
+		const roots = [...new Set([
+			...(config.orm.workspacePath ? [path.resolve(config.orm.workspacePath)] : []),
+			...config.orm.schemas.filter(s => s.workspace !== undefined).map(s => path.resolve(s.workspace!))
+		])]
+		const monitor = new WorkspaceMonitor({
+			roots,
+			resolve: () => resolveConfiguredSchemas(config),
+			spec: specOf,
+			intervalMs: config.orm.watch.intervalMs,
+			debounceMs: config.orm.watch.debounceMs
+		}, supervisor, new FsWorkspaceWatcher(logger), new FileWorkspaceFiles(), new SystemClock(), logger)
+		monitor.start(schemas)
+		supervisor.attach(monitor)
+		logger.info(`[data-gateway] watching the workspaces: ${roots.join(', ')} (scan every ${config.orm.watch.intervalMs} ms)`)
+	}
 	return supervisor
 }
 

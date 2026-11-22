@@ -20,10 +20,14 @@ export interface DiscoveredSchema {
 
 /**
  * Discovered + explicit schemas, with the adjustments (orm.schemas entries without workspace) applied. Problems: an
- * adjustment of a schema that wasn't discovered, duplicated routes, prefixes, the root shared, no schema at all.
+ * adjustment of a schema that wasn't discovered, duplicated routes, prefixes, the root shared, no schema at all. While the
+ * workspaces are watched (orm.watch), no schema and an adjustment of one not there yet are not problems (it may
+ * appear): they are `waiting`, to warn about.
  */
-export const resolveSchemas = (config: DataGatewayConfig, discovered: DiscoveredSchema[]): { schemas: SchemaDescriptor[], issues: string[] } => {
+export const resolveSchemas = (config: DataGatewayConfig, discovered: DiscoveredSchema[]): { schemas: SchemaDescriptor[], issues: string[], waiting: string[] } => {
 	const issues: string[] = []
+	const waiting: string[] = []
+	const watching = config.orm.watch?.enabled === true
 	const schemas: SchemaDescriptor[] = discovered.map(d => ({ path: d.path, workspace: d.workspace, origin: 'discovered', overrides: {} }))
 	for (const entry of config.orm.schemas) {
 		const { path, workspace, ...overrides } = entry
@@ -33,14 +37,15 @@ export const resolveSchemas = (config: DataGatewayConfig, discovered: Discovered
 		}
 		const target = schemas.find(s => s.path === path && s.origin === 'discovered')
 		if (!target) {
-			issues.push(`orm.schemas "${path || '/'}" has no workspace and adjusts no discovered schema (discovered: ${discovered.map(d => d.path || '/').join(', ') || 'none'})`)
+			const problem = `orm.schemas "${path || '/'}" has no workspace and adjusts no discovered schema (discovered: ${discovered.map(d => d.path || '/').join(', ') || 'none'})`
+			;(watching ? waiting : issues).push(problem)
 			continue
 		}
 		target.overrides = { ...target.overrides, ...overrides }
 	}
-	if (schemas.length === 0) issues.push(`no schema found: ${config.orm.workspacePath ?? 'orm.schemas'} has no lambdaORM.yaml`)
+	if (schemas.length === 0) (watching ? waiting : issues).push(`no schema found: ${config.orm.workspacePath ?? 'orm.schemas'} has no lambdaORM.yaml`)
 	issues.push(...schemaPathsIssues(schemas.map(s => s.path)))
-	return { schemas, issues }
+	return { schemas, issues, waiting }
 }
 
 /** What a schema runs with, once schema → transport → global is applied */

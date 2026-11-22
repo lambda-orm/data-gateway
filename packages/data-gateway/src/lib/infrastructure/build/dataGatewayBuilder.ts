@@ -5,7 +5,7 @@ import { MeasuredSchemaDirectory } from '../../application/runtime/measuredDirec
 import { LoggerPort, MetricsPort, AuditPort, ClockPort, AuthenticatorPort, QueueOutcome } from '../../application/ports/output/supportPorts'
 import { Listeners } from '../../application/runtime/listeners'
 import { DataGatewayConfig, TransportName } from '../../domain/config/dataGatewayConfig'
-import { ConfigError } from '../../domain/errors/gatewayError'
+import { ConfigError, GatewayError } from '../../domain/errors/gatewayError'
 import { effectiveAuthentication, effectiveSettings, resolveSchemas, SchemaDescriptor, SchemaSettings } from '../../domain/runtime/schemas'
 import { Transport } from '../input/transport'
 import { StdoutAuditAdapter } from '../output/audit/stdoutAuditAdapter'
@@ -15,6 +15,13 @@ import { ConsoleLogger, WinstonLogger } from '../output/logger/loggers'
 import { NoMetrics, PromClientMetrics } from '../output/metrics/promClientMetrics'
 import { AuthenticatorRegistry, TransportRegistry } from './registries'
 import { composeSchema, ComposedSchema } from './schemaComposer'
+import { AdminService } from '../../application/admin/adminService'
+import { CommandService } from '../../application/admin/commandService'
+import { SchemaDirectoryPort } from '../../application/ports/input/schemaDirectoryPort'
+import { FileWorkspaceStore } from '../output/admin/fileWorkspaceStore'
+import { LambdaSchemaValidator } from '../output/admin/lambdaSchemaValidator'
+import { YamlAdapter } from '../output/admin/yamlAdapter'
+import { NodeCodeGenerator } from '../output/admin/nodeCodeGenerator'
 
 export interface BuildOptions {
 	logger?: LoggerPort
@@ -77,11 +84,44 @@ export const measureConnections = (metrics: MetricsPort, transports: Transport[]
 }
 
 /** Discovered under orm.workspacePath + declared in orm.schemas, checked; ConfigError with every problem */
-export const resolveConfiguredSchemas = (config: DataGatewayConfig): { descriptor: SchemaDescriptor, settings: SchemaSettings }[] => {
+export const resolveConfiguredSchemas = (config: DataGatewayConfig, logger?: LoggerPort): { descriptor: SchemaDescriptor, settings: SchemaSettings }[] => {
 	const discovered = config.orm.workspacePath ? new FileSystemSchemaDiscovery().discover(config.orm.workspacePath) : []
-	const { schemas, issues } = resolveSchemas(config, discovered)
+	const { schemas, issues, waiting } = resolveSchemas(config, discovered)
 	if (issues.length) throw new ConfigError(issues)
+	for (const problem of waiting) logger?.warn(`[data-gateway] ${problem}: waiting for it (orm.watch)`)
 	return schemas.map(descriptor => ({ descriptor, settings: effectiveSettings(config, descriptor) }))
+}
+
+/** admin.enabled: the administration of the workspaces of the schemas the directory serves */
+export const buildAdmin = (config: DataGatewayConfig, directory: SchemaDirectoryPort, logger: LoggerPort, clock: ClockPort, reloads = false): { service: AdminService, commands: CommandService } | undefined => {
+	if (!config.admin.enabled) return undefined
+	const anonymousAdmin = config.admin.allowAnonymous && config.authentication.adapter === 'none'
+	const store = new FileWorkspaceStore()
+	const stateOf = (path: string) => directory.states().find(s => s.path === path)
+	// a lambdaORM.yaml written is served once the monitor of the workspaces reloads it (the process, with orm.watch)
+	const reloaded = async (path: string, since: string | undefined): Promise<void> => {
+		if (!reloads) throw new GatewayError(409, 'ConflictError', 'this gateway does not reload its schemas (orm.watch, the process runtime): incorporate can\'t push the new schema')
+		const pendingBefore = stateOf(path)?.pending
+		const end = Date.now() + config.admin.commandTimeoutMs
+		while (Date.now() < end) {
+			const state = stateOf(path)
+			if (state?.status === 'ready' && state.since !== since && !state.pending) return
+			if (state?.pending && state.pending !== pendingBefore) throw new GatewayError(422, 'SchemaValidationError', state.pending)
+			await new Promise(resolve => setTimeout(resolve, 200))
+		}
+		throw new GatewayError(504, 'TimeoutError', `schema "${path}" did not reload in ${config.admin.commandTimeoutMs} ms`)
+	}
+	const commands = new CommandService({ anonymousAdmin, timeoutMs: config.admin.commandTimeoutMs, previewTtlMs: 10 * 60000, keepJobs: 200, reloaded, since: path => stateOf(path)?.since },
+		() => directory.schemas(), store, new YamlAdapter(), clock, logger)
+	const service = new AdminService({
+		root: config.orm.workspacePath ? path.resolve(config.orm.workspacePath) : undefined,
+		anonymousAdmin: config.admin.allowAnonymous && config.authentication.adapter === 'none',
+		maxFileBytes: config.admin.maxFileBytes
+	},
+	() => directory.schemas().filter(s => s.workspace !== undefined).map(s => ({ path: s.path, workspace: s.workspace! })),
+	() => directory.states(),
+	store, new LambdaSchemaValidator(), new YamlAdapter(), clock, logger, new NodeCodeGenerator())
+	return { service, commands }
 }
 
 /** The authenticator of a schema on each transport that exposes it: schema → transport → global */
@@ -104,7 +144,9 @@ export class DataGatewayBuilder {
 		const composed: ComposedSchema[] = []
 		const inline: InlineSchema[] = []
 		try {
-			for (const { descriptor, settings } of resolveConfiguredSchemas(config)) {
+			// inline nothing is watched: an empty volume, or an adjustment of nothing, is a problem as without orm.watch
+			const unwatched = { ...config, orm: { ...config.orm, watch: { ...config.orm.watch, enabled: false } } }
+			for (const { descriptor, settings } of resolveConfiguredSchemas(unwatched)) {
 				const queueOutcomes = new Listeners<QueueOutcome>()
 				const schema = await composeSchema({
 					path: descriptor.path,
@@ -114,11 +156,14 @@ export class DataGatewayBuilder {
 					mcpName: config.mcp.name,
 					pageSize: config.mcp.pageSize,
 					version,
-					checkConnections: options.checkConnections ?? false
+					checkConnections: options.checkConnections ?? false,
+					admin: config.admin.enabled
 				}, { logger, audit, clock, queueEvents: { completed: outcome => queueOutcomes.emit(outcome) } })
 				composed.push(schema)
 				inline.push({
 					path: descriptor.path,
+					workspace: descriptor.workspace,
+					commands: schema.commands,
 					gateway: schema.gateway,
 					mcp: schema.mcp,
 					transports: settings.transports,
@@ -133,7 +178,8 @@ export class DataGatewayBuilder {
 		}
 		const inlineDirectory = new InlineSchemaDirectory(inline, clock, version)
 		const directory = metrics.enabled ? new MeasuredSchemaDirectory(inlineDirectory, metrics) : inlineDirectory
-		const transports = (options.transports ?? new TransportRegistry()).build({ config, directory, metrics, logger })
+		const admin = buildAdmin(config, directory, logger, clock)
+		const transports = (options.transports ?? new TransportRegistry()).build({ config, directory, metrics, logger, admin })
 		measureConnections(metrics, transports)
 		logger.info(`[data-gateway] ${version} (inline): schemas ${inline.map(s => `/${s.path}`).join(', ')}; rate limit ${config.rateLimit.max > 0 ? `${config.rateLimit.max} per ${config.rateLimit.windowMs} ms` : 'off'}; ` +
 			`scripts ${config.scripts.enabled ? 'enabled' : 'disabled'}; audit ${config.audit.enabled ? 'on' : 'off'}; authentication ${config.authentication.adapter}`)

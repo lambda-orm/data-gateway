@@ -1,7 +1,7 @@
 /** Names a segment of a schema route can't take: they are routes of the gateway itself (docs/DATA_GATEWAY.md §2.2) */
 export const RESERVED_SEGMENTS = [
 	'health', 'ping', 'metrics', 'version', 'schemas', 'mcp', 'sse', 'messages', 'status', 'doc', 'api-docs', 'swagger',
-	'asyncapi', 'ui', 'whoami', 'typings'
+	'asyncapi', 'ui', 'whoami', 'typings', 'admin'
 ]
 
 const SEGMENT = /^[a-zA-Z0-9_.-]+$/

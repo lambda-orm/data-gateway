@@ -5,15 +5,22 @@ import { DomainInfo, edgesOf } from '../domain/diagram'
 import { explorerMessagesOf } from '../domain/explorerI18n'
 import { messagesOf } from '../domain/i18n'
 import { toYaml } from '../domain/results'
-import { folderPaths, SavedDiagram, SavedItem, SavedQuery, SavedQueryContent } from '../domain/savedItems'
+import { folderPaths, SavedDiagram, SavedItem, SavedQuery, SavedQueryContent, toExport } from '../domain/savedItems'
 import { RestQueryApi } from '../infrastructure/restQueryApi'
 import { IndexedDbWorkspaceStore } from '../infrastructure/workspaceStores'
 import { CodeEditor } from './CodeEditor'
-import { DiagramDialog, Icons, ItemDialog } from './dialogs'
+import { DiagramDialog, Icons, ItemDialog, NewSchemaDialog, RemoveSchemaDialog } from './dialogs'
 import { DomainDiagram } from './DomainDiagram'
 import { EntityView } from './EntityView'
 import { Explorer, problemText } from './Explorer'
 import { QueryWorkbench, QueryWorkbenchProps } from './QueryWorkbench'
+import { SchemaEditor } from './SchemaEditor'
+import { CommandsPanel } from './CommandsPanel'
+import { SchemaForms } from './SchemaForms'
+import { RestAdminApi } from '../infrastructure/restAdminApi'
+import { GatewayWorkspaceStore } from '../infrastructure/gatewayWorkspaceStore'
+import { adminMessagesOf, format } from '../domain/adminI18n'
+import { AdminApiPort, AdminCapabilities } from '../application/ports'
 
 export interface WorkspaceProps extends Omit<QueryWorkbenchProps, 'initial' | 'onContentChange' | 'toolbar' | 'initialSchema' | 'schema'> {
 	/** Where the saved items are kept; by default IndexedDB of the browser under workspaceKey */
@@ -22,9 +29,26 @@ export interface WorkspaceProps extends Omit<QueryWorkbenchProps, 'initial' | 'o
 	workspaceKey?: string
 	/** At most this many tabs (default 20) */
 	maxTabs?: number
+	/**
+	 * How often the schemas are read again, in ms (default 5000; 0: never): a schema added, removed or reloaded on the
+	 * gateway (orm.watch) shows without reloading the page
+	 */
+	refreshMs?: number
+	/**
+	 * The administration of the workspaces (admin.enabled on the gateway): the lambdaORM.yaml editable, new and removed
+	 * schemas. By default the gateway's own at {baseUrl}/admin (with the given api, none unless it is given); false: none
+	 */
+	admin?: AdminApiPort | false
 }
 
-type TabKind = 'query' | 'domain' | 'entity' | 'diagram'
+/** A flag of this browser (a convenience: without storage it is never set) */
+const readFlag = (key: string): boolean => { try { return globalThis.localStorage?.getItem(key) === '1' } catch { return false } }
+const writeFlag = (key: string): void => { try { globalThis.localStorage?.setItem(key, '1') } catch { /* no storage */ } }
+
+/** What tells that the schemas changed: their routes, states and the version each serves */
+const revisionOf = (schemas: SchemaInfo[]): string => schemas.map(s => `${s.path}|${s.status}|${s.since ?? ''}|${s.pending ?? ''}|${s.reason ?? ''}`).join('\n')
+
+type TabKind = 'query' | 'domain' | 'entity' | 'diagram' | 'schemaFile' | 'commands' | 'schemaForms'
 
 interface DiagramDraft { entities: string[], positions?: Record<string, { x: number, y: number }>, bends?: Record<string, number>, compact: boolean, relationNames: boolean }
 
@@ -81,12 +105,43 @@ const storedWidth = (): number | undefined => {
 }
 const rememberWidth = (value: number) => { try { window.localStorage.setItem(WIDTH_KEY, String(value)) } catch { /* private window */ } }
 
-export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTabs = 20, ...workbench }) => {
+export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTabs = 20, refreshMs = 5000, admin, ...workbench }) => {
 	const theme = workbench.theme ?? 'light'
 	const m = messagesOf(workbench.locale)
 	const x = explorerMessagesOf(workbench.locale)
 	const api = useMemo(() => workbench.api ?? new RestQueryApi(workbench.baseUrl ?? '', workbench.headers), [workbench.api, workbench.baseUrl, workbench.headers])
-	const controller = useMemo(() => new WorkspaceController(store ?? new IndexedDbWorkspaceStore(workspaceKey ?? workbench.baseUrl ?? 'default')), [store, workspaceKey, workbench.baseUrl])
+	const a = adminMessagesOf(workbench.locale)
+	const adminApi = useMemo<AdminApiPort | undefined>(() => admin === false ? undefined : admin ?? (workbench.api ? undefined : new RestAdminApi(workbench.baseUrl ?? '', workbench.headers)),
+		[admin, workbench.api, workbench.baseUrl, workbench.headers])
+	const [can, setCan] = useState<AdminCapabilities>()
+	// what the gateway allows is known (or there is no administration): until then nothing saved is read
+	const [known, setKnown] = useState(false)
+	useEffect(() => {
+		setCan(undefined)
+		setKnown(!adminApi)
+		adminApi?.capabilities().then(setCan, () => setCan(undefined)).finally(() => setKnown(true))
+	}, [adminApi])
+	// with workbenchWrite what is saved goes to the workspaces of the gateway, shared; without it, to this browser
+	const shared = !store && !!adminApi && !!can?.workbenchWrite
+	const browserKey = workspaceKey ?? workbench.baseUrl ?? 'default'
+	const browserStore = useMemo(() => store ?? new IndexedDbWorkspaceStore(browserKey), [store, browserKey])
+	const sharedStore = useMemo(() => shared ? new GatewayWorkspaceStore(adminApi!) : undefined, [shared, adminApi])
+	const controller = useMemo(() => new WorkspaceController(sharedStore ?? browserStore), [sharedStore, browserStore])
+	// what this browser kept before the workspace was shared: offered to copy there
+	const [inBrowser, setInBrowser] = useState<SavedItem[]>([])
+	useEffect(() => {
+		if (!shared) { setInBrowser([]); return }
+		if (readFlag(`lambdaorm-ui.copied:${browserKey}`)) return
+		browserStore.all().then(items => setInBrowser(items), () => setInBrowser([]))
+	}, [shared, browserStore, browserKey])
+	const copyToWorkspace = async () => {
+		try {
+			await controller.importText(JSON.stringify(toExport(inBrowser)), 'merge')
+			setNotice(format(a.copiedToWorkspace, { n: inBrowser.length }))
+			writeFlag(`lambdaorm-ui.copied:${browserKey}`)
+			setInBrowser([])
+		} catch (e) { setNotice(problemText(e, x)) }
+	}
 	const state = useSyncExternalStore(controller.subscribe, controller.getState)
 	const [schemas, setSchemas] = useState<SchemaInfo[]>([])
 	const [tabs, setTabs] = useState<Tab[]>([{ id: 1, kind: 'query', title: `${m.tabNamed} 1` }])
@@ -101,6 +156,11 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 	const [creatingDiagram, setCreatingDiagram] = useState<{ schema: string, parentId?: string }>()
 	const [choosingEntities, setChoosingEntities] = useState<Tab>()
 	const [notice, setNotice] = useState<string>()
+	const [newSchema, setNewSchema] = useState(false)
+	const [removing, setRemoving] = useState<string>()
+	// the schemas read again now (after creating or removing one), not at the next tick
+	const [poke, setPoke] = useState(0)
+	const [dirtySchemas, setDirtySchemas] = useState<Set<number>>(new Set())
 	// the content of each query tab as it is typed: a ref (no render per key), and a tick to show unsaved changes
 	const contents = useRef(new Map<number, SavedQueryContent & { schema?: string }>())
 	const [, setTick] = useState(0)
@@ -132,16 +192,46 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 		}
 	}
 
-	useEffect(() => { controller.load() }, [controller])
+	useEffect(() => { if (known) controller.load() }, [controller, known])
+	// someone else saved in the workspace (or a file of workbench/ changed): read again
+	useEffect(() => {
+		if (!sharedStore || refreshMs <= 0) return
+		const timer = setInterval(() => { sharedStore.changed().then(changed => { if (changed) controller.load() }, () => undefined) }, refreshMs)
+		return () => clearInterval(timer)
+	}, [controller, sharedStore, refreshMs])
 	// the explorer also shows the schemas that didn't start, with their reason; the rest of the workspace only the ready ones
 	const [listed, setListed] = useState<SchemaInfo[]>([])
-	useEffect(() => { api.schemas().then(all => { setListed(all); setSchemas(all.filter(s => s.status === 'ready')) }, () => { setListed([]); setSchemas([]) }) }, [api])
+	const revision = useMemo(() => revisionOf(listed), [listed])
+	useEffect(() => {
+		let current: SchemaInfo[] | undefined
+		const read = () => api.schemas().then(all => {
+			if (current && revisionOf(all) === revisionOf(current)) return
+			// a schema reloaded (another since): its domain is read again by whoever shows it
+			for (const s of all) {
+				const before = current?.find(c => c.path === s.path)
+				if (before && before.since !== s.since) {
+					domains.current.delete(s.path)
+					loaders.current.delete(s.path)
+				}
+			}
+			current = all
+			setListed(all)
+			setSchemas(all.filter(s => s.status === 'ready'))
+		}, () => { if (!current) { setListed([]); setSchemas([]) } })
+		read()
+		if (refreshMs <= 0) return
+		const timer = setInterval(read, refreshMs)
+		return () => clearInterval(timer)
+	}, [api, refreshMs, poke])
+	const pokeSoon = () => { for (const ms of [300, 1500, 4000]) setTimeout(() => setPoke(p => p + 1), ms) }
+	const sinceOf = (schema: string | undefined) => listed.find(s => s.path === schema)?.since ?? ''
 	useEffect(() => { if (!notice) return; const t = setTimeout(() => setNotice(undefined), 5000); return () => clearTimeout(t) }, [notice])
 
 	const savedOf = (tab: Tab): SavedItem | undefined => tab.savedId ? state.items.find(i => i.id === tab.savedId) : undefined
 	const dirty = (tab: Tab): boolean => {
 		const saved = savedOf(tab)
 		if (tab.kind === 'diagram') return saved?.kind === 'diagram' && !!tab.draft && !sameDraft(tab.draft, draftOf(saved))
+		if (tab.kind === 'schemaFile') return dirtySchemas.has(tab.id)
 		if (tab.kind !== 'query') return false
 		const content = contents.current.get(tab.id)
 		if (!content) return false
@@ -178,6 +268,15 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 	const queryEntity = (schema: string, entity: string) => newQuery(schema, undefined, { query: `${entity}.page(1, 10)` }, entity)
 	const openEntity = (schema: string, entity: string) => {
 		if (!reuse(t => t.kind === 'entity' && t.schema === schema && t.entity === entity)) add({ kind: 'entity', title: entity, schema, entity })
+	}
+	const openSchemaFile = (schema: string) => {
+		if (!reuse(t => t.kind === 'schemaFile' && t.schema === schema)) add({ kind: 'schemaFile', title: `lambdaORM.yaml ${schema || '/'}`, schema })
+	}
+	const openSchemaForms = (schema: string) => {
+		if (!reuse(t => t.kind === 'schemaForms' && t.schema === schema)) add({ kind: 'schemaForms', title: `${a.forms} ${schema || '/'}`, schema })
+	}
+	const openCommands = (schema: string) => {
+		if (!reuse(t => t.kind === 'commands' && t.schema === schema)) add({ kind: 'commands', title: `${a.commands} ${schema || '/'}`, schema })
 	}
 	const openDomain = (schema: string) => {
 		if (!reuse(t => t.kind === 'domain' && t.schema === schema)) add({ kind: 'domain', title: `${x.domainYaml} ${schema || '/'}`, schema })
@@ -242,7 +341,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 		if (e.key === 'Enter') { e.preventDefault(); fitWidth() }
 	}
 
-	const iconOf = (tab: Tab) => tab.kind === 'domain' ? <Icons.yaml /> : tab.kind === 'entity' ? <Icons.entity /> : tab.kind === 'diagram' ? <Icons.diagram /> : savedOf(tab) ? <Icons.query /> : null
+	const iconOf = (tab: Tab) => tab.kind === 'schemaForms' ? <Icons.edit /> : tab.kind === 'commands' ? <Icons.terminal /> : tab.kind === 'domain' || tab.kind === 'schemaFile' ? <Icons.yaml /> : tab.kind === 'entity' ? <Icons.entity /> : tab.kind === 'diagram' ? <Icons.diagram /> : savedOf(tab) ? <Icons.query /> : null
 	const activeTab = tabs.find(t => t.id === active)
 	const saveKeys = (tab: Tab) => (e: React.KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(tab) } }
 	const texts = { ...x, entities: x.entities }
@@ -252,10 +351,22 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 			{!collapsed && (
 				<>
 					<div className="lw-space-side" style={{ width }} ref={side}>
+						{(sharedStore?.problems.length ?? 0) > 0 && state.loaded && (
+							<div className="lw-notice" role="alert">
+								{a.unreadableFiles}
+								<ul className="lw-issues">{sharedStore!.problems.map(p => <li key={`${p.schema}/${p.file}`}>{p.schema || '/'}/{p.file}: {p.message}</li>)}</ul>
+							</div>
+						)}
+						{inBrowser.length > 0 && (
+							<div className="lw-notice" role="note">
+								{format(a.browserItems, { n: inBrowser.length })} <button type="button" onClick={copyToWorkspace}>{a.copyToWorkspace}</button>
+							</div>
+						)}
 						<Explorer schemas={listed} controller={controller} api={api} locale={workbench.locale} theme={theme} activeId={activeTab?.savedId}
 							loadDomain={domainOf} onOpen={openSaved} onOpenDomain={openDomain} onOpenEntity={openEntity}
 							onNewQuery={(schema, parentId) => newQuery(schema, parentId)}
-							onNewDiagram={(schema, parentId) => setCreatingDiagram({ schema, parentId })} />
+							onNewDiagram={(schema, parentId) => setCreatingDiagram({ schema, parentId })}
+							admin={adminApi && can ? { can, onOpenSchemaFile: openSchemaFile, onOpenSchemaForms: openSchemaForms, onOpenCommands: openCommands, onNewSchema: () => setNewSchema(true), onRemoveSchema: setRemoving } : undefined} />
 					</div>
 					<div className="lw-space-resizer" role="separator" aria-orientation="vertical" aria-label={x.resizeExplorer} title={x.resizeExplorer}
 						tabIndex={0} aria-valuenow={width} aria-valuemin={MIN_WIDTH} aria-valuemax={MAX_WIDTH}
@@ -288,9 +399,20 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 						return (
 							<div key={tab.id} role="tabpanel" aria-label={saved?.name ?? tab.title} hidden={tab.id !== active}
 								onKeyDownCapture={tab.kind === 'query' || tab.kind === 'diagram' ? saveKeys(tab) : undefined}>
-								{tab.kind === 'domain' && <DomainYaml domain={loaderOf(tab.schema ?? '')} schema={tab.schema ?? ''} theme={theme} loading={x.loading} readOnly={x.readOnly} />}
+								{tab.kind === 'schemaForms' && adminApi && (
+									<SchemaForms admin={adminApi} schema={tab.schema ?? ''} writable={!!can?.schemaWrite} canAdmin={!!can?.schemaAdmin} revision={sinceOf(tab.schema)} locale={workbench.locale} />
+								)}
+								{tab.kind === 'commands' && adminApi && (
+									<CommandsPanel admin={adminApi} schema={tab.schema ?? ''} canSave={!!can?.workbenchWrite} canBuild={!!can?.build} locale={workbench.locale} />
+								)}
+								{tab.kind === 'schemaFile' && adminApi && (
+									<SchemaEditor admin={adminApi} schema={tab.schema ?? ''} writable={!!can?.schemaWrite} theme={theme} locale={workbench.locale}
+										revision={sinceOf(tab.schema)} pending={listed.find(s => s.path === tab.schema)?.pending}
+										onDirty={d => setDirtySchemas(set => { const n = new Set(set); if (d) n.add(tab.id); else n.delete(tab.id); return n })} />
+								)}
+								{tab.kind === 'domain' && <DomainYaml key={sinceOf(tab.schema)} domain={loaderOf(tab.schema ?? '')} schema={tab.schema ?? ''} theme={theme} loading={x.loading} readOnly={x.readOnly} />}
 								{tab.kind === 'entity' && (
-									<EntityView api={api} schema={tab.schema ?? ''} entity={tab.entity ?? ''} domain={loaderOf(tab.schema ?? '')} theme={theme} locale={workbench.locale}
+									<EntityView key={sinceOf(tab.schema)} api={api} schema={tab.schema ?? ''} entity={tab.entity ?? ''} domain={loaderOf(tab.schema ?? '')} theme={theme} locale={workbench.locale}
 										onOpenEntity={openEntity} onQuery={queryEntity} />
 								)}
 								{tab.kind === 'diagram' && tab.draft && (
@@ -312,7 +434,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 									</div>
 								)}
 								{tab.kind === 'query' && (
-									<QueryPanel tab={tab} workbench={{ ...workbench, api }} onContent={onContent}
+									<QueryPanel tab={tab} workbench={{ ...workbench, api, schemasRevision: revision }} onContent={onContent}
 										toolbar={(
 											<span className="lw-save">
 												<button onClick={() => save(tab)} disabled={contents.current.get(tab.id)?.schema === undefined} title="Ctrl+S">{x.save}</button>
@@ -351,6 +473,26 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 							const diagram = await controller.createDiagram({ schema: creatingDiagram.schema, name: v.name, description: v.description, parentId: v.parentId }, { entities: v.entities, compact: false, relationNames: false })
 							openSaved(diagram)
 						} catch (e) { return problemText(e, x) }
+					}} />
+			)}
+			{newSchema && adminApi && (
+				<NewSchemaDialog theme={theme} schemas={listed.map(s => s.path)}
+					texts={{ title: a.newSchema, route: a.route, routeHint: a.routeHint, startFrom: a.startFrom, empty: a.emptySchema, copyOf: a.copyOf, create: a.create, cancel: a.cancel }}
+					onClose={() => setNewSchema(false)}
+					onSubmit={async v => {
+						const created = await adminApi.createWorkspace(v.path, v.copyOf)
+						setNotice(format(a.created, { name: created.path }))
+						pokeSoon()
+					}} />
+			)}
+			{removing !== undefined && adminApi && (
+				<RemoveSchemaDialog theme={theme} title={a.removeSchema} schema={removing} message={format(a.removeConfirm, { name: removing || '/' })} confirm={a.remove} cancel={a.cancel}
+					onClose={() => setRemoving(undefined)}
+					onConfirm={async () => {
+						await adminApi.removeWorkspace(removing)
+						setTabs(t => t.filter(tab => tab.schema !== removing || tab.kind === 'query'))
+						setNotice(format(a.removed, { name: removing || '/' }))
+						pokeSoon()
 					}} />
 			)}
 			{choosingEntities?.draft && (

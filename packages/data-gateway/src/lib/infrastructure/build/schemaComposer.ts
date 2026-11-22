@@ -16,6 +16,9 @@ import { AuditConfig } from '../../domain/config/dataGatewayConfig'
 import { ConfigError } from '../../domain/errors/gatewayError'
 import { SchemaSettings } from '../../domain/runtime/schemas'
 import { LambdaOrmAdapter } from '../output/orm/lambdaOrmAdapter'
+import { CommandUseCases } from '../../application/usecases/commandUseCases'
+import { adminTools } from '../../application/mcp/adminTools'
+import { workspaceAdminTools } from '../output/admin/workspaceAdminTools'
 import { KafkaQueueAdapter } from '../output/queue/kafkaQueueAdapter'
 
 export interface SchemaCompositionInput {
@@ -29,11 +32,15 @@ export interface SchemaCompositionInput {
 	version: string
 	/** Open a connection of each source at start: a database down leaves the schema in error */
 	checkConnections: boolean
+	/** admin.enabled: the read-only tools of the administration in its MCP server */
+	admin?: boolean
 }
 
 export interface ComposedSchema {
 	gateway: DataGatewayPort
 	mcp: McpServerPort
+	/** the commands of its workspace (admin): fetch, push, drop, export, import */
+	commands: CommandUseCases
 	stop (): Promise<void>
 }
 
@@ -76,7 +83,9 @@ export const composeSchema = async (input: SchemaCompositionInput, deps: { logge
 		schema: new SchemaUseCases(orm),
 		stages: new StageUseCases(orm, auditor)
 	}, orm, deps.clock, input.version, settings.server.timeout)
-	const mcp = new DataGatewayMcpServer(new ToolCatalog(gatewayTools(gateway), settings.mcp.tools), orm, {
+	const commands = new CommandUseCases(orm, auditor)
+	const tools = [...gatewayTools(gateway), ...(input.admin ? adminTools(workspaceAdminTools(file, commands)) : [])]
+	const mcp = new DataGatewayMcpServer(new ToolCatalog(tools, settings.mcp.tools), orm, {
 		name: input.path ? `${input.mcpName} ${input.path}` : input.mcpName,
 		version: input.version,
 		pageSize: input.pageSize,
@@ -85,6 +94,7 @@ export const composeSchema = async (input: SchemaCompositionInput, deps: { logge
 	return {
 		gateway,
 		mcp,
+		commands,
 		stop: async () => {
 			await queue?.stop().catch(error => logger.error(error))
 			await orm.end().catch(error => logger.error(error))

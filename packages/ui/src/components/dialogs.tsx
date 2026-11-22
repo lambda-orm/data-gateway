@@ -113,7 +113,8 @@ export const Icons = {
 	download: icon(<path d="M12 4v12M7 11l5 5 5-5M4 20h16" />),
 	open: icon(<><path d="M14 4h6v6M20 4l-9 9" /><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" /></>),
 	plus: icon(<path d="M12 5v14M5 12h14" />),
-	panel: icon(<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></>)
+	panel: icon(<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></>),
+	terminal: icon(<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M7 9l3 3-3 3M13 15h4" /></>)
 }
 
 /** A small button that opens a list of actions; a click outside or Escape closes it */
@@ -229,6 +230,95 @@ export const DiagramDialog: React.FC<{
 				<div className="lw-form-actions">
 					<button type="button" onClick={onClose}>{texts.cancel}</button>
 					<button type="submit" className="lw-primary" disabled={busy}>{submit}</button>
+				</div>
+			</form>
+		</Modal>
+	)
+}
+
+export interface NewSchemaTexts { title: string, route: string, routeHint: string, startFrom: string, empty: string, copyOf: string, create: string, cancel: string }
+
+/** A new schema: its route and what it starts from (empty, or a copy of another one) */
+export const NewSchemaDialog: React.FC<{
+	texts: NewSchemaTexts
+	schemas: string[]
+	theme?: 'light' | 'dark'
+	/** a text it throws is shown and the dialog stays */
+	onSubmit: (value: { path: string, copyOf?: string }) => Promise<void>
+	onClose: () => void
+}> = ({ texts, schemas, theme, onSubmit, onClose }) => {
+	const [path, setPath] = useState('')
+	const [copyOf, setCopyOf] = useState('')
+	const [error, setError] = useState<string>()
+	const [busy, setBusy] = useState(false)
+	const send = async (e: React.FormEvent) => {
+		e.preventDefault()
+		setBusy(true)
+		try {
+			await onSubmit({ path: path.trim(), copyOf: copyOf === '' ? undefined : copyOf })
+			onClose()
+		} catch (err: any) {
+			setError(err?.message ?? String(err))
+		} finally {
+			setBusy(false)
+		}
+	}
+	return (
+		<Modal title={texts.title} onClose={onClose} theme={theme}>
+			<form className="lw-form" onSubmit={send}>
+				<label>{texts.route}<input aria-label="route" value={path} placeholder="sales/v1" onChange={e => { setPath(e.target.value); setError(undefined) }} maxLength={200} /></label>
+				<small className="lw-type">{texts.routeHint}</small>
+				<label>{texts.startFrom}
+					<select aria-label="start from" value={copyOf} onChange={e => setCopyOf(e.target.value)}>
+						<option value="">{texts.empty}</option>
+						{schemas.map(s => <option key={s} value={s}>{texts.copyOf.replace('{name}', s || '/')}</option>)}
+					</select>
+				</label>
+				{error && <div className="lw-notice" role="alert">{error}</div>}
+				<div className="lw-form-actions">
+					<button type="button" onClick={onClose}>{texts.cancel}</button>
+					<button type="submit" className="lw-primary" disabled={busy || path.trim() === ''}>{texts.create}</button>
+				</div>
+			</form>
+		</Modal>
+	)
+}
+
+/** Removes a schema only once its route is typed again */
+export const RemoveSchemaDialog: React.FC<{
+	title: string
+	message: string
+	schema: string
+	confirm: string
+	cancel: string
+	theme?: 'light' | 'dark'
+	onConfirm: () => Promise<void>
+	onClose: () => void
+}> = ({ title, message, schema, confirm, cancel, theme, onConfirm, onClose }) => {
+	const [typed, setTyped] = useState('')
+	const [error, setError] = useState<string>()
+	const [busy, setBusy] = useState(false)
+	const send = async (e: React.FormEvent) => {
+		e.preventDefault()
+		setBusy(true)
+		try {
+			await onConfirm()
+			onClose()
+		} catch (err: any) {
+			setError(err?.message ?? String(err))
+		} finally {
+			setBusy(false)
+		}
+	}
+	return (
+		<Modal title={title} onClose={onClose} theme={theme}>
+			<form className="lw-form" onSubmit={send}>
+				<p>{message}</p>
+				<input aria-label="confirm route" value={typed} onChange={e => setTyped(e.target.value)} placeholder={schema} />
+				{error && <div className="lw-notice" role="alert">{error}</div>}
+				<div className="lw-form-actions">
+					<button type="button" onClick={onClose}>{cancel}</button>
+					<button type="submit" className="lw-danger" disabled={busy || typed !== schema}>{confirm}</button>
 				</div>
 			</form>
 		</Modal>

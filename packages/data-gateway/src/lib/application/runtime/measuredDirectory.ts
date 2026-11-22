@@ -1,5 +1,6 @@
 import { CONTEXT_FREE_OPERATIONS, GATEWAY_OPERATIONS, MCP_OPERATIONS } from '../../domain/runtime/channelProtocol'
 import { SchemaState } from '../../domain/runtime/policies'
+import { WorkspaceChange } from '../../domain/runtime/workspaces'
 import { RequestContext } from '../ports/input/dataGatewayPort'
 import { GatewayHealth, SchemaDirectoryPort, ServedSchema } from '../ports/input/schemaDirectoryPort'
 import { MetricsPort } from '../ports/output/supportPorts'
@@ -14,10 +15,12 @@ const PERMISSION = /does not have the "([a-zA-Z]+)" permission/
  * see the same ports; only the composition root knows they are measured.
  */
 export class MeasuredSchemaDirectory implements SchemaDirectoryPort {
-	private readonly served: ServedSchema[]
+	private served: ServedSchema[]
 
 	constructor (private readonly directory: SchemaDirectoryPort, private readonly metrics: MetricsPort, private readonly now: () => number = () => performance.now()) {
 		this.served = directory.schemas().map(schema => this.measure(schema))
+		// before the transports (they subscribe after this): they read the set already measured
+		directory.onSchemasChange(() => { this.served = directory.schemas().map(schema => this.measure(schema)) })
 		metrics.gauge('data_gateway_schema_status', 'State of each schema (1 for its current status)', ['schema', 'status'],
 			() => directory.states().map(s => ({ labels: { schema: s.path || '/', status: s.status }, value: 1 })))
 		metrics.gauge('data_gateway_schema_restarts', 'Restarts of the worker of each schema', ['schema'],
@@ -29,6 +32,8 @@ export class MeasuredSchemaDirectory implements SchemaDirectoryPort {
 	public health (): Promise<GatewayHealth> { return this.directory.health() }
 	public version () { return this.directory.version() }
 	public onStateChange (listener: (state: SchemaState) => void) { return this.directory.onStateChange(listener) }
+	public onSchemasChange (listener: () => void) { return this.directory.onSchemasChange(listener) }
+	public onWorkspaceChange (listener: (change: WorkspaceChange) => void) { return this.directory.onWorkspaceChange(listener) }
 
 	private measure (schema: ServedSchema): ServedSchema {
 		const wrap = (target: any, operations: readonly string[], prefix: string) => {

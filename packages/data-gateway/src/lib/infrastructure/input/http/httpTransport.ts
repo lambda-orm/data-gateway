@@ -15,6 +15,9 @@ import { toHttpError } from './httpErrors'
 import { closestNames } from '@lambdaorm/base'
 import { badRequest } from '../../../domain/errors/gatewayError'
 import { withSecurity } from './openApi'
+import { adminRouter } from './adminRoutes'
+import { AdminService } from '../../../application/admin/adminService'
+import { CommandService } from '../../../application/admin/commandService'
 const YAML = require('js-yaml')
 
 export interface HttpTransportOptions {
@@ -34,6 +37,8 @@ export interface HttpTransportDeps {
 	directory: SchemaDirectoryPort
 	metrics: MetricsPort
 	logger: LoggerPort
+	/** admin.enabled: the administration of the workspaces at {basePath}/admin, with this authentication */
+	admin?: { service: AdminService, commands?: CommandService, authenticator: AuthenticatorPort }
 }
 
 /** Paths that never need a credential: Kubernetes probes and Prometheus. */
@@ -51,9 +56,15 @@ export class HttpTransport implements Transport {
 	public readonly name = TRANSPORT_NAME
 	public readonly app: express.Express
 	private server: http.Server | undefined
+	/** The routes of the schemas, rebuilt when one is added or removed (orm.watch) */
+	private schemaRouter: express.Router = express.Router()
+	private routes: { method: string, path: string }[] = []
+	private swaggerDocument: any
 
 	constructor (private readonly options: HttpTransportOptions, private readonly deps: HttpTransportDeps) {
 		this.app = this.createApp()
+		this.mountSchemas()
+		deps.directory.onSchemasChange(() => this.mountSchemas())
 	}
 
 	public get address () {
@@ -119,19 +130,42 @@ export class HttpTransport implements Transport {
 		if (this.options.swaggerEnabled) this.swagger(app)
 		if (this.options.uiEnabled) this.ui(app)
 		const base = this.options.basePath
-		const directory = this.deps.directory
-		const root = this.served.find(s => s.path === '')
-		const routes: { method: string, path: string }[] = [{ method: 'GET', path: `${base}/schemas` }]
 		app.get(`${base}/metrics`, async (_req, res) => {
 			const { contentType, body } = await this.deps.metrics.render()
 			res.status(200).type(contentType).send(body)
 		})
-		app.get(`${base}/schemas`, this.handle(async () => directory.states()))
+		app.get(`${base}/schemas`, this.handle(async () => this.deps.directory.states()))
+		if (this.deps.admin) app.use(`${base}/admin`, adminRouter(this.deps.admin.service, this.authenticate(this.deps.admin.authenticator), this.deps.admin.commands, this.deps.directory))
+		// the schemas: the router of the moment (a schema added or removed replaces it)
+		app.use((req, res, next) => this.schemaRouter(req, res, next))
+		// a route that doesn't exist: JSON like every other answer, with the closest routes (L42)
+		app.use((req: express.Request, res: express.Response) => {
+			const near = closestNames(req.path, this.routes.filter(r => r.method === req.method).map(r => r.path), 3)
+			const hint = near.length ? `; did you mean ${near.map(p => `${req.method} ${p}`).join(', ')}?` : `; the schemas are at ${base || ''}/schemas`
+			res.status(404).json({ error: 'NotFoundError', message: `${req.method} ${req.path} is not a route of this gateway${hint}` })
+		})
+		app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
+			if (res.headersSent) return next(err)
+			// body too large / invalid JSON (body-parser), with its own status
+			const status = Number.isInteger(err?.status) ? err.status : 500
+			res.status(status).json({ error: err?.type ?? err?.name ?? 'Error', message: err?.message ?? String(err) })
+		})
+		return app
+	}
+
+	/** The routes of every schema served now, and the general ones at the base when no schema is at the root */
+	private mountSchemas (): void {
+		const app = express.Router()
+		const base = this.options.basePath
+		const directory = this.deps.directory
+		const root = this.served.find(s => s.path === '')
+		const routes: { method: string, path: string }[] = [{ method: 'GET', path: `${base}/schemas` }]
 		if (!root) {
 			// several schemas (or one under a route): the gateway's own general routes at the base
 			app.get(`${base}/health`, this.handle(() => directory.health()))
 			app.get(`${base}/ping`, this.handle(async () => ({ message: 'pong', time: new Date().toISOString() })))
 			app.get(`${base}/version`, this.handle(async () => directory.version()))
+			routes.push(...this.routesOf(app, ''))
 		}
 		for (const schema of this.served) {
 			const router = express.Router()
@@ -164,19 +198,13 @@ export class HttpTransport implements Transport {
 			app.use(this.schemaBase(schema) || '/', router)
 			routes.push(...this.routesOf(router, this.schemaBase(schema)))
 		}
-		// a route that doesn't exist: JSON like every other answer, with the closest routes (L42)
-		app.use((req: express.Request, res: express.Response) => {
-			const near = closestNames(req.path, routes.filter(r => r.method === req.method).map(r => r.path), 3)
-			const hint = near.length ? `; did you mean ${near.map(p => `${req.method} ${p}`).join(', ')}?` : `; the schemas are at ${base || ''}/schemas`
-			res.status(404).json({ error: 'NotFoundError', message: `${req.method} ${req.path} is not a route of this gateway${hint}` })
-		})
-		app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
-			if (res.headersSent) return next(err)
-			// body too large / invalid JSON (body-parser), with its own status
-			const status = Number.isInteger(err?.status) ? err.status : 500
-			res.status(status).json({ error: err?.type ?? err?.name ?? 'Error', message: err?.message ?? String(err) })
-		})
-		return app
+		this.schemaRouter = app
+		this.routes = routes
+		if (this.swaggerDocument) this.swaggerDocument.servers = this.servers()
+	}
+
+	private servers () {
+		return this.served.map(schema => ({ description: `schema ${schema.path || '/'}`, url: this.schemaBase(schema) || '/' }))
 	}
 
 	/** A required text of the query string: a BadRequest that says which, when it is missing */
@@ -321,7 +349,8 @@ export class HttpTransport implements Transport {
 		const document = YAML.load(fs.readFileSync(file, 'utf8'))
 		// the version of this gateway, not the one written in the file
 		document.info = { ...document.info, version: this.deps.directory.version().version }
-		document.servers = this.served.map(schema => ({ description: `schema ${schema.path || '/'}`, url: this.schemaBase(schema) || '/' }))
+		document.servers = this.servers()
+		this.swaggerDocument = document
 		// Authorize offers how the credential of these schemas is sent (an API key in its header, a token, basic)
 		const schemes = this.served.map(schema => schema.authenticator(TRANSPORT_NAME).scheme?.()).filter((s): s is CredentialScheme => s !== undefined)
 		const secured = withSecurity(document, schemes)

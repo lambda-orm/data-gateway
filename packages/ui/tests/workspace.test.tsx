@@ -7,6 +7,7 @@ import { IndexedDbWorkspaceStore, MemoryWorkspaceStore } from '../src/infrastruc
 import { Workspace } from '../src/components/Workspace'
 import { DomainInfo } from '../src/domain/diagram'
 import { FakeApi } from './fakes'
+import { SchemaInfo } from '../src/application/ports'
 
 vi.mock('../src/infrastructure/monaco/monacoSetup', () => ({
 	loadMonaco: () => Promise.reject(new Error('no browser')),
@@ -123,6 +124,29 @@ describe('Workspace', () => {
 		expect(screen.getByRole('note').textContent).toBe('source salesDocuments needs ORM_SALES_DOCUMENTS_CNX, which is not set')
 		// the ready schema works as before
 		expect(row('northwind/v1')).toBeTruthy()
+	})
+
+	test('the schemas read again: one added shows, one reloaded is read again, one whose new version failed says so', async () => {
+		let schemas: SchemaInfo[] = [{ path: 'northwind/v1', status: 'ready', since: 'one' }]
+		let reads = 0
+		class Changing extends DomainApi {
+			async schemas () { return schemas }
+			async domain () { reads++; return super.domain() }
+		}
+		render(<Workspace api={new Changing()} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" refreshMs={30} />)
+		await waitFor(() => expect(row('northwind/v1')).toBeTruthy())
+		fireEvent.click(row('Entities'))
+		await waitFor(() => expect(reads).toBe(1))
+		schemas = [...schemas, { path: 'iot', status: 'ready', since: 'one' }]
+		await waitFor(() => expect(row('iot')).toBeTruthy())
+		schemas = [{ path: 'northwind/v1', status: 'ready', since: 'two' }, schemas[1]]
+		await waitFor(() => expect(reads).toBe(2))
+		schemas = [{ ...schemas[0], pending: 'the new version did not start: bad indentation' }, schemas[1]]
+		await waitFor(() => expect(screen.getByLabelText('A new version did not start; the previous one is serving')).toBeTruthy())
+		const warned = screen.getAllByRole('treeitem').find(r => r.querySelector('.lw-tree-label')?.textContent?.startsWith('northwind/v1'))!
+		expect(warned.getAttribute('title')).toContain('bad indentation')
+		schemas = [schemas[0]]
+		await waitFor(() => expect(screen.queryByRole('treeitem', { name: /^iot/ })).toBeNull())
 	})
 
 	test('the explorer: its width by the keyboard, kept in the browser', async () => {

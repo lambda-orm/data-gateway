@@ -1,3 +1,5 @@
+import { AdminService } from '../../application/admin/adminService'
+import { CommandService } from '../../application/admin/commandService'
 import { AuthenticatorPort, LoggerPort, MetricsPort } from '../../application/ports/output/supportPorts'
 import { SchemaDirectoryPort } from '../../application/ports/input/schemaDirectoryPort'
 import { AuthenticationConfig, DataGatewayConfig, TransportName } from '../../domain/config/dataGatewayConfig'
@@ -40,6 +42,8 @@ export interface TransportDeps {
 	directory: SchemaDirectoryPort
 	metrics: MetricsPort
 	logger: LoggerPort
+	/** admin.enabled: the administration of the workspaces (REST, on the http transport) */
+	admin?: { service: AdminService, commands: CommandService }
 }
 
 type TransportFactory = (deps: TransportDeps) => Transport
@@ -49,7 +53,7 @@ export class TransportRegistry {
 	private readonly factories = new Map<string, TransportFactory>()
 
 	constructor () {
-		this.register('http', ({ config, directory, metrics, logger }) => {
+		this.register('http', ({ config, directory, metrics, logger, admin }) => {
 			const http = config.transports.http!
 			return new HttpTransport({
 				port: http.port,
@@ -59,7 +63,12 @@ export class TransportRegistry {
 				rateLimit: config.rateLimit,
 				swaggerEnabled: http.swagger.enabled,
 				uiEnabled: http.ui.enabled
-			}, { directory, metrics, logger })
+			}, {
+				directory,
+				metrics,
+				logger,
+				admin: admin ? { ...admin, authenticator: new AuthenticatorRegistry().build(http.authentication ?? config.authentication) } : undefined
+			})
 		})
 		this.register('mcpHttp', ({ config, directory, metrics, logger }) => {
 			const t = config.transports.mcpHttp!

@@ -5,7 +5,7 @@ import { SchemaRouter } from '../../application/runtime/schemaRouter'
 import { MessagePortChannel, SocketChannel } from '../output/channel/channelClients'
 import { SystemClock } from '../output/clock/systemClock'
 import { NoMetrics, PromClientMetrics } from '../output/metrics/promClientMetrics'
-import { buildLogger, measureConnections, schemaAuthenticators } from './dataGatewayBuilder'
+import { buildAdmin, buildLogger, measureConnections, schemaAuthenticators } from './dataGatewayBuilder'
 import { MeasuredSchemaDirectory } from '../../application/runtime/measuredDirectory'
 import { AuthenticatorRegistry, TransportRegistry } from './registries'
 import { control, EdgeWorkerData } from './workerControl'
@@ -16,19 +16,22 @@ const run = async (): Promise<void> => {
 	const { config } = data
 	const logger = buildLogger(config, '[edge]')
 	const registry = new AuthenticatorRegistry()
-	const router = new SchemaRouter(data.schemas.map(({ descriptor, settings }) => ({
+	const routed = ({ descriptor, settings }: EdgeWorkerData['schemas'][number]) => ({
 		path: descriptor.path,
+		workspace: descriptor.workspace,
 		transports: settings.transports,
 		maxConcurrent: settings.server.maxConcurrent,
 		timeout: settings.server.timeout,
 		scriptsEnabled: settings.scripts.enabled,
 		authenticators: schemaAuthenticators(config, descriptor, settings, registry)
-	})), new SystemClock(), data.version)
+	})
+	const router = new SchemaRouter(data.schemas.map(routed), new SystemClock(), data.version)
 	const metrics = config.metrics.enabled ? new PromClientMetrics('edge') : new NoMetrics()
-	// /metrics: the edge's and every schema worker's, asked through its channel
-	for (const { descriptor } of data.schemas) metrics.addSource(() => router.workerMetrics(descriptor.path))
+	// /metrics: the edge's and every schema worker's, asked through its channel (the ones served at that moment)
+	metrics.addSource(() => Promise.all(router.states().map(s => router.workerMetrics(s.path).catch(() => []))))
 	const directory = metrics.enabled ? new MeasuredSchemaDirectory(router, metrics) : router
-	const transports = new TransportRegistry().build({ config, directory, metrics, logger })
+	const admin = buildAdmin(config, directory, logger, new SystemClock(), config.orm.watch.enabled)
+	const transports = new TransportRegistry().build({ config, directory, metrics, logger, admin })
 	measureConnections(metrics, transports)
 	ctl.on(async request => {
 		switch (request.type) {
@@ -37,6 +40,15 @@ const run = async (): Promise<void> => {
 			break
 		case 'state':
 			router.setState(request.state)
+			break
+		case 'add':
+			router.add(routed(request.schema))
+			break
+		case 'remove':
+			router.remove(request.path)
+			break
+		case 'workspace':
+			router.workspaceChanged(request.change)
 			break
 		case 'connect':
 			try {

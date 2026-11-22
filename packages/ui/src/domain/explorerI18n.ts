@@ -91,6 +91,7 @@ export interface ExplorerMessages {
 	resizeExplorer: string
 	schemaStatus: string
 	noReason: string
+	schemaPending: string
 }
 
 type Row = [keyof ExplorerMessages, string, string, string, string, string, string, string, string, string, string]
@@ -185,6 +186,7 @@ const ROWS: Row[] = [
 	['noMatches', 'Nothing matches', 'Nada coincide', 'Nada corresponde', 'Aucun résultat', 'Nessun risultato', 'Keine Treffer', 'Geen resultaten', 'No hi ha coincidències', 'Nada coincide', 'Ez dago bat-etortzerik'],
 	['resizeExplorer', 'Drag to resize; double click fits the names', 'Arrastrá para cambiar el ancho; doble clic lo ajusta a los nombres', 'Arraste para mudar a largura; clique duplo ajusta aos nomes', 'Faites glisser pour redimensionner ; un double clic ajuste aux noms', 'Trascina per ridimensionare; doppio clic per adattare ai nomi', 'Ziehen zum Ändern der Breite; Doppelklick passt sie an die Namen an', 'Sleep om de breedte te wijzigen; dubbelklik past aan de namen', 'Arrossega per canviar l’amplada; doble clic l’ajusta als noms', 'Arrastra para cambiar o largo; dobre clic axústao aos nomes', 'Arrastatu zabalera aldatzeko; klik bikoitzak izenetara egokitzen du'],
 	['schemaStatus', '({status})', '({status})', '({status})', '({status})', '({status})', '({status})', '({status})', '({status})', '({status})', '({status})'],
+	['schemaPending', 'A new version did not start; the previous one is serving', 'Una versión nueva no arrancó; atiende la anterior', 'Uma versão nova não iniciou; a anterior está atendendo', 'Une nouvelle version n’a pas démarré ; la précédente répond', 'Una nuova versione non è partita; risponde la precedente', 'Eine neue Version ist nicht gestartet; die vorherige antwortet', 'Een nieuwe versie is niet gestart; de vorige antwoordt', 'Una versió nova no ha arrencat; respon l’anterior', 'Unha versión nova non arrincou; atende a anterior', 'Bertsio berri bat ez da abiatu; aurrekoak erantzuten du'],
 	['noReason', 'The gateway gives no reason: see its log.', 'La gateway no da el motivo: mirá su log.', 'A gateway não informa o motivo: veja o log.', 'La passerelle ne donne pas la raison : voyez son journal.', 'Il gateway non indica il motivo: guarda il suo log.', 'Das Gateway nennt keinen Grund: siehe sein Log.', 'De gateway geeft geen reden: bekijk het log.', 'La passarel·la no en dona el motiu: mira’n el registre.', 'A pasarela non dá o motivo: mira o seu rexistro.', 'Pasabideak ez du arrazoia ematen: begiratu bere erregistroa.']
 ]
 
