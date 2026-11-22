@@ -1,5 +1,12 @@
 # @lambdaorm/data-gateway-client
 
+## 0.1.1
+
+### Patch Changes
+
+- Updated dependencies [37a1e21]
+  - @lambdaorm/base@3.6.0
+
 ## 0.1.0
 
 ### Minor Changes
