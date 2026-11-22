@@ -113,7 +113,8 @@ export const Icons = {
 	download: icon(<path d="M12 4v12M7 11l5 5 5-5M4 20h16" />),
 	open: icon(<><path d="M14 4h6v6M20 4l-9 9" /><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" /></>),
 	plus: icon(<path d="M12 5v14M5 12h14" />),
-	panel: icon(<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></>)
+	panel: icon(<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></>),
+	terminal: icon(<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M7 9l3 3-3 3M13 15h4" /></>)
 }
 
 /** A small button that opens a list of actions; a click outside or Escape closes it */

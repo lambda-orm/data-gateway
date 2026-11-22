@@ -168,13 +168,14 @@ export class SchemaRouter implements SchemaDirectoryPort {
 	}
 
 	/** One operation on a schema worker, with the state, concurrency and deadline rules */
-	public async call (path: string, target: 'gateway' | 'mcp' | 'runtime', op: string, args: unknown[], ctx: RequestContext | undefined): Promise<unknown> {
+	public async call (path: string, target: 'gateway' | 'mcp' | 'runtime' | 'commands', op: string, args: unknown[], ctx: RequestContext | undefined, timeoutMs?: number): Promise<unknown> {
 		const route = this.route(path)
 		if (route.state.status !== 'ready' || !route.channel) throw schemaUnavailable(route.state)
 		const max = route.settings.maxConcurrent
 		if (max > 0 && route.inFlight >= max) throw tooManyRequests(path, max)
 		route.inFlight++
-		const waitMs = route.settings.timeout + CHANNEL_MARGIN_MS
+		const limit = timeoutMs ?? route.settings.timeout
+		const waitMs = limit + CHANNEL_MARGIN_MS
 		let timer: ReturnType<typeof setTimeout> | undefined
 		try {
 			return await Promise.race([
@@ -186,7 +187,7 @@ export class SchemaRouter implements SchemaDirectoryPort {
 					transport: ctx?.transport ?? 'edge',
 					deadline: Date.now() + waitMs
 				}),
-				new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(timeout(route.settings.timeout)), waitMs) })
+				new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(timeout(limit)), waitMs) })
 			])
 		} finally {
 			if (timer) clearTimeout(timer)
@@ -223,6 +224,7 @@ export class SchemaRouter implements SchemaDirectoryPort {
 		return {
 			path,
 			workspace: settings.workspace,
+			commands: (ctx, op, args, timeoutMs) => this.call(path, 'commands', op, args, ctx, timeoutMs),
 			gateway: gateway as unknown as DataGatewayPort,
 			mcp: mcp as unknown as McpServerPort,
 			features: { scripts: settings.scriptsEnabled ?? false },

@@ -1,5 +1,6 @@
 import express from 'express'
 import { AdminService } from '../../../application/admin/adminService'
+import { CommandService } from '../../../application/admin/commandService'
 import { Principal } from '../../../domain/auth/principal'
 import { toHttpError } from './httpErrors'
 
@@ -11,7 +12,7 @@ export const schemaParam = (raw: string | string[]): string => { const value = A
  * the authentication of the http transport. A workspace is named by its route, encoded in one segment (iot%2Fv1; ~ is
  * the root). Every read answers its version (ETag), every write says the one it changes (If-Match).
  */
-export const adminRouter = (admin: AdminService, authenticate: express.RequestHandler): express.Router => {
+export const adminRouter = (admin: AdminService, authenticate: express.RequestHandler, commands?: CommandService): express.Router => {
 	const router = express.Router()
 	router.use(authenticate)
 	const principal = (res: express.Response) => res.locals.principal as Principal
@@ -19,7 +20,8 @@ export const adminRouter = (admin: AdminService, authenticate: express.RequestHa
 		async (req: express.Request, res: express.Response) => {
 			try {
 				const result = await action(req, res)
-				if (!res.headersSent) res.status(req.method === 'POST' && req.path === '/workspaces' ? 201 : 200).json(result)
+				const created = req.method === 'POST' && (req.path === '/workspaces' || ((result as any)?.status === 'running' && /\/commands\/[a-z]+$/.test(req.path)))
+				if (!res.headersSent) res.status(created ? (req.path === '/workspaces' ? 201 : 202) : 200).json(result)
 			} catch (error: any) {
 				const httpError = toHttpError(error)
 				res.status(httpError.status).json(httpError.body)
@@ -56,5 +58,13 @@ export const adminRouter = (admin: AdminService, authenticate: express.RequestHa
 	}))
 	router.put('/workbench', handle(async (req, res) => admin.putItems(principal(res), req.body ?? {})))
 	router.post('/workbench/remove', handle(async (req, res) => admin.removeItems(principal(res), req.body ?? {})))
+	if (commands) {
+		// the commands of a workspace (§4): their panel, the preview of the ones that change the databases, the jobs
+		router.get('/workspaces/:schema/commands', handle(async (req, res) => commands.summary(principal(res), schemaParam(req.params.schema))))
+		router.post('/workspaces/:schema/commands/:command/preview', handle(async (req, res) => commands.preview(principal(res), schemaParam(req.params.schema), String(req.params.command), req.body ?? {})))
+		router.post('/workspaces/:schema/commands/:command', handle(async (req, res) => commands.run(principal(res), schemaParam(req.params.schema), String(req.params.command), req.body ?? {})))
+		router.get('/workspaces/:schema/jobs', handle(async (req, res) => commands.jobsOf(principal(res), schemaParam(req.params.schema))))
+		router.get('/workspaces/:schema/jobs/:id', handle(async (req, res) => commands.job(principal(res), schemaParam(req.params.schema), String(req.params.id))))
+	}
 	return router
 }

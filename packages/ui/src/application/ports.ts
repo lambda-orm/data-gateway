@@ -96,4 +96,44 @@ export interface AdminApiPort {
 	workbench (version?: string): Promise<{ version: string, items: (SavedItem & { version?: string })[], problems?: WorkbenchProblem[] } | undefined>
 	putItems (items: (SavedItem & { version?: string })[]): Promise<{ items: { id: string, version: string }[] }>
 	removeItems (ids: string[]): Promise<{ removed: string[] }>
+	/** the commands of a workspace (§4): the stages and what may be run */
+	commands (schema: string): Promise<CommandsSummary>
+	previewCommand (schema: string, command: CommandName, body: { stage?: string, data?: unknown }): Promise<CommandPreview>
+	runCommand (schema: string, command: CommandName, body: { stage?: string, previewId?: string, force?: boolean, save?: boolean }): Promise<Job | Record<string, unknown>>
+	jobs (schema: string): Promise<Job[]>
+	job (schema: string, id: string): Promise<Job>
+}
+
+export type CommandName = 'version' | 'fetch' | 'export' | 'push' | 'drop' | 'import'
+
+export interface Job {
+	id: string
+	schema: string
+	command: CommandName
+	stage?: string
+	status: 'running' | 'done' | 'failed'
+	credential: string
+	startedAt: string
+	finishedAt?: string
+	result?: unknown
+	error?: { name: string, message: string, status?: number }
+	file?: string
+}
+
+export interface CommandsSummary {
+	stages: string[]
+	can: Record<CommandName, boolean>
+	running?: Job
+}
+
+/** What a command that changes the databases would do, and the id to run exactly that */
+export interface CommandPreview {
+	previewId: string
+	command: CommandName
+	stage: string
+	expiresAt: string
+	/** push: by source; drop: the sentences */
+	sentences?: unknown[]
+	/** import: the rows of each entity */
+	rows?: Record<string, number>
 }

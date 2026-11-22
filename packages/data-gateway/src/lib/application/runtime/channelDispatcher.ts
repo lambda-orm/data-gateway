@@ -1,7 +1,7 @@
 import { principal } from '../../domain/auth/principal'
 import { GatewayError } from '../../domain/errors/gatewayError'
 import {
-	ChannelRequest, ChannelResponse, CONTEXT_FREE_OPERATIONS, GATEWAY_OPERATIONS, MCP_OPERATIONS, WireError
+	ChannelRequest, ChannelResponse, COMMAND_OPERATIONS, CommandOperation, CONTEXT_FREE_OPERATIONS, GATEWAY_OPERATIONS, MCP_OPERATIONS, WireError
 } from '../../domain/runtime/channelProtocol'
 import { DataGatewayPort, RequestContext } from '../ports/input/dataGatewayPort'
 import { McpServerPort } from '../ports/input/mcpServerPort'
@@ -25,7 +25,9 @@ export class ChannelDispatcher {
 		private readonly maxResponseBytes: number,
 		private readonly logger: LoggerPort,
 		/** runtime.metrics: this worker's metrics, for the edge to aggregate */
-		private readonly metrics?: () => Promise<unknown>
+		private readonly metrics?: () => Promise<unknown>,
+		/** the commands of the workspace (admin) */
+		private readonly commands?: { run (ctx: RequestContext, op: CommandOperation, args: unknown[]): Promise<unknown> }
 	) {}
 
 	public async dispatch (request: ChannelRequest): Promise<ChannelResponse | undefined> {
@@ -74,6 +76,10 @@ export class ChannelDispatcher {
 			return method.apply(this.mcp, [ctx, ...request.args])
 		}
 		if (request.target === 'runtime' && request.op === 'metrics') return this.metrics ? this.metrics() : Promise.resolve([])
+		if (request.target === 'commands' && this.commands && (COMMAND_OPERATIONS as readonly string[]).includes(request.op)) {
+			if (!ctx) throw new GatewayError(401, 'UnauthorizedError', 'the operation needs a principal')
+			return this.commands.run(ctx, request.op as CommandOperation, request.args)
+		}
 		throw new GatewayError(400, 'ChannelError', `unknown operation ${request.target}.${request.op}`)
 	}
 }

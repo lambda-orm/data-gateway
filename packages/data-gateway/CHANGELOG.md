@@ -29,9 +29,13 @@ default, `admin` off.
   validation with the line of each issue (without running `application.start`), and what the UI saves as files in
   `workbench/` of each workspace. Writes to a workspace go one at a time (a lock file, also across replicas) and are
   atomic; the monitor of the workspaces serves what is written.
+- **The commands of a workspace as jobs** (`DATA_GATEWAY.md` §11.3): `version`, `fetch`, `export` (also saved in
+  `data/`), `push`, `drop` and `import`, run by the worker of the schema, one at a time per schema. The ones that change
+  the databases first show what they will do (the sentences by source, the rows of each entity) and run exactly that
+  preview, only with the same `lambdaORM.yaml`. New permission `ddl`; `admin.commandTimeoutMs`.
 - The UI at `/ui` (`@lambdaorm/ui` 0.5.0), with those permissions: the `lambdaORM.yaml` of each schema editable in Monaco
-  (validated while typed, saved with Ctrl+S, a conflict shown side by side), new and removed schemas, and what is saved
-  shared in the workspaces.
+  (validated while typed, saved with Ctrl+S, a conflict shown side by side), new and removed schemas, what is saved
+  shared in the workspaces, and the panel of commands.
 - The UI at `/ui` reads the schemas again every 5 s: a schema added, removed or reloaded shows without reloading the
   page (its domain and typings are read again), and a version that didn't start is marked ⚠ with its reason.
 

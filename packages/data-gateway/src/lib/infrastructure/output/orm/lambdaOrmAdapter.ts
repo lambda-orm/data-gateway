@@ -1,9 +1,9 @@
 import { IOrm, Orm } from '@lambdaorm/lib'
 import { QueryOptions, ScriptOptions } from '@lambdaorm/base'
-import { OrmQueryPort, OrmSchemaPort, OrmScriptPort, OrmStagePort } from '../../../application/ports/output/ormPorts'
+import { OrmCommandPort, OrmQueryPort, OrmSchemaPort, OrmScriptPort, OrmStagePort } from '../../../application/ports/output/ormPorts'
 
 /** λORM (@lambdaorm/lib) behind the ports of the application: one instance per schema. */
-export class LambdaOrmAdapter implements OrmQueryPort, OrmScriptPort, OrmSchemaPort, OrmStagePort {
+export class LambdaOrmAdapter implements OrmQueryPort, OrmScriptPort, OrmSchemaPort, OrmStagePort, OrmCommandPort {
 	public readonly orm: IOrm
 
 	constructor (orm?: IOrm) {
@@ -98,4 +98,13 @@ export class LambdaOrmAdapter implements OrmQueryPort, OrmScriptPort, OrmSchemaP
 	public exists (stage: string) { return this.orm.stage.exists(stage) }
 	public export (stage: string) { return this.orm.stage.export({ stage }).execute() }
 	public import (stage: string, data: unknown) { return this.orm.stage.import({ stage }).execute(data as any) }
+
+	// ─── commands (admin) ────────────────────────────────────────────────────
+
+	public stageNames (): string[] { return (this.orm.state.getSchemaStages() ?? []).map((s: { name: string }) => s.name) }
+	public fetch (stage: string) { return this.orm.stage.fetch({ stage }) as Promise<unknown[]> }
+	public pushSentences (stage: string) { return this.orm.stage.push({ stage }).sentencesBySource() }
+	public push (stage: string, force: boolean) { return this.orm.stage.push({ stage, tryAllCan: force }).execute() as Promise<unknown[]> }
+	public dropSentences (stage: string) { return this.orm.stage.drop({ stage }).sentence() as Promise<unknown[]> }
+	public drop (stage: string, force: boolean) { return this.orm.stage.drop({ stage, tryAllCan: force }).execute() as Promise<unknown[]> }
 }

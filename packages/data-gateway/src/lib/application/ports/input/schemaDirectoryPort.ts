@@ -2,7 +2,8 @@ import { TransportName } from '../../../domain/config/dataGatewayConfig'
 import { SchemaState } from '../../../domain/runtime/policies'
 import { WorkspaceChange } from '../../../domain/runtime/workspaces'
 import { AuthenticatorPort, QueueOutcome } from '../output/supportPorts'
-import { DataGatewayPort } from './dataGatewayPort'
+import { DataGatewayPort, RequestContext } from './dataGatewayPort'
+import { CommandOperation } from '../../../domain/runtime/channelProtocol'
 import { McpServerPort } from './mcpServerPort'
 
 /** One schema as a transport sees it: its route, its ports and who may call it there */
@@ -10,6 +11,8 @@ export interface ServedSchema {
 	path: string
 	/** The folder of its workspace (the administration reads and writes its files) */
 	workspace?: string
+	/** The commands of its workspace, run by its worker (admin); timeoutMs replaces server.timeout (they take long) */
+	commands?: (ctx: RequestContext, op: CommandOperation, args: unknown[], timeoutMs?: number) => Promise<unknown>
 	gateway: DataGatewayPort
 	mcp: McpServerPort
 	/** Whether this transport exposes it (schemas[].transports) */

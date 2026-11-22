@@ -1,7 +1,8 @@
 import { TransportName } from '../../domain/config/dataGatewayConfig'
 import { SchemaState } from '../../domain/runtime/policies'
 import { WorkspaceChange } from '../../domain/runtime/workspaces'
-import { DataGatewayPort } from '../ports/input/dataGatewayPort'
+import { DataGatewayPort, RequestContext } from '../ports/input/dataGatewayPort'
+import { CommandOperation } from '../../domain/runtime/channelProtocol'
 import { McpServerPort } from '../ports/input/mcpServerPort'
 import { GatewayHealth, SchemaDirectoryPort, ServedSchema } from '../ports/input/schemaDirectoryPort'
 import { AuthenticatorPort, ClockPort, QueueOutcome } from '../ports/output/supportPorts'
@@ -10,6 +11,7 @@ import { Listeners } from './listeners'
 export interface InlineSchema {
 	path: string
 	workspace?: string
+	commands?: { run (ctx: RequestContext, op: CommandOperation, args: unknown[]): Promise<unknown> }
 	gateway: DataGatewayPort
 	mcp: McpServerPort
 	transports: TransportName[]
@@ -60,6 +62,7 @@ export class InlineSchemaDirectory implements SchemaDirectoryPort {
 		return {
 			path: s.path,
 			workspace: s.workspace,
+			commands: s.commands ? (ctx, op, args) => s.commands!.run(ctx, op, args) : undefined,
 			gateway: s.gateway,
 			mcp: s.mcp,
 			features: s.features ?? { scripts: false },

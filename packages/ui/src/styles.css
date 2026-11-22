@@ -142,3 +142,17 @@
 .lw-conflict .lw-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .lw-space-side .lw-notice { overflow-wrap: anywhere; }
 .lw-space-side .lw-notice .lw-issues { overflow-x: hidden; }
+/* the commands of a workspace (admin) */
+.lw-commands { display: flex; flex-direction: column; gap: 8px; padding: 8px; min-width: 0; overflow: auto; }
+.lw-commands .lw-toolbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.lw-command-list { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.lw-command-group { display: inline-flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.lw-preview, .lw-job { border: 1px solid var(--lw-border); border-radius: 6px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
+.lw-preview { border-color: var(--lw-warning, #b45309); }
+.lw-preview p, .lw-job p { margin: 0; }
+.lw-preview .lw-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.lw-sentences { margin: 0; padding: 6px; background: var(--lw-panel); border-radius: 4px; max-height: 320px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+.lw-jobs tr { cursor: pointer; }
+.lw-jobs tr.lw-active { background: var(--lw-panel); }
+.lw-space button.lw-danger { background: var(--lw-error); border-color: var(--lw-error); color: #fff; }
+.lw-space button.lw-danger:disabled { opacity: .5; }

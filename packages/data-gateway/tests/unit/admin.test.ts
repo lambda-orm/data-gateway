@@ -40,7 +40,7 @@ describe('admin configuration', () => {
 	const base = { orm: { workspacePath: '/w' }, transports: { http: { port: 8080 } } }
 	test('off by default; on with authentication none it warns; admin permissions are never given by default', () => {
 		const read = (raw: unknown) => new ConfigReader().read(raw)
-		expect(read(base).config?.admin).toEqual({ enabled: false, allowAnonymous: false, maxFileBytes: 2 * 1024 ** 2 })
+		expect(read(base).config?.admin).toEqual({ enabled: false, allowAnonymous: false, maxFileBytes: 2 * 1024 ** 2, commandTimeoutMs: 600000 })
 		expect(read({ ...base, admin: { enabled: true } }).warnings).toContainEqual(expect.stringMatching(/nobody can administer/))
 		const keys = read({ ...base, authentication: { adapter: 'local', type: 'apikey', keys: [{ name: 'a', value: 'k' }, { name: 'b', value: 'j', permissions: ['schemaWrite'] }] } })
 		expect(keys.config?.authentication.credentials.map(c => c.permissions)).toEqual([['read', 'write', 'script', 'queue', 'stageImport'], ['schemaWrite']])

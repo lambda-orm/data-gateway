@@ -16,6 +16,7 @@ import { AuditConfig } from '../../domain/config/dataGatewayConfig'
 import { ConfigError } from '../../domain/errors/gatewayError'
 import { SchemaSettings } from '../../domain/runtime/schemas'
 import { LambdaOrmAdapter } from '../output/orm/lambdaOrmAdapter'
+import { CommandUseCases } from '../../application/usecases/commandUseCases'
 import { KafkaQueueAdapter } from '../output/queue/kafkaQueueAdapter'
 
 export interface SchemaCompositionInput {
@@ -34,6 +35,8 @@ export interface SchemaCompositionInput {
 export interface ComposedSchema {
 	gateway: DataGatewayPort
 	mcp: McpServerPort
+	/** the commands of its workspace (admin): fetch, push, drop, export, import */
+	commands: CommandUseCases
 	stop (): Promise<void>
 }
 
@@ -85,6 +88,7 @@ export const composeSchema = async (input: SchemaCompositionInput, deps: { logge
 	return {
 		gateway,
 		mcp,
+		commands: new CommandUseCases(orm, auditor),
 		stop: async () => {
 			await queue?.stop().catch(error => logger.error(error))
 			await orm.end().catch(error => logger.error(error))

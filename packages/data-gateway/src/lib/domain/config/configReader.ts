@@ -49,7 +49,8 @@ export class ConfigReader {
 			admin: {
 				enabled: this.bool(raw.admin?.enabled, false, 'admin.enabled'),
 				allowAnonymous: this.bool(raw.admin?.allowAnonymous, false, 'admin.allowAnonymous'),
-				maxFileBytes: this.size(raw.admin?.maxFileBytes, 2 * 1024 ** 2, 'admin.maxFileBytes')
+				maxFileBytes: this.size(raw.admin?.maxFileBytes, 2 * 1024 ** 2, 'admin.maxFileBytes'),
+				commandTimeoutMs: this.int(raw.admin?.commandTimeoutMs, 600000, 'admin.commandTimeoutMs', 1000)
 			},
 			server: {
 				timeout: this.int(raw.server?.timeout, 120000, 'server.timeout', 1),
