@@ -68,6 +68,18 @@ export class WebSocketTransport implements Transport {
 		this.wss = new WebSocketServer({ noServer: true, maxPayload: options.maxPayload })
 		this.dispatcher = deps.dispatcher ?? new RpcDispatcher()
 		this.asyncapi = options.asyncapiEnabled ? this.loadAsyncapi() : undefined
+		deps.directory.onSchemasChange(() => this.closeRemoved())
+	}
+
+	/** The schema of each connection ('' the root too, when no schema is there: undefined) */
+	private readonly schemaOf = new Map<WebSocket, string | undefined>()
+
+	/** The connections to a schema that went are closed (4404); the root ones learn it by workspace.changed */
+	private closeRemoved (): void {
+		const paths = new Set(this.served.map(s => s.path))
+		for (const [ws, path] of this.schemaOf) {
+			if (path !== undefined && !paths.has(path)) ws.close(4404, `schema "${path || '/'}" was removed`)
+		}
 	}
 
 	public get address () {
@@ -166,6 +178,12 @@ export class WebSocketTransport implements Transport {
 		const recent = new Map<string, { queueId: string, ok: boolean }>()
 		const done = (outcome: { queueId: string, ok: boolean }) => notify(outcome.ok ? 'queue.completed' : 'queue.failed', outcome)
 		const unsubscribe: (() => void)[] = []
+		this.schemaOf.set(ws, schema?.path)
+		unsubscribe.push(() => this.schemaOf.delete(ws))
+		// what changed in its workspace (a connection to the root: in every workspace)
+		unsubscribe.push(this.deps.directory.onWorkspaceChange(change => {
+			if (!schema || schema.path === change.path) notify('workspace.changed', change)
+		}))
 		if (schema) {
 			unsubscribe.push(schema.onQueueOutcome(outcome => {
 				if (awaited.delete(outcome.queueId)) return done(outcome)
@@ -173,7 +191,7 @@ export class WebSocketTransport implements Transport {
 				if (recent.size > 200) recent.delete(recent.keys().next().value!)
 			}))
 			unsubscribe.push(this.deps.directory.onStateChange(state => {
-				if (state.path === schema.path) notify('schema.statusChanged', { path: state.path, status: state.status, reason: state.reason })
+				if (state.path === schema.path) notify('schema.statusChanged', { path: state.path, status: state.status, reason: state.reason, pending: state.pending })
 			}))
 		}
 		ws.on('close', () => { for (const off of unsubscribe) off() })

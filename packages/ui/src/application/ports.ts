@@ -8,6 +8,10 @@ export interface SchemaInfo {
 	path: string
 	status: string
 	reason?: string
+	/** When the version served now started: another value, the schema was reloaded (its lambdaORM.yaml changed) */
+	since?: string
+	/** A new version of its workspace that didn't start: the previous one is serving */
+	pending?: string
 }
 
 export type Options = Record<string, unknown>

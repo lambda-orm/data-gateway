@@ -77,10 +77,11 @@ export const measureConnections = (metrics: MetricsPort, transports: Transport[]
 }
 
 /** Discovered under orm.workspacePath + declared in orm.schemas, checked; ConfigError with every problem */
-export const resolveConfiguredSchemas = (config: DataGatewayConfig): { descriptor: SchemaDescriptor, settings: SchemaSettings }[] => {
+export const resolveConfiguredSchemas = (config: DataGatewayConfig, logger?: LoggerPort): { descriptor: SchemaDescriptor, settings: SchemaSettings }[] => {
 	const discovered = config.orm.workspacePath ? new FileSystemSchemaDiscovery().discover(config.orm.workspacePath) : []
-	const { schemas, issues } = resolveSchemas(config, discovered)
+	const { schemas, issues, waiting } = resolveSchemas(config, discovered)
 	if (issues.length) throw new ConfigError(issues)
+	for (const problem of waiting) logger?.warn(`[data-gateway] ${problem}: waiting for it (orm.watch)`)
 	return schemas.map(descriptor => ({ descriptor, settings: effectiveSettings(config, descriptor) }))
 }
 
@@ -104,7 +105,9 @@ export class DataGatewayBuilder {
 		const composed: ComposedSchema[] = []
 		const inline: InlineSchema[] = []
 		try {
-			for (const { descriptor, settings } of resolveConfiguredSchemas(config)) {
+			// inline nothing is watched: an empty volume, or an adjustment of nothing, is a problem as without orm.watch
+			const unwatched = { ...config, orm: { ...config.orm, watch: { ...config.orm.watch, enabled: false } } }
+			for (const { descriptor, settings } of resolveConfiguredSchemas(unwatched)) {
 				const queueOutcomes = new Listeners<QueueOutcome>()
 				const schema = await composeSchema({
 					path: descriptor.path,

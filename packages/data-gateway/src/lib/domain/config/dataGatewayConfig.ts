@@ -55,9 +55,23 @@ export interface RuntimeConfig {
 	env: { isolate: boolean, passthrough: string[] }
 }
 
+/**
+ * orm.watch: the workspaces are watched while the gateway runs: a folder with a lambdaORM.yaml that appears is a new
+ * schema, one that goes is removed, a lambdaORM.yaml or .env that changes reloads its schema (docs/DATA_GATEWAY_ADMIN_PLAN.md
+ * §2.1). The file events are the fast path; a scan every intervalMs catches what they miss (some mounted volumes).
+ */
+export interface WatchConfig {
+	enabled: boolean
+	/** the scan of the workspaces, in ms (0: only the file events) */
+	intervalMs: number
+	/** how long the changes are gathered before they are applied (an editor writes a file in several steps) */
+	debounceMs: number
+}
+
 export interface OrmConfig {
 	workspacePath?: string
 	schemas: SchemaConfig[]
+	watch: WatchConfig
 }
 
 export interface ServerConfig {

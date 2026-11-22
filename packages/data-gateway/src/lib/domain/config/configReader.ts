@@ -1,7 +1,7 @@
 import { ALL_PERMISSIONS, isPermission, Permission } from '../auth/permission'
 import {
 	AuthenticationConfig, AuthenticationType, ConfigReading, CredentialConfig, DataGatewayConfig, LoggerConfig, McpConfig,
-	RuntimeConfig, RuntimeMode, SchemaConfig, TransportConfig, TransportName, TransportsConfig
+	OrmConfig, RuntimeConfig, RuntimeMode, SchemaConfig, TransportConfig, TransportName, TransportsConfig, WatchConfig
 } from './dataGatewayConfig'
 import { normalizeSchemaPath, schemaPathIssues } from '../runtime/schemaPath'
 import { parseSize } from './sizes'
@@ -85,10 +85,10 @@ export class ConfigReader {
 
 	// ─── sections ────────────────────────────────────────────────────────────
 
-	private orm (raw: unknown): { workspacePath?: string, schemas: SchemaConfig[] } {
+	private orm (raw: unknown): OrmConfig {
 		if (raw !== undefined && !isObject(raw)) {
 			this.issues.push('orm must be an object')
-			return { schemas: [] }
+			return { schemas: [], watch: { enabled: false, intervalMs: 0, debounceMs: 0 } }
 		}
 		const workspacePath = raw?.workspacePath !== undefined ? this.str(raw.workspacePath, '') || undefined : undefined
 		const schemas: SchemaConfig[] = []
@@ -105,7 +105,17 @@ export class ConfigReader {
 		if (!workspacePath && !schemas.some(s => s.workspace !== undefined)) {
 			this.issues.push('orm.workspacePath (or an orm.schemas entry with workspace) is required')
 		}
-		return { workspacePath, schemas }
+		return { workspacePath, schemas, watch: this.watch(raw?.watch) }
+	}
+
+	/** orm.watch: true / false, or { enabled, intervalMs, debounceMs } */
+	private watch (raw: unknown): WatchConfig {
+		const object = isObject(raw) ? raw : { enabled: raw }
+		return {
+			enabled: this.bool(object.enabled, true, 'orm.watch.enabled'),
+			intervalMs: this.int(object.intervalMs, 5000, 'orm.watch.intervalMs', 0),
+			debounceMs: this.int(object.debounceMs, 300, 'orm.watch.debounceMs', 0)
+		}
 	}
 
 	/** An entry of orm.schemas: with workspace it defines a schema, without it adjusts a discovered one */

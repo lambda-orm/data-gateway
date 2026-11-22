@@ -3,6 +3,7 @@ import { DataGatewayConfig } from '../../domain/config/dataGatewayConfig'
 import { SchemaDescriptor, SchemaSettings } from '../../domain/runtime/schemas'
 import { McpServerInfo } from '../../application/ports/input/mcpServerPort'
 import { SchemaState } from '../../domain/runtime/policies'
+import { WorkspaceChange } from '../../domain/runtime/workspaces'
 
 /** supervisor → worker */
 export type ControlRequest =
@@ -13,6 +14,10 @@ export type ControlRequest =
 	/** edge: a channel to a schema worker (a port in thread mode, a unix socket in process mode) */
 	| { type: 'connect', path: string, port?: unknown, socketPath?: string, info: McpServerInfo }
 	| { type: 'state', state: SchemaState }
+	/** edge: a schema that appeared (its env left out) / went / something changed in a workspace */
+	| { type: 'add', schema: { descriptor: SchemaDescriptor, settings: SchemaSettings } }
+	| { type: 'remove', path: string }
+	| { type: 'workspace', change: WorkspaceChange }
 
 /** worker → supervisor */
 export type ControlEvent =

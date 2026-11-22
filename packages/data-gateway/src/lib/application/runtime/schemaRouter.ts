@@ -2,6 +2,7 @@ import { TransportName } from '../../domain/config/dataGatewayConfig'
 import { GatewayError, timeout, unavailable } from '../../domain/errors/gatewayError'
 import { CONTEXT_FREE_OPERATIONS, GATEWAY_OPERATIONS, MCP_OPERATIONS } from '../../domain/runtime/channelProtocol'
 import { SchemaState } from '../../domain/runtime/policies'
+import { WorkspaceChange } from '../../domain/runtime/workspaces'
 import { DataGatewayPort, RequestContext } from '../ports/input/dataGatewayPort'
 import { McpServerInfo, McpServerPort } from '../ports/input/mcpServerPort'
 import { GatewayHealth, SchemaDirectoryPort, ServedSchema } from '../ports/input/schemaDirectoryPort'
@@ -10,7 +11,7 @@ import { AuthenticatorPort, ClockPort, QueueOutcome } from '../ports/output/supp
 import { Listeners } from './listeners'
 import { toolError } from '../mcp/resultSerializer'
 
-/** What the edge knows of a schema, fixed at start */
+/** What the edge knows of a schema, fixed when it is added */
 export interface RoutedSchemaSettings {
 	path: string
 	transports: TransportName[]
@@ -49,12 +50,48 @@ class RoutedSchema {
  */
 export class SchemaRouter implements SchemaDirectoryPort {
 	private readonly routes = new Map<string, RoutedSchema>()
-	private readonly served: ServedSchema[]
+	private served: ServedSchema[] = []
 	private readonly stateChanges = new Listeners<SchemaState>()
+	private readonly schemasChanges = new Listeners<void>()
+	private readonly workspaceChanges = new Listeners<WorkspaceChange>()
 
 	constructor (settings: RoutedSchemaSettings[], private readonly clock: ClockPort, private readonly gatewayVersion: string) {
 		for (const s of settings) this.routes.set(s.path, new RoutedSchema(s, clock.now().toISOString()))
-		this.served = settings.map(s => this.serve(s.path))
+		this.serveAll()
+	}
+
+	private serveAll (): void {
+		this.served = [...this.routes.keys()].sort().map(path => this.serve(path))
+	}
+
+	/** A schema that appeared (a new workspace): starting until its worker connects */
+	public add (settings: RoutedSchemaSettings): void {
+		if (this.routes.has(settings.path)) return
+		this.routes.set(settings.path, new RoutedSchema(settings, this.clock.now().toISOString()))
+		this.serveAll()
+		this.schemasChanges.emit()
+	}
+
+	/** A schema that went: its requests in flight end with their channel, the next ones are 404 */
+	public remove (path: string): void {
+		const route = this.routes.get(path)
+		if (!route) return
+		route.channel?.close()
+		this.routes.delete(path)
+		this.serveAll()
+		this.schemasChanges.emit()
+	}
+
+	public onSchemasChange (listener: () => void): () => void {
+		return this.schemasChanges.subscribe(listener)
+	}
+
+	public onWorkspaceChange (listener: (change: WorkspaceChange) => void): () => void {
+		return this.workspaceChanges.subscribe(listener)
+	}
+
+	public workspaceChanged (change: WorkspaceChange): void {
+		this.workspaceChanges.emit(change)
 	}
 
 	public schemas (): ServedSchema[] {
@@ -81,8 +118,14 @@ export class SchemaRouter implements SchemaDirectoryPort {
 
 	/** A new channel to the (re)started worker of a schema */
 	public connect (path: string, channel: SchemaChannelPort, info: McpServerInfo): void {
-		const route = this.route(path)
-		route.channel?.close()
+		const route = this.routes.get(path)
+		if (!route) {
+			channel.close()
+			return
+		}
+		// a reload: the requests in flight on the old channel finish there, the new ones go to the new worker
+		const old = route.channel
+		if (old) setTimeout(() => old.close(), route.settings.timeout + CHANNEL_MARGIN_MS).unref?.()
 		route.channel = channel
 		route.info = info
 		channel.onEvent(event => { if (event.event === 'queue') route.queueOutcomes.emit(event.outcome) })
@@ -93,8 +136,10 @@ export class SchemaRouter implements SchemaDirectoryPort {
 	}
 
 	public setState (state: SchemaState): void {
-		const route = this.route(state.path)
-		const changed = route.state.status !== state.status
+		const route = this.routes.get(state.path)
+		// a state that arrives after the schema was removed
+		if (!route) return
+		const changed = route.state.status !== state.status || route.state.pending !== state.pending
 		route.state = { ...state }
 		if (state.status !== 'ready') {
 			route.channel?.close()

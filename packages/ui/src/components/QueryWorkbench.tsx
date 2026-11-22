@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useSyncExternalStore } from 'react'
+import React, { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
 import { ALL_OPERATIONS, Operation } from '../domain/operations'
 import { QueryResult } from '../domain/results'
 import { HistoryPort, QueryApiPort } from '../application/ports'
@@ -33,6 +33,8 @@ export interface QueryWorkbenchProps {
 	initialQuery?: string
 	/** Schema chosen at the start in the selector (it can be changed); schema fixes one instead */
 	initialSchema?: string
+	/** Changes when a schema is added, removed or reloaded (the Workspace watches /schemas): the list and typings again */
+	schemasRevision?: string
 	/** First content of the editors (a saved query); initialQuery is the query alone */
 	initial?: Partial<SavedQueryContent>
 	/** Every change of the content or the schema (to save it, to know it changed) */
@@ -89,6 +91,15 @@ export const QueryWorkbench: React.FC<QueryWorkbenchProps> = props => {
 		}
 		// the initial schema only counts at the start
 	}, [controller, fixedSchema])
+
+	// the schemas changed (one added, removed or reloaded): the list again, and the typings of the one chosen
+	const revisionSeen = useRef(props.schemasRevision)
+	useEffect(() => {
+		if (revisionSeen.current === props.schemasRevision) return
+		revisionSeen.current = props.schemasRevision
+		if (fixedSchema === undefined) controller.loadSchemas()
+		controller.refreshSchema()
+	}, [controller, fixedSchema, props.schemasRevision])
 
 	useEffect(() => { setSchemaTypings(s.typings).catch(() => undefined) }, [s.typings])
 	const contentChange = props.onContentChange

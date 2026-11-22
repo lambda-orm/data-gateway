@@ -28,7 +28,7 @@ describe('asyncapi.yaml', () => {
 describe('websocket asyncapi.yaml', () => {
 	test('parses: requests, responses and the notifications', () => {
 		const asyncapi = YAML.load(fs.readFileSync(path.join(__dirname, '../../src/lib/infrastructure/input/websocket/asyncapi.yaml'), 'utf8'))
-		expect(asyncapi.components.messages.notification.payload.properties.method.enum).toEqual(['queue.completed', 'queue.failed', 'schema.statusChanged'])
+		expect(asyncapi.components.messages.notification.payload.properties.method.enum).toEqual(['queue.completed', 'queue.failed', 'schema.statusChanged', 'workspace.changed'])
 		expect(Object.keys(asyncapi.operations)).toEqual(['call', 'notify'])
 	})
 })

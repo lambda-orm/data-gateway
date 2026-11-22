@@ -1,5 +1,6 @@
 import { TransportName } from '../../../domain/config/dataGatewayConfig'
 import { SchemaState } from '../../../domain/runtime/policies'
+import { WorkspaceChange } from '../../../domain/runtime/workspaces'
 import { AuthenticatorPort, QueueOutcome } from '../output/supportPorts'
 import { DataGatewayPort } from './dataGatewayPort'
 import { McpServerPort } from './mcpServerPort'
@@ -27,7 +28,10 @@ export interface GatewayHealth {
 	schemas: SchemaState[]
 }
 
-/** The schemas a transport serves, fixed at start (no hot reload), and the state of each one */
+/**
+ * The schemas a transport serves and the state of each one. The set changes when a workspace appears or goes
+ * (orm.watch): a transport reads schemas() again on onSchemasChange.
+ */
 export interface SchemaDirectoryPort {
 	schemas (): ServedSchema[]
 	states (): SchemaState[]
@@ -35,4 +39,8 @@ export interface SchemaDirectoryPort {
 	version (): { version: string }
 	/** A schema changed its state (WebSocket: schema.statusChanged) */
 	onStateChange (listener: (state: SchemaState) => void): () => void
+	/** A schema was added or removed: schemas() answers another set */
+	onSchemasChange (listener: () => void): () => void
+	/** Something changed in a workspace (WebSocket: workspace.changed) */
+	onWorkspaceChange (listener: (change: WorkspaceChange) => void): () => void
 }

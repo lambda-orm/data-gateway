@@ -23,6 +23,13 @@ describe('config reader', () => {
 		})
 	})
 
+	test('orm.watch: on by default; false, or its scan and debounce', () => {
+		expect(read(base).config?.orm.watch).toEqual({ enabled: true, intervalMs: 5000, debounceMs: 300 })
+		expect(read({ ...base, orm: { ...base.orm, watch: false } }).config?.orm.watch.enabled).toBe(false)
+		expect(read({ ...base, orm: { ...base.orm, watch: { intervalMs: '0', debounceMs: 50 } } }).config?.orm.watch).toEqual({ enabled: true, intervalMs: 0, debounceMs: 50 })
+		expect(read({ ...base, orm: { ...base.orm, watch: { intervalMs: -1 } } }).issues).toContain('orm.watch.intervalMs "-1" must be an integer >= 0')
+	})
+
 	test('values from environment variables come as strings', () => {
 		const { config, issues } = read({ ...base, transports: { http: { port: '9000' } }, rateLimit: { max: '0' }, scripts: { enabled: 'true', timeoutMs: '1000' } })
 		expect(issues).toEqual([])

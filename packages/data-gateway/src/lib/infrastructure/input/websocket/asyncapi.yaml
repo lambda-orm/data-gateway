@@ -14,7 +14,10 @@ info:
     - Errors: -32700 parse, -32600 invalid request, -32601 no such method, -32602 invalid params, -32000 for the
       rest with data { name, status, code } (the status REST would answer: 403, 503 while the schema is not ready…).
     - Notifications (no id): queue.completed / queue.failed for executeQueued with notify: true on this connection,
-      schema.statusChanged when the schema leaves or comes back to ready.
+      schema.statusChanged when the schema leaves or comes back to ready (pending: a new version of its workspace that
+      didn't start, the last one serves), workspace.changed when its workspace changed (a connection to the root: every
+      workspace) - kind added, removed, schema (lambdaORM.yaml, reloaded), env (.env, reloaded) or files (others).
+      A connection to a schema that is removed is closed with code 4404.
 channels:
   schema:
     address: '/{schema}'
@@ -90,8 +93,10 @@ components:
         required: [jsonrpc, method, params]
         properties:
           jsonrpc: { const: '2.0' }
-          method: { type: string, enum: [queue.completed, queue.failed, schema.statusChanged] }
+          method: { type: string, enum: [queue.completed, queue.failed, schema.statusChanged, workspace.changed] }
           params: { type: object }
       examples:
+        - name: workspaceChanged
+          payload: { jsonrpc: '2.0', method: workspace.changed, params: { path: iot/v1, kind: files, files: [workbench/reports/sales.query.yaml], at: '2026-11-22T10:00:00.000Z' } }
         - name: completed
           payload: { jsonrpc: '2.0', method: queue.completed, params: { queueId: q-123, ok: true, rows: 18234 } }

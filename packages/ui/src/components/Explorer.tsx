@@ -106,6 +106,18 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 	const toggle = (key: string) => setExpanded(e => { const n = new Set(e); if (n.has(key)) n.delete(key); else n.add(key); return n })
 	const open = (key: string) => setExpanded(e => e.has(key) ? e : new Set(e).add(key))
 
+	// a schema reloaded (another since): its domain again, if it was read
+	const seen = useRef<Record<string, string | undefined>>({})
+	useEffect(() => {
+		for (const s of schemas) {
+			const before = seen.current[s.path]
+			seen.current[s.path] = s.since
+			if (before === undefined || before === s.since || domains[s.path] === undefined) continue
+			const read = domainOf ?? (api.domain ? (path: string) => api.domain!(path) : undefined)
+			if (read) read(s.path).then(domain => setDomains(d => ({ ...d, [s.path]: domain })), () => undefined)
+		}
+	}, [schemas])
+
 	const loadDomain = (schema: string) => {
 		if (domains[schema] !== undefined) return
 		const read = domainOf ?? (api.domain ? (path: string) => api.domain!(path) : undefined)
@@ -252,10 +264,13 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 					const saved = expanded.has(key) ? savedRows(s.path, undefined, 2) : []
 					return (
 						<React.Fragment key={s.path}>
-							<Row level={1} label={s.path || '/'} icon={<Icons.schema />} expanded={expanded.has(key)} onToggle={() => toggle(key)}
+							<Row level={1} label={s.pending ? <span>{s.path || '/'} <span className="lw-pending" aria-label={m.schemaPending}>⚠</span></span> : s.path || '/'}
+								icon={<Icons.schema />} expanded={expanded.has(key)} onToggle={() => toggle(key)}
+								title={s.pending ? `${m.schemaPending}: ${s.pending}` : undefined}
 								dropTarget={{ onDrop: id => move(id, undefined) }} actions={creators(s.path)} />
 							{expanded.has(key) && (
 								<>
+									{s.pending && <div className="lw-schema-reason lw-schema-pending" role="note" style={{ paddingLeft: 6 + 14 + 22 }}>{m.schemaPending}: {s.pending}</div>}
 									<Row level={2} label={m.domainYaml} icon={<Icons.yaml />} onOpen={() => onOpenDomain(s.path)} title={`${m.domainYaml} — ${m.readOnly}`} />
 									<Row level={2} label={m.entities} icon={<Icons.entity />} expanded={expanded.has(entitiesKey)}
 										onToggle={() => { toggle(entitiesKey); loadDomain(s.path) }} />
