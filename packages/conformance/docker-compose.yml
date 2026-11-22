@@ -20,7 +20,7 @@ services:
 
   data-gateway:
     profiles: [ image ]
-    image: ${DATA_GATEWAY_IMAGE:-flaviorita/data-gateway:3.1.0}
+    image: ${DATA_GATEWAY_IMAGE:-flaviorita/data-gateway:3.2.0}
     depends_on:
       postgres: { condition: service_healthy }
     environment:

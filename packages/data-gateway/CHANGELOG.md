@@ -4,10 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## Versions
 
-### Unreleased (3.2.0)
+### 3.2.0 (2026-11-22)
 
-Phases 1 to 6 of `docs/DATA_GATEWAY_ADMIN_PLAN.md`. Nothing to change in the configuration: `orm.watch` is on by
-default, `admin` off.
+Uses `@lambdaorm/lib` 3.8.1 and `@lambdaorm/ui` 0.5.0. The administration of the workspaces (phases 1 to 6 of
+`docs/DATA_GATEWAY_ADMIN_PLAN.md`). Nothing to change in the configuration: `orm.watch` is on by default, `admin` off.
 
 **Features:**
 
