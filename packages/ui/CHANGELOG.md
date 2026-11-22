@@ -1,5 +1,19 @@
 # @lambdaorm/ui
 
+## 0.4.0
+
+### Minor Changes
+
+- 0d15eab: The explorer filters the entities of a schema by part of a name: an entity whose name contains it, or the properties
+  and relations that do, shown under their entity without opening it (`Areas.type` looks only in Areas). With a large
+  domain (192 entities) the list was flat and had to be scrolled. Escape clears it; the count says how many match.
+- 2923a57: - An error of the query with a suggestion of the gateway offers it ("use name"): a click replaces the name in the query
+  (every whole word, not quoted text) and checks it again.
+  - The width of the explorer is kept in the browser, changes with the keyboard (arrows on its border) and, with a double
+    click or Enter on the border, fits the longest name.
+  - A schema that didn't start shows in the explorer with its status and, opened, its reason (a database down, a
+    connection variable not set); nothing can be created in it.
+
 ## 0.3.4
 
 ### Patch Changes
