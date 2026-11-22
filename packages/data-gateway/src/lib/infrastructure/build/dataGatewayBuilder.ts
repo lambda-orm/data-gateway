@@ -156,7 +156,8 @@ export class DataGatewayBuilder {
 					mcpName: config.mcp.name,
 					pageSize: config.mcp.pageSize,
 					version,
-					checkConnections: options.checkConnections ?? false
+					checkConnections: options.checkConnections ?? false,
+					admin: config.admin.enabled
 				}, { logger, audit, clock, queueEvents: { completed: outcome => queueOutcomes.emit(outcome) } })
 				composed.push(schema)
 				inline.push({

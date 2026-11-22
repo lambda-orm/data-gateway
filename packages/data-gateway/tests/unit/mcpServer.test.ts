@@ -4,6 +4,9 @@ import { describeDomain, describeEntities, searchDomain } from '../../src/lib/ap
 import { gatewayTools } from '../../src/lib/application/mcp/gatewayTools'
 import { ToolCatalog, ToolFilter } from '../../src/lib/application/mcp/toolCatalog'
 import { TOOL_NAMES } from '../../src/lib/domain/config/configReader'
+
+/** The tools of a schema without the administration (admin off) */
+const GATEWAY_TOOLS = TOOL_NAMES.filter(name => !name.startsWith('admin_'))
 import { ALL, ctx, fakeGateway } from '../helpers/fakes'
 
 const server = (options: { filter?: ToolFilter, maxRows?: number, pageSize?: number } = {}) => {
@@ -18,7 +21,7 @@ const names = async (mcp: DataGatewayMcpServer, permissions: any[]) => (await mc
 
 describe('tool catalog', () => {
 	test('every tool of the design, in its order', async () => {
-		expect(await names(server().mcp, ALL)).toEqual(TOOL_NAMES)
+		expect(await names(server().mcp, ALL)).toEqual(GATEWAY_TOOLS)
 	})
 
 	test('a credential sees only what it can use', async () => {
@@ -54,7 +57,7 @@ describe('tool catalog', () => {
 		expect(first.items).toHaveLength(10)
 		const second = await mcp.listTools(ctx(ALL), first.nextCursor)
 		const third = await mcp.listTools(ctx(ALL), second.nextCursor)
-		expect([...first.items, ...second.items, ...third.items].map(t => t.name)).toEqual(TOOL_NAMES)
+		expect([...first.items, ...second.items, ...third.items].map(t => t.name)).toEqual(GATEWAY_TOOLS)
 		expect(third.nextCursor).toBeUndefined()
 		await expect(mcp.listTools(ctx(ALL), 'garbage')).rejects.toMatchObject({ name: 'McpRequestError' })
 	})

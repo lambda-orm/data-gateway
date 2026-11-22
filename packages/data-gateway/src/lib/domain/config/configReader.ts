@@ -16,7 +16,7 @@ export const TOOL_NAMES = [
 	'orm_execute', 'orm_execute_script', 'orm_execute_queued', 'orm_plan', 'orm_metadata', 'orm_model', 'orm_parameters',
 	'orm_constraints', 'schema_get', 'schema_version', 'schema_domain', 'schema_entities', 'schema_search', 'schema_describe', 'schema_enums', 'schema_sources',
 	'schema_mappings', 'schema_views', 'schema_stages', 'stage_exists', 'stage_export', 'stage_import', 'gateway_version',
-	'gateway_health'
+	'gateway_health', 'admin_schema_get', 'admin_schema_validate', 'admin_stage_fetch'
 ]
 
 type Raw = Record<string, any>

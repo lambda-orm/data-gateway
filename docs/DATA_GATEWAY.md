@@ -618,6 +618,9 @@ MCP, pero es una decisión explícita: el agente puede hacer lo mismo que una ap
 | `stage_import` | `stage`, `data` | `POST /stages/:stage/import` | `stageImport` | `destructiveHint: true` |
 | `gateway_version` | — | `GET /version` | `read` | `readOnlyHint: true` |
 | `gateway_health` | — | `GET /health` | `read` | `readOnlyHint: true` |
+| `admin_schema_get` | — | `GET /admin/workspaces/{ruta}/schema` | `schemaRead` (con `admin.enabled`) | `readOnlyHint: true` |
+| `admin_schema_validate` | `text` | `POST /admin/validate` | `schemaRead` (con `admin.enabled`) | `readOnlyHint: true` |
+| `admin_stage_fetch` | `stage?` | `POST …/commands/fetch` | `schemaRead` (con `admin.enabled`) | `readOnlyHint: true` |
 
 - **`tools/list` se filtra por los permisos de la credencial:** una credencial sin `script` no ve
   `orm_execute_script`; con solo `read`, `orm_execute` aparece con la descripción "solo consultas de lectura con esta
@@ -1109,4 +1112,16 @@ Lo que manda cada formulario de la UI: un cambio de **un** elemento, nombrado po
   `lambdaORM.yaml` sugiere las claves de cada lugar (entidad, propiedad, relación, source, mapping, stage…) y los
   valores conocidos (`type`, `dialect`, el `entity` de una relación, el `enum` de una propiedad, el `mapping` de una
   source).
+
+### 11.6 Por MCP, solo lectura (`DATA_GATEWAY_ADMIN_PLAN.md` fase 6)
+
+Con `admin.enabled`, el MCP de cada esquema suma `admin_schema_get` (el `lambdaORM.yaml` como está escrito, con sus
+comentarios; las conexiones como `${VARIABLES}`), `admin_schema_validate` (un cambio revisado sin guardarlo) y
+`admin_stage_fetch` (las diferencias entre las bases y el modelo), solo para credenciales con `schemaRead`. Escribir
+(el esquema, `push`, `drop`, …) no se ofrece por MCP: un modelo lo haría sin la vista previa ni la confirmación de la
+UI. Un agente propone el cambio; una persona lo aplica.
+
+La administración es una API REST para la UI: los clientes de la gateway (`@lambdaorm/data-gateway-client` y los que
+vienen) no la cubren, y por eso no entra en la suite de conformidad de los clientes; la prueban las pruebas de
+integración de la gateway.
 

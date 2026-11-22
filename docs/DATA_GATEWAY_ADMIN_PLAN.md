@@ -291,7 +291,9 @@ por defecto.
 - **Fase 5 (hecha):** las variables de las conexiones en el `.env` desde la gateway y la UI (nunca un valor), `build`
   (escrito en `src/` y como `.zip`, con el generador movido a `@lambdaorm/base`) y el autocompletado del
   `lambdaORM.yaml` en el editor (un proveedor propio: `monaco-yaml` y un JSON Schema quedan para después).
-- **Fase 6 (pendiente):** MCP de solo lectura y validación, la wiki, la conformidad de los clientes con el admin.
+- **Fase 6 (hecha en el core):** las tools de MCP `admin_schema_get`, `admin_schema_validate`, `admin_stage_fetch`,
+  solo lectura (`DATA_GATEWAY.md` §11.6). La conformidad de los clientes no cubre la administración: es una API REST para
+  la UI que los clientes no exponen (la prueban las pruebas de integración). Queda la wiki, con la release 3.2.0.
 - Queda de la fase 2 para después: los borradores personales del navegador **junto** a lo compartido (hoy es uno u otro
   según `workbenchWrite`, con la copia del navegador al workspace), y el diff de tres vías (hoy son dos lados).
 - Encontrado en la fase 1: λORM arranca un esquema con un tipo que no existe (`type: nope`) sin error; la validación de
