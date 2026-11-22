@@ -7,6 +7,7 @@ import { IndexedDbWorkspaceStore, MemoryWorkspaceStore } from '../src/infrastruc
 import { Workspace } from '../src/components/Workspace'
 import { DomainInfo } from '../src/domain/diagram'
 import { FakeApi } from './fakes'
+import { SchemaInfo } from '../src/application/ports'
 
 vi.mock('../src/infrastructure/monaco/monacoSetup', () => ({
 	loadMonaco: () => Promise.reject(new Error('no browser')),
@@ -126,11 +127,11 @@ describe('Workspace', () => {
 	})
 
 	test('the schemas read again: one added shows, one reloaded is read again, one whose new version failed says so', async () => {
-		let schemas = [{ path: 'northwind/v1', status: 'ready', since: 'one' }]
+		let schemas: SchemaInfo[] = [{ path: 'northwind/v1', status: 'ready', since: 'one' }]
 		let reads = 0
 		class Changing extends DomainApi {
 			async schemas () { return schemas }
-			async domain (schema: string) { reads++; return super.domain(schema) }
+			async domain () { reads++; return super.domain() }
 		}
 		render(<Workspace api={new Changing()} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" refreshMs={30} />)
 		await waitFor(() => expect(row('northwind/v1')).toBeTruthy())

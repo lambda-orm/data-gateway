@@ -64,6 +64,8 @@ export const addToHistory = (history: HistoryEntry[], entry: HistoryEntry, size 
 /** An error of λORM as an editor marker: where it says (line / column), or the whole first line */
 export interface EditorMarker {
 	message: string
+	/** error by default */
+	severity?: 'error' | 'warning'
 	startLineNumber: number
 	startColumn: number
 	endLineNumber: number

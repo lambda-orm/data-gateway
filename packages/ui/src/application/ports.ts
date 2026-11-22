@@ -56,3 +56,37 @@ export interface WorkspaceStore {
 	/** Whether what is put survives closing the page (false when the browser doesn't allow storing) */
 	durable (): Promise<boolean>
 }
+
+/** What a credential may do in the administration of the workspaces (GET /admin) */
+export interface AdminCapabilities {
+	schemaRead: boolean
+	schemaWrite: boolean
+	schemaAdmin: boolean
+	workbenchRead: boolean
+	workbenchWrite: boolean
+}
+
+export interface SchemaIssue {
+	severity: 'error' | 'warning'
+	message: string
+	line?: number
+	column?: number
+}
+
+/**
+ * The administration of the workspaces of a gateway with admin.enabled (docs/DATA_GATEWAY.md §11). A failure throws
+ * an Error with status: 412 (another changed it: details has what there is now), 422 (invalid: details.issues).
+ */
+export interface AdminApiPort {
+	/** undefined when the gateway has no administration (admin off) */
+	capabilities (): Promise<AdminCapabilities | undefined>
+	readSchema (schema: string): Promise<{ text: string, version: string }>
+	writeSchema (schema: string, text: string, version: string): Promise<{ version: string, issues: SchemaIssue[] }>
+	validate (text: string): Promise<{ valid: boolean, issues: SchemaIssue[] }>
+	createWorkspace (path: string, copyOf?: string): Promise<{ path: string, version: string }>
+	removeWorkspace (path: string): Promise<{ trash: string }>
+	/** what is saved in every workspace; undefined when it didn't change since that version */
+	workbench (version?: string): Promise<{ version: string, items: (SavedItem & { version?: string })[] } | undefined>
+	putItems (items: (SavedItem & { version?: string })[]): Promise<{ items: { id: string, version: string }[] }>
+	removeItems (ids: string[]): Promise<{ removed: string[] }>
+}

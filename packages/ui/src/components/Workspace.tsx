@@ -9,11 +9,15 @@ import { folderPaths, SavedDiagram, SavedItem, SavedQuery, SavedQueryContent } f
 import { RestQueryApi } from '../infrastructure/restQueryApi'
 import { IndexedDbWorkspaceStore } from '../infrastructure/workspaceStores'
 import { CodeEditor } from './CodeEditor'
-import { DiagramDialog, Icons, ItemDialog } from './dialogs'
+import { DiagramDialog, Icons, ItemDialog, NewSchemaDialog, RemoveSchemaDialog } from './dialogs'
 import { DomainDiagram } from './DomainDiagram'
 import { EntityView } from './EntityView'
 import { Explorer, problemText } from './Explorer'
 import { QueryWorkbench, QueryWorkbenchProps } from './QueryWorkbench'
+import { SchemaEditor } from './SchemaEditor'
+import { RestAdminApi } from '../infrastructure/restAdminApi'
+import { adminMessagesOf, format } from '../domain/adminI18n'
+import { AdminApiPort, AdminCapabilities } from '../application/ports'
 
 export interface WorkspaceProps extends Omit<QueryWorkbenchProps, 'initial' | 'onContentChange' | 'toolbar' | 'initialSchema' | 'schema'> {
 	/** Where the saved items are kept; by default IndexedDB of the browser under workspaceKey */
@@ -27,12 +31,17 @@ export interface WorkspaceProps extends Omit<QueryWorkbenchProps, 'initial' | 'o
 	 * gateway (orm.watch) shows without reloading the page
 	 */
 	refreshMs?: number
+	/**
+	 * The administration of the workspaces (admin.enabled on the gateway): the lambdaORM.yaml editable, new and removed
+	 * schemas. By default the gateway's own at {baseUrl}/admin (with the given api, none unless it is given); false: none
+	 */
+	admin?: AdminApiPort | false
 }
 
 /** What tells that the schemas changed: their routes, states and the version each serves */
 const revisionOf = (schemas: SchemaInfo[]): string => schemas.map(s => `${s.path}|${s.status}|${s.since ?? ''}|${s.pending ?? ''}|${s.reason ?? ''}`).join('\n')
 
-type TabKind = 'query' | 'domain' | 'entity' | 'diagram'
+type TabKind = 'query' | 'domain' | 'entity' | 'diagram' | 'schemaFile'
 
 interface DiagramDraft { entities: string[], positions?: Record<string, { x: number, y: number }>, bends?: Record<string, number>, compact: boolean, relationNames: boolean }
 
@@ -89,7 +98,7 @@ const storedWidth = (): number | undefined => {
 }
 const rememberWidth = (value: number) => { try { window.localStorage.setItem(WIDTH_KEY, String(value)) } catch { /* private window */ } }
 
-export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTabs = 20, refreshMs = 5000, ...workbench }) => {
+export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTabs = 20, refreshMs = 5000, admin, ...workbench }) => {
 	const theme = workbench.theme ?? 'light'
 	const m = messagesOf(workbench.locale)
 	const x = explorerMessagesOf(workbench.locale)
@@ -109,6 +118,19 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 	const [creatingDiagram, setCreatingDiagram] = useState<{ schema: string, parentId?: string }>()
 	const [choosingEntities, setChoosingEntities] = useState<Tab>()
 	const [notice, setNotice] = useState<string>()
+	const a = adminMessagesOf(workbench.locale)
+	const adminApi = useMemo<AdminApiPort | undefined>(() => admin === false ? undefined : admin ?? (workbench.api ? undefined : new RestAdminApi(workbench.baseUrl ?? '', workbench.headers)),
+		[admin, workbench.api, workbench.baseUrl, workbench.headers])
+	const [can, setCan] = useState<AdminCapabilities>()
+	useEffect(() => {
+		setCan(undefined)
+		adminApi?.capabilities().then(setCan, () => setCan(undefined))
+	}, [adminApi])
+	const [newSchema, setNewSchema] = useState(false)
+	const [removing, setRemoving] = useState<string>()
+	// the schemas read again now (after creating or removing one), not at the next tick
+	const [poke, setPoke] = useState(0)
+	const [dirtySchemas, setDirtySchemas] = useState<Set<number>>(new Set())
 	// the content of each query tab as it is typed: a ref (no render per key), and a tick to show unsaved changes
 	const contents = useRef(new Map<number, SavedQueryContent & { schema?: string }>())
 	const [, setTick] = useState(0)
@@ -164,7 +186,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 		if (refreshMs <= 0) return
 		const timer = setInterval(read, refreshMs)
 		return () => clearInterval(timer)
-	}, [api, refreshMs])
+	}, [api, refreshMs, poke])
+	const pokeSoon = () => { for (const ms of [300, 1500, 4000]) setTimeout(() => setPoke(p => p + 1), ms) }
 	const sinceOf = (schema: string | undefined) => listed.find(s => s.path === schema)?.since ?? ''
 	useEffect(() => { if (!notice) return; const t = setTimeout(() => setNotice(undefined), 5000); return () => clearTimeout(t) }, [notice])
 
@@ -172,6 +195,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 	const dirty = (tab: Tab): boolean => {
 		const saved = savedOf(tab)
 		if (tab.kind === 'diagram') return saved?.kind === 'diagram' && !!tab.draft && !sameDraft(tab.draft, draftOf(saved))
+		if (tab.kind === 'schemaFile') return dirtySchemas.has(tab.id)
 		if (tab.kind !== 'query') return false
 		const content = contents.current.get(tab.id)
 		if (!content) return false
@@ -208,6 +232,9 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 	const queryEntity = (schema: string, entity: string) => newQuery(schema, undefined, { query: `${entity}.page(1, 10)` }, entity)
 	const openEntity = (schema: string, entity: string) => {
 		if (!reuse(t => t.kind === 'entity' && t.schema === schema && t.entity === entity)) add({ kind: 'entity', title: entity, schema, entity })
+	}
+	const openSchemaFile = (schema: string) => {
+		if (!reuse(t => t.kind === 'schemaFile' && t.schema === schema)) add({ kind: 'schemaFile', title: `lambdaORM.yaml ${schema || '/'}`, schema })
 	}
 	const openDomain = (schema: string) => {
 		if (!reuse(t => t.kind === 'domain' && t.schema === schema)) add({ kind: 'domain', title: `${x.domainYaml} ${schema || '/'}`, schema })
@@ -272,7 +299,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 		if (e.key === 'Enter') { e.preventDefault(); fitWidth() }
 	}
 
-	const iconOf = (tab: Tab) => tab.kind === 'domain' ? <Icons.yaml /> : tab.kind === 'entity' ? <Icons.entity /> : tab.kind === 'diagram' ? <Icons.diagram /> : savedOf(tab) ? <Icons.query /> : null
+	const iconOf = (tab: Tab) => tab.kind === 'domain' || tab.kind === 'schemaFile' ? <Icons.yaml /> : tab.kind === 'entity' ? <Icons.entity /> : tab.kind === 'diagram' ? <Icons.diagram /> : savedOf(tab) ? <Icons.query /> : null
 	const activeTab = tabs.find(t => t.id === active)
 	const saveKeys = (tab: Tab) => (e: React.KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(tab) } }
 	const texts = { ...x, entities: x.entities }
@@ -285,7 +312,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 						<Explorer schemas={listed} controller={controller} api={api} locale={workbench.locale} theme={theme} activeId={activeTab?.savedId}
 							loadDomain={domainOf} onOpen={openSaved} onOpenDomain={openDomain} onOpenEntity={openEntity}
 							onNewQuery={(schema, parentId) => newQuery(schema, parentId)}
-							onNewDiagram={(schema, parentId) => setCreatingDiagram({ schema, parentId })} />
+							onNewDiagram={(schema, parentId) => setCreatingDiagram({ schema, parentId })}
+							admin={adminApi && can ? { can, onOpenSchemaFile: openSchemaFile, onNewSchema: () => setNewSchema(true), onRemoveSchema: setRemoving } : undefined} />
 					</div>
 					<div className="lw-space-resizer" role="separator" aria-orientation="vertical" aria-label={x.resizeExplorer} title={x.resizeExplorer}
 						tabIndex={0} aria-valuenow={width} aria-valuemin={MIN_WIDTH} aria-valuemax={MAX_WIDTH}
@@ -318,6 +346,11 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 						return (
 							<div key={tab.id} role="tabpanel" aria-label={saved?.name ?? tab.title} hidden={tab.id !== active}
 								onKeyDownCapture={tab.kind === 'query' || tab.kind === 'diagram' ? saveKeys(tab) : undefined}>
+								{tab.kind === 'schemaFile' && adminApi && (
+									<SchemaEditor admin={adminApi} schema={tab.schema ?? ''} writable={!!can?.schemaWrite} theme={theme} locale={workbench.locale}
+										revision={sinceOf(tab.schema)} pending={listed.find(s => s.path === tab.schema)?.pending}
+										onDirty={d => setDirtySchemas(set => { const n = new Set(set); if (d) n.add(tab.id); else n.delete(tab.id); return n })} />
+								)}
 								{tab.kind === 'domain' && <DomainYaml key={sinceOf(tab.schema)} domain={loaderOf(tab.schema ?? '')} schema={tab.schema ?? ''} theme={theme} loading={x.loading} readOnly={x.readOnly} />}
 								{tab.kind === 'entity' && (
 									<EntityView key={sinceOf(tab.schema)} api={api} schema={tab.schema ?? ''} entity={tab.entity ?? ''} domain={loaderOf(tab.schema ?? '')} theme={theme} locale={workbench.locale}
@@ -381,6 +414,26 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 							const diagram = await controller.createDiagram({ schema: creatingDiagram.schema, name: v.name, description: v.description, parentId: v.parentId }, { entities: v.entities, compact: false, relationNames: false })
 							openSaved(diagram)
 						} catch (e) { return problemText(e, x) }
+					}} />
+			)}
+			{newSchema && adminApi && (
+				<NewSchemaDialog theme={theme} schemas={listed.map(s => s.path)}
+					texts={{ title: a.newSchema, route: a.route, routeHint: a.routeHint, startFrom: a.startFrom, empty: a.emptySchema, copyOf: a.copyOf, create: a.create, cancel: a.cancel }}
+					onClose={() => setNewSchema(false)}
+					onSubmit={async v => {
+						const created = await adminApi.createWorkspace(v.path, v.copyOf)
+						setNotice(format(a.created, { name: created.path }))
+						pokeSoon()
+					}} />
+			)}
+			{removing !== undefined && adminApi && (
+				<RemoveSchemaDialog theme={theme} title={a.removeSchema} schema={removing} message={format(a.removeConfirm, { name: removing || '/' })} confirm={a.remove} cancel={a.cancel}
+					onClose={() => setRemoving(undefined)}
+					onConfirm={async () => {
+						await adminApi.removeWorkspace(removing)
+						setTabs(t => t.filter(tab => tab.schema !== removing || tab.kind === 'query'))
+						setNotice(format(a.removed, { name: removing || '/' }))
+						pokeSoon()
 					}} />
 			)}
 			{choosingEntities?.draft && (

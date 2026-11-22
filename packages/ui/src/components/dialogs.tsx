@@ -234,3 +234,92 @@ export const DiagramDialog: React.FC<{
 		</Modal>
 	)
 }
+
+export interface NewSchemaTexts { title: string, route: string, routeHint: string, startFrom: string, empty: string, copyOf: string, create: string, cancel: string }
+
+/** A new schema: its route and what it starts from (empty, or a copy of another one) */
+export const NewSchemaDialog: React.FC<{
+	texts: NewSchemaTexts
+	schemas: string[]
+	theme?: 'light' | 'dark'
+	/** a text it throws is shown and the dialog stays */
+	onSubmit: (value: { path: string, copyOf?: string }) => Promise<void>
+	onClose: () => void
+}> = ({ texts, schemas, theme, onSubmit, onClose }) => {
+	const [path, setPath] = useState('')
+	const [copyOf, setCopyOf] = useState('')
+	const [error, setError] = useState<string>()
+	const [busy, setBusy] = useState(false)
+	const send = async (e: React.FormEvent) => {
+		e.preventDefault()
+		setBusy(true)
+		try {
+			await onSubmit({ path: path.trim(), copyOf: copyOf === '' ? undefined : copyOf })
+			onClose()
+		} catch (err: any) {
+			setError(err?.message ?? String(err))
+		} finally {
+			setBusy(false)
+		}
+	}
+	return (
+		<Modal title={texts.title} onClose={onClose} theme={theme}>
+			<form className="lw-form" onSubmit={send}>
+				<label>{texts.route}<input aria-label="route" value={path} placeholder="sales/v1" onChange={e => { setPath(e.target.value); setError(undefined) }} maxLength={200} /></label>
+				<small className="lw-type">{texts.routeHint}</small>
+				<label>{texts.startFrom}
+					<select aria-label="start from" value={copyOf} onChange={e => setCopyOf(e.target.value)}>
+						<option value="">{texts.empty}</option>
+						{schemas.map(s => <option key={s} value={s}>{texts.copyOf.replace('{name}', s || '/')}</option>)}
+					</select>
+				</label>
+				{error && <div className="lw-notice" role="alert">{error}</div>}
+				<div className="lw-form-actions">
+					<button type="button" onClick={onClose}>{texts.cancel}</button>
+					<button type="submit" className="lw-primary" disabled={busy || path.trim() === ''}>{texts.create}</button>
+				</div>
+			</form>
+		</Modal>
+	)
+}
+
+/** Removes a schema only once its route is typed again */
+export const RemoveSchemaDialog: React.FC<{
+	title: string
+	message: string
+	schema: string
+	confirm: string
+	cancel: string
+	theme?: 'light' | 'dark'
+	onConfirm: () => Promise<void>
+	onClose: () => void
+}> = ({ title, message, schema, confirm, cancel, theme, onConfirm, onClose }) => {
+	const [typed, setTyped] = useState('')
+	const [error, setError] = useState<string>()
+	const [busy, setBusy] = useState(false)
+	const send = async (e: React.FormEvent) => {
+		e.preventDefault()
+		setBusy(true)
+		try {
+			await onConfirm()
+			onClose()
+		} catch (err: any) {
+			setError(err?.message ?? String(err))
+		} finally {
+			setBusy(false)
+		}
+	}
+	return (
+		<Modal title={title} onClose={onClose} theme={theme}>
+			<form className="lw-form" onSubmit={send}>
+				<p>{message}</p>
+				<input aria-label="confirm route" value={typed} onChange={e => setTyped(e.target.value)} placeholder={schema} />
+				{error && <div className="lw-notice" role="alert">{error}</div>}
+				<div className="lw-form-actions">
+					<button type="button" onClick={onClose}>{cancel}</button>
+					<button type="submit" className="lw-danger" disabled={busy || typed !== schema}>{confirm}</button>
+				</div>
+			</form>
+		</Modal>
+	)
+}
