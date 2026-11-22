@@ -288,6 +288,10 @@ por defecto.
 - Encontrado en la fase 4: tras una recarga blue-green, los eventos del worker nuevo seguían atados al candidato (sus
   pongs no lo mantenían vivo y su caída no reiniciaba el esquema): a los 30 s el supervisor lo terminaba. Corregido
   con su prueba. Y λORM acepta un nombre repetido en una lista: la validación lo marca.
+- **Fase 5 (hecha):** las variables de las conexiones en el `.env` desde la gateway y la UI (nunca un valor), `build`
+  (escrito en `src/` y como `.zip`, con el generador movido a `@lambdaorm/base`) y el autocompletado del
+  `lambdaORM.yaml` en el editor (un proveedor propio: `monaco-yaml` y un JSON Schema quedan para después).
+- **Fase 6 (pendiente):** MCP de solo lectura y validación, la wiki, la conformidad de los clientes con el admin.
 - Queda de la fase 2 para después: los borradores personales del navegador **junto** a lo compartido (hoy es uno u otro
   según `workbenchWrite`, con la copia del navegador al workspace), y el diff de tres vías (hoy son dos lados).
 - Encontrado en la fase 1: λORM arranca un esquema con un tipo que no existe (`type: nope`) sin error; la validación de

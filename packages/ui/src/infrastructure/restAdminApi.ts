@@ -1,4 +1,4 @@
-import { AdminApiPort, AdminCapabilities, CommandName, CommandPreview, CommandsSummary, Job, SchemaIssue, SchemaPatch, WorkbenchProblem } from '../application/ports'
+import { AdminApiPort, AdminCapabilities, CommandName, CommandPreview, CommandsSummary, Job, SchemaIssue, SchemaPatch, SchemaVariable, WorkbenchProblem } from '../application/ports'
 import { SavedItem } from '../domain/savedItems'
 import { GatewayRequestError, HeadersProvider } from './restQueryApi'
 
@@ -49,6 +49,28 @@ export class RestAdminApi implements AdminApiPort {
 
 	public async patchSchema (schema: string, patch: SchemaPatch) {
 		return (await this.request(`/workspaces/${schemaSegment(schema)}/schema`, { method: 'PATCH', body: patch })).body as { version: string, references: string[], added: number, removed: number }
+	}
+
+	public async variables (schema: string) {
+		return (await this.request(`/workspaces/${schemaSegment(schema)}/variables`)).body as { variables: SchemaVariable[] }
+	}
+
+	public async setVariables (schema: string, change: { set?: Record<string, string>, remove?: string[] }) {
+		return (await this.request(`/workspaces/${schemaSegment(schema)}/variables`, { method: 'PUT', body: change })).body as { variables: SchemaVariable[] }
+	}
+
+	public async build (schema: string, language: 'node' | 'client-node') {
+		return (await this.request(`/workspaces/${schemaSegment(schema)}/build`, { body: { language, write: true } })).body as { language: string, files: { path: string, written?: string, bytes: number }[] }
+	}
+
+	public async buildZip (schema: string, language: 'node' | 'client-node') {
+		const response = await this.fetcher(`${this.baseUrl}/admin/workspaces/${schemaSegment(schema)}/build.zip?language=${language}`, { headers: { ...(await this.headers()) } })
+		if (!response.ok) {
+			let body: any
+			try { body = await response.json() } catch { body = undefined }
+			throw new GatewayRequestError(response.status, body?.error ?? `HTTP ${response.status}`, body?.message ?? response.statusText)
+		}
+		return await response.blob()
 	}
 
 	public async references (schema: string, at: string[]) {

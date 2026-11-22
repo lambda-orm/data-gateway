@@ -400,10 +400,10 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 							<div key={tab.id} role="tabpanel" aria-label={saved?.name ?? tab.title} hidden={tab.id !== active}
 								onKeyDownCapture={tab.kind === 'query' || tab.kind === 'diagram' ? saveKeys(tab) : undefined}>
 								{tab.kind === 'schemaForms' && adminApi && (
-									<SchemaForms admin={adminApi} schema={tab.schema ?? ''} writable={!!can?.schemaWrite} revision={sinceOf(tab.schema)} locale={workbench.locale} />
+									<SchemaForms admin={adminApi} schema={tab.schema ?? ''} writable={!!can?.schemaWrite} canAdmin={!!can?.schemaAdmin} revision={sinceOf(tab.schema)} locale={workbench.locale} />
 								)}
 								{tab.kind === 'commands' && adminApi && (
-									<CommandsPanel admin={adminApi} schema={tab.schema ?? ''} canSave={!!can?.workbenchWrite} locale={workbench.locale} />
+									<CommandsPanel admin={adminApi} schema={tab.schema ?? ''} canSave={!!can?.workbenchWrite} canBuild={!!can?.build} locale={workbench.locale} />
 								)}
 								{tab.kind === 'schemaFile' && adminApi && (
 									<SchemaEditor admin={adminApi} schema={tab.schema ?? ''} writable={!!can?.schemaWrite} theme={theme} locale={workbench.locale}

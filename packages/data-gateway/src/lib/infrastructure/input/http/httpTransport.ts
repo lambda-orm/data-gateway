@@ -135,7 +135,7 @@ export class HttpTransport implements Transport {
 			res.status(200).type(contentType).send(body)
 		})
 		app.get(`${base}/schemas`, this.handle(async () => this.deps.directory.states()))
-		if (this.deps.admin) app.use(`${base}/admin`, adminRouter(this.deps.admin.service, this.authenticate(this.deps.admin.authenticator), this.deps.admin.commands))
+		if (this.deps.admin) app.use(`${base}/admin`, adminRouter(this.deps.admin.service, this.authenticate(this.deps.admin.authenticator), this.deps.admin.commands, this.deps.directory))
 		// the schemas: the router of the moment (a schema added or removed replaces it)
 		app.use((req, res, next) => this.schemaRouter(req, res, next))
 		// a route that doesn't exist: JSON like every other answer, with the closest routes (L42)

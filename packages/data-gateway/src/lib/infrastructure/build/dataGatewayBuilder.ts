@@ -21,6 +21,7 @@ import { SchemaDirectoryPort } from '../../application/ports/input/schemaDirecto
 import { FileWorkspaceStore } from '../output/admin/fileWorkspaceStore'
 import { LambdaSchemaValidator } from '../output/admin/lambdaSchemaValidator'
 import { YamlAdapter } from '../output/admin/yamlAdapter'
+import { NodeCodeGenerator } from '../output/admin/nodeCodeGenerator'
 
 export interface BuildOptions {
 	logger?: LoggerPort
@@ -119,7 +120,7 @@ export const buildAdmin = (config: DataGatewayConfig, directory: SchemaDirectory
 	},
 	() => directory.schemas().filter(s => s.workspace !== undefined).map(s => ({ path: s.path, workspace: s.workspace! })),
 	() => directory.states(),
-	store, new LambdaSchemaValidator(), new YamlAdapter(), clock, logger)
+	store, new LambdaSchemaValidator(), new YamlAdapter(), clock, logger, new NodeCodeGenerator())
 	return { service, commands }
 }
 

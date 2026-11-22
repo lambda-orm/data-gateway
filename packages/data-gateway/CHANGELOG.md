@@ -41,9 +41,14 @@ default, `admin` off.
   `add`, `remove` or `rename` of an element named by names; a rename renames what names it (relations, keys, indexes,
   mappings, stages…). Concurrency per element: someone else's change to another element doesn't collide. Written
   keeping the comments and the rest of the file. The validation rejects a name repeated in a list.
+- **The connections and the code** (`DATA_GATEWAY.md` §11.5): the variables of the connections in the `.env` of a
+  workspace, listed (defined or not, used by which sources) and set or removed keeping the rest of the file, never
+  answered; and `build` of the model and repositories (node, client-node) in `src/` of the workspace or as a `.zip`.
+  New permission `build`.
 - The UI at `/ui` (`@lambdaorm/ui` 0.5.0), with those permissions: the `lambdaORM.yaml` of each schema editable in Monaco
   (validated while typed, saved with Ctrl+S, a conflict shown side by side), new and removed schemas, what is saved
-  shared in the workspaces, the panel of commands and the schema as forms.
+  shared in the workspaces, the panel of commands, the schema as forms with
+  its variables, the code of the domain and the completion of the keys and values of the lambdaORM.yaml.
 - The UI at `/ui` reads the schemas again every 5 s: a schema added, removed or reloaded shows without reloading the
   page (its domain and typings are read again), and a version that didn't start is marked ⚠ with its reason.
 

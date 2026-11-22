@@ -58,3 +58,8 @@ export interface YamlPort {
 	/** a YAML text with a new value, keeping the comments, order and style of what didn't change */
 	merge (text: string, value: unknown): string
 }
+
+/** The code of a domain for a language: its files, relative to the folder of the domain (model.ts, repositoryX.ts) */
+export interface CodeGeneratorPort {
+	files (language: 'node' | 'client-node', domain: unknown, options: { model: boolean, repositories: boolean }): { file: string, content: string }[]
+}
