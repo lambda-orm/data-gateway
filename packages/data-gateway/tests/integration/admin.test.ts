@@ -180,6 +180,21 @@ describe('admin over REST (inline)', () => {
 		fs.writeFileSync(path.join(os.tmpdir(), 'data-gateway-build-test.zip'), zip)
 	})
 
+		test('the files of data/ and src/ are listed and read; the .env, the state and what is outside them are not', async () => {
+		const files = '/admin/workspaces/iot%2Fv1/files'
+		fs.mkdirSync(path.join(root, 'iot/v1/data'), { recursive: true })
+		fs.writeFileSync(path.join(root, 'iot/v1/data/seed.sql'), 'INSERT INTO categories VALUES (1);\n')
+		const listed = await call(base, `${files}?dir=data`, { headers: ADMIN })
+		expect(listed.body).toMatchObject({ roots: { data: 'data', src: 'src', model: 'src/domain' }, files: [expect.objectContaining({ path: 'data/seed.sql', dir: false })] })
+		const read = await call(base, `${files}/content?path=data/seed.sql`, { headers: ADMIN })
+		expect(read.body).toMatchObject({ path: 'data/seed.sql', text: 'INSERT INTO categories VALUES (1);\n' })
+		expect((await call(base, `${files}/content?path=.env`, { headers: ADMIN })).status).toBe(400)
+		expect((await call(base, `${files}/content?path=lambdaORM.yaml`, { headers: ADMIN })).status).toBe(403)
+		expect((await call(base, `${files}/content?path=data/../.env`, { headers: ADMIN })).status).toBe(400)
+		expect((await call(base, `${files}?dir=orm_state`, { headers: ADMIN })).status).toBe(403)
+		expect((await call(base, `${files}?dir=data`, { headers: READER })).status).toBe(403)
+	})
+
 		test('validation: a YAML error at its line, a type that is not of λORM a warning, an extends of nothing an error', async () => {
 		const yaml = await call(base, '/admin/validate', { body: { text: 'domain:\n  entities:\n    - name: A\n   bad: x\n' }, headers: ADMIN })
 		expect(yaml.body).toMatchObject({ valid: false, issues: expect.arrayContaining([expect.objectContaining({ severity: 'error', line: expect.any(Number) })]) })

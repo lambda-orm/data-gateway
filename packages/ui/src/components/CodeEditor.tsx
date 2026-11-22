@@ -6,7 +6,7 @@ import { loadMonaco } from '../infrastructure/monaco/monacoSetup'
 export interface CodeEditorProps {
 	value: string
 	onChange: (value: string) => void
-	language: 'typescript' | 'javascript' | 'json' | 'yaml'
+	language: 'typescript' | 'javascript' | 'json' | 'yaml' | 'sql' | 'plaintext'
 	/** Shown, not edited */
 	readOnly?: boolean
 	/** λORM errors to mark in the text */
@@ -40,7 +40,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ value, onChange, languag
 		loadMonaco().then(monaco => {
 			if (disposed || !host.current) return
 			monacoRef.current = monaco
-			const extension = language === 'json' ? 'json' : language === 'yaml' ? 'yaml' : language === 'typescript' ? 'ts' : 'js'
+			const extension = ({ json: 'json', yaml: 'yaml', typescript: 'ts', javascript: 'js', sql: 'sql', plaintext: 'txt' } as const)[language]
 			const model = monaco.editor.createModel(value, language, monaco.Uri.parse(`file:///lambdaorm-${++models}.${extension}`))
 			const instance = monaco.editor.create(host.current, {
 				model,

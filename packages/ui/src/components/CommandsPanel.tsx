@@ -13,6 +13,8 @@ export interface CommandsPanelProps {
 	pollMs?: number
 	/** the credential may generate the code of the domain (build) */
 	canBuild?: boolean
+	/** the heading (the tab of a schema: its name); Commands by default */
+	title?: string
 }
 
 const PREVIEWED: CommandName[] = ['push', 'drop', 'import', 'pull', 'introspect', 'incorporate']
@@ -40,7 +42,7 @@ const download = (name: string, value: unknown) => {
  * job; push, drop and import first show what they will do (the sentences by source, the rows of each entity) and run
  * exactly that. The last jobs, with their result.
  */
-export const CommandsPanel: React.FC<CommandsPanelProps> = ({ admin, schema, canSave = false, locale, pollMs = 1000, canBuild = false }) => {
+export const CommandsPanel: React.FC<CommandsPanelProps> = ({ admin, schema, canSave = false, locale, pollMs = 1000, canBuild = false, title }) => {
 	const [language, setLanguage] = useState<'node' | 'client-node'>('node')
 	const [built, setBuilt] = useState<{ path: string, written?: string }[]>()
 	const m = adminMessagesOf(locale)
@@ -122,7 +124,7 @@ export const CommandsPanel: React.FC<CommandsPanelProps> = ({ admin, schema, can
 	return (
 		<section className="lw-commands" aria-label={`${m.commands} — ${schema || '/'}`}>
 			<div className="lw-toolbar">
-				<strong>{m.commands}</strong>
+				<strong>{title ?? m.commands}</strong>
 				<label>{m.stage}{' '}
 					<select aria-label="stage" value={stage} onChange={e => { setStage(e.target.value); setPreview(undefined) }}>
 						{(summary?.stages ?? []).map(s => <option key={s} value={s}>{s}</option>)}

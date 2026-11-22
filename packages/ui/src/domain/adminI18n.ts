@@ -82,6 +82,19 @@ export interface AdminMessages {
 	buildWrite: string
 	buildZip: string
 	written: string
+	edit: string
+	schemas: string
+	config: string
+	domain: string
+	application: string
+	infrastructure: string
+	data: string
+	src: string
+	model: string
+	projects: string
+	newProject: string
+	empty: string
+	commandsOf: string
 }
 
 type Row = [keyof AdminMessages, ...string[]]
@@ -120,6 +133,19 @@ const ROWS: Row[] = [
 ]
 
 ROWS.push(
+	['edit', 'Edit', 'Editar', 'Editar', 'Modifier', 'Modifica', 'Bearbeiten', 'Bewerken', 'Edita', 'Editar', 'Editatu'],
+	['schemas', 'Schemas', 'Esquemas', 'Esquemas', 'Schémas', 'Schemi', 'Schemas', 'Schema’s', 'Esquemes', 'Esquemas', 'Eskemak'],
+	['config', 'config', 'config', 'config', 'config', 'config', 'config', 'config', 'config', 'config', 'config'],
+	['domain', 'domain', 'domain', 'domain', 'domain', 'domain', 'domain', 'domain', 'domain', 'domain', 'domain'],
+	['application', 'application', 'application', 'application', 'application', 'application', 'application', 'application', 'application', 'application', 'application'],
+	['infrastructure', 'infrastructure', 'infrastructure', 'infrastructure', 'infrastructure', 'infrastructure', 'infrastructure', 'infrastructure', 'infrastructure', 'infrastructure', 'infrastructure'],
+	['data', 'data', 'data', 'data', 'data', 'data', 'data', 'data', 'data', 'data', 'data'],
+	['src', 'src', 'src', 'src', 'src', 'src', 'src', 'src', 'src', 'src', 'src'],
+	['model', 'model', 'model', 'model', 'model', 'model', 'model', 'model', 'model', 'model', 'model'],
+	['projects', 'projects', 'proyectos', 'projetos', 'projets', 'progetti', 'Projekte', 'projecten', 'projectes', 'proxectos', 'proiektuak'],
+	['newProject', 'New project', 'Nuevo proyecto', 'Novo projeto', 'Nouveau projet', 'Nuovo progetto', 'Neues Projekt', 'Nieuw project', 'Projecte nou', 'Novo proxecto', 'Proiektu berria'],
+	['empty', '(empty)', '(vacío)', '(vazio)', '(vide)', '(vuoto)', '(leer)', '(leeg)', '(buit)', '(baleiro)', '(hutsa)'],
+	['commandsOf', 'Schema {name}', 'Esquema {name}', 'Esquema {name}', 'Schéma {name}', 'Schema {name}', 'Schema {name}', 'Schema {name}', 'Esquema {name}', 'Esquema {name}', '{name} eskema'],
 	['variables', 'Variables (.env)', 'Variables (.env)', 'Variáveis (.env)', 'Variables (.env)', 'Variabili (.env)', 'Variablen (.env)', 'Variabelen (.env)', 'Variables (.env)', 'Variables (.env)', 'Aldagaiak (.env)'],
 	['defined', 'defined', 'definida', 'definida', 'définie', 'definita', 'definiert', 'gedefinieerd', 'definida', 'definida', 'definituta'],
 	['notDefined', 'not in .env', 'no está en .env', 'não está no .env', 'absente de .env', 'non in .env', 'nicht in .env', 'niet in .env', 'no és a .env', 'non está en .env', 'ez dago .env-n'],

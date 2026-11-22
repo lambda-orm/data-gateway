@@ -277,6 +277,51 @@ export class AdminService {
 		return { language: language as string, files }
 	}
 
+	// ─── files (data/, src/) ─────────────────────────────────────────────────
+
+	/** The folders of a workspace whose files can be seen: its data and its code (infrastructure.paths, data and src by default) */
+	private async fileRoots (workspace: string): Promise<{ data: string, src: string, model: string }> {
+		const file = await this.store.read(workspace, SCHEMA_FILE)
+		let paths: any = {}
+		try { paths = (this.yaml.parse(file?.text ?? '') as any)?.infrastructure?.paths ?? {} } catch { /* the defaults */ }
+		const clean = (p: unknown, fallback: string) => (typeof p === 'string' && p.trim() ? p.trim() : fallback).replace(/^\.?\/+|\/+$/g, '')
+		const src = clean(paths.src, 'src')
+		return { data: clean(paths.data, 'data'), src, model: `${src}/${clean(paths.domain, 'domain')}` }
+	}
+
+	/** A path a person may read: inside data/ or src/, never the .env, the state of λORM or a hidden file */
+	private async readable (workspace: string, path: unknown): Promise<string> {
+		if (typeof path !== 'string' || !path.trim()) throw badRequest('ValidationError', 'path is required (data/… or src/…)')
+		const relative = path.replace(/\\/g, '/').replace(/^\/+/, '')
+		const roots = await this.fileRoots(workspace)
+		const parts = relative.split('/')
+		if (parts.some(p => p === '..' || p.startsWith('.'))) throw badRequest('ValidationError', `"${path}" is not a file that can be read`)
+		if (![roots.data, roots.src].some(root => relative === root || relative.startsWith(`${root}/`))) {
+			throw new GatewayError(403, 'ForbiddenError', `only the files of ${roots.data}/ and ${roots.src}/ can be read here`)
+		}
+		return relative
+	}
+
+	/** The files under a folder of data/ or src/ (recursive), and where the data, code and model folders are */
+	public async files (principal: Principal, path: string, dir: unknown): Promise<{ roots: { data: string, src: string, model: string }, files: { path: string, dir: boolean, modified: string }[] }> {
+		this.require(principal, 'schemaRead')
+		const workspace = this.workspaceOf(path)
+		const roots = await this.fileRoots(workspace)
+		const folder = await this.readable(workspace, dir ?? roots.data)
+		return { roots, files: await this.store.list(workspace, folder) }
+	}
+
+	/** The text of a file of data/ or src/ (an export, a script, the code of build) */
+	public async fileContent (principal: Principal, path: string, file: unknown): Promise<{ path: string, text: string, version: string, modified: string }> {
+		this.require(principal, 'schemaRead')
+		const workspace = this.workspaceOf(path)
+		const relative = await this.readable(workspace, file)
+		const read = await this.store.read(workspace, relative)
+		if (!read) throw notFound(`${relative} is not a file of "${path || '/'}"`)
+		if (Buffer.byteLength(read.text) > this.options.maxFileBytes) throw new GatewayError(413, 'PayloadTooLargeError', `${relative} is larger than admin.maxFileBytes: download it from the volume`)
+		return { path: relative, ...read }
+	}
+
 	// ─── connections (.env) ──────────────────────────────────────────────────
 
 	/**

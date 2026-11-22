@@ -180,7 +180,12 @@ export const applyPatch = (schema: Json, patch: SchemaPatch): { schema: Json, re
 		list.push(value)
 		return { schema: copy, references: [] }
 	}
-	const found = elementAt(copy, patch.at)
+	let found = elementAt(copy, patch.at)
+	// set of a section the file doesn't have yet (application:): created in its owner
+	if (!found && patch.op === 'set') {
+		const owner = patch.at.length === 1 ? { value: copy } : elementAt(copy, patch.at.slice(0, -1))
+		if (owner && isObject(owner.value)) found = { parent: owner.value, key: patch.at[patch.at.length - 1], value: undefined }
+	}
 	if (!found) throw new PatchError('notFound', `${where(patch.at)} is not in the schema`)
 	if (patch.expected !== undefined && !sameValue(found.value, patch.expected)) {
 		throw new PatchError('conflict', `${where(patch.at)} changed since it was read`, found.value)

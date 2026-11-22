@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## Versions
 
+### Unreleased
+
+**Features:**
+
+- `GET /admin/workspaces/{path}/files` and `…/files/content`: the files of `data/` and `src/` of a workspace, listed and
+  read (never the `.env`, `orm_state/` or a hidden file), for the explorer of the UI.
+- A `set` of a section the `lambdaORM.yaml` doesn't have yet (`application`) creates it.
+- The UI at `/ui` (`@lambdaorm/ui`): the explorer as the workspace is (`DATA_GATEWAY.md` §11.7).
+
 ### 3.2.0 (2026-11-22)
 
 Uses `@lambdaorm/lib` 3.8.1 and `@lambdaorm/ui` 0.5.0. The administration of the workspaces (phases 1 to 6 of

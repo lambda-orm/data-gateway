@@ -56,6 +56,9 @@ class FakeAdmin implements AdminApiPort {
 	async build () { return { language: 'node', files: [{ path: 'src/domain/model.ts', written: 'created', bytes: 10 }, { path: 'src/domain/repositoryProduct.ts', written: 'kept', bytes: 5 }] } }
 	async buildZip () { return new Blob(['zip']) }
 
+	async files () { return { roots: { data: 'data', src: 'src', model: 'src/domain' }, files: [{ path: 'data/seed.sql', dir: false, modified: 'now' }] } }
+	async fileContent (_schema: string, path: string) { return { path, text: 'INSERT INTO x VALUES (1);', version: 'f1' } }
+
 	async references (_schema: string, at: string[]) { return { references: at.includes('States') ? ['domain/entities/Products/properties/state'] : [] } }
 
 	async validate (text: string): Promise<{ valid: boolean, issues: SchemaIssue[] }> {
@@ -86,16 +89,23 @@ class FakeAdmin implements AdminApiPort {
 }
 
 const row = (name: string) => screen.getAllByRole('treeitem').find(r => r.querySelector('.lw-tree-label')?.textContent === name)!
+/** A row of the tree once it is there */
+const rowSoon = (name: string) => waitFor(() => { const found = row(name); expect(found).toBeTruthy(); return found })
 const show = (admin: FakeAdmin) => render(<Workspace api={new FakeApi()} admin={admin} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" refreshMs={0} />)
 
 describe('the schema as YAML, editable', () => {
 	test('opened from the explorer, saved with the version it read; while typed, the issues show', async () => {
 		const admin = new FakeAdmin()
 		show(admin)
-		await waitFor(() => expect(row('Schema (lambdaORM.yaml)')).toBeTruthy())
-		fireEvent.click(row('Schema (lambdaORM.yaml)'))
-		const editor = await screen.findByLabelText('Schema (lambdaORM.yaml)', { selector: 'textarea' }) as HTMLTextAreaElement
-		expect(editor.value).toBe(admin.text)
+		await waitFor(() => expect(row('config')).toBeTruthy())
+		fireEvent.click(row('config'))
+		const reading = await screen.findByLabelText('Schema (lambdaORM.yaml)', { selector: 'textarea' }) as HTMLTextAreaElement
+		expect(reading.value).toBe(admin.text)
+		expect(reading.readOnly).toBe(true)
+		expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+		fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+		const editor = screen.getByLabelText('Schema (lambdaORM.yaml)', { selector: 'textarea' }) as HTMLTextAreaElement
+		expect(editor.readOnly).toBe(false)
 		fireEvent.change(editor, { target: { value: 'domain:\n  nope: 1\n' } })
 		await waitFor(() => expect(screen.getByText('2: bad indentation')).toBeTruthy(), { timeout: 2000 })
 		expect(screen.getByText('1 errors')).toBeTruthy()
@@ -104,14 +114,17 @@ describe('the schema as YAML, editable', () => {
 		await waitFor(() => expect(admin.calls).toContain('write northwind/v1 v1'))
 		await screen.findByText('Saved: the gateway reloads the schema')
 		expect(admin.text).toBe('domain:\n  entities: [ { name: A } ]\n')
+		// saved, it is read only again
+		expect(screen.getByRole('button', { name: 'Edit' })).toBeTruthy()
 	})
 
 	test('someone else saved meanwhile: both side by side, and either is taken', async () => {
 		const admin = new FakeAdmin()
 		show(admin)
-		await waitFor(() => expect(row('Schema (lambdaORM.yaml)')).toBeTruthy())
-		fireEvent.click(row('Schema (lambdaORM.yaml)'))
-		const editor = await screen.findByLabelText('Schema (lambdaORM.yaml)', { selector: 'textarea' }) as HTMLTextAreaElement
+		await waitFor(() => expect(row('config')).toBeTruthy())
+		fireEvent.click(row('config'))
+		fireEvent.click(await screen.findByRole('button', { name: 'Edit' }))
+		const editor = screen.getByLabelText('Schema (lambdaORM.yaml)', { selector: 'textarea' }) as HTMLTextAreaElement
 		// another person saves version 2
 		admin.text = 'domain:\n  entities: [ { name: Theirs } ]\n'
 		admin.version = 'v2'
@@ -128,24 +141,25 @@ describe('the schema as YAML, editable', () => {
 	test('without schemaWrite it is read only; without schemaRead there is no file to open', async () => {
 		const reader = new FakeAdmin({ ...ALL, schemaWrite: false, schemaAdmin: false })
 		show(reader)
-		await waitFor(() => expect(row('Schema (lambdaORM.yaml)')).toBeTruthy())
+		await waitFor(() => expect(row('config')).toBeTruthy())
 		expect(screen.queryByRole('button', { name: 'New schema' })).toBeNull()
-		fireEvent.click(row('Schema (lambdaORM.yaml)'))
+		fireEvent.click(row('config'))
 		await screen.findByText('Read only: this credential can’t change the schema')
 		expect(screen.queryByRole('button', { name: 'Save' })).toBeNull()
+		expect(screen.queryByRole('button', { name: 'Edit' })).toBeNull()
 		cleanup()
 		const none = new FakeAdmin()
 		none.can = undefined
 		show(none)
 		await waitFor(() => expect(row('northwind/v1')).toBeTruthy())
-		expect(screen.queryByText('Schema (lambdaORM.yaml)')).toBeNull()
+		expect(screen.queryByText('config')).toBeNull()
 	})
 
 	test('a schema that did not start can be opened to fix it', async () => {
 		show(new FakeAdmin())
 		await waitFor(() => expect(row('northwind/v2 (error)')).toBeTruthy())
 		fireEvent.click(row('northwind/v2 (error)'))
-		expect(screen.getAllByText('Schema (lambdaORM.yaml)').length).toBeGreaterThan(0)
+		expect(screen.getAllByText('config').length).toBeGreaterThan(0)
 	})
 })
 
@@ -239,9 +253,12 @@ describe('what is saved, in the workspaces of the gateway', () => {
 	test('the explorer shows what is saved in the workspace and saves there', async () => {
 		const admin = new SharedAdmin()
 		render(<Workspace api={new FakeApi()} admin={admin} history={false} locale="en" refreshMs={0} />)
+		// what is saved lives in the projects of the schema: a project is a folder at its top
+		await waitFor(() => expect(row('projects')).toBeTruthy())
+		fireEvent.click(row('projects'))
 		await waitFor(() => expect(row('shared reports')).toBeTruthy())
-		fireEvent.click(within(row('northwind/v1')).getByRole('button', { name: 'Add' }))
-		fireEvent.click(screen.getByRole('menuitem', { name: /New folder/ }))
+		fireEvent.click(within(row('projects')).getByRole('button', { name: 'Add' }))
+		fireEvent.click(screen.getByRole('menuitem', { name: /New project/ }))
 		fireEvent.change(screen.getByLabelText('name'), { target: { value: 'mine' } })
 		fireEvent.click(screen.getByRole('button', { name: 'Create' }))
 		await waitFor(() => expect(admin.puts.some(p => p[0].name === 'mine' && p[0].version === undefined)).toBe(true))
@@ -259,8 +276,8 @@ describe('what is saved, in the workspaces of the gateway', () => {
 describe('the commands of a workspace', () => {
 	const openCommands = async (admin: FakeAdmin) => {
 		show(admin)
-		await waitFor(() => expect(row('Commands')).toBeTruthy())
-		fireEvent.click(row('Commands'))
+		await waitFor(() => expect(row('northwind/v1')).toBeTruthy())
+		fireEvent.doubleClick(row('northwind/v1'))
 		return screen.findByRole('region', { name: /Commands — northwind\/v1/ }).catch(() => screen.findByLabelText('Commands — northwind/v1'))
 	}
 
@@ -303,8 +320,8 @@ describe('commands that change the schema', () => {
 	test('pull shows what changes in the lambdaORM.yaml and runs that', async () => {
 		const admin = new FakeAdmin()
 		show(admin)
-		await waitFor(() => expect(row('Commands')).toBeTruthy())
-		fireEvent.click(row('Commands'))
+		await waitFor(() => expect(row('northwind/v1')).toBeTruthy())
+		fireEvent.doubleClick(row('northwind/v1'))
 		fireEvent.click(await screen.findByRole('button', { name: 'pull…' }))
 		await screen.findByText('What pull will change in lambdaORM.yaml (stage default)')
 		expect(screen.getByText('+2 −0 lines; the rest of the file (and its comments) stays as it is')).toBeTruthy()
@@ -317,8 +334,8 @@ describe('commands that change the schema', () => {
 
 	test('introspect and incorporate wait for the data and its entity', async () => {
 		show(new FakeAdmin())
-		await waitFor(() => expect(row('Commands')).toBeTruthy())
-		fireEvent.click(row('Commands'))
+		await waitFor(() => expect(row('northwind/v1')).toBeTruthy())
+		fireEvent.doubleClick(row('northwind/v1'))
 		const introspect = await screen.findByRole('button', { name: 'introspect…' }) as HTMLButtonElement
 		expect(introspect.disabled).toBe(true)
 		fireEvent.change(screen.getByLabelText('Entity of the data'), { target: { value: 'Brands' } })
@@ -328,18 +345,26 @@ describe('commands that change the schema', () => {
 
 describe('the schema as forms', () => {
 	const FORMS_SCHEMA = 'domain:\n  entities:\n    - name: Products\n      primaryKey: [id]\n      properties:\n        - { name: id, type: integer }\n  enums:\n    - name: States\n      values: [{ name: on, value: 1 }]\ninfrastructure:\n  sources:\n    - { name: main, dialect: PostgreSQL }\n  stages:\n    - name: default\n      sources: [{ name: main }]\n'
+	class FormsApi extends FakeApi {
+		async domain () { return { entities: [{ name: 'Products', primaryKey: ['id'], properties: [{ name: 'id', type: 'integer' }], relations: [] }], enums: [{ name: 'States', values: [] }] } as any }
+	}
 	const openForms = async (admin: FakeAdmin) => {
 		admin.text = FORMS_SCHEMA
-		show(admin)
-		await waitFor(() => expect(row('Schema (forms)')).toBeTruthy())
-		fireEvent.click(row('Schema (forms)'))
-		await screen.findByRole('button', { name: 'Products' })
+		render(<Workspace api={new FormsApi()} admin={admin} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" refreshMs={0} />)
+		await waitFor(() => expect(row('domain')).toBeTruthy())
+	}
+	/** an entity of the tree, as a form: read first, then Edit */
+	const editEntity = async (name: string) => {
+		fireEvent.click(row('domain'))
+		fireEvent.click(await rowSoon('Entities'))
+		fireEvent.click(within(await waitFor(() => row(name))).getByRole('button', { name: `Edit ${name}` }))
+		fireEvent.click(await screen.findByRole('button', { name: 'Edit' }))
 	}
 
 	test('an entity: a property added and saved as one change, with the entity as it was read', async () => {
 		const admin = new FakeAdmin()
 		await openForms(admin)
-		fireEvent.click(screen.getByRole('button', { name: 'Products' }))
+		await editEntity('Products')
 		const properties = await screen.findByRole('table', { name: 'properties' })
 		fireEvent.click(within(properties).getByRole('button', { name: 'Add' }))
 		fireEvent.change(within(properties).getByLabelText('1 name'), { target: { value: 'price' } })
@@ -357,7 +382,7 @@ describe('the schema as forms', () => {
 	test('someone else changed the same element: the form shows what it has now', async () => {
 		const admin = new FakeAdmin()
 		await openForms(admin)
-		fireEvent.click(screen.getByRole('button', { name: 'Products' }))
+		await editEntity('Products')
 		fireEvent.change(await screen.findByLabelText('primaryKey'), { target: { value: 'id, code' } })
 		admin.conflictOnce = true
 		fireEvent.click(screen.getByRole('button', { name: 'Save' }))
@@ -368,17 +393,20 @@ describe('the schema as forms', () => {
 	test('a new source, a rename, and a remove that first says who uses the element', async () => {
 		const admin = new FakeAdmin()
 		await openForms(admin)
-		fireEvent.click(screen.getByRole('button', { name: 'New in Sources' }))
+		fireEvent.click(row('infrastructure'))
+		fireEvent.click(within(await rowSoon('Sources')).getByRole('button', { name: 'New in Sources' }))
 		fireEvent.change(screen.getByLabelText('name'), { target: { value: 'replica' } })
 		fireEvent.change(screen.getByLabelText('dialect'), { target: { value: 'MySQL' } })
 		fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 		await waitFor(() => expect(admin.patches[0]).toEqual({ op: 'add', at: ['infrastructure', 'sources'], value: { name: 'replica', dialect: 'MySQL' } }))
-		fireEvent.click(screen.getByRole('button', { name: 'States' }))
+		fireEvent.click(row('domain'))
+		fireEvent.click(await rowSoon('Enums'))
+		fireEvent.click(await rowSoon('States'))
 		fireEvent.click(await screen.findByRole('button', { name: 'Rename' }))
 		fireEvent.change(screen.getByLabelText('Rename'), { target: { value: 'Status' } })
 		fireEvent.click(screen.getAllByRole('button', { name: 'Rename' }).at(-1)!)
 		await waitFor(() => expect(admin.patches.at(-1)).toMatchObject({ op: 'rename', at: ['domain', 'enums', 'States'], to: 'Status' }))
-		fireEvent.click(screen.getByRole('button', { name: 'States' }))
+		fireEvent.click(row('States'))
 		fireEvent.click(await screen.findByRole('button', { name: 'Remove' }))
 		await screen.findByText('domain/entities/Products/properties/state')
 		fireEvent.click(screen.getAllByRole('button', { name: 'Remove' }).at(-1)!)
@@ -391,9 +419,9 @@ describe('the variables of the connections and the code of the domain', () => {
 		const admin = new FakeAdmin()
 		admin.text = 'domain: {}\ninfrastructure:\n  sources:\n    - { name: main, connection: ${SHOP_CNX} }\n'
 		show(admin)
-		await waitFor(() => expect(row('Schema (forms)')).toBeTruthy())
-		fireEvent.click(row('Schema (forms)'))
-		fireEvent.click(await screen.findByRole('button', { name: 'Variables (.env)' }))
+		await waitFor(() => expect(row('infrastructure')).toBeTruthy())
+		fireEvent.click(row('infrastructure'))
+		fireEvent.click(await rowSoon('Variables (.env)'))
 		await screen.findByText('not in .env')
 		fireEvent.change(screen.getByLabelText('SHOP_CNX New value (not shown again)'), { target: { value: '{"host":"db"}' } })
 		fireEvent.click(screen.getByRole('button', { name: 'Set' }))
@@ -406,10 +434,37 @@ describe('the variables of the connections and the code of the domain', () => {
 	test('build writes the code in src/ and says what stayed', async () => {
 		const admin = new FakeAdmin({ ...ALL, build: true })
 		show(admin)
-		await waitFor(() => expect(row('Commands')).toBeTruthy())
-		fireEvent.click(row('Commands'))
+		await waitFor(() => expect(row('northwind/v1')).toBeTruthy())
+		fireEvent.doubleClick(row('northwind/v1'))
 		fireEvent.click(await screen.findByRole('button', { name: 'Write in src/ of the workspace' }))
 		await screen.findByText('src/domain/model.ts')
 		expect(screen.getByText(/created and updated: 1/)).toBeTruthy()
+	})
+})
+
+describe('the explorer as the workspace is', () => {
+	test('data and src show their files; a file opens read only; application as YAML; the schema opens its commands', async () => {
+		const admin = new FakeAdmin()
+		admin.text = 'domain: {}\napplication:\n  start: []\n'
+		render(<Workspace api={new FakeApi()} admin={admin} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" refreshMs={0} />)
+		await waitFor(() => expect(row('data')).toBeTruthy())
+		const labels = screen.getAllByRole('treeitem').filter(r => r.getAttribute('aria-level') === '2').map(r => r.querySelector('.lw-tree-label')?.textContent)
+		expect(labels).toEqual(['config', 'domain', 'application', 'infrastructure', 'data', 'src', 'projects'])
+		fireEvent.click(row('data'))
+		fireEvent.click(await rowSoon('seed.sql'))
+		const file = await screen.findByLabelText('data/seed.sql', { selector: 'textarea' }) as HTMLTextAreaElement
+		expect(file.value).toBe('INSERT INTO x VALUES (1);')
+		expect(file.readOnly).toBe(true)
+		fireEvent.click(row('src'))
+		expect(row('model')).toBeTruthy()
+		fireEvent.click(row('application'))
+		const app = await screen.findByLabelText('application', { selector: 'textarea' }) as HTMLTextAreaElement
+		expect(app.value).toContain('start: []')
+		expect(app.readOnly).toBe(true)
+		// selecting the schema (folded) opens its tab, with the commands
+		fireEvent.click(row('northwind/v1'))
+		fireEvent.click(row('northwind/v1'))
+		expect(await screen.findByRole('button', { name: 'fetch' })).toBeTruthy()
+		expect(screen.getAllByText('Schema northwind/v1').length).toBe(2) // its tab and its heading
 	})
 })

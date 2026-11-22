@@ -1,7 +1,8 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { AdminApiPort, SchemaVariable } from '../application/ports'
 import { adminMessagesOf, format } from '../domain/adminI18n'
-import { fromYaml } from '../domain/results'
+import { fromYaml, toYaml } from '../domain/results'
+import { CodeEditor } from './CodeEditor'
 
 export interface SchemaFormsProps {
 	admin: AdminApiPort
@@ -13,6 +14,10 @@ export interface SchemaFormsProps {
 	locale?: string
 	/** the credential may set the variables of the connections (schemaAdmin) */
 	canAdmin?: boolean
+	/** one element only (a tab of the explorer): without the tree of sections, read first and Edit to change it */
+	focus?: FormFocus
+	/** an element renamed or removed: the explorer follows it */
+	onChanged?: (focus: FormFocus | undefined) => void
 }
 
 /** The variables of the connections (.env): defined or not, and where used; a value is set, never shown */
@@ -64,6 +69,8 @@ const Variables: React.FC<{ admin: AdminApiPort, schema: string, canAdmin: boole
 
 type Json = any
 type Section = 'entities' | 'enums' | 'sources' | 'mappings' | 'stages'
+/** What a tab of one element shows: an element of a section, the application section as YAML, or the variables */
+export type FormFocus = { section: Section, name?: string } | { section: 'application' } | { section: 'variables' }
 
 const SECTIONS: { key: Section, at: string[] }[] = [
 	{ key: 'entities', at: ['domain', 'entities'] },
@@ -148,12 +155,18 @@ const Rows: React.FC<{
  * with the element as it was read: someone else's change to another element doesn't collide; to the same one, the
  * form shows what it has now. The gateway writes it keeping the comments and the rest of the file.
  */
-export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, schema, writable, revision, locale, canAdmin = false }) => {
-	const [showVariables, setShowVariables] = useState(false)
+export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, schema, writable, revision, locale, canAdmin = false, focus, onChanged }) => {
+	const [showVariables, setShowVariables] = useState(focus?.section === 'variables')
+	const [showApplication] = useState(focus?.section === 'application')
+	// a focused element is read first: Edit to change it; the forms of the whole schema edit at once
+	// a new element (focused on a section without a name) starts blank, in edit
+	const creating = !!focus && focus.section !== 'application' && focus.section !== 'variables' && (focus as any).name === undefined
+	const [editing, setEditing] = useState(!focus || creating)
 	const m = adminMessagesOf(locale)
 	const [doc, setDoc] = useState<Json>()
-	const [selected, setSelected] = useState<{ section: Section, name?: string }>()
-	const [draft, setDraft] = useState<Json>()
+	const [selected, setSelected] = useState<{ section: Section, name?: string } | undefined>(
+		focus && focus.section !== 'application' && focus.section !== 'variables' ? { section: focus.section, name: (focus as any).name } : undefined)
+	const [draft, setDraft] = useState<Json>(creating ? {} : undefined)
 	const [read, setRead] = useState<Json>()
 	const [error, setError] = useState<string>()
 	const [notice, setNotice] = useState<string>()
@@ -202,10 +215,26 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, schema, writabl
 		if (selected.name === undefined) {
 			await admin.patchSchema(schema, { op: 'add', at, value: clean(draft) })
 			setSelected({ section: selected.section, name: draft.name })
+			onChanged?.({ section: selected.section, name: draft.name })
 		} else {
 			await admin.patchSchema(schema, { op: 'set', at: [...at, selected.name], value: clean(draft), expected: read })
 		}
 		setNotice(m.saved)
+		if (focus) setEditing(false)
+		await load()
+	})
+
+	// the application section, as YAML (start tasks, listeners)
+	const [appText, setAppText] = useState<string>()
+	const appRead = doc?.application
+	useEffect(() => { if (showApplication && appText === undefined && doc) setAppText(appRead === undefined ? '' : toYaml(appRead)) }, [doc, showApplication])
+	const saveApplication = () => attempt(async () => {
+		const value = appText?.trim() ? fromYaml(appText) : undefined
+		if (value !== undefined && (typeof value !== 'object' || Array.isArray(value))) throw new Error('application is an object (start, listeners)')
+		await admin.patchSchema(schema, value === undefined ? { op: 'remove', at: ['application'], expected: appRead } : { op: 'set', at: ['application'], value, expected: appRead })
+		setNotice(m.saved)
+		setEditing(false)
+		setAppText(undefined)
 		await load()
 	})
 
@@ -216,6 +245,7 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, schema, writabl
 		setRenaming(undefined)
 		setDraft(undefined)
 		setSelected({ section: selected.section, name: to })
+		onChanged?.({ section: selected.section, name: to })
 		await load()
 	})
 
@@ -230,24 +260,26 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, schema, writabl
 		setRemoving(undefined)
 		setSelected(undefined)
 		setDraft(undefined)
+		onChanged?.(undefined)
 		await load()
 	})
 
+	const editable = writable && editing
 	const field = (key: string, input: React.ReactNode) => <label className="lw-form-field"><span>{key}</span>{input}</label>
 	const text = (key: string, opts: { fields?: boolean } = {}) => field(key, (
-		<input aria-label={key} readOnly={!writable} value={opts.fields ? fieldsText(draft?.[key]) : draft?.[key] ?? ''}
+		<input aria-label={key} readOnly={!editable} value={opts.fields ? fieldsText(draft?.[key]) : draft?.[key] ?? ''}
 			onChange={e => setDraft({ ...draft, [key]: opts.fields ? textFields(e.target.value, false) : e.target.value || undefined })} />
 	))
-	const check = (key: string) => field(key, <input type="checkbox" aria-label={key} disabled={!writable} checked={draft?.[key] === true} onChange={e => setDraft({ ...draft, [key]: e.target.checked ? true : undefined })} />)
+	const check = (key: string) => field(key, <input type="checkbox" aria-label={key} disabled={!editable} checked={draft?.[key] === true} onChange={e => setDraft({ ...draft, [key]: e.target.checked ? true : undefined })} />)
 	const select = (key: string, options: string[]) => field(key, (
-		<select aria-label={key} disabled={!writable} value={draft?.[key] ?? ''} onChange={e => setDraft({ ...draft, [key]: e.target.value || undefined })}>
+		<select aria-label={key} disabled={!editable} value={draft?.[key] ?? ''} onChange={e => setDraft({ ...draft, [key]: e.target.value || undefined })}>
 			<option value="" />
 			{options.map(o => <option key={o} value={o}>{o}</option>)}
 		</select>
 	))
 	const rows = (key: string, columns: Parameters<typeof Rows>[0]['columns']) => (
 		<fieldset className="lw-form-group"><legend>{key}</legend>
-			<Rows label={key} rows={Array.isArray(draft?.[key]) ? draft[key] : []} columns={columns} readOnly={!writable} addLabel={m.addRow}
+			<Rows label={key} rows={Array.isArray(draft?.[key]) ? draft[key] : []} columns={columns} readOnly={!editable} addLabel={m.addRow}
 				onChange={value => setDraft({ ...draft, [key]: value })} />
 		</fieldset>
 	)
@@ -279,7 +311,7 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, schema, writabl
 					{select('dialect', DIALECTS)}
 					{select('mapping', names.mappings)}
 					{field('connection', (
-						<input aria-label="connection" readOnly={!writable} value={typeof draft.connection === 'string' ? draft.connection : draft.connection ? JSON.stringify(draft.connection) : ''}
+						<input aria-label="connection" readOnly={!editable} value={typeof draft.connection === 'string' ? draft.connection : draft.connection ? JSON.stringify(draft.connection) : ''}
 							placeholder="${MY_CONNECTION}" onChange={e => setDraft({ ...draft, connection: e.target.value || undefined })} />
 					))}
 				</>
@@ -293,7 +325,7 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, schema, writabl
 					<fieldset className="lw-form-group"><legend>sources</legend>
 						{names.sources.map(source => (
 							<label key={source} className="lw-type">
-								<input type="checkbox" disabled={!writable} checked={(draft.sources ?? []).some((s: Json) => s?.name === source)}
+								<input type="checkbox" disabled={!editable} checked={(draft.sources ?? []).some((s: Json) => s?.name === source)}
 									onChange={e => setDraft({ ...draft, sources: e.target.checked ? [...(draft.sources ?? []), { name: source }] : (draft.sources ?? []).filter((s: Json) => s?.name !== source) })} /> {source}
 							</label>
 						))}
@@ -306,14 +338,14 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, schema, writabl
 	const changed = draft !== undefined && JSON.stringify(clean(draft)) !== JSON.stringify(clean(read ?? {}))
 
 	return (
-		<section className="lw-schema-forms" aria-label={`${m.forms} — ${schema || '/'}`}>
-			<nav className="lw-forms-tree" aria-label={m.forms}>
+		<section className={focus ? 'lw-schema-forms lw-focused' : 'lw-schema-forms'} aria-label={`${m.forms} — ${schema || '/'}`}>
+			{!focus && <nav className="lw-forms-tree" aria-label={m.forms}>
 				{SECTIONS.map(s => (
 					<div key={s.key}>
 						<div className="lw-forms-section">
 							<strong>{m[s.key]}</strong>
 							{writable && <button type="button" aria-label={format(m.newNamed, { name: m[s.key] })} title={format(m.newNamed, { name: m[s.key] })}
-								onClick={() => { setShowVariables(false); setSelected({ section: s.key }); setRead(undefined); setDraft({}) }}>+</button>}
+								onClick={() => { setShowVariables(false); setSelected({ section: s.key }); setRead(undefined); setDraft({}); setEditing(true) }}>+</button>}
 						</div>
 						<ul>
 							{names[s.key].map(name => (
@@ -328,9 +360,28 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, schema, writabl
 				<div className="lw-forms-section">
 					<button type="button" className={showVariables ? 'lw-active' : undefined} onClick={() => { setShowVariables(true); setSelected(undefined) }}><strong>{m.variables}</strong></button>
 				</div>
-			</nav>
+			</nav>}
 			<div className="lw-forms-element">
 				{showVariables && <Variables admin={admin} schema={schema} canAdmin={canAdmin} locale={locale} revision={revision} />}
+				{showApplication && (
+					<>
+						<div className="lw-toolbar">
+							<strong>{m.application}</strong>
+							<span className="lw-spacer" />
+							{writable && !editing && <button type="button" className="lw-primary" onClick={() => setEditing(true)}>{m.edit}</button>}
+							{writable && editing && (
+								<>
+									<button type="button" onClick={() => { setEditing(false); setAppText(appRead === undefined ? '' : toYaml(appRead)) }}>{m.cancel}</button>
+									<button type="button" className="lw-primary" disabled={busy} onClick={saveApplication}>{m.save}</button>
+								</>
+							)}
+						</div>
+						{appText !== undefined && (
+							<CodeEditor key={editing ? 'editing' : 'reading'} value={appText} onChange={setAppText} language="yaml" readOnly={!editable} height={360} ariaLabel={m.application} />
+						)}
+						{appText === '' && !editing && <p className="lw-type">{m.empty}</p>}
+					</>
+				)}
 				{selected && (
 					<div className="lw-toolbar">
 						<strong>{m[selected.section]}{selected.name ? ` / ${selected.name}` : ''}</strong>
@@ -344,7 +395,11 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, schema, writabl
 							</>
 						)}
 						{writable && selected.name && <button type="button" className="lw-danger" disabled={busy} onClick={askRemove}>{m.remove}</button>}
-						{writable && <button type="button" className="lw-primary" disabled={busy || !changed || (selected.name === undefined && !draft?.name)} onClick={save}>{m.save}</button>}
+						{writable && !editing && <button type="button" className="lw-primary" onClick={() => setEditing(true)}>{m.edit}</button>}
+						{writable && editing && focus && selected.name && (
+							<button type="button" onClick={() => { setEditing(false); setDraft(read ? JSON.parse(JSON.stringify(read)) : undefined); setError(undefined) }}>{m.cancel}</button>
+						)}
+						{writable && editing && <button type="button" className="lw-primary" disabled={busy || !changed || (selected.name === undefined && !draft?.name)} onClick={save}>{m.save}</button>}
 					</div>
 				)}
 				{error && <div className="lw-notice" role="alert">{error}</div>}

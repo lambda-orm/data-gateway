@@ -40,6 +40,7 @@ describe('one change of one element', () => {
 		expect(elementAt(schema, ['domain', 'entities', 'Categories', 'indexes', 'byName'])).toBeDefined()
 		expect(() => applyPatch(SCHEMA, { op: 'add', at: ['domain', 'entities'], value: { name: 'Products' } })).toThrow(/already has "Products"/)
 		expect(() => applyPatch(SCHEMA, { op: 'add', at: ['domain', 'nope', 'x', 'y'], value: { name: 'z' } })).toThrow(PatchError)
+		expect(applyPatch({ domain: {} }, { op: 'set', at: ['application'], value: { start: [] } }).schema.application).toEqual({ start: [] })
 		expect(applyPatch({ domain: { enums: null } }, { op: 'add', at: ['domain', 'enums'], value: { name: 'E' } }).schema.domain.enums).toEqual([{ name: 'E' }])
 	})
 

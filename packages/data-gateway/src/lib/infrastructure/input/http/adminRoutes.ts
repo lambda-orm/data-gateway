@@ -69,6 +69,8 @@ export const adminRouter = (admin: AdminService, authenticate: express.RequestHa
 		res.send(zipOf(result.files.map(f => ({ path: f.path, content: f.content }))))
 		return undefined
 	}))
+	router.get('/workspaces/:schema/files', handle(async (req, res) => admin.files(principal(res), schemaParam(req.params.schema), req.query.dir)))
+	router.get('/workspaces/:schema/files/content', handle(async (req, res) => admin.fileContent(principal(res), schemaParam(req.params.schema), req.query.path)))
 	router.get('/workspaces/:schema/variables', handle(async (req, res) => admin.variables(principal(res), schemaParam(req.params.schema))))
 	router.put('/workspaces/:schema/variables', handle(async (req, res) => admin.setVariables(principal(res), schemaParam(req.params.schema), req.body ?? {})))
 	router.post('/validate', handle(async (req, res) => admin.validate(principal(res), req.body?.text)))

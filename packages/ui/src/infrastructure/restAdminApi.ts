@@ -73,6 +73,14 @@ export class RestAdminApi implements AdminApiPort {
 		return await response.blob()
 	}
 
+	public async files (schema: string, dir?: string) {
+		return (await this.request(`/workspaces/${schemaSegment(schema)}/files${dir ? `?dir=${encodeURIComponent(dir)}` : ''}`)).body as { roots: { data: string, src: string, model: string }, files: { path: string, dir: boolean, modified: string }[] }
+	}
+
+	public async fileContent (schema: string, path: string) {
+		return (await this.request(`/workspaces/${schemaSegment(schema)}/files/content?path=${encodeURIComponent(path)}`)).body as { path: string, text: string, version: string }
+	}
+
 	public async references (schema: string, at: string[]) {
 		return (await this.request(`/workspaces/${schemaSegment(schema)}/references`, { body: { at } })).body as { references: string[] }
 	}

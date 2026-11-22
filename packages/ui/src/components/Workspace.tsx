@@ -16,7 +16,9 @@ import { Explorer, problemText } from './Explorer'
 import { QueryWorkbench, QueryWorkbenchProps } from './QueryWorkbench'
 import { SchemaEditor } from './SchemaEditor'
 import { CommandsPanel } from './CommandsPanel'
-import { SchemaForms } from './SchemaForms'
+import { FormFocus, SchemaForms } from './SchemaForms'
+import { FileView } from './FileView'
+import { fromYaml } from '../domain/results'
 import { RestAdminApi } from '../infrastructure/restAdminApi'
 import { GatewayWorkspaceStore } from '../infrastructure/gatewayWorkspaceStore'
 import { adminMessagesOf, format } from '../domain/adminI18n'
@@ -48,7 +50,7 @@ const writeFlag = (key: string): void => { try { globalThis.localStorage?.setIte
 /** What tells that the schemas changed: their routes, states and the version each serves */
 const revisionOf = (schemas: SchemaInfo[]): string => schemas.map(s => `${s.path}|${s.status}|${s.since ?? ''}|${s.pending ?? ''}|${s.reason ?? ''}`).join('\n')
 
-type TabKind = 'query' | 'domain' | 'entity' | 'diagram' | 'schemaFile' | 'commands' | 'schemaForms'
+type TabKind = 'query' | 'domain' | 'entity' | 'diagram' | 'schemaFile' | 'schema' | 'element' | 'file'
 
 interface DiagramDraft { entities: string[], positions?: Record<string, { x: number, y: number }>, bends?: Record<string, number>, compact: boolean, relationNames: boolean }
 
@@ -67,6 +69,10 @@ interface Tab {
 	entity?: string
 	/** A saved diagram as it is now on the screen */
 	draft?: DiagramDraft
+	/** The element of an element tab (an entity, a source, the application section…) */
+	focus?: FormFocus
+	/** The file of a file tab (data/…, src/…) */
+	file?: string
 }
 
 const SAME = (a: SavedQueryContent, b: SavedQueryContent) => a.mode === b.mode && a.query === b.query && a.script === b.script && a.data === b.data && a.options === b.options
@@ -272,12 +278,27 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 	const openSchemaFile = (schema: string) => {
 		if (!reuse(t => t.kind === 'schemaFile' && t.schema === schema)) add({ kind: 'schemaFile', title: `lambdaORM.yaml ${schema || '/'}`, schema })
 	}
-	const openSchemaForms = (schema: string) => {
-		if (!reuse(t => t.kind === 'schemaForms' && t.schema === schema)) add({ kind: 'schemaForms', title: `${a.forms} ${schema || '/'}`, schema })
+	// the schema: its tab, with the commands in a toolbar
+	const openSchema = (schema: string) => {
+		if (!reuse(t => t.kind === 'schema' && t.schema === schema)) add({ kind: 'schema', title: format(a.commandsOf, { name: schema || '/' }), schema })
 	}
-	const openCommands = (schema: string) => {
-		if (!reuse(t => t.kind === 'commands' && t.schema === schema)) add({ kind: 'commands', title: `${a.commands} ${schema || '/'}`, schema })
+	const focusKey = (f: FormFocus) => `${f.section}:${(f as any).name ?? ''}`
+	const focusTitle = (f: FormFocus) => (f as any).name ?? (f.section === 'application' || f.section === 'variables' ? a[f.section] : format(a.newNamed, { name: a[f.section] }))
+	// one element of the schema; a new one (no name) is always a tab of its own
+	const openElement = (schema: string, focus: FormFocus) => {
+		const named = (focus as any).name !== undefined || focus.section === 'application' || focus.section === 'variables'
+		if (named && reuse(t => t.kind === 'element' && t.schema === schema && !!t.focus && focusKey(t.focus) === focusKey(focus))) return
+		add({ kind: 'element', title: focusTitle(focus), schema, focus })
 	}
+	const elementChanged = (id: number, focus: FormFocus | undefined) => {
+		if (!focus) { close(id); return }
+		setTabs(all => all.map(t => t.id === id ? { ...t, focus, title: focusTitle(focus) } : t))
+	}
+	const openFile = (schema: string, file: string) => {
+		if (!reuse(t => t.kind === 'file' && t.schema === schema && t.file === file)) add({ kind: 'file', title: file.split('/').pop() ?? file, schema, file })
+	}
+	const loadSchemaDoc = async (schema: string) => fromYaml((await adminApi!.readSchema(schema)).text)
+	const loadFiles = (schema: string, dir?: string) => adminApi!.files(schema, dir)
 	const openDomain = (schema: string) => {
 		if (!reuse(t => t.kind === 'domain' && t.schema === schema)) add({ kind: 'domain', title: `${x.domainYaml} ${schema || '/'}`, schema })
 	}
@@ -341,7 +362,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 		if (e.key === 'Enter') { e.preventDefault(); fitWidth() }
 	}
 
-	const iconOf = (tab: Tab) => tab.kind === 'schemaForms' ? <Icons.edit /> : tab.kind === 'commands' ? <Icons.terminal /> : tab.kind === 'domain' || tab.kind === 'schemaFile' ? <Icons.yaml /> : tab.kind === 'entity' ? <Icons.entity /> : tab.kind === 'diagram' ? <Icons.diagram /> : savedOf(tab) ? <Icons.query /> : null
+	const iconOf = (tab: Tab) => tab.kind === 'element' ? <Icons.edit /> : tab.kind === 'schema' ? <Icons.terminal /> : tab.kind === 'file' ? <Icons.query /> : tab.kind === 'domain' || tab.kind === 'schemaFile' ? <Icons.yaml /> : tab.kind === 'entity' ? <Icons.entity /> : tab.kind === 'diagram' ? <Icons.diagram /> : savedOf(tab) ? <Icons.query /> : null
 	const activeTab = tabs.find(t => t.id === active)
 	const saveKeys = (tab: Tab) => (e: React.KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(tab) } }
 	const texts = { ...x, entities: x.entities }
@@ -366,7 +387,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 							loadDomain={domainOf} onOpen={openSaved} onOpenDomain={openDomain} onOpenEntity={openEntity}
 							onNewQuery={(schema, parentId) => newQuery(schema, parentId)}
 							onNewDiagram={(schema, parentId) => setCreatingDiagram({ schema, parentId })}
-							admin={adminApi && can ? { can, onOpenSchemaFile: openSchemaFile, onOpenSchemaForms: openSchemaForms, onOpenCommands: openCommands, onNewSchema: () => setNewSchema(true), onRemoveSchema: setRemoving } : undefined} />
+							admin={adminApi && can ? { can, onOpenSchemaFile: openSchemaFile, onOpenSchema: openSchema, onOpenElement: openElement, onOpenFile: openFile, loadSchemaDoc, loadFiles, onNewSchema: () => setNewSchema(true), onRemoveSchema: setRemoving } : undefined} />
 					</div>
 					<div className="lw-space-resizer" role="separator" aria-orientation="vertical" aria-label={x.resizeExplorer} title={x.resizeExplorer}
 						tabIndex={0} aria-valuenow={width} aria-valuemin={MIN_WIDTH} aria-valuemax={MAX_WIDTH}
@@ -399,11 +420,16 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 						return (
 							<div key={tab.id} role="tabpanel" aria-label={saved?.name ?? tab.title} hidden={tab.id !== active}
 								onKeyDownCapture={tab.kind === 'query' || tab.kind === 'diagram' ? saveKeys(tab) : undefined}>
-								{tab.kind === 'schemaForms' && adminApi && (
-									<SchemaForms admin={adminApi} schema={tab.schema ?? ''} writable={!!can?.schemaWrite} canAdmin={!!can?.schemaAdmin} revision={sinceOf(tab.schema)} locale={workbench.locale} />
+								{tab.kind === 'element' && adminApi && tab.focus && (
+									<SchemaForms admin={adminApi} schema={tab.schema ?? ''} writable={!!can?.schemaWrite} canAdmin={!!can?.schemaAdmin} revision={sinceOf(tab.schema)} locale={workbench.locale}
+										focus={tab.focus} onChanged={focus => elementChanged(tab.id, focus)} />
 								)}
-								{tab.kind === 'commands' && adminApi && (
-									<CommandsPanel admin={adminApi} schema={tab.schema ?? ''} canSave={!!can?.workbenchWrite} canBuild={!!can?.build} locale={workbench.locale} />
+								{tab.kind === 'schema' && adminApi && (
+									<CommandsPanel admin={adminApi} schema={tab.schema ?? ''} canSave={!!can?.workbenchWrite} canBuild={!!can?.build} locale={workbench.locale}
+										title={format(a.commandsOf, { name: tab.schema || '/' })} />
+								)}
+								{tab.kind === 'file' && adminApi && tab.file && (
+									<FileView admin={adminApi} schema={tab.schema ?? ''} path={tab.file} theme={theme} revision={sinceOf(tab.schema)} />
 								)}
 								{tab.kind === 'schemaFile' && adminApi && (
 									<SchemaEditor admin={adminApi} schema={tab.schema ?? ''} writable={!!can?.schemaWrite} theme={theme} locale={workbench.locale}

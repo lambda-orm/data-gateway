@@ -978,6 +978,7 @@ Un workspace se nombra por su ruta en **un** segmento, codificada: `iot%2Fv1` (`
 | `PUT` | `/admin/workspaces/{ruta}/variables` | `{ set?: { NOMBRE: valor }, remove?: [NOMBRE] }` en el `.env`, conservando el resto | `schemaAdmin` |
 | `POST` | `/admin/workspaces/{ruta}/build` | `{ language: node \| client-node, write? }`: el modelo y los repositorios (§11.5) | `build` (+ `read`) |
 | `GET` | `/admin/workspaces/{ruta}/build.zip?language=` | lo mismo como `.zip`, sin escribir nada | `build` (+ `read`) |
+| `GET` | `/admin/workspaces/{ruta}/files?dir=` / `…/files/content?path=` | los archivos de `data/` y de `src/` (recursivo) / el texto de uno; nunca el `.env`, `orm_state/` ni un oculto | `schemaRead` |
 | `POST` | `/admin/validate` | `{ text }` → `{ valid, issues: [{ severity, message, line?, column? }] }` | `schemaRead` |
 | `GET` | `/admin/workbench[?schema={ruta}]` | lo guardado en los workspaces (§11.1), `ETag`; con `If-None-Match` igual, `304` | `read` o `workbenchWrite` |
 | `PUT` | `/admin/workbench` | `{ items }`: guarda, mueve o renombra; cada uno que existía dice su `version` | `workbenchWrite` |
@@ -1124,4 +1125,12 @@ UI. Un agente propone el cambio; una persona lo aplica.
 La administración es una API REST para la UI: los clientes de la gateway (`@lambdaorm/data-gateway-client` y los que
 vienen) no la cubren, y por eso no entra en la suite de conformidad de los clientes; la prueban las pruebas de
 integración de la gateway.
+
+### 11.7 El explorador como el workspace
+
+En la UI, cada esquema se muestra como es su workspace: **config** (el `lambdaORM.yaml`, en lectura; **Edit** con
+`schemaWrite`, y **Save** / **Cancel**), **domain** (entities, enums), **application**, **infrastructure** (mappings,
+sources, stages y las variables del `.env`), **data** y **src** → **model** (sus archivos, en lectura) y **projects**
+(las carpetas de primer nivel de `workbench/`, con consultas, scripts y diagramas). Cada elemento se abre en su pestaña,
+en lectura, con **Edit**; seleccionar el esquema abre su pestaña con los comandos en una barra.
 

@@ -46,6 +46,8 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({ admin, schema, writa
 	const [notice, setNotice] = useState<string>()
 	const [error, setError] = useState<string>()
 	const [theirs, setTheirs] = useState<{ text: string, version: string, why: 'conflict' | 'changed' }>()
+	// read first; Edit (with schemaWrite) to change it, then Save or Cancel
+	const [editing, setEditing] = useState(false)
 	const dirty = base !== undefined && draft !== base.text
 	const state = useRef({ base, draft })
 	state.current = { base, draft }
@@ -96,7 +98,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({ admin, schema, writa
 
 	const save = async (over?: string) => {
 		const { base, draft } = state.current
-		if (!base || saving || !writable) return
+		if (!base || saving || !writable || !editing) return
 		setSaving(true)
 		setError(undefined)
 		try {
@@ -104,6 +106,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({ admin, schema, writa
 			setBase({ text: draft, version: result.version })
 			setIssues(result.issues)
 			setTheirs(undefined)
+			setEditing(false)
 			setNotice(m.saved)
 		} catch (e: any) {
 			if (statusOf(e) === 412 && e.details?.text !== undefined) setTheirs({ text: e.details.text, version: e.details.version, why: 'conflict' })
@@ -141,9 +144,14 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({ admin, schema, writa
 				</span>
 				{dirty && <span className="lw-type">• {m.unsaved}</span>}
 				<span className="lw-spacer" />
-				{writable
-					? <button type="button" onClick={() => save()} disabled={!dirty || saving}>{saving ? m.saving : m.save}</button>
-					: <span className="lw-type">{m.readOnlySchema}</span>}
+				{!writable && <span className="lw-type">{m.readOnlySchema}</span>}
+				{writable && !editing && <button type="button" className="lw-primary" onClick={() => setEditing(true)} disabled={base === undefined}>{m.edit}</button>}
+				{writable && editing && (
+					<>
+						<button type="button" onClick={() => { setDraft(base?.text ?? ''); setEditing(false); setTheirs(undefined); setError(undefined) }} disabled={saving}>{m.cancel}</button>
+						<button type="button" className="lw-primary" onClick={() => save()} disabled={!dirty || saving}>{saving ? m.saving : m.save}</button>
+					</>
+				)}
 			</div>
 			{pending && <div className="lw-notice lw-schema-pending" role="note">{pending}</div>}
 			{notice && <div className="lw-notice lw-toast" role="status">{notice}</div>}
@@ -168,7 +176,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({ admin, schema, writa
 				</div>
 			)}
 			{base !== undefined && !theirs && (
-				<CodeEditor value={draft} onChange={setDraft} language="yaml" readOnly={!writable} markers={markersOf(issues)} height="calc(100vh - 220px)" theme={theme} ariaLabel={m.schemaFile} completion={schemaCompletions} />
+				<CodeEditor key={editing ? 'editing' : 'reading'} value={draft} onChange={setDraft} language="yaml" readOnly={!writable || !editing} markers={markersOf(issues)} height="calc(100vh - 220px)" theme={theme} ariaLabel={m.schemaFile} completion={schemaCompletions} />
 			)}
 			{!error && issues.length > 0 && (
 				<ul className="lw-issues">

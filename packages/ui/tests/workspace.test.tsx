@@ -108,6 +108,11 @@ class DomainApi extends FakeApi { async domain () { return DOMAIN } }
 
 const row = (name: string) => screen.getAllByRole('treeitem').find(r => r.querySelector('.lw-tree-label')?.textContent === name)!
 const action = (rowName: string, label: string) => within(row(rowName)).getByRole('button', { name: label })
+/** The entities of a schema: inside its domain */
+const openEntities = (label: string) => { if (!screen.getAllByRole('treeitem').some(r => r.querySelector('.lw-tree-label')?.textContent === label)) fireEvent.click(row('domain')); fireEvent.click(row(label)) }
+/** What is saved in a schema: inside its projects */
+const openProjects = (label = 'proyectos') => { if (!row(label).getAttribute('aria-expanded') || row(label).getAttribute('aria-expanded') === 'false') fireEvent.click(row(label)) }
+
 /** The + of a row, then one of its items */
 const add = (rowName: string, label: string) => { fireEvent.click(action(rowName, 'Agregar')); fireEvent.click(screen.getByRole('menuitem', { name: new RegExp(label) })) }
 
@@ -135,7 +140,7 @@ describe('Workspace', () => {
 		}
 		render(<Workspace api={new Changing()} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" refreshMs={30} />)
 		await waitFor(() => expect(row('northwind/v1')).toBeTruthy())
-		fireEvent.click(row('Entities'))
+		openEntities('Entities')
 		await waitFor(() => expect(reads).toBe(1))
 		schemas = [...schemas, { path: 'iot', status: 'ready', since: 'one' }]
 		await waitFor(() => expect(row('iot')).toBeTruthy())
@@ -169,7 +174,7 @@ describe('Workspace', () => {
 	test('the entities of a large domain narrowed by a filter: by name, by a property or relation, and Entity.field', async () => {
 		render(<Workspace api={new DomainApi()} store={new MemoryWorkspaceStore([], true)} history={false} locale="es" />)
 		await waitFor(() => expect(row('northwind/v1')).toBeTruthy())
-		fireEvent.click(row('Entidades'))
+		openEntities('Entidades')
 		await waitFor(() => expect(row('Orders')).toBeTruthy())
 		const filter = screen.getByRole('searchbox', { name: /Filtrar/ })
 		const labels = () => screen.getAllByRole('treeitem').map(r => r.querySelector('.lw-tree-label')?.textContent ?? '').filter(Boolean)
@@ -200,9 +205,10 @@ describe('Workspace', () => {
 		const store = new MemoryWorkspaceStore([], true)
 		render(<Workspace api={new DomainApi()} store={store} history={false} locale="es" />)
 		await waitFor(() => expect(row('northwind/v1')).toBeTruthy())
+		openProjects()
 		await screen.findByText('Todavía no hay nada guardado')
 
-		add('northwind/v1', 'Nueva carpeta')
+		add('proyectos', 'Nuevo proyecto')
 		fireEvent.change(screen.getByRole('textbox', { name: 'name' }), { target: { value: 'Reportes' } })
 		fireEvent.click(screen.getByRole('button', { name: 'Crear' }))
 		await waitFor(() => expect(row('Reportes')).toBeTruthy())
@@ -220,7 +226,7 @@ describe('Workspace', () => {
 		fireEvent.change(within(dialog).getByRole('textbox', { name: 'description' }), { target: { value: 'todos' } })
 		fireEvent.click(within(dialog).getByRole('button', { name: 'Guardar' }))
 		await waitFor(() => expect(screen.getByRole('tab', { selected: true }).textContent).toBe(' Productos'))
-		expect(row('Productos').getAttribute('aria-level')).toBe('3')
+		expect(row('Productos').getAttribute('aria-level')).toBe('4')
 		expect((await store.all()).find(i => i.name === 'Productos')).toMatchObject({ kind: 'query', query: 'Products', description: 'todos', schema: 'northwind/v1' })
 
 		fireEvent.change(within(panel()).getByRole('textbox', { name: 'query' }), { target: { value: 'Products.page(1, 2)' } })
@@ -238,7 +244,7 @@ describe('Workspace', () => {
 		fireEvent.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Cancelar' }))
 
 		// entities: their properties and relations; a double click opens the form, which queries it
-		fireEvent.click(row('Entidades'))
+		openEntities('Entidades')
 		await waitFor(() => expect(row('Orders')).toBeTruthy())
 		fireEvent.click(row('Orders'))
 		fireEvent.click(row('Propiedades (2)'))
@@ -263,7 +269,7 @@ describe('Workspace', () => {
 		await waitFor(() => expect((within(panel()).getByRole('textbox', { name: 'query' }) as HTMLTextAreaElement).value).toBe('Customers.page(1, 10)'))
 
 		// the domain as YAML, read only
-		fireEvent.click(row('Dominio (YAML)'))
+		fireEvent.doubleClick(row('domain'))
 		const yaml = await waitFor(() => within(panel()).getByRole('textbox', { name: 'domain' }) as HTMLTextAreaElement)
 		expect(yaml.readOnly).toBe(true)
 		expect(yaml.value).toContain('entities:')
@@ -282,7 +288,8 @@ describe('saved diagrams', () => {
 		const store = new MemoryWorkspaceStore([], true)
 		const { container } = render(<Workspace api={new DomainApi()} store={store} history={false} locale="es" />)
 		await waitFor(() => expect(row('northwind/v1')).toBeTruthy())
-		add('northwind/v1', 'Nuevo diagrama')
+		openProjects()
+		add('proyectos', 'Nuevo diagrama')
 		const dialog = await screen.findByRole('dialog')
 		fireEvent.change(within(dialog).getByRole('textbox', { name: 'name' }), { target: { value: 'Ventas' } })
 		fireEvent.click(within(dialog).getByRole('button', { name: 'Crear' }))
