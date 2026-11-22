@@ -36,6 +36,25 @@ export interface AdminMessages {
 	copyToWorkspace: string
 	copiedToWorkspace: string
 	unreadableFiles: string
+	commands: string
+	stage: string
+	preview: string
+	runNamed: string
+	force: string
+	typeStage: string
+	willRun: string
+	nothingToRun: string
+	rowsToWrite: string
+	chooseExport: string
+	saveToData: string
+	download: string
+	jobs: string
+	noJobs: string
+	running: string
+	done: string
+	failed: string
+	savedIn: string
+	inStep: string
 }
 
 type Row = [keyof AdminMessages, ...string[]]
@@ -74,6 +93,25 @@ const ROWS: Row[] = [
 ]
 
 ROWS.push(
+	['commands', 'Commands', 'Comandos', 'Comandos', 'Commandes', 'Comandi', 'Befehle', 'Opdrachten', 'Ordres', 'Comandos', 'Aginduak'],
+	['stage', 'Stage', 'Stage', 'Stage', 'Stage', 'Stage', 'Stage', 'Stage', 'Stage', 'Stage', 'Stage'],
+	['preview', 'See what it will do', 'Ver qué va a hacer', 'Ver o que vai fazer', 'Voir ce qu’elle fera', 'Vedi cosa farà', 'Ansehen, was er tut', 'Bekijk wat het doet', 'Mira què farà', 'Ver que vai facer', 'Ikusi zer egingo duen'],
+	['runNamed', 'Run {name}', 'Ejecutar {name}', 'Executar {name}', 'Exécuter {name}', 'Esegui {name}', '{name} ausführen', '{name} uitvoeren', 'Executa {name}', 'Executar {name}', 'Exekutatu {name}'],
+	['force', 'go on after a sentence fails (tryAllCan)', 'seguir aunque falle una sentencia (tryAllCan)', 'continuar se uma sentença falhar (tryAllCan)', 'continuer si une instruction échoue (tryAllCan)', 'continua se una istruzione fallisce (tryAllCan)', 'weitermachen, wenn ein Befehl fehlschlägt (tryAllCan)', 'doorgaan als een opdracht faalt (tryAllCan)', 'continua encara que falli una sentència (tryAllCan)', 'seguir aínda que falle unha sentenza (tryAllCan)', 'jarraitu esaldi batek huts egiten badu (tryAllCan)'],
+	['typeStage', 'Type {name} to confirm:', 'Escribí {name} para confirmar:', 'Digite {name} para confirmar:', 'Tapez {name} pour confirmer :', 'Scrivi {name} per confermare:', 'Gib {name} zur Bestätigung ein:', 'Typ {name} om te bevestigen:', 'Escriu {name} per confirmar:', 'Escribe {name} para confirmar:', 'Idatzi {name} berresteko:'],
+	['willRun', 'What {name} will run on stage {stage}', 'Lo que {name} va a ejecutar en el stage {stage}', 'O que {name} vai executar no stage {stage}', 'Ce que {name} exécutera sur le stage {stage}', 'Cosa eseguirà {name} sullo stage {stage}', 'Was {name} im Stage {stage} ausführt', 'Wat {name} op stage {stage} uitvoert', 'El que {name} executarà al stage {stage}', 'O que {name} vai executar no stage {stage}', '{name}-ek {stage} stagean exekutatuko duena'],
+	['nothingToRun', 'Nothing to run: the databases are in step with the model', 'Nada que ejecutar: las bases coinciden con el modelo', 'Nada a executar: os bancos estão de acordo com o modelo', 'Rien à exécuter : les bases correspondent au modèle', 'Niente da eseguire: i database corrispondono al modello', 'Nichts auszuführen: die Datenbanken entsprechen dem Modell', 'Niets uit te voeren: de databases komen overeen met het model', 'Res a executar: les bases coincideixen amb el model', 'Nada que executar: as bases coinciden co modelo', 'Ez dago exekutatzekorik: datu-baseak ereduarekin bat datoz'],
+	['rowsToWrite', 'The rows it will write', 'Las filas que va a escribir', 'As linhas que vai gravar', 'Les lignes qu’elle écrira', 'Le righe che scriverà', 'Die Zeilen, die er schreibt', 'De rijen die het schrijft', 'Les files que escriurà', 'As filas que vai escribir', 'Idatziko dituen errenkadak'],
+	['chooseExport', 'An export of a stage (JSON)', 'Un export de un stage (JSON)', 'Um export de um stage (JSON)', 'Un export d’un stage (JSON)', 'Un export di uno stage (JSON)', 'Ein Export eines Stage (JSON)', 'Een export van een stage (JSON)', 'Un export d’un stage (JSON)', 'Un export dun stage (JSON)', 'Stage baten esportazio bat (JSON)'],
+	['saveToData', 'also save it in data/ of the workspace', 'guardarlo también en data/ del workspace', 'salvar também em data/ do workspace', 'l’enregistrer aussi dans data/ de l’espace de travail', 'salvalo anche in data/ del workspace', 'auch in data/ des Workspace speichern', 'ook opslaan in data/ van de workspace', 'desa’l també a data/ del workspace', 'gardalo tamén en data/ do workspace', 'gorde ere workspace-aren data/-n'],
+	['download', 'Download', 'Descargar', 'Baixar', 'Télécharger', 'Scarica', 'Herunterladen', 'Downloaden', 'Baixa', 'Descargar', 'Deskargatu'],
+	['jobs', 'Last commands', 'Últimos comandos', 'Últimos comandos', 'Dernières commandes', 'Ultimi comandi', 'Letzte Befehle', 'Laatste opdrachten', 'Darreres ordres', 'Últimos comandos', 'Azken aginduak'],
+	['noJobs', 'No command run yet', 'Todavía no se ejecutó ningún comando', 'Nenhum comando executado ainda', 'Aucune commande exécutée', 'Nessun comando eseguito', 'Noch kein Befehl ausgeführt', 'Nog geen opdracht uitgevoerd', 'Encara no s’ha executat cap ordre', 'Aínda non se executou ningún comando', 'Oraindik ez da agindurik exekutatu'],
+	['running', 'running', 'en curso', 'em andamento', 'en cours', 'in corso', 'läuft', 'bezig', 'en curs', 'en curso', 'martxan'],
+	['done', 'done', 'terminado', 'concluído', 'terminé', 'completato', 'fertig', 'klaar', 'acabat', 'rematado', 'eginda'],
+	['failed', 'failed', 'falló', 'falhou', 'échoué', 'fallito', 'fehlgeschlagen', 'mislukt', 'ha fallat', 'fallou', 'huts egin du'],
+	['savedIn', 'Saved in {name}', 'Guardado en {name}', 'Salvo em {name}', 'Enregistré dans {name}', 'Salvato in {name}', 'Gespeichert in {name}', 'Opgeslagen in {name}', 'Desat a {name}', 'Gardado en {name}', '{name}-n gordeta'],
+	['inStep', 'No differences: the databases are in step with the model', 'Sin diferencias: las bases coinciden con el modelo', 'Sem diferenças: os bancos estão de acordo com o modelo', 'Aucune différence : les bases correspondent au modèle', 'Nessuna differenza: i database corrispondono al modello', 'Keine Unterschiede: die Datenbanken entsprechen dem Modell', 'Geen verschillen: de databases komen overeen met het model', 'Sense diferències: les bases coincideixen amb el model', 'Sen diferenzas: as bases coinciden co modelo', 'Ez dago desberdintasunik: datu-baseak ereduarekin bat datoz'],
 	['browserItems', '{n} items are saved in this browser only.', '{n} elementos están guardados solo en este navegador.', '{n} itens estão salvos só neste navegador.', '{n} éléments sont enregistrés seulement dans ce navigateur.', '{n} elementi sono salvati solo in questo browser.', '{n} Elemente sind nur in diesem Browser gespeichert.', '{n} items zijn alleen in deze browser opgeslagen.', '{n} elements estan desats només en aquest navegador.', '{n} elementos están gardados só neste navegador.', '{n} elementu nabigatzaile honetan bakarrik daude gordeta.'],
 	['copyToWorkspace', 'Copy them to the workspace', 'Copiarlos al workspace', 'Copiá-los para o workspace', 'Les copier dans l’espace de travail', 'Copiali nel workspace', 'In den Workspace kopieren', 'Naar de workspace kopiëren', 'Copia’ls al workspace', 'Copialos ao workspace', 'Kopiatu workspace-ra'],
 	['unreadableFiles', 'Files of workbench/ that can’t be read (fix them by hand):', 'Archivos de workbench/ que no se pueden leer (corregilos a mano):', 'Arquivos de workbench/ que não podem ser lidos (corrija à mão):', 'Fichiers de workbench/ illisibles (corrigez-les à la main) :', 'File di workbench/ che non si possono leggere (correggili a mano):', 'Dateien in workbench/, die nicht gelesen werden können (von Hand korrigieren):', 'Bestanden in workbench/ die niet gelezen kunnen worden (handmatig herstellen):', 'Fitxers de workbench/ que no es poden llegir (corregeix-los a mà):', 'Ficheiros de workbench/ que non se poden ler (corríxeos a man):', 'Irakur ezin diren workbench/-eko fitxategiak (zuzendu eskuz):'],

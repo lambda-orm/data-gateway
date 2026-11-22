@@ -1,4 +1,4 @@
-import { AdminApiPort, AdminCapabilities, SchemaIssue, WorkbenchProblem } from '../application/ports'
+import { AdminApiPort, AdminCapabilities, CommandName, CommandPreview, CommandsSummary, Job, SchemaIssue, WorkbenchProblem } from '../application/ports'
 import { SavedItem } from '../domain/savedItems'
 import { GatewayRequestError, HeadersProvider } from './restQueryApi'
 
@@ -70,5 +70,25 @@ export class RestAdminApi implements AdminApiPort {
 
 	public async removeItems (ids: string[]) {
 		return (await this.request('/workbench/remove', { body: { ids } })).body as { removed: string[] }
+	}
+
+	public async commands (schema: string) {
+		return (await this.request(`/workspaces/${schemaSegment(schema)}/commands`)).body as CommandsSummary
+	}
+
+	public async previewCommand (schema: string, command: CommandName, body: { stage?: string, data?: unknown }) {
+		return (await this.request(`/workspaces/${schemaSegment(schema)}/commands/${command}/preview`, { body })).body as CommandPreview
+	}
+
+	public async runCommand (schema: string, command: CommandName, body: { stage?: string, previewId?: string, force?: boolean, save?: boolean }) {
+		return (await this.request(`/workspaces/${schemaSegment(schema)}/commands/${command}`, { body })).body as Job | Record<string, unknown>
+	}
+
+	public async jobs (schema: string) {
+		return (await this.request(`/workspaces/${schemaSegment(schema)}/jobs`)).body as Job[]
+	}
+
+	public async job (schema: string, id: string) {
+		return (await this.request(`/workspaces/${schemaSegment(schema)}/jobs/${encodeURIComponent(id)}`)).body as Job
 	}
 }

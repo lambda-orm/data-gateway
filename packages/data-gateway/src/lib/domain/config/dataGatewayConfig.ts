@@ -172,6 +172,8 @@ export interface AdminConfig {
 	allowAnonymous: boolean
 	/** the largest file that can be written (a lambdaORM.yaml, a saved query) */
 	maxFileBytes: number
+	/** how long a command may take (push, export of a whole stage) */
+	commandTimeoutMs: number
 }
 
 export interface DataGatewayConfig {

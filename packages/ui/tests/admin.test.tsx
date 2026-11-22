@@ -42,6 +42,22 @@ class FakeAdmin implements AdminApiPort {
 	async workbench (_version?: string): Promise<{ version: string, items: any[] } | undefined> { return { version: '0', items: [] } }
 	async putItems (_items: any[]): Promise<{ items: { id: string, version: string }[] }> { return { items: [] } }
 	async removeItems (_ids: string[]): Promise<{ removed: string[] }> { return { removed: [] } }
+	public jobList: any[] = []
+	async commands () { return { stages: ['default', 'test'], can: { version: true, fetch: true, export: true, push: true, drop: true, import: true } } }
+	async previewCommand (_schema: string, command: any, body: any): Promise<any> {
+		this.calls.push(`preview ${command} ${body.stage}`)
+		return { previewId: `p-${command}`, command, stage: body.stage ?? 'default', expiresAt: 'later', sentences: command === 'push' ? [{ source: 'main', sentences: ['CREATE TABLE Categories (id INTEGER)'] }] : ['DROP TABLE Categories'] }
+	}
+
+	async runCommand (_schema: string, command: any, body: any): Promise<any> {
+		this.calls.push(`run ${command} ${body.stage} ${body.previewId ?? ''} ${body.force ? 'force' : ''}`.trim())
+		const job = { id: `j${this.jobList.length + 1}`, schema: 'northwind/v1', command, stage: body.stage, status: 'done', credential: 'admin', startedAt: new Date().toISOString(), result: command === 'fetch' ? [{ name: 'default', entities: [] }] : [] }
+		this.jobList.unshift(job)
+		return job
+	}
+
+	async jobs () { return this.jobList.map(({ result, ...j }) => j) }
+	async job (_schema: string, id: string) { return this.jobList.find(j => j.id === id) }
 }
 
 const row = (name: string) => screen.getAllByRole('treeitem').find(r => r.querySelector('.lw-tree-label')?.textContent === name)!
@@ -212,5 +228,48 @@ describe('what is saved, in the workspaces of the gateway', () => {
 		render(<Workspace api={new FakeApi()} admin={admin} history={false} locale="en" refreshMs={0} />)
 		await waitFor(() => expect(row('northwind/v1')).toBeTruthy())
 		expect(screen.queryByText('shared reports')).toBeNull()
+	})
+})
+
+describe('the commands of a workspace', () => {
+	const openCommands = async (admin: FakeAdmin) => {
+		show(admin)
+		await waitFor(() => expect(row('Commands')).toBeTruthy())
+		fireEvent.click(row('Commands'))
+		return screen.findByRole('region', { name: /Commands — northwind\/v1/ }).catch(() => screen.findByLabelText('Commands — northwind/v1'))
+	}
+
+	test('fetch runs at once; the result says the databases are in step', async () => {
+		const admin = new FakeAdmin()
+		await openCommands(admin)
+		fireEvent.click(await screen.findByRole('button', { name: 'fetch' }))
+		await screen.findByText('No differences: the databases are in step with the model')
+		expect(admin.calls).toContain('run fetch default')
+		expect(screen.getAllByText('done').length).toBeGreaterThan(0)
+	})
+
+	test('push shows its sentences first and runs that preview, on the chosen stage', async () => {
+		const admin = new FakeAdmin()
+		await openCommands(admin)
+		fireEvent.change(await screen.findByLabelText('stage'), { target: { value: 'test' } })
+		fireEvent.click(screen.getByRole('button', { name: 'push…' }))
+		await screen.findByText(/CREATE TABLE Categories/)
+		expect(screen.getByText('What push will run on stage test')).toBeTruthy()
+		fireEvent.click(screen.getByLabelText(/tryAllCan/))
+		fireEvent.click(screen.getByRole('button', { name: 'Run push' }))
+		await waitFor(() => expect(admin.calls).toContain('run push test p-push force'))
+	})
+
+	test('drop runs only once its stage is typed again', async () => {
+		const admin = new FakeAdmin()
+		await openCommands(admin)
+		fireEvent.click(await screen.findByRole('button', { name: 'drop…' }))
+		await screen.findByText(/DROP TABLE Categories/)
+		const run = screen.getByRole('button', { name: 'Run drop' }) as HTMLButtonElement
+		expect(run.disabled).toBe(true)
+		fireEvent.change(screen.getByLabelText('confirm stage'), { target: { value: 'default' } })
+		expect(run.disabled).toBe(false)
+		fireEvent.click(run)
+		await waitFor(() => expect(admin.calls).toContain('run drop default p-drop'))
 	})
 })

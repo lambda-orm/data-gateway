@@ -69,7 +69,7 @@ const run = async (): Promise<void> => {
 		setTimeout(() => process.exit(1), 50)
 		return
 	}
-	dispatcher = new ChannelDispatcher(schema.gateway, schema.mcp, data.settings.server.maxResponseBytes, logger, metrics ? () => metrics.snapshot() : undefined)
+	dispatcher = new ChannelDispatcher(schema.gateway, schema.mcp, data.settings.server.maxResponseBytes, logger, metrics ? () => metrics.snapshot() : undefined, schema.commands)
 	for (const port of pendingPorts.splice(0)) senders.push(receiveOnPort(port, dispatcher))
 	let socketPath: string | undefined
 	if (data.settings.runtime.mode === 'process') {

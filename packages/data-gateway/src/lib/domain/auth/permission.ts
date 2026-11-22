@@ -13,15 +13,16 @@
  * - schemaWrite: change the lambdaORM.yaml
  * - schemaAdmin: create and remove workspaces
  * - workbenchWrite: save queries, scripts and diagrams in the workspaces (without touching the schema)
+ * - ddl: change the structure of the databases of a stage (push, drop)
  */
 export type DataPermission = 'read' | 'write' | 'script' | 'queue' | 'stageImport'
-export type AdminPermission = 'schemaRead' | 'schemaWrite' | 'schemaAdmin' | 'workbenchWrite'
+export type AdminPermission = 'schemaRead' | 'schemaWrite' | 'schemaAdmin' | 'workbenchWrite' | 'ddl'
 export type Permission = DataPermission | AdminPermission
 
 /** What a credential without a list of permissions gets: every permission of the data, none of the administration */
 export const ALL_PERMISSIONS: readonly Permission[] = ['read', 'write', 'script', 'queue', 'stageImport']
 
-export const ADMIN_PERMISSIONS: readonly AdminPermission[] = ['schemaRead', 'schemaWrite', 'schemaAdmin', 'workbenchWrite']
+export const ADMIN_PERMISSIONS: readonly AdminPermission[] = ['schemaRead', 'schemaWrite', 'schemaAdmin', 'workbenchWrite', 'ddl']
 
 export const KNOWN_PERMISSIONS: readonly Permission[] = [...ALL_PERMISSIONS, ...ADMIN_PERMISSIONS]
 

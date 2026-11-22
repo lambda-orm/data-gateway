@@ -294,6 +294,7 @@ transports:
 | `admin.enabled` | `false` | la administración de los workspaces en `/admin` del transporte `http` (§11) |
 | `admin.allowAnonymous` | `false` | con `authentication: none`, cualquiera administra (solo desarrollo local) |
 | `admin.maxFileBytes` | `2MB` | el archivo más grande que se puede escribir (un `lambdaORM.yaml`, una consulta guardada) |
+| `admin.commandTimeoutMs` | `600000` | cuánto puede tardar un comando (§11.3) |
 | `runtime.transports` | `shared` | `shared` / `thread` / `process` (§3.1); en 3.0.0 solo `shared` (los otros dos avisan y usan `shared`) |
 | `runtime.schemas` | `thread` | `thread` / `process` |
 | `runtime.maxMemoryMb` | `512` | por worker |
@@ -737,8 +738,9 @@ en el edge, antes de enviar nada al esquema. Cada tipo es un `AuthenticatorPort`
 | `schemaWrite` | administración: cambiar el `lambdaORM.yaml` |
 | `schemaAdmin` | administración: crear y eliminar workspaces |
 | `workbenchWrite` | administración: guardar consultas, scripts y diagramas en los workspaces, sin tocar el esquema |
+| `ddl` | administración: cambiar la estructura de las bases de un stage (`push`, `drop`, §11.3) |
 
-Los cuatro de administración **nunca se dan por defecto**: una credencial sin lista de permisos tiene los cinco de los
+Los de administración **nunca se dan por defecto**: una credencial sin lista de permisos tiene los cinco de los
 datos, y para administrar hay que nombrarlos.
 
 - Se autoriza en el **schema worker**, en la capa de aplicación, antes de ejecutar, con `AuthorizationPolicy` (dominio,
@@ -1021,4 +1023,33 @@ junto al esquema):
 - Con `workbenchWrite`, lo guardado (carpetas, consultas, scripts, diagramas) va a `workbench/` de cada workspace, en
   lugar del navegador, y se relee cuando cambia (`ETag`). Lo que el navegador tenía guardado se ofrece copiar al
   workspace. Sin `workbenchWrite`, se guarda en el navegador como antes.
+
+### 11.3 Los comandos (`DATA_GATEWAY_ADMIN_PLAN.md` fase 3a)
+
+Los comandos de la CLI sobre las bases de un stage, como **jobs**, en el worker del esquema (con su λORM y sus
+conexiones). Uno a la vez por esquema: otro responde `409 BusyError` con el que está corriendo.
+
+| Método | Ruta | Hace | Permiso |
+| --- | --- | --- | --- |
+| `GET` | `/admin/workspaces/{ruta}/commands` | `{ stages, can, running? }` | `read` |
+| `POST` | `/admin/workspaces/{ruta}/commands/{comando}/preview` | qué haría (`push`, `drop`, `import`): `{ previewId, stage, sentences \| rows, expiresAt }` | el del comando |
+| `POST` | `/admin/workspaces/{ruta}/commands/{comando}` | `{ stage?, previewId?, force?, save? }` → `202` con el job (`version` responde en el momento) | el del comando |
+| `GET` | `/admin/workspaces/{ruta}/jobs[/{id}]` | los últimos jobs (sin resultado) / uno con su resultado | `read` |
+
+| Comando | Qué hace | Vista previa | Permiso |
+| --- | --- | --- | --- |
+| `version` | la versión de la gateway y del esquema | — | `read` |
+| `fetch` | las diferencias entre las bases y el modelo (ninguna: coinciden) | — | `read` |
+| `export` | los datos del stage; con `save: true` además en `data/<stage>-<fecha>.json` del workspace (`workbenchWrite`) | — | `read` |
+| `push` | crea o cambia las tablas según el modelo | las sentencias por source | `ddl` |
+| `drop` | elimina los objetos de las bases del stage | las sentencias; la UI pide escribir el stage | `ddl` |
+| `import` | importa un export | las filas por entidad | `stageImport` |
+
+- `push`, `drop` e `import` ejecutan **la vista previa que se mostró**: sin `previewId` responden `409
+  PreviewRequiredError`; cada vista previa sirve una vez, por 10 minutos, y solo con el mismo `lambdaORM.yaml` con que
+  se hizo. `force` es `tryAllCan` (seguir aunque falle una sentencia).
+- Cada job deja su registro (sin el resultado) en `orm_state/jobs/<id>.json` del workspace; `push`, `drop` e `import`
+  se auditan como las escrituras (§8.1).
+- Pendientes (fase 3b): `pull`, `introspect` e `incorporate`, que cambian el `lambdaORM.yaml` (con el diff como vista
+  previa y conservando los comentarios), y `build`.
 

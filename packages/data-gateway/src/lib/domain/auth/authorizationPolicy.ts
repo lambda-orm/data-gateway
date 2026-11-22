@@ -6,6 +6,8 @@ export type Operation =
 	| 'plan' | 'metadata' | 'model' | 'parameters' | 'constraints'
 	| 'execute' | 'executeScript' | 'executeQueued'
 	| 'schema' | 'stageExists' | 'stageExport' | 'stageImport'
+	/** the commands of the workspaces (admin): fetch reads, push and drop change the databases */
+	| 'stageFetch' | 'stagePush' | 'stageDrop'
 
 /**
  * The permissions an operation needs. `writes` (from the query classification) matters for execute and
@@ -21,6 +23,9 @@ export const requiredPermissions = (operation: Operation, writes = false): Permi
 		return ['script']
 	case 'stageImport':
 		return ['stageImport']
+	case 'stagePush':
+	case 'stageDrop':
+		return ['ddl']
 	default:
 		return ['read']
 	}

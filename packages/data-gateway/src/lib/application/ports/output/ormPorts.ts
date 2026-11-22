@@ -44,3 +44,16 @@ export interface OrmStagePort {
 	export (stage: string): Promise<SchemaData>
 	import (stage: string, data: unknown): Promise<void>
 }
+
+/** The commands of λORM over the databases of a stage (the CLI's push, drop, fetch) */
+export interface OrmCommandPort {
+	stageNames (): string[]
+	/** per mapping, the entities whose tables differ from the model; none when they are in step */
+	fetch (stage: string): Promise<unknown[]>
+	pushSentences (stage: string): Promise<{ source: string, sentences: string[] }[]>
+	push (stage: string, force: boolean): Promise<unknown[]>
+	dropSentences (stage: string): Promise<unknown[]>
+	drop (stage: string, force: boolean): Promise<unknown[]>
+	export (stage: string): Promise<unknown>
+	import (stage: string, data: unknown): Promise<void>
+}

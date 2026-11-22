@@ -10,8 +10,8 @@ export interface WirePrincipal {
 export interface ChannelRequest {
 	type: 'request'
 	id: number
-	/** runtime: the worker itself (its metrics) */
-	target: 'gateway' | 'mcp' | 'runtime'
+	/** runtime: the worker itself (its metrics); commands: the commands of the workspace (admin) */
+	target: 'gateway' | 'mcp' | 'runtime' | 'commands'
 	op: string
 	args: unknown[]
 	principal?: WirePrincipal
@@ -66,3 +66,11 @@ export const CONTEXT_FREE_OPERATIONS = ['version', 'health', 'ping']
 
 /** info() is synchronous on the port: the worker sends it once, with `ready` */
 export const MCP_OPERATIONS = ['listTools', 'callTool', 'listResources', 'listResourceTemplates', 'readResource'] as const
+
+/**
+ * The commands of a workspace that run in its schema worker, with its λORM and its connections
+ * (docs/DATA_GATEWAY_ADMIN_PLAN.md §4): the ones that read (fetch, export) and the ones that change the databases, each
+ * with the sentences it would run first (push, drop).
+ */
+export const COMMAND_OPERATIONS = ['stages', 'fetch', 'pushSentences', 'push', 'dropSentences', 'drop', 'export', 'import'] as const
+export type CommandOperation = typeof COMMAND_OPERATIONS[number]

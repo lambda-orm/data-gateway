@@ -34,6 +34,8 @@ export interface ExplorerProps {
 export interface ExplorerAdmin {
 	can: AdminCapabilities
 	onOpenSchemaFile: (schema: string) => void
+	/** the commands of a ready schema (fetch, push, drop, export, import) */
+	onOpenCommands?: (schema: string) => void
 	onNewSchema: () => void
 	onRemoveSchema: (schema: string) => void
 }
@@ -293,6 +295,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 								<>
 									{s.pending && <div className="lw-schema-reason lw-schema-pending" role="note" style={{ paddingLeft: 6 + 14 + 22 }}>{m.schemaPending}: {s.pending}</div>}
 									{schemaFileRow(s.path)}
+									{admin?.onOpenCommands && <Row level={2} label={a.commands} icon={<Icons.terminal />} onOpen={() => admin.onOpenCommands!(s.path)} title={a.commands} />}
 									<Row level={2} label={m.domainYaml} icon={<Icons.yaml />} onOpen={() => onOpenDomain(s.path)} title={`${m.domainYaml} — ${m.readOnly}`} />
 									<Row level={2} label={m.entities} icon={<Icons.entity />} expanded={expanded.has(entitiesKey)}
 										onToggle={() => { toggle(entitiesKey); loadDomain(s.path) }} />

@@ -16,6 +16,7 @@ import { NoMetrics, PromClientMetrics } from '../output/metrics/promClientMetric
 import { AuthenticatorRegistry, TransportRegistry } from './registries'
 import { composeSchema, ComposedSchema } from './schemaComposer'
 import { AdminService } from '../../application/admin/adminService'
+import { CommandService } from '../../application/admin/commandService'
 import { SchemaDirectoryPort } from '../../application/ports/input/schemaDirectoryPort'
 import { FileWorkspaceStore } from '../output/admin/fileWorkspaceStore'
 import { LambdaSchemaValidator } from '../output/admin/lambdaSchemaValidator'
@@ -91,16 +92,21 @@ export const resolveConfiguredSchemas = (config: DataGatewayConfig, logger?: Log
 }
 
 /** admin.enabled: the administration of the workspaces of the schemas the directory serves */
-export const buildAdmin = (config: DataGatewayConfig, directory: SchemaDirectoryPort, logger: LoggerPort, clock: ClockPort): AdminService | undefined => {
+export const buildAdmin = (config: DataGatewayConfig, directory: SchemaDirectoryPort, logger: LoggerPort, clock: ClockPort): { service: AdminService, commands: CommandService } | undefined => {
 	if (!config.admin.enabled) return undefined
-	return new AdminService({
+	const anonymousAdmin = config.admin.allowAnonymous && config.authentication.adapter === 'none'
+	const store = new FileWorkspaceStore()
+	const commands = new CommandService({ anonymousAdmin, timeoutMs: config.admin.commandTimeoutMs, previewTtlMs: 10 * 60000, keepJobs: 200 },
+		() => directory.schemas(), store, clock, logger)
+	const service = new AdminService({
 		root: config.orm.workspacePath ? path.resolve(config.orm.workspacePath) : undefined,
 		anonymousAdmin: config.admin.allowAnonymous && config.authentication.adapter === 'none',
 		maxFileBytes: config.admin.maxFileBytes
 	},
 	() => directory.schemas().filter(s => s.workspace !== undefined).map(s => ({ path: s.path, workspace: s.workspace! })),
 	() => directory.states(),
-	new FileWorkspaceStore(), new LambdaSchemaValidator(), new YamlAdapter(), clock, logger)
+	store, new LambdaSchemaValidator(), new YamlAdapter(), clock, logger)
+	return { service, commands }
 }
 
 /** The authenticator of a schema on each transport that exposes it: schema → transport → global */
@@ -141,6 +147,7 @@ export class DataGatewayBuilder {
 				inline.push({
 					path: descriptor.path,
 					workspace: descriptor.workspace,
+					commands: schema.commands,
 					gateway: schema.gateway,
 					mcp: schema.mcp,
 					transports: settings.transports,
