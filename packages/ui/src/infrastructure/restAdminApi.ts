@@ -1,4 +1,4 @@
-import { AdminApiPort, AdminCapabilities, CommandName, CommandPreview, CommandsSummary, Job, SchemaIssue, WorkbenchProblem } from '../application/ports'
+import { AdminApiPort, AdminCapabilities, CommandName, CommandPreview, CommandsSummary, Job, SchemaIssue, SchemaPatch, WorkbenchProblem } from '../application/ports'
 import { SavedItem } from '../domain/savedItems'
 import { GatewayRequestError, HeadersProvider } from './restQueryApi'
 
@@ -45,6 +45,14 @@ export class RestAdminApi implements AdminApiPort {
 
 	public async writeSchema (schema: string, text: string, version: string) {
 		return (await this.request(`/workspaces/${schemaSegment(schema)}/schema`, { method: 'PUT', body: { text }, headers: { 'If-Match': `"${version}"` } })).body as { version: string, issues: SchemaIssue[] }
+	}
+
+	public async patchSchema (schema: string, patch: SchemaPatch) {
+		return (await this.request(`/workspaces/${schemaSegment(schema)}/schema`, { method: 'PATCH', body: patch })).body as { version: string, references: string[], added: number, removed: number }
+	}
+
+	public async references (schema: string, at: string[]) {
+		return (await this.request(`/workspaces/${schemaSegment(schema)}/references`, { body: { at } })).body as { references: string[] }
 	}
 
 	public async validate (text: string) {

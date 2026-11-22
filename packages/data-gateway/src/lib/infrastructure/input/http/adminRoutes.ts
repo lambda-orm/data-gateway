@@ -44,6 +44,12 @@ export const adminRouter = (admin: AdminService, authenticate: express.RequestHa
 		res.setHeader('ETag', `"${result.version}"`)
 		return result
 	}))
+	router.patch('/workspaces/:schema/schema', handle(async (req, res) => {
+		const result = await admin.patchSchema(principal(res), schemaParam(req.params.schema), req.body ?? {})
+		res.setHeader('ETag', `"${result.version}"`)
+		return result
+	}))
+	router.post('/workspaces/:schema/references', handle(async (req, res) => admin.references(principal(res), schemaParam(req.params.schema), req.body?.at)))
 	router.post('/validate', handle(async (req, res) => admin.validate(principal(res), req.body?.text)))
 	router.get('/workbench', handle(async (req, res) => {
 		const schema = typeof req.query.schema === 'string' ? schemaParam(req.query.schema) : undefined

@@ -99,6 +99,41 @@ describe('admin over REST (inline)', () => {
 		expect((await call(base, schemaUrl, { method: 'PUT', body: { text: NORTHWIND }, headers: { 'X-Api-Key': 'analyst-key', 'If-Match': written.body.version } })).status).toBe(403)
 	})
 
+	test('one element changed (a form): its comments and the rest of the file stay; a conflict only on the same element', async () => {
+		const file = path.join(root, 'iot/v1/lambdaORM.yaml')
+		const before = fs.readFileSync(file, 'utf8')
+		const at = ['domain', 'entities', 'Products', 'properties', 'name']
+		const read = (await call(base, schemaUrl, { headers: ADMIN })).body
+		const current = (await import('yaml')).parse(read.text).domain.entities.find((e: any) => e.name === 'Products').properties.find((p: any) => p.name === 'name')
+		const changed = await call(base, schemaUrl, { method: 'PATCH', body: { op: 'set', at, value: { ...current, length: 120 }, expected: current }, headers: ADMIN })
+		expect(changed).toMatchObject({ status: 200, body: { version: expect.any(String), added: expect.any(Number) } })
+		const after = fs.readFileSync(file, 'utf8')
+		expect(after).toContain('# northwind')
+		expect(after.split('\n').length).toBe(before.split('\n').length + (changed.body.added - changed.body.removed))
+		// another form read the same element before: 412 with what there is now
+		const stale = await call(base, schemaUrl, { method: 'PATCH', body: { op: 'set', at, value: { ...current, length: 10 }, expected: current }, headers: ADMIN })
+		expect(stale).toMatchObject({ status: 412, body: { details: { current: { length: 120 } } } })
+		// another element, read before that change: applied
+		const other = await call(base, schemaUrl, { method: 'PATCH', body: { op: 'add', at: ['domain', 'enums'], value: { name: 'Sizes', values: [{ name: 'small', value: 1 }] } }, headers: ADMIN })
+		expect(other.status).toBe(200)
+		// a change that leaves the schema invalid is not written
+		const invalid = await call(base, schemaUrl, { method: 'PATCH', body: { op: 'set', at: ['domain', 'entities', 'Products'], value: { name: 'Products', extends: 'Nothing', properties: [] } }, headers: ADMIN })
+		expect(invalid.status).toBe(422)
+		expect((await call(base, schemaUrl, { method: 'PATCH', body: { op: 'remove', at: ['domain', 'entities', 'Nope'] }, headers: ADMIN })).status).toBe(404)
+		expect((await call(base, schemaUrl, { method: 'PATCH', body: { op: 'set', at, value: current }, headers: READER })).status).toBe(403)
+	})
+
+	test('rename an entity: who pointed to it follows; references before a remove', async () => {
+		const references = await call(base, '/admin/workspaces/iot%2Fv1/references', { body: { at: ['domain', 'entities', 'Orders'] }, headers: ADMIN })
+		expect(references.body.references.length).toBeGreaterThan(0)
+		const renamed = await call(base, schemaUrl, { method: 'PATCH', body: { op: 'rename', at: ['domain', 'entities', 'Orders'], to: 'Purchases' }, headers: ADMIN })
+		expect(renamed.status).toBe(200)
+		const text = fs.readFileSync(path.join(root, 'iot/v1/lambdaORM.yaml'), 'utf8')
+		expect(text).not.toMatch(/entity: Orders\b/)
+		expect(text).toMatch(/entity: Purchases/)
+		await call(base, schemaUrl, { method: 'PATCH', body: { op: 'rename', at: ['domain', 'entities', 'Purchases'], to: 'Orders' }, headers: ADMIN })
+	})
+
 	test('validation: a YAML error at its line, a type that is not of λORM a warning, an extends of nothing an error', async () => {
 		const yaml = await call(base, '/admin/validate', { body: { text: 'domain:\n  entities:\n    - name: A\n   bad: x\n' }, headers: ADMIN })
 		expect(yaml.body).toMatchObject({ valid: false, issues: expect.arrayContaining([expect.objectContaining({ severity: 'error', line: expect.any(Number) })]) })
@@ -107,7 +142,10 @@ describe('admin over REST (inline)', () => {
 		expect(typed.body.issues).toEqual([expect.objectContaining({ severity: 'warning', line: 7, message: expect.stringContaining('"nope" is not a type of λORM') })])
 		const extended = await call(base, '/admin/validate', { body: { text: 'domain:\n  entities:\n    - name: A\n      extends: Nothing\n      properties: [ { name: id } ]\n' }, headers: ADMIN })
 		expect(extended.body.valid).toBe(false)
-		// the code of the schema is not run to validate it
+		// a name twice in a list: a form would edit only one of them
+		const twice = await call(base, '/admin/validate', { body: { text: 'domain:\n  entities:\n    - name: A\n      properties:\n        - name: id\n        - name: id\n' }, headers: ADMIN })
+		expect(twice.body).toMatchObject({ valid: false, issues: [expect.objectContaining({ message: 'A.properties: "id" twice', line: 6 })] })
+				// the code of the schema is not run to validate it
 		const started = await call(base, '/admin/validate', { body: { text: 'domain: { entities: [] }\napplication:\n  start:\n    - expression: "throw \\"ran\\""\n' }, headers: ADMIN })
 		expect(started.body.valid).toBe(true)
 	})

@@ -129,6 +129,9 @@ export class Supervisor {
 			schema.candidate = undefined
 			this.setState(schema, 'ready', undefined, `the new version did not start: ${reason}; serving the last one that did`)
 		}
+		// once it is the worker served, its events are the ones of any worker of the schema (its pongs keep it alive, its
+		// exit restarts the schema); until then, they only decide whether it replaces the current one
+		const served = () => schema.handle === candidate.handle && this.schemas.get(schema.state.path) === schema
 		candidate.handle = this.schemaRuntime.start(spec, {
 			ready: info => {
 				if (schema.candidate !== candidate) return
@@ -144,9 +147,24 @@ export class Supervisor {
 				// the edge sends the new requests to the new worker; the old one finishes the ones it has
 				previous?.stop(this.options.graceMs).catch(error => this.logger.error(error))
 			},
-			failed: reason => keepCurrent(reason),
-			exited: reason => keepCurrent(reason),
-			pong: () => { candidate.lastPong = this.clock.now().getTime() }
+			failed: reason => {
+				if (!served()) return keepCurrent(reason)
+				schema.handle = undefined
+				this.setState(schema, 'error', reason)
+				this.scheduleSchema(schema)
+			},
+			exited: reason => {
+				if (!served()) return keepCurrent(reason)
+				if (this.stopping) return
+				schema.handle = undefined
+				this.setState(schema, 'restarting', reason)
+				this.scheduleSchema(schema)
+			},
+			pong: () => {
+				const now = this.clock.now().getTime()
+				if (served()) schema.lastPong = now
+				else candidate.lastPong = now
+			}
 		})
 		schema.candidate = candidate
 	}

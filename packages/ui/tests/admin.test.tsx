@@ -34,6 +34,19 @@ class FakeAdmin implements AdminApiPort {
 		this.version = `v${Number(this.version.slice(1)) + 1}`
 		return { version: this.version, issues: [] }
 	}
+	public patches: any[] = []
+	public conflictOnce = false
+	async patchSchema (_schema: string, patch: any): Promise<any> {
+		if (this.conflictOnce) {
+			this.conflictOnce = false
+			throw status(412, 'changed', { current: { name: 'Products', properties: [{ name: 'id', type: 'integer' }, { name: 'price', type: 'decimal' }] } })
+		}
+		this.patches.push(patch)
+		return { version: 'v9', references: [], added: 1, removed: 0 }
+	}
+
+	async references (_schema: string, at: string[]) { return { references: at.includes('States') ? ['domain/entities/Products/properties/state'] : [] } }
+
 	async validate (text: string): Promise<{ valid: boolean, issues: SchemaIssue[] }> {
 		return text.includes('nope') ? { valid: false, issues: [{ severity: 'error', message: 'bad indentation', line: 2, column: 3 }] } : { valid: true, issues: [] }
 	}
@@ -299,5 +312,65 @@ describe('commands that change the schema', () => {
 		expect(introspect.disabled).toBe(true)
 		fireEvent.change(screen.getByLabelText('Entity of the data'), { target: { value: 'Brands' } })
 		expect(introspect.disabled).toBe(true)
+	})
+})
+
+describe('the schema as forms', () => {
+	const FORMS_SCHEMA = 'domain:\n  entities:\n    - name: Products\n      primaryKey: [id]\n      properties:\n        - { name: id, type: integer }\n  enums:\n    - name: States\n      values: [{ name: on, value: 1 }]\ninfrastructure:\n  sources:\n    - { name: main, dialect: PostgreSQL }\n  stages:\n    - name: default\n      sources: [{ name: main }]\n'
+	const openForms = async (admin: FakeAdmin) => {
+		admin.text = FORMS_SCHEMA
+		show(admin)
+		await waitFor(() => expect(row('Schema (forms)')).toBeTruthy())
+		fireEvent.click(row('Schema (forms)'))
+		await screen.findByRole('button', { name: 'Products' })
+	}
+
+	test('an entity: a property added and saved as one change, with the entity as it was read', async () => {
+		const admin = new FakeAdmin()
+		await openForms(admin)
+		fireEvent.click(screen.getByRole('button', { name: 'Products' }))
+		const properties = await screen.findByRole('table', { name: 'properties' })
+		fireEvent.click(within(properties).getByRole('button', { name: 'Add' }))
+		fireEvent.change(within(properties).getByLabelText('1 name'), { target: { value: 'price' } })
+		fireEvent.change(within(properties).getByLabelText('price type'), { target: { value: 'decimal' } })
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+		await waitFor(() => expect(admin.patches).toHaveLength(1))
+		expect(admin.patches[0]).toEqual({
+			op: 'set',
+			at: ['domain', 'entities', 'Products'],
+			value: { name: 'Products', primaryKey: ['id'], properties: [{ name: 'id', type: 'integer' }, { name: 'price', type: 'decimal' }] },
+			expected: { name: 'Products', primaryKey: ['id'], properties: [{ name: 'id', type: 'integer' }] }
+		})
+	})
+
+	test('someone else changed the same element: the form shows what it has now', async () => {
+		const admin = new FakeAdmin()
+		await openForms(admin)
+		fireEvent.click(screen.getByRole('button', { name: 'Products' }))
+		fireEvent.change(await screen.findByLabelText('primaryKey'), { target: { value: 'id, code' } })
+		admin.conflictOnce = true
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+		await screen.findByText('Someone else changed it meanwhile: this is what it has now')
+		expect((screen.getByLabelText('price name') as HTMLInputElement).value).toBe('price')
+	})
+
+	test('a new source, a rename, and a remove that first says who uses the element', async () => {
+		const admin = new FakeAdmin()
+		await openForms(admin)
+		fireEvent.click(screen.getByRole('button', { name: 'New in Sources' }))
+		fireEvent.change(screen.getByLabelText('name'), { target: { value: 'replica' } })
+		fireEvent.change(screen.getByLabelText('dialect'), { target: { value: 'MySQL' } })
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+		await waitFor(() => expect(admin.patches[0]).toEqual({ op: 'add', at: ['infrastructure', 'sources'], value: { name: 'replica', dialect: 'MySQL' } }))
+		fireEvent.click(screen.getByRole('button', { name: 'States' }))
+		fireEvent.click(await screen.findByRole('button', { name: 'Rename' }))
+		fireEvent.change(screen.getByLabelText('Rename'), { target: { value: 'Status' } })
+		fireEvent.click(screen.getAllByRole('button', { name: 'Rename' }).at(-1)!)
+		await waitFor(() => expect(admin.patches.at(-1)).toMatchObject({ op: 'rename', at: ['domain', 'enums', 'States'], to: 'Status' }))
+		fireEvent.click(screen.getByRole('button', { name: 'States' }))
+		fireEvent.click(await screen.findByRole('button', { name: 'Remove' }))
+		await screen.findByText('domain/entities/Products/properties/state')
+		fireEvent.click(screen.getAllByRole('button', { name: 'Remove' }).at(-1)!)
+		await waitFor(() => expect(admin.patches.at(-1)).toMatchObject({ op: 'remove', at: ['domain', 'enums', 'States'] }))
 	})
 })

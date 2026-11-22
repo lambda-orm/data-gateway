@@ -968,6 +968,8 @@ Un workspace se nombra por su ruta en **un** segmento, codificada: `iot%2Fv1` (`
 | `DELETE` | `/admin/workspaces/{ruta}?confirm={ruta}` | lo mueve a `<workspacePath>/.trash/<ruta>-<fecha>` (no borra nada) | `schemaAdmin` |
 | `GET` | `/admin/workspaces/{ruta}/schema` | `{ text, version }` del `lambdaORM.yaml`, `ETag` | `schemaRead` |
 | `PUT` | `/admin/workspaces/{ruta}/schema` | `{ text }` con `If-Match: <version>`: lo valida y lo escribe atómico | `schemaWrite` |
+| `PATCH` | `/admin/workspaces/{ruta}/schema` | un cambio de un elemento (un formulario, §11.4): `{ op, at, value?, to?, expected? }` | `schemaWrite` |
+| `POST` | `/admin/workspaces/{ruta}/references` | `{ at }` → quién usa ese elemento (antes de eliminarlo) | `schemaRead` |
 | `POST` | `/admin/validate` | `{ text }` → `{ valid, issues: [{ severity, message, line?, column? }] }` | `schemaRead` |
 | `GET` | `/admin/workbench[?schema={ruta}]` | lo guardado en los workspaces (§11.1), `ETag`; con `If-None-Match` igual, `304` | `read` o `workbenchWrite` |
 | `PUT` | `/admin/workbench` | `{ items }`: guarda, mueve o renombra; cada uno que existía dice su `version` | `workbenchWrite` |
@@ -986,7 +988,8 @@ Las escrituras a un workspace van de a una: en el proceso, en fila; entre répli
 `.lambdaorm.lock` creado con `O_EXCL` (uno de más de 30 s se considera abandonado). Cada archivo se escribe atómico
 (temporal + `rename`): quien lee ve el anterior o el nuevo, nunca la mitad.
 
-**Validación.** El YAML (cada error en su línea), la forma, los tipos de las propiedades (uno que λORM no conoce es una
+**Validación.** El YAML (cada error en su línea), la forma, un nombre repetido en una lista (dos propiedades `id`), los
+tipos de las propiedades (uno que λORM no conoce es una
 advertencia, no un error: λORM lo acepta) y λORM completando el esquema sin conectar (`extends`, relaciones, mappings).
 `application.start` y los listeners no se ejecutan: son código del esquema.
 
@@ -1062,4 +1065,25 @@ conexiones). Uno a la vez por esquema: otro responde `409 BusyError` con el que 
 - `incorporate` necesita la gateway del proceso con `orm.watch` (espera a que el esquema escrito se recargue para hacer
   `push` e `import`); en el runtime inline responde `409`.
 - Pendiente: `build`.
+
+### 11.4 Un elemento a la vez (`DATA_GATEWAY_ADMIN_PLAN.md` fase 4)
+
+Lo que manda cada formulario de la UI: un cambio de **un** elemento, nombrado por nombres y no por posiciones
+(`["domain", "entities", "Products", "properties", "price"]`).
+
+| `op` | Hace |
+| --- | --- |
+| `set` | reemplaza el elemento por `value` (con el mismo nombre: para cambiarlo, `rename`) |
+| `add` | agrega `value` (con su `name`) a la lista `at`; la crea si no está (`enums:` vacío, los `indexes` de una entidad) |
+| `remove` | lo elimina; la respuesta dice quién lo usaba (`references`) |
+| `rename` | le da el nombre `to` y renombra lo que lo nombra: de una entidad, las relaciones que la apuntan, su `extends`, sus mappings y views; de una propiedad, las claves, índices y relaciones de los dos lados y su mapping; de una relación, el `target` del otro lado; de un enum, las propiedades; de una source, los stages; de un mapping, las sources |
+
+- **Concurrencia por elemento:** `expected` es el elemento como el formulario lo leyó. Si otro cambió ese mismo
+  elemento, `412` con `details.current` (lo que tiene ahora); si cambió otro elemento, el cambio se aplica igual
+  sobre el archivo de ahora.
+- Se escribe con la misma unión de la fase 3b: el resto del archivo, sus comentarios y su estilo quedan como estaban.
+  Un cambio que deja el esquema inválido no se escribe (`422`).
+- En la UI, **Esquema (formularios)** de cada esquema: las secciones (entidades, enums, sources, mappings, stages),
+  cada elemento en un formulario (las propiedades, relaciones, índices y valores en tablas), **Renombrar** y
+  **Eliminar** (que antes muestra quién lo usa).
 

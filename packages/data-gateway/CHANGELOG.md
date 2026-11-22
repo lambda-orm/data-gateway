@@ -37,11 +37,20 @@ default, `admin` off.
   written keeping its comments, order and style (only what changed is new; λORM writes it with js-yaml, which loses
   them). `pull` updates the state of the stage as λORM does; `incorporate` waits for the new schema, pushes it and
   imports the data.
+- **One element of a schema at a time** (`DATA_GATEWAY.md` §11.4): `PATCH /admin/workspaces/{path}/schema` with `set`,
+  `add`, `remove` or `rename` of an element named by names; a rename renames what names it (relations, keys, indexes,
+  mappings, stages…). Concurrency per element: someone else's change to another element doesn't collide. Written
+  keeping the comments and the rest of the file. The validation rejects a name repeated in a list.
 - The UI at `/ui` (`@lambdaorm/ui` 0.5.0), with those permissions: the `lambdaORM.yaml` of each schema editable in Monaco
   (validated while typed, saved with Ctrl+S, a conflict shown side by side), new and removed schemas, what is saved
-  shared in the workspaces, and the panel of commands.
+  shared in the workspaces, the panel of commands and the schema as forms.
 - The UI at `/ui` reads the schemas again every 5 s: a schema added, removed or reloaded shows without reloading the
   page (its domain and typings are read again), and a version that didn't start is marked ⚠ with its reason.
+
+**Bug Fixes:**
+
+- After a blue-green reload, the new worker was terminated 30 s later (its pongs were not counted) and its fall didn't
+  restart the schema: it is now a worker of the schema like any other.
 
 ### 3.1.0 (2026-11-21)
 

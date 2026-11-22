@@ -60,6 +60,18 @@ export interface AdminMessages {
 	dataFile: string
 	entityOfData: string
 	incorporateNote: string
+	forms: string
+	entities: string
+	enums: string
+	sources: string
+	mappings: string
+	stages: string
+	newNamed: string
+	rename: string
+	usedBy: string
+	changedMeanwhile: string
+	addRow: string
+	nothingSelected: string
 }
 
 type Row = [keyof AdminMessages, ...string[]]
@@ -98,6 +110,18 @@ const ROWS: Row[] = [
 ]
 
 ROWS.push(
+	['forms', 'Schema (forms)', 'Esquema (formularios)', 'Esquema (formulários)', 'Schéma (formulaires)', 'Schema (moduli)', 'Schema (Formulare)', 'Schema (formulieren)', 'Esquema (formularis)', 'Esquema (formularios)', 'Eskema (inprimakiak)'],
+	['entities', 'Entities', 'Entidades', 'Entidades', 'Entités', 'Entità', 'Entitäten', 'Entiteiten', 'Entitats', 'Entidades', 'Entitateak'],
+	['enums', 'Enums', 'Enums', 'Enums', 'Énumérations', 'Enum', 'Enums', 'Enums', 'Enums', 'Enums', 'Enumak'],
+	['sources', 'Sources', 'Sources', 'Sources', 'Sources', 'Sorgenti', 'Quellen', 'Bronnen', 'Fonts', 'Fontes', 'Iturriak'],
+	['mappings', 'Mappings', 'Mappings', 'Mappings', 'Mappings', 'Mapping', 'Mappings', 'Mappings', 'Mappings', 'Mappings', 'Mapping-ak'],
+	['stages', 'Stages', 'Stages', 'Stages', 'Stages', 'Stage', 'Stages', 'Stages', 'Stages', 'Stages', 'Stage-ak'],
+	['newNamed', 'New in {name}', 'Nuevo en {name}', 'Novo em {name}', 'Nouveau dans {name}', 'Nuovo in {name}', 'Neu in {name}', 'Nieuw in {name}', 'Nou a {name}', 'Novo en {name}', 'Berria {name}-n'],
+	['rename', 'Rename', 'Renombrar', 'Renomear', 'Renommer', 'Rinomina', 'Umbenennen', 'Hernoemen', 'Canvia el nom', 'Renomear', 'Berrizendatu'],
+	['usedBy', '{name} is used by:', '{name} lo usan:', '{name} é usado por:', '{name} est utilisé par :', '{name} è usato da:', '{name} wird verwendet von:', '{name} wordt gebruikt door:', '{name} l’usen:', '{name} úsano:', '{name} hauek erabiltzen dute:'],
+	['changedMeanwhile', 'Someone else changed it meanwhile: this is what it has now', 'Alguien más lo cambió mientras tanto: esto es lo que tiene ahora', 'Outra pessoa alterou enquanto isso: isto é o que tem agora', 'Quelqu’un d’autre l’a modifié entre-temps : voici ce qu’il contient', 'Qualcun altro l’ha cambiato nel frattempo: ecco cosa contiene ora', 'Jemand anderes hat es inzwischen geändert: das ist der aktuelle Stand', 'Iemand anders heeft het intussen gewijzigd: dit is wat het nu bevat', 'Algú altre l’ha canviat mentrestant: això és el que té ara', 'Alguén máis cambiouno mentres tanto: isto é o que ten agora', 'Beste norbaitek aldatu du bitartean: hau da orain duena'],
+	['addRow', 'Add', 'Agregar', 'Adicionar', 'Ajouter', 'Aggiungi', 'Hinzufügen', 'Toevoegen', 'Afegeix', 'Engadir', 'Gehitu'],
+	['nothingSelected', 'Choose an element on the left, or create one with +', 'Elegí un elemento a la izquierda, o creá uno con +', 'Escolha um elemento à esquerda, ou crie um com +', 'Choisissez un élément à gauche, ou créez-en un avec +', 'Scegli un elemento a sinistra, o creane uno con +', 'Wähle links ein Element oder erstelle eins mit +', 'Kies links een element, of maak er een met +', 'Tria un element a l’esquerra, o crea’n un amb +', 'Escolle un elemento á esquerda, ou crea un con +', 'Aukeratu elementu bat ezkerrean, edo sortu bat + erabiliz'],
 	['schemaChanges', 'What {name} will change in lambdaORM.yaml (stage {stage})', 'Lo que {name} va a cambiar en lambdaORM.yaml (stage {stage})', 'O que {name} vai mudar em lambdaORM.yaml (stage {stage})', 'Ce que {name} changera dans lambdaORM.yaml (stage {stage})', 'Cosa cambierà {name} in lambdaORM.yaml (stage {stage})', 'Was {name} in lambdaORM.yaml ändert (Stage {stage})', 'Wat {name} in lambdaORM.yaml wijzigt (stage {stage})', 'El que {name} canviarà a lambdaORM.yaml (stage {stage})', 'O que {name} vai cambiar en lambdaORM.yaml (stage {stage})', '{name}-ek lambdaORM.yaml-n aldatuko duena (stage {stage})'],
 	['linesChanged', '+{added} −{removed} lines; the rest of the file (and its comments) stays as it is', '+{added} −{removed} líneas; el resto del archivo (y sus comentarios) queda igual', '+{added} −{removed} linhas; o resto do arquivo (e seus comentários) fica igual', '+{added} −{removed} lignes ; le reste du fichier (et ses commentaires) ne change pas', '+{added} −{removed} righe; il resto del file (e i suoi commenti) resta uguale', '+{added} −{removed} Zeilen; der Rest der Datei (und ihre Kommentare) bleibt gleich', '+{added} −{removed} regels; de rest van het bestand (en de opmerkingen) blijft gelijk', '+{added} −{removed} línies; la resta del fitxer (i els comentaris) queda igual', '+{added} −{removed} liñas; o resto do ficheiro (e os seus comentarios) queda igual', '+{added} −{removed} lerro; fitxategiaren gainerakoa (eta iruzkinak) berdin geratzen da'],
 	['dataFile', 'Data (JSON) to read the entities from', 'Datos (JSON) de los que leer las entidades', 'Dados (JSON) dos quais ler as entidades', 'Données (JSON) dont lire les entités', 'Dati (JSON) da cui leggere le entità', 'Daten (JSON), aus denen die Entitäten gelesen werden', 'Gegevens (JSON) om de entiteiten uit te lezen', 'Dades (JSON) de les quals llegir les entitats', 'Datos (JSON) dos que ler as entidades', 'Entitateak irakurtzeko datuak (JSON)'],
