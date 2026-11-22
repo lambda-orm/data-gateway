@@ -7,7 +7,9 @@ formularios de entidad y diagramas. Este plan las vuelve un **entorno de trabajo
 2. ver el esquema **entero en YAML con Monaco** y, a la vez, **cada sección y elemento en formularios** para crearlo,
    editarlo o eliminarlo;
 3. **concurrencia** (dos personas o una persona y un agente no se pisan) y **refresh** (lo que cambia otro se ve);
-4. ejecutar desde la UI **todos los comandos de la CLI**: `version`, `init`, `build`, `schema`, `push`, `pull`,
+4. **carpetas con consultas, scripts y diagramas** guardados, como los de la UI hoy, pero **en el workspace** y
+   compartidos;
+5. ejecutar desde la UI **todos los comandos de la CLI**: `version`, `init`, `build`, `schema`, `push`, `pull`,
    `fetch`, `introspect`, `incorporate`, `drop`, `import`, `export`.
 
 Decidido con el usuario el 2026-11-22.
@@ -24,15 +26,18 @@ Decidido con el usuario el 2026-11-22.
 - Los permisos de una credencial: `read`, `write`, `script`, `queue`, `stageImport`. La UI muestra o deshabilita cada
   acción según `whoami`.
 - Los cambios de estado de un esquema ya se notifican por WebSocket (`schema.statusChanged`).
+- La UI ya guarda **carpetas, consultas y diagramas** (anidadas, con nombre y descripción, mover arrastrando), pero
+  **en el navegador** (IndexedDB, por gateway y credencial): otro navegador u otra persona no los ve; se comparten
+  exportando un JSON.
 
 ## 1. Decisiones
 
 | Tema | Propuesta |
 | --- | --- |
 | Dónde viven los workspaces | un directorio raíz en el volumen, `orm.workspacesPath` (`/workspaces`): **cada subcarpeta con un `lambdaORM.yaml` es un esquema**, y su ruta es el nombre de la carpeta (`iot/v1` → `/workspaces/iot/v1`). Los `orm.schemas[]` del config siguen valiendo, para dar overrides o esquemas fuera de la raíz |
-| Estructura de un workspace | la de `lambdaorm init`: `lambdaORM.yaml`, `data/`, `src/`, `src/model/` (con `build`), `orm_state/`, y `.env` para las conexiones (§5) |
+| Estructura de un workspace | la de `lambdaorm init`: `lambdaORM.yaml`, `data/`, `src/`, `src/model/` (con `build`), `orm_state/`, `.env` para las conexiones (§5) y `workbench/` para las consultas, scripts y diagramas guardados (§3.5) |
 | Activación | **apagado por defecto**: `admin.enabled: false`. Una gateway de producción sigue siendo de solo lectura aunque tenga la UI |
-| Permisos nuevos | `schemaRead` (ver el YAML y la infraestructura completa, sin secretos), `schemaWrite` (editar el esquema), `schemaAdmin` (crear y eliminar workspaces), `ddl` (`push`, `pull`, `drop`, `incorporate`), `build`. `stageImport` ya existe y cubre `import` |
+| Permisos nuevos | `schemaRead` (ver el YAML y la infraestructura completa, sin secretos), `schemaWrite` (editar el esquema), `schemaAdmin` (crear y eliminar workspaces), `ddl` (`push`, `pull`, `drop`, `incorporate`), `build`, `workbenchWrite` (guardar consultas, scripts y diagramas en el workspace, sin poder tocar el esquema). `stageImport` ya existe y cubre `import`; leer lo guardado pide `read` |
 | Formato del archivo | editar con el paquete `yaml` (eemeli), con su `Document`: **se conservan los comentarios, el orden y el estilo**. También para `pull`, `introspect` e `incorporate` cuando corren desde la gateway (dejan de usar `js-yaml.dump`) |
 | Concurrencia | optimista: cada lectura devuelve la **versión** del archivo (hash del contenido, `ETag`) y cada escritura la exige (`If-Match`); si cambió, `412` con la versión actual. Más un **candado por workspace** para los comandos (§4) |
 | Refresh | un **watcher** del volumen (lo que cambia otro, la gateway o alguien con un editor) y una notificación `workspace.changed` por WebSocket; la UI recarga lo que no estás editando y avisa sobre lo que sí |
@@ -70,6 +75,9 @@ Bajo `/admin` (fuera de las rutas de un esquema, para que existan aunque el esqu
 | `GET` | `/admin/workspaces/{path}/files[/{file}]` | el árbol del workspace y un archivo (`data/`, `src/`, …) | `schemaRead` |
 | `PUT`, `DELETE` | `/admin/workspaces/{path}/files/{file}` | sube o elimina un archivo (los datos de `import`, `introspect`) | `schemaWrite` |
 | `POST` | `/admin/workspaces/{path}/commands/{command}` | corre un comando (§4) | el del comando |
+| `GET` | `/admin/workspaces/{path}/workbench[/{item}]` | el árbol de carpetas, consultas, scripts y diagramas (§3.5), y uno con su versión | `read` |
+| `PUT`, `DELETE` | `/admin/workspaces/{path}/workbench/{item}` | guarda o elimina uno (o una carpeta, con lo que tiene); `If-Match` | `workbenchWrite` |
+| `POST` | `/admin/workspaces/{path}/workbench/{item}/move` | lo mueve o renombra (`{ to }`) | `workbenchWrite` |
 | `GET` | `/admin/workspaces/{path}/jobs[/{id}]` | los comandos en curso y los últimos, con su salida | `schemaRead` |
 
 Las mismas operaciones por WebSocket (`admin.*`). Por MCP, solo ver, validar y `fetch` (fase 6): escribir y los
@@ -146,6 +154,40 @@ Un árbol con cada sección, y un formulario por elemento con **Crear**, **Guard
 Un panel **Comandos** por esquema, con un formulario por comando (sus argumentos, los mismos que en la CLI) y la
 salida del job en vivo. Los destructivos muestran primero qué van a hacer y piden confirmar (§4).
 
+### 3.5 Carpetas, consultas, scripts y diagramas
+
+Lo que hoy la UI guarda en el navegador pasa a guardarse **en el workspace**, en `workbench/`, y lo ve todo el que
+tenga acceso al esquema:
+
+```text
+/workspaces/iot/v1/
+  lambdaORM.yaml
+  workbench/
+    reportes/                        una carpeta (se anidan)
+      ventas por mes.query.yaml
+      cierre mensual.script.yaml
+    dominio.diagram.yaml
+```
+
+| Archivo | Contiene |
+| --- | --- |
+| carpeta | una carpeta real del volumen; `.folder.yaml` opcional con su descripción |
+| `<nombre>.query.yaml` | `description`, `query`, `data`, `options` |
+| `<nombre>.script.yaml` | `description`, `script` (3xpr con `orm.execute`), `data`, `options` |
+| `<nombre>.diagram.yaml` | `description`, `entities`, la posición de cada caja y línea, las opciones (nombres de relaciones, solo nombres) |
+
+- Un archivo por elemento y carpetas reales: se pueden versionar con git junto al esquema, y dos personas que guardan
+  cosas distintas no chocan.
+- Las mismas reglas de hoy: nombre y descripción, mover arrastrando, eliminar una carpeta con lo que tiene, dos
+  elementos del mismo tipo no pueden llamarse igual en una carpeta. Los **scripts** pasan a ser un tipo propio (hoy
+  son una consulta en modo script).
+- Concurrencia y refresh como el esquema: versión por archivo (`If-Match`, `412` con lo que hay si otro lo guardó) y
+  `workspace.changed` cuando cambia algo en `workbench/`, también desde fuera de la gateway.
+- Un diagrama o una consulta que nombra una entidad que ya no existe se abre igual y la marca (no se pierde).
+- **El navegador sigue** como espacio **personal** ("Mis borradores"): sin permiso `workbenchWrite`, o con el admin
+  apagado, la UI guarda como hoy. Un elemento se pasa de uno a otro con **Mover al workspace** / **Copiar a mis
+  borradores**, y el JSON que exporta la UI hoy se importa al workspace.
+
 ## 4. Los comandos
 
 | Comando | Desde la gateway | Paso de vista | Permiso |
@@ -214,7 +256,7 @@ Decidido: 3.
 | Fase | Qué | Resultado |
 | --- | --- | --- |
 | 1 | **Registro dinámico**: `orm.workspacesPath`, alta, baja y recarga de un esquema sin reiniciar la gateway, el watcher y `workspace.changed` | una carpeta nueva en el volumen aparece en la UI; un YAML editado a mano se recarga |
-| 2 | **Editar el YAML**: `GET` / `PUT` / `validate` con versión, Monaco editable, el diff de conflicto, crear y eliminar workspaces | el esquema se edita entero desde la UI |
+| 2 | **Editar el YAML**: `GET` / `PUT` / `validate` con versión, Monaco editable, el diff de conflicto, crear y eliminar workspaces; **`workbench/`**: carpetas, consultas, scripts y diagramas en el workspace, con su versión y su refresh, y pasar lo del navegador | el esquema se edita entero desde la UI, y lo guardado se comparte |
 | 3 | **Comandos**: los comandos en un módulo común, jobs, la vista previa de los destructivos y el panel de la UI | todos los comandos de la CLI desde la UI |
 | 4 | **Formularios**: `PATCH` por elemento, `rename` con referencias, el árbol y los formularios de cada sección | el esquema se edita sin escribir YAML |
 | 5 | **Conexiones y secretos** (§5), `build` (§6), el JSON Schema de `lambdaORM.yaml` para el autocompletado | un esquema nuevo de cero hasta consultarlo, sin tocar el contenedor |
