@@ -98,13 +98,13 @@ export interface AdminApiPort {
 	removeItems (ids: string[]): Promise<{ removed: string[] }>
 	/** the commands of a workspace (§4): the stages and what may be run */
 	commands (schema: string): Promise<CommandsSummary>
-	previewCommand (schema: string, command: CommandName, body: { stage?: string, data?: unknown }): Promise<CommandPreview>
+	previewCommand (schema: string, command: CommandName, body: { stage?: string, data?: unknown, name?: string }): Promise<CommandPreview>
 	runCommand (schema: string, command: CommandName, body: { stage?: string, previewId?: string, force?: boolean, save?: boolean }): Promise<Job | Record<string, unknown>>
 	jobs (schema: string): Promise<Job[]>
 	job (schema: string, id: string): Promise<Job>
 }
 
-export type CommandName = 'version' | 'fetch' | 'export' | 'push' | 'drop' | 'import'
+export type CommandName = 'version' | 'fetch' | 'export' | 'push' | 'drop' | 'import' | 'pull' | 'introspect' | 'incorporate'
 
 export interface Job {
 	id: string
@@ -134,6 +134,8 @@ export interface CommandPreview {
 	expiresAt: string
 	/** push: by source; drop: the sentences */
 	sentences?: unknown[]
-	/** import: the rows of each entity */
+	/** import, introspect, incorporate: the rows of each entity */
 	rows?: Record<string, number>
+	/** pull, introspect, incorporate: what changes in the lambdaORM.yaml */
+	diff?: { added: number, removed: number, hunks: { oldStart: number, newStart: number, lines: { op: ' ' | '+' | '-', text: string }[] }[] }
 }

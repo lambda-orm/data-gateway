@@ -55,4 +55,6 @@ export interface SchemaValidatorPort {
 export interface YamlPort {
 	parse (text: string): unknown
 	stringify (value: unknown): string
+	/** a YAML text with a new value, keeping the comments, order and style of what didn't change */
+	merge (text: string, value: unknown): string
 }

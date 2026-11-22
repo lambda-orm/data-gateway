@@ -107,4 +107,53 @@ export class LambdaOrmAdapter implements OrmQueryPort, OrmScriptPort, OrmSchemaP
 	public push (stage: string, force: boolean) { return this.orm.stage.push({ stage, tryAllCan: force }).execute() as Promise<unknown[]> }
 	public dropSentences (stage: string) { return this.orm.stage.drop({ stage }).sentence() as Promise<unknown[]> }
 	public drop (stage: string, force: boolean) { return this.orm.stage.drop({ stage, tryAllCan: force }).execute() as Promise<unknown[]> }
+
+	/** The schema as written (variables unsolved), without its application: code of the schema that must not run here */
+	private writtenSchema (): { schema: any, application: unknown } {
+		const schema = JSON.parse(JSON.stringify(this.orm.state.originalSchema))
+		const application = schema.application
+		delete schema.application
+		return { schema, application }
+	}
+
+	/** A λORM on a copy of the schema, without connections nor a file: what it changes is not written anywhere */
+	private async onACopy<T> (task: (copy: Orm) => Promise<T>): Promise<{ result: T, schema: unknown }> {
+		const { schema, application } = this.writtenSchema()
+		const copy = new Orm()
+		try {
+			await copy.init(schema, false)
+			const result = await task(copy)
+			const changed: any = JSON.parse(JSON.stringify(copy.state.originalSchema))
+			if (application !== undefined) changed.application = application
+			return { result, schema: changed }
+		} finally {
+			await copy.end().catch(() => undefined)
+		}
+	}
+
+	public async pullSchema (stage: string): Promise<unknown> {
+		const mappings = await this.orm.stage.read({ stage })
+		return (await this.onACopy(copy => copy.state.match(mappings))).schema
+	}
+
+	/**
+	 * pull on the schema served: the state of the stage (orm_state) updated as λORM does, but without letting λORM write
+	 * the lambdaORM.yaml (js-yaml loses its comments and order): the gateway writes the schema it answers.
+	 */
+	public async pull (stage: string): Promise<unknown> {
+		const facade = (this.orm.state as any).facade
+		const write = facade.write
+		facade.write = async () => undefined
+		try {
+			await this.orm.stage.pull({ stage })
+		} finally {
+			facade.write = write
+		}
+		return JSON.parse(JSON.stringify(this.orm.state.originalSchema))
+	}
+
+	public async introspectSchema (data: unknown, name: string): Promise<{ schema: unknown, data: unknown }> {
+		const { result, schema } = await this.onACopy(copy => copy.state.introspect(data as any, name))
+		return { schema, data: result }
+	}
 }

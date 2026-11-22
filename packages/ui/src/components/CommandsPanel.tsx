@@ -13,7 +13,7 @@ export interface CommandsPanelProps {
 	pollMs?: number
 }
 
-const PREVIEWED: CommandName[] = ['push', 'drop', 'import']
+const PREVIEWED: CommandName[] = ['push', 'drop', 'import', 'pull', 'introspect', 'incorporate']
 
 /** The sentences of a preview as lines: push gives them by source, drop as a list */
 const sentencesOf = (preview: CommandPreview): { source?: string, sentences: string[] }[] => {
@@ -49,6 +49,9 @@ export const CommandsPanel: React.FC<CommandsPanelProps> = ({ admin, schema, can
 	const [typed, setTyped] = useState('')
 	const [save, setSave] = useState(false)
 	const [data, setData] = useState<unknown>()
+	// introspect, incorporate: the data to read the entities from, and their entity
+	const [source, setSource] = useState<unknown>()
+	const [entity, setEntity] = useState('')
 	const [error, setError] = useState<string>()
 	const [busy, setBusy] = useState(false)
 
@@ -95,17 +98,19 @@ export const CommandsPanel: React.FC<CommandsPanelProps> = ({ admin, schema, can
 	})
 
 	const ask = (command: CommandName) => attempt(async () => {
-		setPreview(await admin.previewCommand(schema, command, { stage: stage || undefined, data: command === 'import' ? data : undefined }))
+		const body = command === 'import' ? { data } : command === 'introspect' || command === 'incorporate' ? { data: source, name: entity.trim() } : {}
+		setPreview(await admin.previewCommand(schema, command, { stage: stage || undefined, ...body }))
 		setForce(false)
 		setTyped('')
 	})
 
-	const chooseFile = (e: React.ChangeEvent<HTMLInputElement>) => {
+	const readFile = (set: (value: unknown) => void) => (e: React.ChangeEvent<HTMLInputElement>) => {
 		const file = e.target.files?.[0]
 		e.target.value = ''
 		if (!file) return
-		file.text().then(text => { setData(JSON.parse(text)); setError(undefined) }, err => setError(String(err))).catch(err => setError(String(err?.message ?? err)))
+		file.text().then(text => { set(JSON.parse(text)); setError(undefined) }).catch(err => setError(String(err?.message ?? err)))
 	}
+	const chooseFile = readFile(setData)
 
 	const can = (command: CommandName) => !!summary?.can[command] && !busy && !anyRunning
 	const confirmable = preview && (preview.command !== 'drop' || typed === preview.stage)
@@ -134,11 +139,31 @@ export const CommandsPanel: React.FC<CommandsPanelProps> = ({ admin, schema, can
 				</span>
 				<button type="button" disabled={!summary?.can.version || busy} onClick={() => start('version')}>version</button>
 			</div>
+			<div className="lw-command-list">
+				<button type="button" disabled={!can('pull')} onClick={() => ask('pull')}>pull…</button>
+				<span className="lw-command-group">
+					<label className="lw-type">{m.dataFile} <input type="file" accept="application/json,.json" aria-label={m.dataFile} onChange={readFile(setSource)} disabled={!summary?.can.introspect} /></label>
+					<label className="lw-type">{m.entityOfData} <input aria-label={m.entityOfData} value={entity} onChange={e => setEntity(e.target.value)} size={14} disabled={!summary?.can.introspect} /></label>
+					<button type="button" disabled={!can('introspect') || source === undefined || !entity.trim()} onClick={() => ask('introspect')}>introspect…</button>
+					<button type="button" disabled={!can('incorporate') || source === undefined || !entity.trim()} onClick={() => ask('incorporate')}>incorporate…</button>
+				</span>
+			</div>
 			{error && <div className="lw-notice" role="alert">{error}</div>}
 			{preview && (
 				<div className="lw-preview" role="region" aria-label={format(m.willRun, { name: preview.command, stage: preview.stage })}>
-					<p><strong>{format(m.willRun, { name: preview.command, stage: preview.stage })}</strong></p>
-					{preview.rows
+					<p><strong>{format(preview.diff ? m.schemaChanges : m.willRun, { name: preview.command, stage: preview.stage })}</strong></p>
+					{preview.diff && (
+						<>
+							<p className="lw-type">{format(m.linesChanged, { added: preview.diff.added, removed: preview.diff.removed })}</p>
+							{preview.diff.hunks.map((hunk, i) => (
+								<pre key={i} className="lw-sentences lw-diff" aria-label={`@@ ${hunk.oldStart} ${hunk.newStart} @@`}>
+									{hunk.lines.map((line, n) => <span key={n} className={line.op === '+' ? 'lw-diff-add' : line.op === '-' ? 'lw-diff-remove' : undefined}>{`${line.op}${line.text}`}</span>)}
+								</pre>
+							))}
+						</>
+					)}
+					{preview.command === 'incorporate' && <p className="lw-type">{m.incorporateNote}</p>}
+					{preview.diff && !preview.rows ? null : preview.rows
 						? (
 							<table className="lw-table"><caption>{m.rowsToWrite}</caption><tbody>
 								{Object.entries(preview.rows).map(([entity, n]) => <tr key={entity}><td>{entity}</td><td>{n}</td></tr>)}
@@ -152,7 +177,7 @@ export const CommandsPanel: React.FC<CommandsPanelProps> = ({ admin, schema, can
 									<pre className="lw-sentences">{group.sentences.join(';\n\n')}{group.sentences.length ? ';' : ''}</pre>
 								</div>
 							))}
-					{preview.command !== 'import' && <label className="lw-type"><input type="checkbox" checked={force} onChange={e => setForce(e.target.checked)} /> {m.force}</label>}
+					{['push', 'drop'].includes(preview.command) && <label className="lw-type"><input type="checkbox" checked={force} onChange={e => setForce(e.target.checked)} /> {m.force}</label>}
 					{preview.command === 'drop' && <label>{format(m.typeStage, { name: preview.stage })} <input aria-label="confirm stage" value={typed} onChange={e => setTyped(e.target.value)} /></label>}
 					<div className="lw-actions">
 						<button type="button" onClick={() => setPreview(undefined)}>{m.cancel}</button>

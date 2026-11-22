@@ -43,9 +43,10 @@ class FakeAdmin implements AdminApiPort {
 	async putItems (_items: any[]): Promise<{ items: { id: string, version: string }[] }> { return { items: [] } }
 	async removeItems (_ids: string[]): Promise<{ removed: string[] }> { return { removed: [] } }
 	public jobList: any[] = []
-	async commands () { return { stages: ['default', 'test'], can: { version: true, fetch: true, export: true, push: true, drop: true, import: true } } }
+	async commands () { return { stages: ['default', 'test'], can: { version: true, fetch: true, export: true, push: true, drop: true, import: true, pull: true, introspect: true, incorporate: true } } }
 	async previewCommand (_schema: string, command: any, body: any): Promise<any> {
 		this.calls.push(`preview ${command} ${body.stage}`)
+		if (command === 'pull') return { previewId: 'p-pull', command, stage: 'default', expiresAt: 'later', diff: { added: 2, removed: 0, hunks: [{ oldStart: 3, newStart: 3, lines: [{ op: ' ', text: '  entities:' }, { op: '+', text: '  - name: Suppliers' }, { op: '+', text: '    primaryKey: [id]' }] }] } }
 		return { previewId: `p-${command}`, command, stage: body.stage ?? 'default', expiresAt: 'later', sentences: command === 'push' ? [{ source: 'main', sentences: ['CREATE TABLE Categories (id INTEGER)'] }] : ['DROP TABLE Categories'] }
 	}
 
@@ -271,5 +272,32 @@ describe('the commands of a workspace', () => {
 		expect(run.disabled).toBe(false)
 		fireEvent.click(run)
 		await waitFor(() => expect(admin.calls).toContain('run drop default p-drop'))
+	})
+})
+
+describe('commands that change the schema', () => {
+	test('pull shows what changes in the lambdaORM.yaml and runs that', async () => {
+		const admin = new FakeAdmin()
+		show(admin)
+		await waitFor(() => expect(row('Commands')).toBeTruthy())
+		fireEvent.click(row('Commands'))
+		fireEvent.click(await screen.findByRole('button', { name: 'pull…' }))
+		await screen.findByText('What pull will change in lambdaORM.yaml (stage default)')
+		expect(screen.getByText('+2 −0 lines; the rest of the file (and its comments) stays as it is')).toBeTruthy()
+		const added = [...document.querySelectorAll('.lw-diff span')].find(s => s.textContent === '+  - name: Suppliers')!
+		expect(added.className).toBe('lw-diff-add')
+		expect(screen.queryByLabelText(/tryAllCan/)).toBeNull()
+		fireEvent.click(screen.getByRole('button', { name: 'Run pull' }))
+		await waitFor(() => expect(admin.calls).toContain('run pull default p-pull'))
+	})
+
+	test('introspect and incorporate wait for the data and its entity', async () => {
+		show(new FakeAdmin())
+		await waitFor(() => expect(row('Commands')).toBeTruthy())
+		fireEvent.click(row('Commands'))
+		const introspect = await screen.findByRole('button', { name: 'introspect…' }) as HTMLButtonElement
+		expect(introspect.disabled).toBe(true)
+		fireEvent.change(screen.getByLabelText('Entity of the data'), { target: { value: 'Brands' } })
+		expect(introspect.disabled).toBe(true)
 	})
 })

@@ -72,5 +72,5 @@ export const MCP_OPERATIONS = ['listTools', 'callTool', 'listResources', 'listRe
  * (docs/DATA_GATEWAY_ADMIN_PLAN.md §4): the ones that read (fetch, export) and the ones that change the databases, each
  * with the sentences it would run first (push, drop).
  */
-export const COMMAND_OPERATIONS = ['stages', 'fetch', 'pushSentences', 'push', 'dropSentences', 'drop', 'export', 'import'] as const
+export const COMMAND_OPERATIONS = ['stages', 'fetch', 'pushSentences', 'push', 'dropSentences', 'drop', 'export', 'import', 'pullSchema', 'pull', 'introspectSchema'] as const
 export type CommandOperation = typeof COMMAND_OPERATIONS[number]
