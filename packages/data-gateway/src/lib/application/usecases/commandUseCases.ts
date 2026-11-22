@@ -13,7 +13,10 @@ const OPERATIONS: Record<CommandOperation, Operation> = {
 	dropSentences: 'stageFetch',
 	drop: 'stageDrop',
 	export: 'stageExport',
-	import: 'stageImport'
+	import: 'stageImport',
+	pullSchema: 'stageFetch',
+	pull: 'stagePull',
+	introspectSchema: 'schema'
 }
 
 /**
@@ -37,6 +40,10 @@ export class CommandUseCases {
 	public async run (ctx: RequestContext, op: CommandOperation, args: unknown[]): Promise<unknown> {
 		authorize(ctx.principal, OPERATIONS[op])
 		if (op === 'stages') return this.orm.stageNames()
+		if (op === 'introspectSchema') {
+			if (typeof args[1] !== 'string' || !args[1]) throw badRequest('ValidationError', 'name is the entity of the data (Orders for a list of orders)')
+			return this.orm.introspectSchema(args[0], args[1])
+		}
 		const stage = this.stageOf(args[0])
 		const force = args[1] === true
 		switch (op) {
@@ -47,6 +54,8 @@ export class CommandUseCases {
 		case 'push': return this.auditor.track(ctx, { operation: 'stagePush', stage }, () => this.orm.push(stage, force))
 		case 'drop': return this.auditor.track(ctx, { operation: 'stageDrop', stage }, () => this.orm.drop(stage, force))
 		case 'import': return this.auditor.track(ctx, { operation: 'stageImport', stage, data: args[1] }, () => this.orm.import(stage, args[1]))
+		case 'pullSchema': return this.orm.pullSchema(stage)
+		case 'pull': return this.orm.pull(stage)
 		}
 	}
 }

@@ -156,3 +156,6 @@
 .lw-jobs tr.lw-active { background: var(--lw-panel); }
 .lw-space button.lw-danger { background: var(--lw-error); border-color: var(--lw-error); color: #fff; }
 .lw-space button.lw-danger:disabled { opacity: .5; }
+.lw-diff-add { color: var(--lw-ok); }
+.lw-diff-remove { color: var(--lw-error); }
+.lw-diff span { display: block; }

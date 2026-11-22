@@ -8,6 +8,8 @@ export type Operation =
 	| 'schema' | 'stageExists' | 'stageExport' | 'stageImport'
 	/** the commands of the workspaces (admin): fetch reads, push and drop change the databases */
 	| 'stageFetch' | 'stagePush' | 'stageDrop'
+	/** pull: changes the schema with the structure of the databases */
+	| 'stagePull'
 
 /**
  * The permissions an operation needs. `writes` (from the query classification) matters for execute and
@@ -26,6 +28,8 @@ export const requiredPermissions = (operation: Operation, writes = false): Permi
 	case 'stagePush':
 	case 'stageDrop':
 		return ['ddl']
+	case 'stagePull':
+		return ['schemaWrite']
 	default:
 		return ['read']
 	}

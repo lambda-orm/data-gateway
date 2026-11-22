@@ -55,6 +55,11 @@ export interface AdminMessages {
 	failed: string
 	savedIn: string
 	inStep: string
+	schemaChanges: string
+	linesChanged: string
+	dataFile: string
+	entityOfData: string
+	incorporateNote: string
 }
 
 type Row = [keyof AdminMessages, ...string[]]
@@ -93,6 +98,11 @@ const ROWS: Row[] = [
 ]
 
 ROWS.push(
+	['schemaChanges', 'What {name} will change in lambdaORM.yaml (stage {stage})', 'Lo que {name} va a cambiar en lambdaORM.yaml (stage {stage})', 'O que {name} vai mudar em lambdaORM.yaml (stage {stage})', 'Ce que {name} changera dans lambdaORM.yaml (stage {stage})', 'Cosa cambierà {name} in lambdaORM.yaml (stage {stage})', 'Was {name} in lambdaORM.yaml ändert (Stage {stage})', 'Wat {name} in lambdaORM.yaml wijzigt (stage {stage})', 'El que {name} canviarà a lambdaORM.yaml (stage {stage})', 'O que {name} vai cambiar en lambdaORM.yaml (stage {stage})', '{name}-ek lambdaORM.yaml-n aldatuko duena (stage {stage})'],
+	['linesChanged', '+{added} −{removed} lines; the rest of the file (and its comments) stays as it is', '+{added} −{removed} líneas; el resto del archivo (y sus comentarios) queda igual', '+{added} −{removed} linhas; o resto do arquivo (e seus comentários) fica igual', '+{added} −{removed} lignes ; le reste du fichier (et ses commentaires) ne change pas', '+{added} −{removed} righe; il resto del file (e i suoi commenti) resta uguale', '+{added} −{removed} Zeilen; der Rest der Datei (und ihre Kommentare) bleibt gleich', '+{added} −{removed} regels; de rest van het bestand (en de opmerkingen) blijft gelijk', '+{added} −{removed} línies; la resta del fitxer (i els comentaris) queda igual', '+{added} −{removed} liñas; o resto do ficheiro (e os seus comentarios) queda igual', '+{added} −{removed} lerro; fitxategiaren gainerakoa (eta iruzkinak) berdin geratzen da'],
+	['dataFile', 'Data (JSON) to read the entities from', 'Datos (JSON) de los que leer las entidades', 'Dados (JSON) dos quais ler as entidades', 'Données (JSON) dont lire les entités', 'Dati (JSON) da cui leggere le entità', 'Daten (JSON), aus denen die Entitäten gelesen werden', 'Gegevens (JSON) om de entiteiten uit te lezen', 'Dades (JSON) de les quals llegir les entitats', 'Datos (JSON) dos que ler as entidades', 'Entitateak irakurtzeko datuak (JSON)'],
+	['entityOfData', 'Entity of the data', 'Entidad de los datos', 'Entidade dos dados', 'Entité des données', 'Entità dei dati', 'Entität der Daten', 'Entiteit van de gegevens', 'Entitat de les dades', 'Entidade dos datos', 'Datuen entitatea'],
+	['incorporateNote', 'Then the schema reloads, push creates its tables and the rows are imported', 'Después el esquema se recarga, push crea sus tablas y se importan las filas', 'Depois o esquema recarrega, push cria as tabelas e as linhas são importadas', 'Ensuite le schéma se recharge, push crée ses tables et les lignes sont importées', 'Poi lo schema si ricarica, push crea le tabelle e le righe vengono importate', 'Dann wird das Schema neu geladen, push legt die Tabellen an und die Zeilen werden importiert', 'Daarna laadt het schema opnieuw, push maakt de tabellen en de rijen worden geïmporteerd', 'Després l’esquema es recarrega, push crea les taules i s’importen les files', 'Despois o esquema recárgase, push crea as táboas e impórtanse as filas', 'Ondoren eskema berriz kargatzen da, push-ek taulak sortzen ditu eta errenkadak inportatzen dira'],
 	['commands', 'Commands', 'Comandos', 'Comandos', 'Commandes', 'Comandi', 'Befehle', 'Opdrachten', 'Ordres', 'Comandos', 'Aginduak'],
 	['stage', 'Stage', 'Stage', 'Stage', 'Stage', 'Stage', 'Stage', 'Stage', 'Stage', 'Stage', 'Stage'],
 	['preview', 'See what it will do', 'Ver qué va a hacer', 'Ver o que vai fazer', 'Voir ce qu’elle fera', 'Vedi cosa farà', 'Ansehen, was er tut', 'Bekijk wat het doet', 'Mira què farà', 'Ver que vai facer', 'Ikusi zer egingo duen'],

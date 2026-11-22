@@ -56,4 +56,10 @@ export interface OrmCommandPort {
 	drop (stage: string, force: boolean): Promise<unknown[]>
 	export (stage: string): Promise<unknown>
 	import (stage: string, data: unknown): Promise<void>
+	/** the schema with the structure of the databases of the stage, without writing anything (the preview of pull) */
+	pullSchema (stage: string): Promise<unknown>
+	/** pull: the state of the stage updated; the schema it gives is written by the caller (λORM doesn't write it) */
+	pull (stage: string): Promise<unknown>
+	/** the schema with the entities of some data, and the data as an export of the stage (introspect, incorporate) */
+	introspectSchema (data: unknown, name: string): Promise<{ schema: unknown, data: unknown }>
 }

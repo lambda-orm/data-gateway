@@ -1044,12 +1044,22 @@ conexiones). Uno a la vez por esquema: otro responde `409 BusyError` con el que 
 | `push` | crea o cambia las tablas según el modelo | las sentencias por source | `ddl` |
 | `drop` | elimina los objetos de las bases del stage | las sentencias; la UI pide escribir el stage | `ddl` |
 | `import` | importa un export | las filas por entidad | `stageImport` |
+| `pull` | actualiza el esquema con la estructura de las bases (y el estado del stage, como λORM) | el diff del `lambdaORM.yaml` | `schemaWrite` |
+| `introspect` | agrega al esquema las entidades de unos datos (`{ data, name }`) | el diff y las filas | `schemaWrite` |
+| `incorporate` | `introspect`, y con el esquema recargado `push` e `import` de esos datos | el diff y las filas | `schemaWrite` + `ddl` + `stageImport` |
 
 - `push`, `drop` e `import` ejecutan **la vista previa que se mostró**: sin `previewId` responden `409
   PreviewRequiredError`; cada vista previa sirve una vez, por 10 minutos, y solo con el mismo `lambdaORM.yaml` con que
   se hizo. `force` es `tryAllCan` (seguir aunque falle una sentencia).
 - Cada job deja su registro (sin el resultado) en `orm_state/jobs/<id>.json` del workspace; `push`, `drop` e `import`
   se auditan como las escrituras (§8.1).
-- Pendientes (fase 3b): `pull`, `introspect` e `incorporate`, que cambian el `lambdaORM.yaml` (con el diff como vista
-  previa y conservando los comentarios), y `build`.
+- **El `lambdaORM.yaml` que escriben `pull`, `introspect` e `incorporate`** (fase 3b): λORM calcula el esquema nuevo
+  sin escribir nada (un λORM sobre una copia, sin conexiones ni archivo; `application.start` no corre) y la gateway lo
+  escribe uniendo solo lo que cambió en el `Document` de `yaml`: comentarios, orden, estilo (`[a]` o `[ a ]`, listas
+  indentadas o no) y las líneas largas plegadas a mano quedan como estaban. El modelo de Ilusor (10 mil líneas) sale
+  idéntico byte a byte si no cambia nada. λORM sí normaliza lo que toca (saca lo que es igual al valor por defecto):
+  el diff de la vista previa lo muestra.
+- `incorporate` necesita la gateway del proceso con `orm.watch` (espera a que el esquema escrito se recargue para hacer
+  `push` e `import`); en el runtime inline responde `409`.
+- Pendiente: `build`.
 

@@ -33,6 +33,10 @@ default, `admin` off.
   `data/`), `push`, `drop` and `import`, run by the worker of the schema, one at a time per schema. The ones that change
   the databases first show what they will do (the sentences by source, the rows of each entity) and run exactly that
   preview, only with the same `lambdaORM.yaml`. New permission `ddl`; `admin.commandTimeoutMs`.
+- `pull`, `introspect` and `incorporate` from the gateway: their preview is the diff of the `lambdaORM.yaml`, and it is
+  written keeping its comments, order and style (only what changed is new; λORM writes it with js-yaml, which loses
+  them). `pull` updates the state of the stage as λORM does; `incorporate` waits for the new schema, pushes it and
+  imports the data.
 - The UI at `/ui` (`@lambdaorm/ui` 0.5.0), with those permissions: the `lambdaORM.yaml` of each schema editable in Monaco
   (validated while typed, saved with Ctrl+S, a conflict shown side by side), new and removed schemas, what is saved
   shared in the workspaces, and the panel of commands.

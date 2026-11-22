@@ -5,7 +5,7 @@ import { MeasuredSchemaDirectory } from '../../application/runtime/measuredDirec
 import { LoggerPort, MetricsPort, AuditPort, ClockPort, AuthenticatorPort, QueueOutcome } from '../../application/ports/output/supportPorts'
 import { Listeners } from '../../application/runtime/listeners'
 import { DataGatewayConfig, TransportName } from '../../domain/config/dataGatewayConfig'
-import { ConfigError } from '../../domain/errors/gatewayError'
+import { ConfigError, GatewayError } from '../../domain/errors/gatewayError'
 import { effectiveAuthentication, effectiveSettings, resolveSchemas, SchemaDescriptor, SchemaSettings } from '../../domain/runtime/schemas'
 import { Transport } from '../input/transport'
 import { StdoutAuditAdapter } from '../output/audit/stdoutAuditAdapter'
@@ -92,12 +92,26 @@ export const resolveConfiguredSchemas = (config: DataGatewayConfig, logger?: Log
 }
 
 /** admin.enabled: the administration of the workspaces of the schemas the directory serves */
-export const buildAdmin = (config: DataGatewayConfig, directory: SchemaDirectoryPort, logger: LoggerPort, clock: ClockPort): { service: AdminService, commands: CommandService } | undefined => {
+export const buildAdmin = (config: DataGatewayConfig, directory: SchemaDirectoryPort, logger: LoggerPort, clock: ClockPort, reloads = false): { service: AdminService, commands: CommandService } | undefined => {
 	if (!config.admin.enabled) return undefined
 	const anonymousAdmin = config.admin.allowAnonymous && config.authentication.adapter === 'none'
 	const store = new FileWorkspaceStore()
-	const commands = new CommandService({ anonymousAdmin, timeoutMs: config.admin.commandTimeoutMs, previewTtlMs: 10 * 60000, keepJobs: 200 },
-		() => directory.schemas(), store, clock, logger)
+	const stateOf = (path: string) => directory.states().find(s => s.path === path)
+	// a lambdaORM.yaml written is served once the monitor of the workspaces reloads it (the process, with orm.watch)
+	const reloaded = async (path: string, since: string | undefined): Promise<void> => {
+		if (!reloads) throw new GatewayError(409, 'ConflictError', 'this gateway does not reload its schemas (orm.watch, the process runtime): incorporate can\'t push the new schema')
+		const pendingBefore = stateOf(path)?.pending
+		const end = Date.now() + config.admin.commandTimeoutMs
+		while (Date.now() < end) {
+			const state = stateOf(path)
+			if (state?.status === 'ready' && state.since !== since && !state.pending) return
+			if (state?.pending && state.pending !== pendingBefore) throw new GatewayError(422, 'SchemaValidationError', state.pending)
+			await new Promise(resolve => setTimeout(resolve, 200))
+		}
+		throw new GatewayError(504, 'TimeoutError', `schema "${path}" did not reload in ${config.admin.commandTimeoutMs} ms`)
+	}
+	const commands = new CommandService({ anonymousAdmin, timeoutMs: config.admin.commandTimeoutMs, previewTtlMs: 10 * 60000, keepJobs: 200, reloaded, since: path => stateOf(path)?.since },
+		() => directory.schemas(), store, new YamlAdapter(), clock, logger)
 	const service = new AdminService({
 		root: config.orm.workspacePath ? path.resolve(config.orm.workspacePath) : undefined,
 		anonymousAdmin: config.admin.allowAnonymous && config.authentication.adapter === 'none',

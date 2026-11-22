@@ -76,7 +76,7 @@ export class RestAdminApi implements AdminApiPort {
 		return (await this.request(`/workspaces/${schemaSegment(schema)}/commands`)).body as CommandsSummary
 	}
 
-	public async previewCommand (schema: string, command: CommandName, body: { stage?: string, data?: unknown }) {
+	public async previewCommand (schema: string, command: CommandName, body: { stage?: string, data?: unknown, name?: string }) {
 		return (await this.request(`/workspaces/${schemaSegment(schema)}/commands/${command}/preview`, { body })).body as CommandPreview
 	}
 
