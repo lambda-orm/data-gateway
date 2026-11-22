@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { AdminApiPort } from '../application/ports'
+import { AdminApiPort, SchemaVariable } from '../application/ports'
 import { adminMessagesOf, format } from '../domain/adminI18n'
 import { fromYaml } from '../domain/results'
 
@@ -11,6 +11,55 @@ export interface SchemaFormsProps {
 	/** changes when the gateway serves another version: read again */
 	revision?: string
 	locale?: string
+	/** the credential may set the variables of the connections (schemaAdmin) */
+	canAdmin?: boolean
+}
+
+/** The variables of the connections (.env): defined or not, and where used; a value is set, never shown */
+const Variables: React.FC<{ admin: AdminApiPort, schema: string, canAdmin: boolean, locale?: string, revision?: string }> = ({ admin, schema, canAdmin, locale, revision }) => {
+	const m = adminMessagesOf(locale)
+	const [variables, setVariables] = useState<SchemaVariable[]>()
+	const [values, setValues] = useState<Record<string, string>>({})
+	const [added, setAdded] = useState('')
+	const [error, setError] = useState<string>()
+	const load = useCallback(() => { admin.variables(schema).then(r => setVariables(r.variables), e => setError(e?.message ?? String(e))) }, [admin, schema])
+	useEffect(load, [load, revision])
+	const change = async (change: { set?: Record<string, string>, remove?: string[] }) => {
+		setError(undefined)
+		try {
+			setVariables((await admin.setVariables(schema, change)).variables)
+			setValues({})
+			setAdded('')
+		} catch (e: any) { setError(e?.message ?? String(e)) }
+	}
+	const rows = [...(variables ?? []), ...(added && !(variables ?? []).some(v => v.name === added) ? [{ name: added, defined: false, usedBy: [], used: false }] : [])]
+	return (
+		<div>
+			<p className="lw-type">{m.variablesNote}</p>
+			{error && <div className="lw-notice" role="alert">{error}</div>}
+			<table className="lw-table lw-form-rows" aria-label={m.variables}>
+				<tbody>
+					{rows.map(v => (
+						<tr key={v.name}>
+							<td><code>{v.name}</code></td>
+							<td className={v.defined ? undefined : 'lw-warning-text'}>{v.defined ? m.defined : m.notDefined}</td>
+							<td className="lw-type">{v.usedBy.join(', ')}</td>
+							{canAdmin && (
+								<>
+									<td><input type="password" autoComplete="off" aria-label={`${v.name} ${m.newValue}`} placeholder={m.newValue} value={values[v.name] ?? ''} onChange={e => setValues({ ...values, [v.name]: e.target.value })} /></td>
+									<td>
+										<button type="button" disabled={!values[v.name]} onClick={() => change({ set: { [v.name]: values[v.name] } })}>{m.setValue}</button>
+										{v.defined && <button type="button" onClick={() => change({ remove: [v.name] })}>{m.remove}</button>}
+									</td>
+								</>
+							)}
+						</tr>
+					))}
+				</tbody>
+			</table>
+			{canAdmin && <label className="lw-form-field"><span>{m.addRow}</span><input aria-label="new variable" placeholder="MY_CONNECTION" value={added} onChange={e => setAdded(e.target.value.replace(/[^A-Za-z0-9_]/g, ''))} /></label>}
+		</div>
+	)
 }
 
 type Json = any
@@ -99,7 +148,8 @@ const Rows: React.FC<{
  * with the element as it was read: someone else's change to another element doesn't collide; to the same one, the
  * form shows what it has now. The gateway writes it keeping the comments and the rest of the file.
  */
-export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, schema, writable, revision, locale }) => {
+export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, schema, writable, revision, locale, canAdmin = false }) => {
+	const [showVariables, setShowVariables] = useState(false)
 	const m = adminMessagesOf(locale)
 	const [doc, setDoc] = useState<Json>()
 	const [selected, setSelected] = useState<{ section: Section, name?: string }>()
@@ -263,20 +313,24 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, schema, writabl
 						<div className="lw-forms-section">
 							<strong>{m[s.key]}</strong>
 							{writable && <button type="button" aria-label={format(m.newNamed, { name: m[s.key] })} title={format(m.newNamed, { name: m[s.key] })}
-								onClick={() => { setSelected({ section: s.key }); setRead(undefined); setDraft({}) }}>+</button>}
+								onClick={() => { setShowVariables(false); setSelected({ section: s.key }); setRead(undefined); setDraft({}) }}>+</button>}
 						</div>
 						<ul>
 							{names[s.key].map(name => (
 								<li key={name}>
 									<button type="button" className={selected?.section === s.key && selected.name === name ? 'lw-active' : undefined}
-										onClick={() => { setSelected({ section: s.key, name }); setDraft(undefined); setRenaming(undefined); setRemoving(undefined); setError(undefined) }}>{name}</button>
+										onClick={() => { setShowVariables(false); setSelected({ section: s.key, name }); setDraft(undefined); setRenaming(undefined); setRemoving(undefined); setError(undefined) }}>{name}</button>
 								</li>
 							))}
 						</ul>
 					</div>
 				))}
+				<div className="lw-forms-section">
+					<button type="button" className={showVariables ? 'lw-active' : undefined} onClick={() => { setShowVariables(true); setSelected(undefined) }}><strong>{m.variables}</strong></button>
+				</div>
 			</nav>
 			<div className="lw-forms-element">
+				{showVariables && <Variables admin={admin} schema={schema} canAdmin={canAdmin} locale={locale} revision={revision} />}
 				{selected && (
 					<div className="lw-toolbar">
 						<strong>{m[selected.section]}{selected.name ? ` / ${selected.name}` : ''}</strong>

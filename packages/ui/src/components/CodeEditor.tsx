@@ -16,6 +16,8 @@ export interface CodeEditorProps {
 	height?: number | string
 	theme?: 'light' | 'dark'
 	ariaLabel: string
+	/** Suggestions of its own at a position (1-based): keys and values of a lambdaORM.yaml */
+	completion?: (text: string, line: number, column: number) => { label: string, kind: 'key' | 'value', insertText: string, detail?: string }[]
 }
 
 let models = 0
@@ -24,12 +26,13 @@ let models = 0
  * Monaco when it loads; a plain text area before (and if it can't load, e.g. no browser workers). The text area keeps
  * the workbench usable and is what the tests type in.
  */
-export const CodeEditor: React.FC<CodeEditorProps> = ({ value, onChange, language, readOnly = false, markers = [], onRun, height = 160, theme = 'light', ariaLabel }) => {
+export const CodeEditor: React.FC<CodeEditorProps> = ({ value, onChange, language, readOnly = false, markers = [], onRun, height = 160, theme = 'light', ariaLabel, completion }) => {
 	const host = useRef<HTMLDivElement>(null)
 	const editor = useRef<Monaco.editor.IStandaloneCodeEditor>()
 	const monacoRef = useRef<typeof Monaco>()
-	const handlers = useRef({ onChange, onRun })
-	handlers.current = { onChange, onRun }
+	const completionProvider = useRef<Monaco.IDisposable>()
+	const handlers = useRef({ onChange, onRun, completion })
+	handlers.current = { onChange, onRun, completion }
 	const [ready, setReady] = useState(false)
 
 	useEffect(() => {
@@ -55,11 +58,32 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ value, onChange, languag
 			})
 			instance.onDidChangeModelContent(() => handlers.current.onChange(instance.getValue()))
 			instance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => handlers.current.onRun?.())
+			// suggestions of its own, only for this editor's model (the provider of a language is global)
+			if (handlers.current.completion) {
+				completionProvider.current = monaco.languages.registerCompletionItemProvider(language, {
+					triggerCharacters: [' ', ':'],
+					provideCompletionItems: (target, position) => {
+						if (target !== model || !handlers.current.completion) return { suggestions: [] }
+						const word = target.getWordUntilPosition(position)
+						const range = { startLineNumber: position.lineNumber, endLineNumber: position.lineNumber, startColumn: word.startColumn, endColumn: word.endColumn }
+						return {
+							suggestions: handlers.current.completion(target.getValue(), position.lineNumber, position.column).map(s => ({
+								label: s.label,
+								kind: s.kind === 'key' ? monaco.languages.CompletionItemKind.Property : monaco.languages.CompletionItemKind.Value,
+								insertText: s.insertText,
+								detail: s.detail,
+								range
+							}))
+						}
+					}
+				})
+			}
 			editor.current = instance
 			setReady(true)
 		}).catch(() => { /* the text area stays */ })
 		return () => {
 			disposed = true
+			completionProvider.current?.dispose()
 			const model = editor.current?.getModel()
 			editor.current?.dispose()
 			model?.dispose()

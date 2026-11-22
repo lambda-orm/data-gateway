@@ -739,6 +739,7 @@ en el edge, antes de enviar nada al esquema. Cada tipo es un `AuthenticatorPort`
 | `schemaAdmin` | administración: crear y eliminar workspaces |
 | `workbenchWrite` | administración: guardar consultas, scripts y diagramas en los workspaces, sin tocar el esquema |
 | `ddl` | administración: cambiar la estructura de las bases de un stage (`push`, `drop`, §11.3) |
+| `build` | administración: generar el código del dominio en `src/` del workspace (§11.5) |
 
 Los de administración **nunca se dan por defecto**: una credencial sin lista de permisos tiene los cinco de los
 datos, y para administrar hay que nombrarlos.
@@ -970,6 +971,10 @@ Un workspace se nombra por su ruta en **un** segmento, codificada: `iot%2Fv1` (`
 | `PUT` | `/admin/workspaces/{ruta}/schema` | `{ text }` con `If-Match: <version>`: lo valida y lo escribe atómico | `schemaWrite` |
 | `PATCH` | `/admin/workspaces/{ruta}/schema` | un cambio de un elemento (un formulario, §11.4): `{ op, at, value?, to?, expected? }` | `schemaWrite` |
 | `POST` | `/admin/workspaces/{ruta}/references` | `{ at }` → quién usa ese elemento (antes de eliminarlo) | `schemaRead` |
+| `GET` | `/admin/workspaces/{ruta}/variables` | las variables de las conexiones (§11.5): cuáles define el `.env` y quién las usa; **nunca su valor** | `schemaRead` |
+| `PUT` | `/admin/workspaces/{ruta}/variables` | `{ set?: { NOMBRE: valor }, remove?: [NOMBRE] }` en el `.env`, conservando el resto | `schemaAdmin` |
+| `POST` | `/admin/workspaces/{ruta}/build` | `{ language: node \| client-node, write? }`: el modelo y los repositorios (§11.5) | `build` (+ `read`) |
+| `GET` | `/admin/workspaces/{ruta}/build.zip?language=` | lo mismo como `.zip`, sin escribir nada | `build` (+ `read`) |
 | `POST` | `/admin/validate` | `{ text }` → `{ valid, issues: [{ severity, message, line?, column? }] }` | `schemaRead` |
 | `GET` | `/admin/workbench[?schema={ruta}]` | lo guardado en los workspaces (§11.1), `ETag`; con `If-None-Match` igual, `304` | `read` o `workbenchWrite` |
 | `PUT` | `/admin/workbench` | `{ items }`: guarda, mueve o renombra; cada uno que existía dice su `version` | `workbenchWrite` |
@@ -1086,4 +1091,22 @@ Lo que manda cada formulario de la UI: un cambio de **un** elemento, nombrado po
 - En la UI, **Esquema (formularios)** de cada esquema: las secciones (entidades, enums, sources, mappings, stages),
   cada elemento en un formulario (las propiedades, relaciones, índices y valores en tablas), **Renombrar** y
   **Eliminar** (que antes muestra quién lo usa).
+
+### 11.5 Conexiones y código (`DATA_GATEWAY_ADMIN_PLAN.md` fase 5)
+
+- **Las variables de las conexiones** (`${NOMBRE}` en el `lambdaORM.yaml`) se definen en el `.env` del workspace: la
+  gateway dice cuáles nombra el esquema, cuáles define el `.env` y qué sources las usan, y las define o quita sin tocar
+  el resto del archivo (comentarios, orden, otras variables). **Ningún valor se devuelve**, ni en la API ni en la UI;
+  el log y la auditoría solo nombran las variables. El monitor ve el `.env` cambiado y recarga el esquema
+  (blue-green). Una variable también puede venir de `orm.schemas[].env` o del entorno de la gateway: `defined` es solo
+  el `.env`.
+- **`build`** genera lo mismo que `lambdaorm build -l node` (o `client-node`): `model.ts` y un repositorio por entidad,
+  bajo `infrastructure.paths.src`/`domain` (`src/domain`). Con `write`, `model.ts` se reescribe siempre y un
+  repositorio solo se crea si no está (una vez escrito es del usuario). No instala paquetes: eso es del proyecto que
+  usa el código. El generador vive en `@lambdaorm/base` (`NodeCodeBuilder`) y lo comparten la CLI y la gateway.
+- En la UI: **Variables (.env)** en los formularios del esquema (el valor nuevo en un campo de contraseña, que se vacía
+  al guardar) y **Código (build)** en el panel de comandos (escribir en `src/` o descargar el `.zip`). El editor del
+  `lambdaORM.yaml` sugiere las claves de cada lugar (entidad, propiedad, relación, source, mapping, stage…) y los
+  valores conocidos (`type`, `dialect`, el `entity` de una relación, el `enum` de una propiedad, el `mapping` de una
+  source).
 

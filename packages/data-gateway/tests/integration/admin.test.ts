@@ -43,7 +43,7 @@ authentication:
   adapter: local
   type: apikey
   keys:
-    - { name: admin, value: admin-key, permissions: [ read, schemaRead, schemaWrite, schemaAdmin, workbenchWrite ] }
+    - { name: admin, value: admin-key, permissions: [ read, schemaRead, schemaWrite, schemaAdmin, workbenchWrite, build ] }
     - { name: analyst, value: analyst-key, permissions: [ read, workbenchWrite ] }
     - { name: reader, value: reader-key, permissions: [ read ] }
 transports:
@@ -74,7 +74,7 @@ describe('admin over REST (inline)', () => {
 	afterAll(() => gateway?.stop())
 
 	test('what each credential may do; without the permission, 403', async () => {
-		expect((await call(base, '/admin', { headers: ADMIN })).body.can).toEqual({ schemaRead: true, schemaWrite: true, schemaAdmin: true, workbenchRead: true, workbenchWrite: true })
+		expect((await call(base, '/admin', { headers: ADMIN })).body.can).toEqual({ schemaRead: true, schemaWrite: true, schemaAdmin: true, workbenchRead: true, workbenchWrite: true, build: true })
 		expect((await call(base, '/admin', { headers: READER })).body.can).toMatchObject({ schemaRead: false, workbenchRead: true, workbenchWrite: false })
 		expect((await call(base, '/admin/workspaces', { headers: READER })).status).toBe(403)
 		expect((await call(base, '/admin/workspaces')).status).toBe(401)
@@ -134,7 +134,53 @@ describe('admin over REST (inline)', () => {
 		await call(base, schemaUrl, { method: 'PATCH', body: { op: 'rename', at: ['domain', 'entities', 'Purchases'], to: 'Orders' }, headers: ADMIN })
 	})
 
-	test('validation: a YAML error at its line, a type that is not of λORM a warning, an extends of nothing an error', async () => {
+	test('the variables of the connections: which are defined and where they are used; never their value', async () => {
+		const url = '/admin/workspaces/iot%2Fv1/variables'
+		const text = fs.readFileSync(path.join(root, 'iot/v1/lambdaORM.yaml'), 'utf8')
+		fs.writeFileSync(path.join(root, 'iot/v1/lambdaORM.yaml'), text.replace(/connection: .*/, 'connection: ${SHOP_CNX}'))
+		fs.writeFileSync(path.join(root, 'iot/v1/.env'), '# by hand\nTZ=UTC\n')
+		expect((await call(base, url, { headers: ADMIN })).body.variables).toEqual([
+			{ name: 'SHOP_CNX', defined: false, usedBy: ['main'], used: true },
+			{ name: 'TZ', defined: true, usedBy: [], used: false }
+		])
+		const set = await call(base, url, { method: 'PUT', body: { set: { SHOP_CNX: '{"host":"127.0.0.1","password":"secret"}' } }, headers: ADMIN })
+		expect(set.body.variables[0]).toEqual({ name: 'SHOP_CNX', defined: true, usedBy: ['main'], used: true })
+		expect(JSON.stringify(set.body)).not.toContain('secret')
+		expect(fs.readFileSync(path.join(root, 'iot/v1/.env'), 'utf8')).toBe('# by hand\nTZ=UTC\nSHOP_CNX=\'{"host":"127.0.0.1","password":"secret"}\'\n')
+		expect((await call(base, url, { method: 'PUT', body: { remove: ['TZ'] }, headers: { 'X-Api-Key': 'analyst-key' } })).status).toBe(403)
+		expect((await call(base, url, { method: 'PUT', body: { set: { 'bad name': 'x' } }, headers: ADMIN })).status).toBe(400)
+		await call(base, url, { method: 'PUT', body: { remove: ['TZ'] }, headers: ADMIN })
+		expect(fs.readFileSync(path.join(root, 'iot/v1/.env'), 'utf8')).toBe('# by hand\nSHOP_CNX=\'{"host":"127.0.0.1","password":"secret"}\'\n')
+		fs.writeFileSync(path.join(root, 'iot/v1/lambdaORM.yaml'), text)
+	})
+
+		test('build: the model and the repositories in src/domain; a repository written once is the user\'s; also as a zip', async () => {
+		const url = '/admin/workspaces/iot%2Fv1/build'
+		expect((await call(base, url, { body: {}, headers: READER })).status).toBe(403)
+		const built = await call(base, url, { body: { language: 'node', write: true }, headers: ADMIN })
+		expect(built.status).toBe(200)
+		expect(built.body.files).toEqual(expect.arrayContaining([
+			expect.objectContaining({ path: 'src/domain/model.ts', written: 'created' }),
+			expect.objectContaining({ path: 'src/domain/repositoryProduct.ts', written: 'created' })
+		]))
+		const model = fs.readFileSync(path.join(root, 'iot/v1/src/domain/model.ts'), 'utf8')
+		expect(model).toContain('export class Product')
+		expect(model).toContain("from '@lambdaorm/lib'")
+		fs.writeFileSync(path.join(root, 'iot/v1/src/domain/repositoryProduct.ts'), '// mine\n')
+		const again = await call(base, url, { body: { write: true }, headers: ADMIN })
+		expect(again.body.files.find((f: any) => f.path.endsWith('repositoryProduct.ts')).written).toBe('kept')
+		expect(again.body.files.find((f: any) => f.path.endsWith('model.ts')).written).toBe('updated')
+		expect(fs.readFileSync(path.join(root, 'iot/v1/src/domain/repositoryProduct.ts'), 'utf8')).toBe('// mine\n')
+		const response = await fetch(`${base}${url}.zip?language=client-node`, { headers: ADMIN })
+		expect(response.headers.get('content-type')).toBe('application/zip')
+		const zip = Buffer.from(await response.arrayBuffer())
+		expect(zip.readUInt32LE(0)).toBe(0x04034b50)
+		expect(zip.toString('latin1')).toContain('src/domain/model.ts')
+		expect(zip.toString('utf8')).toContain("from '@lambdaorm/client'")
+		fs.writeFileSync(path.join(os.tmpdir(), 'data-gateway-build-test.zip'), zip)
+	})
+
+		test('validation: a YAML error at its line, a type that is not of λORM a warning, an extends of nothing an error', async () => {
 		const yaml = await call(base, '/admin/validate', { body: { text: 'domain:\n  entities:\n    - name: A\n   bad: x\n' }, headers: ADMIN })
 		expect(yaml.body).toMatchObject({ valid: false, issues: expect.arrayContaining([expect.objectContaining({ severity: 'error', line: expect.any(Number) })]) })
 		const typed = await call(base, '/admin/validate', { body: { text: 'domain:\n  entities:\n    - name: A\n      primaryKey: [id]\n      properties:\n        - name: id\n          type: nope\n' }, headers: ADMIN })

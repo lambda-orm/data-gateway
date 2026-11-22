@@ -72,6 +72,16 @@ export interface AdminMessages {
 	changedMeanwhile: string
 	addRow: string
 	nothingSelected: string
+	variables: string
+	defined: string
+	notDefined: string
+	newValue: string
+	setValue: string
+	variablesNote: string
+	build: string
+	buildWrite: string
+	buildZip: string
+	written: string
 }
 
 type Row = [keyof AdminMessages, ...string[]]
@@ -110,6 +120,16 @@ const ROWS: Row[] = [
 ]
 
 ROWS.push(
+	['variables', 'Variables (.env)', 'Variables (.env)', 'Variáveis (.env)', 'Variables (.env)', 'Variabili (.env)', 'Variablen (.env)', 'Variabelen (.env)', 'Variables (.env)', 'Variables (.env)', 'Aldagaiak (.env)'],
+	['defined', 'defined', 'definida', 'definida', 'définie', 'definita', 'definiert', 'gedefinieerd', 'definida', 'definida', 'definituta'],
+	['notDefined', 'not in .env', 'no está en .env', 'não está no .env', 'absente de .env', 'non in .env', 'nicht in .env', 'niet in .env', 'no és a .env', 'non está en .env', 'ez dago .env-n'],
+	['newValue', 'New value (not shown again)', 'Valor nuevo (no se vuelve a mostrar)', 'Valor novo (não é mostrado de novo)', 'Nouvelle valeur (plus affichée ensuite)', 'Nuovo valore (non verrà più mostrato)', 'Neuer Wert (wird nicht wieder angezeigt)', 'Nieuwe waarde (wordt niet meer getoond)', 'Valor nou (no es torna a mostrar)', 'Valor novo (non se volve mostrar)', 'Balio berria (ez da berriz erakutsiko)'],
+	['setValue', 'Set', 'Definir', 'Definir', 'Définir', 'Imposta', 'Setzen', 'Instellen', 'Defineix', 'Definir', 'Ezarri'],
+	['variablesNote', 'The values live in the .env of the workspace and are never shown; a variable may also come from the gateway’s configuration or environment. Changing them reloads the schema.', 'Los valores viven en el .env del workspace y nunca se muestran; una variable también puede venir de la configuración o del entorno de la gateway. Cambiarlas recarga el esquema.', 'Os valores ficam no .env do workspace e nunca são mostrados; uma variável também pode vir da configuração ou do ambiente da gateway. Alterá-las recarrega o esquema.', 'Les valeurs vivent dans le .env de l’espace de travail et ne sont jamais affichées ; une variable peut aussi venir de la configuration ou de l’environnement de la passerelle. Les changer recharge le schéma.', 'I valori stanno nel .env del workspace e non vengono mai mostrati; una variabile può venire anche dalla configurazione o dall’ambiente del gateway. Cambiarle ricarica lo schema.', 'Die Werte stehen in der .env des Workspace und werden nie angezeigt; eine Variable kann auch aus der Konfiguration oder Umgebung des Gateways kommen. Eine Änderung lädt das Schema neu.', 'De waarden staan in de .env van de workspace en worden nooit getoond; een variabele kan ook uit de configuratie of omgeving van de gateway komen. Wijzigen laadt het schema opnieuw.', 'Els valors viuen al .env del workspace i no es mostren mai; una variable també pot venir de la configuració o de l’entorn de la passarel·la. Canviar-les recarrega l’esquema.', 'Os valores viven no .env do workspace e nunca se amosan; unha variable tamén pode vir da configuración ou do contorno da pasarela. Cambialas recarga o esquema.', 'Balioak workspace-aren .env-n daude eta ez dira inoiz erakusten; aldagai bat pasabidearen konfiguraziotik edo ingurunetik ere etor daiteke. Aldatzeak eskema berriz kargatzen du.'],
+	['build', 'Code (build)', 'Código (build)', 'Código (build)', 'Code (build)', 'Codice (build)', 'Code (build)', 'Code (build)', 'Codi (build)', 'Código (build)', 'Kodea (build)'],
+	['buildWrite', 'Write in src/ of the workspace', 'Escribir en src/ del workspace', 'Gravar em src/ do workspace', 'Écrire dans src/ de l’espace de travail', 'Scrivi in src/ del workspace', 'In src/ des Workspace schreiben', 'Schrijven in src/ van de workspace', 'Escriu a src/ del workspace', 'Escribir en src/ do workspace', 'Idatzi workspace-aren src/-n'],
+	['buildZip', 'Download .zip', 'Descargar .zip', 'Baixar .zip', 'Télécharger le .zip', 'Scarica .zip', '.zip herunterladen', '.zip downloaden', 'Baixa el .zip', 'Descargar .zip', 'Deskargatu .zip'],
+	['written', 'created and updated: {n} (a repository already there is the user’s and stays)', 'creados y actualizados: {n} (un repositorio que ya estaba es del usuario y queda)', 'criados e atualizados: {n} (um repositório que já existia é do usuário e fica)', 'créés et mis à jour : {n} (un dépôt déjà présent appartient à l’utilisateur et reste)', 'creati e aggiornati: {n} (un repository già presente è dell’utente e resta)', 'erstellt und aktualisiert: {n} (ein vorhandenes Repository gehört dem Nutzer und bleibt)', 'aangemaakt en bijgewerkt: {n} (een bestaande repository is van de gebruiker en blijft)', 'creats i actualitzats: {n} (un repositori que ja hi era és de l’usuari i es queda)', 'creados e actualizados: {n} (un repositorio que xa estaba é do usuario e queda)', 'sortuak eta eguneratuak: {n} (lehendik zegoen biltegi bat erabiltzailearena da eta geratzen da)'],
 	['forms', 'Schema (forms)', 'Esquema (formularios)', 'Esquema (formulários)', 'Schéma (formulaires)', 'Schema (moduli)', 'Schema (Formulare)', 'Schema (formulieren)', 'Esquema (formularis)', 'Esquema (formularios)', 'Eskema (inprimakiak)'],
 	['entities', 'Entities', 'Entidades', 'Entidades', 'Entités', 'Entità', 'Entitäten', 'Entiteiten', 'Entitats', 'Entidades', 'Entitateak'],
 	['enums', 'Enums', 'Enums', 'Enums', 'Énumérations', 'Enum', 'Enums', 'Enums', 'Enums', 'Enums', 'Enumak'],

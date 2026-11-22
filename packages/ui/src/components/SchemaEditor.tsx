@@ -3,6 +3,7 @@ import { AdminApiPort, SchemaIssue } from '../application/ports'
 import { adminMessagesOf, format } from '../domain/adminI18n'
 import { EditorMarker } from '../domain/workspace'
 import { CodeEditor } from './CodeEditor'
+import { schemaCompletions } from '../domain/schemaCompletion'
 
 export interface SchemaEditorProps {
 	admin: AdminApiPort
@@ -167,7 +168,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({ admin, schema, writa
 				</div>
 			)}
 			{base !== undefined && !theirs && (
-				<CodeEditor value={draft} onChange={setDraft} language="yaml" readOnly={!writable} markers={markersOf(issues)} height="calc(100vh - 220px)" theme={theme} ariaLabel={m.schemaFile} />
+				<CodeEditor value={draft} onChange={setDraft} language="yaml" readOnly={!writable} markers={markersOf(issues)} height="calc(100vh - 220px)" theme={theme} ariaLabel={m.schemaFile} completion={schemaCompletions} />
 			)}
 			{!error && issues.length > 0 && (
 				<ul className="lw-issues">

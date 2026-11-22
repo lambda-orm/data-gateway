@@ -45,6 +45,17 @@ class FakeAdmin implements AdminApiPort {
 		return { version: 'v9', references: [], added: 1, removed: 0 }
 	}
 
+	public env: Record<string, string> = {}
+	async variables () { return { variables: [{ name: 'SHOP_CNX', defined: 'SHOP_CNX' in this.env, usedBy: ['main'], used: true }] } }
+	async setVariables (_schema: string, change: { set?: Record<string, string>, remove?: string[] }) {
+		Object.assign(this.env, change.set ?? {})
+		for (const name of change.remove ?? []) delete this.env[name]
+		return this.variables()
+	}
+
+	async build () { return { language: 'node', files: [{ path: 'src/domain/model.ts', written: 'created', bytes: 10 }, { path: 'src/domain/repositoryProduct.ts', written: 'kept', bytes: 5 }] } }
+	async buildZip () { return new Blob(['zip']) }
+
 	async references (_schema: string, at: string[]) { return { references: at.includes('States') ? ['domain/entities/Products/properties/state'] : [] } }
 
 	async validate (text: string): Promise<{ valid: boolean, issues: SchemaIssue[] }> {
@@ -372,5 +383,33 @@ describe('the schema as forms', () => {
 		await screen.findByText('domain/entities/Products/properties/state')
 		fireEvent.click(screen.getAllByRole('button', { name: 'Remove' }).at(-1)!)
 		await waitFor(() => expect(admin.patches.at(-1)).toMatchObject({ op: 'remove', at: ['domain', 'enums', 'States'] }))
+	})
+})
+
+describe('the variables of the connections and the code of the domain', () => {
+	test('a variable is set without ever being shown', async () => {
+		const admin = new FakeAdmin()
+		admin.text = 'domain: {}\ninfrastructure:\n  sources:\n    - { name: main, connection: ${SHOP_CNX} }\n'
+		show(admin)
+		await waitFor(() => expect(row('Schema (forms)')).toBeTruthy())
+		fireEvent.click(row('Schema (forms)'))
+		fireEvent.click(await screen.findByRole('button', { name: 'Variables (.env)' }))
+		await screen.findByText('not in .env')
+		fireEvent.change(screen.getByLabelText('SHOP_CNX New value (not shown again)'), { target: { value: '{"host":"db"}' } })
+		fireEvent.click(screen.getByRole('button', { name: 'Set' }))
+		await screen.findByText('defined')
+		expect(admin.env).toEqual({ SHOP_CNX: '{"host":"db"}' })
+		expect((screen.getByLabelText('SHOP_CNX New value (not shown again)') as HTMLInputElement).value).toBe('')
+		expect(screen.queryByText('{"host":"db"}')).toBeNull()
+	})
+
+	test('build writes the code in src/ and says what stayed', async () => {
+		const admin = new FakeAdmin({ ...ALL, build: true })
+		show(admin)
+		await waitFor(() => expect(row('Commands')).toBeTruthy())
+		fireEvent.click(row('Commands'))
+		fireEvent.click(await screen.findByRole('button', { name: 'Write in src/ of the workspace' }))
+		await screen.findByText('src/domain/model.ts')
+		expect(screen.getByText(/created and updated: 1/)).toBeTruthy()
 	})
 })

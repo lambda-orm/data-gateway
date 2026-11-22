@@ -8,7 +8,8 @@ import { SchemaState } from '../../domain/runtime/policies'
 import { normalizeSchemaPath, schemaPathIssues, schemaPathsIssues } from '../../domain/runtime/schemaPath'
 import { applyPatch, PatchError, referencesOf, SchemaPatch } from '../../domain/admin/schemaPatch'
 import { lineDiff } from '../../domain/admin/lineDiff'
-import { SchemaIssue, SchemaValidatorPort, VersionConflict, WorkspaceStorePort, YamlPort } from '../ports/output/adminPorts'
+import { dotEnvNames, editDotEnv, schemaVariables, VARIABLE_NAME } from '../../domain/admin/dotEnv'
+import { CodeGeneratorPort, SchemaIssue, SchemaValidatorPort, VersionConflict, WorkspaceStorePort, YamlPort } from '../ports/output/adminPorts'
 import { ClockPort, LoggerPort } from '../ports/output/supportPorts'
 
 export const SCHEMA_FILE = 'lambdaORM.yaml'
@@ -72,7 +73,9 @@ export class AdminService {
 		private readonly validator: SchemaValidatorPort,
 		private readonly yaml: YamlPort,
 		private readonly clock: ClockPort,
-		private readonly logger: LoggerPort
+		private readonly logger: LoggerPort,
+		/** the code of a domain for a language (build) */
+		private readonly code: CodeGeneratorPort = { files: () => [] }
 	) {}
 
 	// ─── permissions ─────────────────────────────────────────────────────────
@@ -91,7 +94,8 @@ export class AdminService {
 			schemaWrite: has('schemaWrite'),
 			schemaAdmin: has('schemaAdmin') && this.options.root !== undefined,
 			workbenchRead: has('read') || has('workbenchWrite'),
-			workbenchWrite: has('workbenchWrite')
+			workbenchWrite: has('workbenchWrite'),
+			build: has('build')
 		}
 	}
 
@@ -238,6 +242,83 @@ export class AdminService {
 		const file = await this.store.read(this.workspaceOf(path), SCHEMA_FILE)
 		if (!file) throw notFound(`schema "${path}" has no ${SCHEMA_FILE}`)
 		return { references: referencesOf(this.yaml.parse(file.text), at as string[]) }
+	}
+
+	// ─── build ───────────────────────────────────────────────────────────────
+
+	/**
+	 * The code of the domain for a language (as `lambdaorm build`): model.ts and a repository per entity, under the src
+	 * and domain paths of the schema (infrastructure.paths, src/domain by default). With write, in the workspace: the
+	 * model rewritten, a repository only when it is not there (it is the user's once written). Packages are not
+	 * installed: that is for the project that uses the code.
+	 */
+	public async build (principal: Principal, path: string, request: { language?: unknown, write?: unknown, model?: unknown, repositories?: unknown }, domain: unknown): Promise<{ language: string, files: { path: string, content: string, written?: 'created' | 'updated' | 'kept' }[] }> {
+		this.require(principal, 'build')
+		const language = request.language ?? 'node'
+		if (language !== 'node' && language !== 'client-node') throw badRequest('ValidationError', 'language is node or client-node')
+		const workspace = this.workspaceOf(path)
+		const file = await this.store.read(workspace, SCHEMA_FILE)
+		let paths: any = {}
+		try { paths = (this.yaml.parse(file?.text ?? '') as any)?.infrastructure?.paths ?? {} } catch { /* the defaults */ }
+		const base = `${paths.src || 'src'}/${paths.domain || 'domain'}`.replace(/\/+/g, '/')
+		const generated = this.code.files(language, domain, { model: request.model !== false, repositories: request.repositories !== false })
+		const files: { path: string, content: string, written?: 'created' | 'updated' | 'kept' }[] = generated.map(g => ({ path: `${base}/${g.file}`, content: g.content }))
+		if (request.write === true) {
+			await this.store.withLock(workspace, async () => {
+				for (const f of files) {
+					const existing = await this.store.read(workspace, f.path)
+					if (existing && !f.path.endsWith('/model.ts')) { f.written = 'kept'; continue }
+					await this.store.write(workspace, f.path, f.content)
+					f.written = existing ? 'updated' : 'created'
+				}
+			})
+			this.audit(principal, `built ${language} code (${files.filter(f => f.written !== 'kept').length} files) in`, `${path}/${base}`)
+		}
+		return { language: language as string, files }
+	}
+
+	// ─── connections (.env) ──────────────────────────────────────────────────
+
+	/**
+	 * The variables of a workspace: the ones its lambdaORM.yaml names (${NAME}) and the ones its .env defines, each with
+	 * whether the .env defines it and the sources that use it. Never a value: they are secrets. A variable may also come
+	 * from orm.schemas[].env or the environment of the gateway (runtime.env.passthrough): `defined` is only the .env.
+	 */
+	public async variables (principal: Principal, path: string): Promise<{ variables: { name: string, defined: boolean, usedBy: string[], used: boolean }[] }> {
+		this.require(principal, 'schemaRead')
+		const workspace = this.workspaceOf(path)
+		const [schemaFile, envFile] = await Promise.all([this.store.read(workspace, SCHEMA_FILE), this.store.read(workspace, '.env')])
+		let schema: unknown
+		try { schema = this.yaml.parse(schemaFile?.text ?? '') } catch { schema = undefined }
+		const used = schemaVariables(schema, schemaFile?.text ?? '')
+		const defined = new Set(dotEnvNames(envFile?.text ?? ''))
+		const names = [...new Set([...used.keys(), ...defined])].sort()
+		return { variables: names.map(name => ({ name, defined: defined.has(name), usedBy: used.get(name) ?? [], used: used.has(name) })) }
+	}
+
+	/** Sets and removes variables of the .env, keeping the rest of it; the monitor reloads the schema with them */
+	public async setVariables (principal: Principal, path: string, request: { set?: unknown, remove?: unknown }): Promise<{ variables: { name: string, defined: boolean, usedBy: string[], used: boolean }[] }> {
+		this.require(principal, 'schemaAdmin')
+		const set = request.set ?? {}
+		const remove = request.remove ?? []
+		if (typeof set !== 'object' || Array.isArray(set) || Object.values(set).some(v => typeof v !== 'string')) throw badRequest('ValidationError', 'set is { NAME: "value" }')
+		if (!Array.isArray(remove) || remove.some(v => typeof v !== 'string')) throw badRequest('ValidationError', 'remove is a list of names')
+		const bad = [...Object.keys(set), ...remove].filter(n => !VARIABLE_NAME.test(n))
+		if (bad.length) throw badRequest('ValidationError', `not names of variables: ${bad.join(', ')}`)
+		const workspace = this.workspaceOf(path)
+		await this.store.withLock(workspace, async () => {
+			const current = await this.store.read(workspace, '.env')
+			let text: string
+			try {
+				text = editDotEnv(current?.text ?? '', set as Record<string, string>, remove as string[])
+			} catch (error: any) {
+				throw badRequest('ValidationError', error?.message ?? String(error))
+			}
+			await this.store.write(workspace, '.env', text, current?.version ?? null)
+		})
+		// the names, never the values
+		this.audit(principal, `set ${Object.keys(set).join(', ') || '-'} and removed ${remove.join(', ') || '-'} in`, `${path}/.env`)
+		return this.variables(principal, path).catch(() => ({ variables: [] }))
 	}
 
 	// ─── workbench ───────────────────────────────────────────────────────────

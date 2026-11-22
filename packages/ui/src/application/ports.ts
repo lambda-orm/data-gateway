@@ -64,6 +64,8 @@ export interface AdminCapabilities {
 	schemaAdmin: boolean
 	workbenchRead: boolean
 	workbenchWrite: boolean
+	/** generate the code of the domain (lambdaorm build) */
+	build?: boolean
 }
 
 /** A file of workbench/ that is not an item (not valid YAML): nothing saved from here replaces it */
@@ -90,6 +92,13 @@ export interface AdminApiPort {
 	readSchema (schema: string): Promise<{ text: string, version: string }>
 	/** one change of one element (a form): 412 when that element changed since it was read (details.current) */
 	patchSchema (schema: string, patch: SchemaPatch): Promise<{ version: string, references: string[], added: number, removed: number }>
+	/** the variables of the connections (.env): which are defined and where they are used, never their value */
+	variables (schema: string): Promise<{ variables: SchemaVariable[] }>
+	setVariables (schema: string, change: { set?: Record<string, string>, remove?: string[] }): Promise<{ variables: SchemaVariable[] }>
+	/** the code of the domain written in src/ of the workspace */
+	build (schema: string, language: 'node' | 'client-node'): Promise<{ language: string, files: { path: string, written?: string, bytes: number }[] }>
+	/** the same code as a zip, without writing anything */
+	buildZip (schema: string, language: 'node' | 'client-node'): Promise<Blob>
 	/** who uses an element (to warn before removing it) */
 	references (schema: string, at: string[]): Promise<{ references: string[] }>
 	writeSchema (schema: string, text: string, version: string): Promise<{ version: string, issues: SchemaIssue[] }>
@@ -152,4 +161,15 @@ export interface SchemaPatch {
 	to?: string
 	/** the element as it was read */
 	expected?: unknown
+}
+
+/** A variable of the connections of a workspace: never its value */
+export interface SchemaVariable {
+	name: string
+	/** the .env of the workspace defines it (it may also come from the gateway's configuration or environment) */
+	defined: boolean
+	/** the sources whose connection names it */
+	usedBy: string[]
+	/** the lambdaORM.yaml names it */
+	used: boolean
 }

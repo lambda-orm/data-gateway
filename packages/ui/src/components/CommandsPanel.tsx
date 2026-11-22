@@ -11,6 +11,8 @@ export interface CommandsPanelProps {
 	locale?: string
 	/** how often the jobs running are asked for (ms) */
 	pollMs?: number
+	/** the credential may generate the code of the domain (build) */
+	canBuild?: boolean
 }
 
 const PREVIEWED: CommandName[] = ['push', 'drop', 'import', 'pull', 'introspect', 'incorporate']
@@ -38,7 +40,9 @@ const download = (name: string, value: unknown) => {
  * job; push, drop and import first show what they will do (the sentences by source, the rows of each entity) and run
  * exactly that. The last jobs, with their result.
  */
-export const CommandsPanel: React.FC<CommandsPanelProps> = ({ admin, schema, canSave = false, locale, pollMs = 1000 }) => {
+export const CommandsPanel: React.FC<CommandsPanelProps> = ({ admin, schema, canSave = false, locale, pollMs = 1000, canBuild = false }) => {
+	const [language, setLanguage] = useState<'node' | 'client-node'>('node')
+	const [built, setBuilt] = useState<{ path: string, written?: string }[]>()
 	const m = adminMessagesOf(locale)
 	const [summary, setSummary] = useState<CommandsSummary>()
 	const [stage, setStage] = useState('')
@@ -148,6 +152,33 @@ export const CommandsPanel: React.FC<CommandsPanelProps> = ({ admin, schema, can
 					<button type="button" disabled={!can('incorporate') || source === undefined || !entity.trim()} onClick={() => ask('incorporate')}>incorporate…</button>
 				</span>
 			</div>
+			{canBuild && (
+				<div className="lw-command-list" role="group" aria-label={m.build}>
+					<strong>{m.build}</strong>
+					<select aria-label="language" value={language} onChange={e => setLanguage(e.target.value as 'node' | 'client-node')}>
+						<option value="node">node (@lambdaorm/lib)</option>
+						<option value="client-node">client-node (@lambdaorm/client)</option>
+					</select>
+					<button type="button" disabled={busy} onClick={() => attempt(async () => { setBuilt((await admin.build(schema, language)).files) })}>{m.buildWrite}</button>
+					<button type="button" disabled={busy} onClick={() => attempt(async () => {
+						const blob = await admin.buildZip(schema, language)
+						const url = URL.createObjectURL(blob)
+						const link = document.createElement('a')
+						link.href = url
+						link.download = `${schema.replace(/\//g, '_') || 'root'}-${language}.zip`
+						document.body.appendChild(link)
+						link.click()
+						link.remove()
+						setTimeout(() => URL.revokeObjectURL(url), 1000)
+					})}>{m.buildZip}</button>
+				</div>
+			)}
+			{built && (
+				<div className="lw-job" role="region" aria-label={m.build}>
+					<p className="lw-type">{format(m.written, { n: built.filter(f => f.written === 'created' || f.written === 'updated').length })}</p>
+					<ul>{built.map(f => <li key={f.path}><code>{f.path}</code> <span className="lw-type">{f.written}</span></li>)}</ul>
+				</div>
+			)}
 			{error && <div className="lw-notice" role="alert">{error}</div>}
 			{preview && (
 				<div className="lw-preview" role="region" aria-label={format(m.willRun, { name: preview.command, stage: preview.stage })}>
