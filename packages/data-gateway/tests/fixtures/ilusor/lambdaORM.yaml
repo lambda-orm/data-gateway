@@ -6,6 +6,8 @@
 # Built on 2026-11-20 from the database after docs/plan/DATABASE_SCRIPTS_PLAN.md scripts 01–30 (the one-off pull of
 # D4, with Ilusor's naming rules); from now on this file is the source of truth: a change here → `push -o` → a
 # reviewed SQL script under services/<owner>/sql/<schema>/.
+# Every object of a Postgres schema carries the schema's prefix (cmn_, cat_, crm_, iam_, sal_, per_, loc_; scripts
+# 31–37): entities, properties and relations are named without it, each entity's mapping names the prefixed table.
 # What the model can't say is in the SQL scripts: partitions by location (iot_location, perception), CHECKs, partial
 # unique indexes, deferrable foreign keys, ON DELETE SET NULL (col). Relations between schemas are `weak` (no FK).
 # Every foreign key of iot_location is (location_id, x): a relation of several fields (`from: [locationId, areaId]`,
@@ -182,7 +184,7 @@ domain:
       entity: AreaTypeCapabilityPropertyThresholdBands
       to: [areaTypeId, capabilityId, propertyCode]
     indexes:
-    - name: area_type_capability_properties_capability_id_property_code_idx
+    - name: area_type_capability_properties_capability_id_prop_3303243f
       fields: [capabilityId, propertyCode]
   - name: AreaTypeCapabilityPropertyThresholdBands
     primaryKey: [areaTypeId, capabilityId, propertyCode, position]
@@ -491,7 +493,7 @@ domain:
     - {name: capabilityProperty, from: capabilityPropertyId, entity: CapabilityProperties, to: id}
     - {name: notificationLevel, from: notificationLevelId, entity: NotificationLevels, to: code, target: capabilityPropertyRateThresholds}
     indexes:
-    - name: capability_property_rate_thresholds_notification_level_id_idx
+    - name: capability_property_rate_thresholds_notification_l_b8544cc2
       fields: [notificationLevelId]
   - name: CapabilityPropertyThresholdBands
     primaryKey: [capabilityPropertyId, position]
@@ -748,7 +750,7 @@ domain:
     indexes:
     - name: idx_device_model_capability_actions_action_id
       fields: [actionId]
-    - name: idx_device_model_capability_actions_device_model_capability_id
+    - name: idx_device_model_capability_actions_device_model_c_e62c1745
       fields: [deviceModelCapabilityId]
   - name: DeviceModelCapabilityProperties
     primaryKey: [deviceModelCapabilityId, name, deviceProperty]
@@ -793,7 +795,7 @@ domain:
       entity: DeviceModelCapabilityPropertyThresholdBands
       to: [deviceModelCapabilityId, name, deviceProperty]
     indexes:
-    - name: idx_device_model_capability_properties_device_model_cap9871ef0f
+    - name: idx_device_model_capability_properties_device_mode_f6e8b219
       fields: [deviceModelCapabilityId]
     - name: idx_device_model_capability_properties_name
       fields: [name]
@@ -854,7 +856,7 @@ domain:
       to: [deviceModelCapabilityId, name, deviceProperty]
     - {name: state, from: stateId, entity: ThresholdStates, to: id, target: deviceModelCapabilityPropertyThresholdBands}
     indexes:
-    - name: device_model_capability_property_threshold_bands_state_id_idx
+    - name: device_model_capability_property_threshold_bands_s_b195e576
       fields: [stateId]
   - name: DeviceModelConnectionTypes
     primaryKey: [deviceModelId, connectionTypeId]
@@ -890,7 +892,7 @@ domain:
     indexes:
     - name: idx_device_model_disabled_controls_control_id
       fields: [controlId]
-    - name: idx_device_model_disabled_controls_device_model_capability_id
+    - name: idx_device_model_disabled_controls_device_model_ca_e74fac42
       fields: [deviceModelCapabilityId]
   - name: DeviceModelLinkRequirementConditions
     primaryKey: [deviceModelId, kind, code, propertyId]
@@ -5717,7 +5719,7 @@ infrastructure:
   - name: common
     entities:
     - name: Countries
-      mapping: countries
+      mapping: cmn_countries
       properties:
       - {name: code, mapping: code, dbType: char(3)}
       - {name: alpha2, mapping: alpha2, dbType: char(2)}
@@ -5735,7 +5737,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: Currencies
-      mapping: currencies
+      mapping: cmn_currencies
       properties:
       - {name: code, mapping: code, dbType: char(3)}
       - {name: minorUnits, mapping: minor_units, dbType: smallint}
@@ -5744,14 +5746,14 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: DocumentTypes
-      mapping: document_types
+      mapping: cmn_document_types
       properties:
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
       - {name: createdBy, mapping: created_by}
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: Languages
-      mapping: languages
+      mapping: cmn_languages
       properties:
       - {name: nameNormalized, mapping: name_normalized}
       - {name: format, mapping: format, dbType: jsonb}
@@ -5762,7 +5764,7 @@ infrastructure:
   - name: iotCatalog
     entities:
     - name: AreaCategories
-      mapping: area_categories
+      mapping: cat_area_categories
       properties:
       - {name: nameNormalized, mapping: name_normalized}
       - {name: floorPlan, mapping: floor_plan}
@@ -5771,7 +5773,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: AreaTypeCapabilities
-      mapping: area_type_capabilities
+      mapping: cat_area_type_capabilities
       properties:
       - {name: areaTypeId, mapping: area_type_id}
       - {name: capabilityId, mapping: capability_id}
@@ -5781,7 +5783,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: AreaTypeCapabilityProperties
-      mapping: area_type_capability_properties
+      mapping: cat_area_type_capability_properties
       properties:
       - {name: areaTypeId, mapping: area_type_id}
       - {name: capabilityId, mapping: capability_id}
@@ -5790,7 +5792,7 @@ infrastructure:
       - {name: readingFrequencyValue, mapping: reading_frequency_value}
       - {name: readingFrequencyUnit, mapping: reading_frequency_unit}
     - name: AreaTypeCapabilityPropertyThresholdBands
-      mapping: area_type_capability_property_threshold_bands
+      mapping: cat_area_type_capability_property_threshold_bands
       properties:
       - {name: areaTypeId, mapping: area_type_id}
       - {name: capabilityId, mapping: capability_id}
@@ -5798,7 +5800,7 @@ infrastructure:
       - {name: stateId, mapping: state_id}
       - {name: value, mapping: value, dbType: double precision}
     - name: AreaTypeCases
-      mapping: area_type_cases
+      mapping: cat_area_type_cases
       properties:
       - {name: areaTypeId, mapping: area_type_id}
       - {name: caseId, mapping: case_id}
@@ -5807,7 +5809,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: AreaTypeScenes
-      mapping: area_type_scenes
+      mapping: cat_area_type_scenes
       properties:
       - {name: areaTypeId, mapping: area_type_id}
       - {name: sceneId, mapping: scene_id}
@@ -5816,7 +5818,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: AreaTypes
-      mapping: area_types
+      mapping: cat_area_types
       properties:
       - {name: nameNormalized, mapping: name_normalized}
       - {name: categoryId, mapping: category_id}
@@ -5827,7 +5829,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: Capabilities
-      mapping: capabilities
+      mapping: cat_capabilities
       properties:
       - {name: nameNormalized, mapping: name_normalized}
       - {name: categoryId, mapping: category_id}
@@ -5838,7 +5840,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: CapabilityActions
-      mapping: capability_actions
+      mapping: cat_capability_actions
       properties:
       - {name: capabilityId, mapping: capability_id}
       - {name: params, mapping: params, dbType: jsonb}
@@ -5851,7 +5853,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: CapabilityControls
-      mapping: capability_controls
+      mapping: cat_capability_controls
       properties:
       - {name: capabilityId, mapping: capability_id}
       - {name: valueType, mapping: value_type}
@@ -5869,7 +5871,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: CapabilityProperties
-      mapping: capability_properties
+      mapping: cat_capability_properties
       properties:
       - {name: capabilityId, mapping: capability_id}
       - {name: propertyId, mapping: property_id}
@@ -5888,18 +5890,18 @@ infrastructure:
       - {name: appliesToZone, mapping: applies_to_zone}
       - {name: appliesToScene, mapping: applies_to_scene}
     - name: CapabilityPropertyEnumValues
-      mapping: capability_property_enum_values
+      mapping: cat_capability_property_enum_values
       properties:
       - {name: capabilityPropertyId, mapping: capability_property_id}
     - name: CapabilityPropertyNotifications
-      mapping: capability_property_notifications
+      mapping: cat_capability_property_notifications
       properties:
       - {name: capabilityPropertyId, mapping: capability_property_id}
       - {name: stateId, mapping: state_id}
       - {name: notificationLevelId, mapping: notification_level_id}
       - {name: notification, mapping: notification, dbType: jsonb}
     - name: CapabilityPropertyRateThresholds
-      mapping: capability_property_rate_thresholds
+      mapping: cat_capability_property_rate_thresholds
       properties:
       - {name: capabilityPropertyId, mapping: capability_property_id}
       - {name: notificationLevelId, mapping: notification_level_id}
@@ -5907,19 +5909,19 @@ infrastructure:
       - {name: periodValue, mapping: period_value}
       - {name: periodUnit, mapping: period_unit}
     - name: CapabilityPropertyThresholdBands
-      mapping: capability_property_threshold_bands
+      mapping: cat_capability_property_threshold_bands
       properties:
       - {name: capabilityPropertyId, mapping: capability_property_id}
       - {name: stateId, mapping: state_id}
       - {name: value, mapping: value, dbType: double precision}
     - name: CapabilityPropertyVerifiers
-      mapping: capability_property_verifiers
+      mapping: cat_capability_property_verifiers
       properties:
       - {name: capabilityPropertyId, mapping: capability_property_id}
       - {name: capabilityId, mapping: capability_id}
       - {name: reliability, mapping: reliability, dbType: double precision}
     - name: CaseHandlerDeviceTypes
-      mapping: case_handler_device_types
+      mapping: cat_case_handler_device_types
       properties:
       - {name: caseId, mapping: case_id}
       - {name: deviceTypeId, mapping: device_type_id}
@@ -5928,7 +5930,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: CaseParameters
-      mapping: case_parameters
+      mapping: cat_case_parameters
       properties:
       - {name: caseId, mapping: case_id}
       - {name: value, mapping: value, dbType: double precision}
@@ -5937,7 +5939,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: CaseProperties
-      mapping: case_properties
+      mapping: cat_case_properties
       properties:
       - {name: caseId, mapping: case_id}
       - {name: propertyId, mapping: property_id}
@@ -5946,7 +5948,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: Cases
-      mapping: cases
+      mapping: cat_cases
       properties:
       - {name: nameNormalized, mapping: name_normalized}
       - {name: categoryId, mapping: category_id}
@@ -5957,7 +5959,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: Categories
-      mapping: categories
+      mapping: cat_categories
       properties:
       - {name: nameNormalized, mapping: name_normalized}
       - {name: chartType, mapping: chart_type}
@@ -5967,7 +5969,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: ConnectionTypeProperties
-      mapping: connection_type_properties
+      mapping: cat_connection_type_properties
       properties:
       - {name: connectionTypeId, mapping: connection_type_id}
       - {name: valueType, mapping: value_type}
@@ -5976,7 +5978,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: ConnectionTypes
-      mapping: connection_types
+      mapping: cat_connection_types
       properties:
       - {name: nameNormalized, mapping: name_normalized}
       - {name: signalWarningValue, mapping: signal_warning_value, dbType: double precision}
@@ -5988,7 +5990,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: DeviceModelActionCodes
-      mapping: device_model_action_codes
+      mapping: cat_device_model_action_codes
       properties:
       - {name: deviceModelCapabilityId, mapping: device_model_capability_id}
       - {name: actionKey, mapping: action_key}
@@ -5998,7 +6000,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: DeviceModelCapabilities
-      mapping: device_model_capabilities
+      mapping: cat_device_model_capabilities
       properties:
       - {name: deviceModelId, mapping: device_model_id}
       - {name: capabilityId, mapping: capability_id}
@@ -6014,7 +6016,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: DeviceModelCapabilityActions
-      mapping: device_model_capability_actions
+      mapping: cat_device_model_capability_actions
       properties:
       - {name: deviceModelCapabilityId, mapping: device_model_capability_id}
       - {name: actionId, mapping: action_id}
@@ -6025,7 +6027,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: DeviceModelCapabilityProperties
-      mapping: device_model_capability_properties
+      mapping: cat_device_model_capability_properties
       properties:
       - {name: deviceModelCapabilityId, mapping: device_model_capability_id}
       - {name: deviceProperty, mapping: device_property}
@@ -6039,7 +6041,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: DeviceModelCapabilityPropertyNotifications
-      mapping: device_model_capability_property_notifications
+      mapping: cat_device_model_capability_property_notifications
       properties:
       - {name: deviceModelCapabilityId, mapping: device_model_capability_id}
       - {name: deviceProperty, mapping: device_property}
@@ -6047,7 +6049,7 @@ infrastructure:
       - {name: notificationLevelId, mapping: notification_level_id}
       - {name: notification, mapping: notification, dbType: jsonb}
     - name: DeviceModelCapabilityPropertyRateThresholds
-      mapping: device_model_capability_property_rate_thresholds
+      mapping: cat_device_model_capability_property_rate_thresholds
       properties:
       - {name: deviceModelCapabilityId, mapping: device_model_capability_id}
       - {name: deviceProperty, mapping: device_property}
@@ -6056,14 +6058,14 @@ infrastructure:
       - {name: periodValue, mapping: period_value}
       - {name: periodUnit, mapping: period_unit}
     - name: DeviceModelCapabilityPropertyThresholdBands
-      mapping: device_model_capability_property_threshold_bands
+      mapping: cat_device_model_capability_property_threshold_bands
       properties:
       - {name: deviceModelCapabilityId, mapping: device_model_capability_id}
       - {name: deviceProperty, mapping: device_property}
       - {name: stateId, mapping: state_id}
       - {name: value, mapping: value, dbType: double precision}
     - name: DeviceModelConnectionTypes
-      mapping: device_model_connection_types
+      mapping: cat_device_model_connection_types
       properties:
       - {name: deviceModelId, mapping: device_model_id}
       - {name: connectionTypeId, mapping: connection_type_id}
@@ -6072,7 +6074,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: DeviceModelDisabledControls
-      mapping: device_model_disabled_controls
+      mapping: cat_device_model_disabled_controls
       properties:
       - {name: deviceModelCapabilityId, mapping: device_model_capability_id}
       - {name: controlId, mapping: control_id}
@@ -6081,18 +6083,18 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: DeviceModelLinkRequirementConditions
-      mapping: device_model_link_requirement_conditions
+      mapping: cat_device_model_link_requirement_conditions
       properties:
       - {name: deviceModelId, mapping: device_model_id}
       - {name: propertyId, mapping: property_id}
       - {name: expectedValue, mapping: expected_value, dbType: jsonb}
     - name: DeviceModelLinkRequirementOutputStates
-      mapping: device_model_link_requirement_output_states
+      mapping: cat_device_model_link_requirement_output_states
       properties:
       - {name: deviceModelId, mapping: device_model_id}
       - {name: virtualIndex, mapping: virtual_index}
     - name: DeviceModelLinkRequirements
-      mapping: device_model_link_requirements
+      mapping: cat_device_model_link_requirements
       properties:
       - {name: deviceModelId, mapping: device_model_id}
       - {name: capabilityId, mapping: capability_id}
@@ -6106,7 +6108,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: DeviceModelPrices
-      mapping: device_model_prices
+      mapping: cat_device_model_prices
       properties:
       - {name: deviceModelId, mapping: device_model_id}
       - {name: countryCode, mapping: country_code, dbType: char(3)}
@@ -6118,7 +6120,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: DeviceModelVirtuals
-      mapping: device_model_virtuals
+      mapping: cat_device_model_virtuals
       properties:
       - {name: deviceModelId, mapping: device_model_id}
       - {name: virtualIndex, mapping: virtual_index}
@@ -6128,7 +6130,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: DeviceModels
-      mapping: device_models
+      mapping: cat_device_models
       properties:
       - {name: deviceType, mapping: device_type}
       - {name: nameNormalized, mapping: name_normalized}
@@ -6163,7 +6165,7 @@ infrastructure:
       - {name: cameraIpRating, mapping: camera_ip_rating}
       - {name: cameraLocalStorage, mapping: camera_local_storage}
     - name: DeviceRecognitionContextModalities
-      mapping: device_recognition_context_modalities
+      mapping: cat_device_recognition_context_modalities
       properties:
       - {name: contextId, mapping: context_id}
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
@@ -6171,7 +6173,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: DeviceRecognitionContextValues
-      mapping: device_recognition_context_values
+      mapping: cat_device_recognition_context_values
       properties:
       - {name: contextId, mapping: context_id}
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
@@ -6179,14 +6181,14 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: DeviceRecognitionContexts
-      mapping: device_recognition_contexts
+      mapping: cat_device_recognition_contexts
       properties:
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
       - {name: createdBy, mapping: created_by}
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: DeviceTypes
-      mapping: device_types
+      mapping: cat_device_types
       properties:
       - {name: categoryId, mapping: category_id}
       - {name: nameNormalized, mapping: name_normalized}
@@ -6199,7 +6201,7 @@ infrastructure:
       - {name: defaultSizeHeightM, mapping: default_size_height_m, dbType: double precision}
       - {name: defaultSizeElevationM, mapping: default_size_elevation_m, dbType: double precision}
     - name: FileCategories
-      mapping: file_categories
+      mapping: cat_file_categories
       properties:
       - {name: retentionDays, mapping: retention_days}
       - {name: keepLast, mapping: keep_last}
@@ -6210,14 +6212,14 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: FilesDetailTypes
-      mapping: files_detail_types
+      mapping: cat_files_detail_types
       properties:
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
       - {name: createdBy, mapping: created_by}
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: FloorPlanFixtureCatalogEntries
-      mapping: floor_plan_fixture_catalog_entries
+      mapping: cat_floor_plan_fixture_catalog_entries
       properties:
       - {name: icon2D, mapping: icon2_d}
       - {name: defaultWidthM, mapping: default_width_m, dbType: double precision}
@@ -6227,7 +6229,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: LocationTemplateProperties
-      mapping: location_template_properties
+      mapping: cat_location_template_properties
       properties:
       - {name: locationTemplateId, mapping: location_template_id}
       - {name: propertyId, mapping: property_id}
@@ -6238,7 +6240,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: LocationTemplatePropertyRateThresholds
-      mapping: location_template_property_rate_thresholds
+      mapping: cat_location_template_property_rate_thresholds
       properties:
       - {name: locationTemplateId, mapping: location_template_id}
       - {name: notificationLevelId, mapping: notification_level_id}
@@ -6246,13 +6248,13 @@ infrastructure:
       - {name: periodValue, mapping: period_value}
       - {name: periodUnit, mapping: period_unit}
     - name: LocationTemplatePropertyThresholdBands
-      mapping: location_template_property_threshold_bands
+      mapping: cat_location_template_property_threshold_bands
       properties:
       - {name: locationTemplateId, mapping: location_template_id}
       - {name: stateId, mapping: state_id}
       - {name: value, mapping: value, dbType: double precision}
     - name: LocationTemplates
-      mapping: location_templates
+      mapping: cat_location_templates
       properties:
       - {name: locationTypeId, mapping: location_type_id}
       - {name: nameNormalized, mapping: name_normalized}
@@ -6261,7 +6263,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: LocationTypes
-      mapping: location_types
+      mapping: cat_location_types
       properties:
       - {name: nameNormalized, mapping: name_normalized}
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
@@ -6269,7 +6271,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: Magnitudes
-      mapping: magnitudes
+      mapping: cat_magnitudes
       properties:
       - {name: nameNormalized, mapping: name_normalized}
       - {name: categoryId, mapping: category_id}
@@ -6279,7 +6281,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: ModeScenes
-      mapping: mode_scenes
+      mapping: cat_mode_scenes
       properties:
       - {name: modeId, mapping: mode_id}
       - {name: sceneId, mapping: scene_id}
@@ -6288,7 +6290,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: Modes
-      mapping: modes
+      mapping: cat_modes
       properties:
       - {name: nameNormalized, mapping: name_normalized}
       - {name: builtIn, mapping: built_in}
@@ -6299,7 +6301,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: NotificationLevels
-      mapping: notification_levels
+      mapping: cat_notification_levels
       properties:
       - {name: nameNormalized, mapping: name_normalized}
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
@@ -6307,7 +6309,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: Presets
-      mapping: presets
+      mapping: cat_presets
       properties:
       - {name: nameNormalized, mapping: name_normalized}
       - {name: builtIn, mapping: built_in}
@@ -6316,7 +6318,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: Properties
-      mapping: properties
+      mapping: cat_properties
       properties:
       - {name: nameNormalized, mapping: name_normalized}
       - {name: unitId, mapping: unit_id}
@@ -6334,7 +6336,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: PropertyAliases
-      mapping: property_aliases
+      mapping: cat_property_aliases
       properties:
       - {name: propertyId, mapping: property_id}
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
@@ -6342,7 +6344,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: PropertyEnumValues
-      mapping: property_enum_values
+      mapping: cat_property_enum_values
       properties:
       - {name: propertyId, mapping: property_id}
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
@@ -6350,7 +6352,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: PropertyNotifications
-      mapping: property_notifications
+      mapping: cat_property_notifications
       properties:
       - {name: propertyId, mapping: property_id}
       - {name: stateId, mapping: state_id}
@@ -6361,7 +6363,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: PropertyRateThresholds
-      mapping: property_rate_thresholds
+      mapping: cat_property_rate_thresholds
       properties:
       - {name: propertyId, mapping: property_id}
       - {name: notificationLevelId, mapping: notification_level_id}
@@ -6373,12 +6375,12 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: PropertyThresholdBandValues
-      mapping: property_threshold_band_values
+      mapping: cat_property_threshold_band_values
       properties:
       - {name: propertyId, mapping: property_id}
       - {name: bandPosition, mapping: band_position}
     - name: PropertyThresholdBands
-      mapping: property_threshold_bands
+      mapping: cat_property_threshold_bands
       properties:
       - {name: propertyId, mapping: property_id}
       - {name: stateId, mapping: state_id}
@@ -6388,7 +6390,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: SceneCapabilities
-      mapping: scene_capabilities
+      mapping: cat_scene_capabilities
       properties:
       - {name: sceneId, mapping: scene_id}
       - {name: capabilityId, mapping: capability_id}
@@ -6397,14 +6399,14 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: SceneCapabilityStates
-      mapping: scene_capability_states
+      mapping: cat_scene_capability_states
       properties:
       - {name: sceneId, mapping: scene_id}
       - {name: capabilityId, mapping: capability_id}
       - {name: propertyCode, mapping: property_code}
       - {name: stateId, mapping: state_id}
     - name: ScenePresetStates
-      mapping: scene_preset_states
+      mapping: cat_scene_preset_states
       properties:
       - {name: sceneId, mapping: scene_id}
       - {name: presetId, mapping: preset_id}
@@ -6412,7 +6414,7 @@ infrastructure:
       - {name: propertyCode, mapping: property_code}
       - {name: stateId, mapping: state_id}
     - name: ScenePresets
-      mapping: scene_presets
+      mapping: cat_scene_presets
       properties:
       - {name: sceneId, mapping: scene_id}
       - {name: presetId, mapping: preset_id}
@@ -6421,7 +6423,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: Scenes
-      mapping: scenes
+      mapping: cat_scenes
       properties:
       - {name: nameNormalized, mapping: name_normalized}
       - {name: builtIn, mapping: built_in}
@@ -6430,7 +6432,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: ServiceManifests
-      mapping: service_manifests
+      mapping: cat_service_manifests
       properties:
       - {name: manifest, mapping: manifest, dbType: jsonb}
       - {name: fetchedAt, mapping: fetched_at, dbType: timestamptz(3)}
@@ -6439,7 +6441,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: SubjectCategories
-      mapping: subject_categories
+      mapping: cat_subject_categories
       properties:
       - {name: nameNormalized, mapping: name_normalized}
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
@@ -6447,7 +6449,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: SubjectRecognitionContextModalities
-      mapping: subject_recognition_context_modalities
+      mapping: cat_subject_recognition_context_modalities
       properties:
       - {name: contextId, mapping: context_id}
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
@@ -6455,7 +6457,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: SubjectRecognitionContextValues
-      mapping: subject_recognition_context_values
+      mapping: cat_subject_recognition_context_values
       properties:
       - {name: contextId, mapping: context_id}
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
@@ -6463,14 +6465,14 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: SubjectRecognitionContexts
-      mapping: subject_recognition_contexts
+      mapping: cat_subject_recognition_contexts
       properties:
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
       - {name: createdBy, mapping: created_by}
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: SubjectTypes
-      mapping: subject_types
+      mapping: cat_subject_types
       properties:
       - {name: categoryId, mapping: category_id}
       - {name: nameNormalized, mapping: name_normalized}
@@ -6479,7 +6481,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: ThresholdStates
-      mapping: threshold_states
+      mapping: cat_threshold_states
       properties:
       - {name: thresholdId, mapping: threshold_id}
       - {name: order, mapping: order, dbType: double precision}
@@ -6488,7 +6490,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: Thresholds
-      mapping: thresholds
+      mapping: cat_thresholds
       properties:
       - {name: nameNormalized, mapping: name_normalized}
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
@@ -6496,7 +6498,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: UndefinedProperties
-      mapping: undefined_properties
+      mapping: cat_undefined_properties
       properties:
       - {name: deviceModelId, mapping: device_model_id}
       - {name: propertyKey, mapping: property_key}
@@ -6508,7 +6510,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: UnitSystems
-      mapping: unit_systems
+      mapping: cat_unit_systems
       properties:
       - {name: nameNormalized, mapping: name_normalized}
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
@@ -6516,7 +6518,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: UnitUnitSystems
-      mapping: unit_unit_systems
+      mapping: cat_unit_unit_systems
       properties:
       - {name: unitId, mapping: unit_id}
       - {name: unitSystemId, mapping: unit_system_id}
@@ -6525,7 +6527,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: Units
-      mapping: units
+      mapping: cat_units
       properties:
       - {name: magnitudeId, mapping: magnitude_id}
       - {name: nameNormalized, mapping: name_normalized}
@@ -6537,7 +6539,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: ZoneCategories
-      mapping: zone_categories
+      mapping: cat_zone_categories
       properties:
       - {name: nameNormalized, mapping: name_normalized}
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
@@ -6545,7 +6547,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: ZoneTypeProperties
-      mapping: zone_type_properties
+      mapping: cat_zone_type_properties
       properties:
       - {name: zoneTypeId, mapping: zone_type_id}
       - {name: propertyId, mapping: property_id}
@@ -6556,7 +6558,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: ZoneTypePropertyRateThresholds
-      mapping: zone_type_property_rate_thresholds
+      mapping: cat_zone_type_property_rate_thresholds
       properties:
       - {name: zoneTypeId, mapping: zone_type_id}
       - {name: notificationLevelId, mapping: notification_level_id}
@@ -6564,13 +6566,13 @@ infrastructure:
       - {name: periodValue, mapping: period_value}
       - {name: periodUnit, mapping: period_unit}
     - name: ZoneTypePropertyThresholdBands
-      mapping: zone_type_property_threshold_bands
+      mapping: cat_zone_type_property_threshold_bands
       properties:
       - {name: zoneTypeId, mapping: zone_type_id}
       - {name: stateId, mapping: state_id}
       - {name: value, mapping: value, dbType: double precision}
     - name: ZoneTypes
-      mapping: zone_types
+      mapping: cat_zone_types
       properties:
       - {name: nameNormalized, mapping: name_normalized}
       - {name: categoryId, mapping: category_id}
@@ -6581,7 +6583,7 @@ infrastructure:
   - name: crm
     entities:
     - name: Companies
-      mapping: companies
+      mapping: crm_companies
       properties:
       - {name: id, mapping: id, dbType: uuid}
       - {name: legalName, mapping: legal_name}
@@ -6607,7 +6609,7 @@ infrastructure:
       - {name: countryCode, mapping: country_code, dbType: char(3)}
       - {name: acceptsCustomers, mapping: accepts_customers}
     - name: CompanyBranches
-      mapping: company_branches
+      mapping: crm_company_branches
       properties:
       - {name: companyId, mapping: company_id, dbType: uuid}
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
@@ -6626,7 +6628,7 @@ infrastructure:
       - {name: positionAltitude, mapping: position_altitude, dbType: double precision}
       - {name: id, mapping: id, dbType: bigint}
     - name: CompanyBrands
-      mapping: company_brands
+      mapping: crm_company_brands
       properties:
       - {name: companyId, mapping: company_id, dbType: uuid}
       - {name: primaryColor, mapping: primary_color}
@@ -6640,7 +6642,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: CompanyDocuments
-      mapping: company_documents
+      mapping: crm_company_documents
       properties:
       - {name: companyId, mapping: company_id, dbType: uuid}
       - {name: fileName, mapping: file_name}
@@ -6659,7 +6661,7 @@ infrastructure:
       - {name: uploadedByIdentityId, mapping: uploaded_by_identity_id, dbType: uuid}
       - {name: id, mapping: id, dbType: bigint}
     - name: CompanyIdentities
-      mapping: company_identities
+      mapping: crm_company_identities
       properties:
       - {name: companyId, mapping: company_id, dbType: uuid}
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
@@ -6669,7 +6671,7 @@ infrastructure:
       - {name: companyRole, mapping: company_role}
       - {name: identityId, mapping: identity_id, dbType: uuid}
     - name: CompanyPartnerships
-      mapping: company_partnerships
+      mapping: crm_company_partnerships
       properties:
       - {name: companyId, mapping: company_id, dbType: uuid}
       - {name: partnerCompanyId, mapping: partner_company_id, dbType: uuid}
@@ -6685,7 +6687,7 @@ infrastructure:
       - {name: endedByIdentityId, mapping: ended_by_identity_id, dbType: uuid}
       - {name: id, mapping: id, dbType: bigint}
     - name: CompanyPrices
-      mapping: company_prices
+      mapping: crm_company_prices
       properties:
       - {name: companyId, mapping: company_id, dbType: uuid}
       - {name: amount, mapping: amount, dbType: 'numeric(14,2)'}
@@ -6697,7 +6699,7 @@ infrastructure:
       - {name: workId, mapping: work_id}
       - {name: id, mapping: id, dbType: bigint}
     - name: CompanyQualifications
-      mapping: company_qualifications
+      mapping: crm_company_qualifications
       properties:
       - {name: companyId, mapping: company_id, dbType: uuid}
       - {name: qualificationId, mapping: qualification_id}
@@ -6706,7 +6708,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: CompanyWorks
-      mapping: company_works
+      mapping: crm_company_works
       properties:
       - {name: companyId, mapping: company_id, dbType: uuid}
       - {name: workId, mapping: work_id}
@@ -6715,7 +6717,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: ContactMessages
-      mapping: contact_messages
+      mapping: crm_contact_messages
       properties:
       - {name: languageCode, mapping: language_code}
       - {name: ip, mapping: ip, dbType: inet}
@@ -6732,7 +6734,7 @@ infrastructure:
       - {name: customerId, mapping: customer_id, dbType: uuid}
       - {name: companyId, mapping: company_id, dbType: uuid}
     - name: CountryDocumentTypes
-      mapping: country_document_types
+      mapping: crm_country_document_types
       properties:
       - {name: countryCode, mapping: country_code, dbType: char(3)}
       - {name: documentTypeCode, mapping: document_type_code}
@@ -6742,7 +6744,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: CountryQualificationImplies
-      mapping: country_qualification_implies
+      mapping: crm_country_qualification_implies
       properties:
       - {name: qualificationId, mapping: qualification_id}
       - {name: impliedId, mapping: implied_id}
@@ -6751,7 +6753,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: CountryQualifications
-      mapping: country_qualifications
+      mapping: crm_country_qualifications
       properties:
       - {name: countryCode, mapping: country_code, dbType: char(3)}
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
@@ -6759,7 +6761,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: CountryWorkRequirements
-      mapping: country_work_requirements
+      mapping: crm_country_work_requirements
       properties:
       - {name: workId, mapping: work_id}
       - {name: qualificationId, mapping: qualification_id}
@@ -6768,7 +6770,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: CountryWorks
-      mapping: country_works
+      mapping: crm_country_works
       properties:
       - {name: countryCode, mapping: country_code, dbType: char(3)}
       - {name: workGroup, mapping: work_group}
@@ -6779,7 +6781,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: CustomerIdentities
-      mapping: customer_identities
+      mapping: crm_customer_identities
       properties:
       - {name: customerId, mapping: customer_id, dbType: uuid}
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
@@ -6788,7 +6790,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: identityId, mapping: identity_id, dbType: uuid}
     - name: Customers
-      mapping: customers
+      mapping: crm_customers
       properties:
       - {name: id, mapping: id, dbType: uuid}
       - {name: nameNormalized, mapping: name_normalized}
@@ -6800,7 +6802,7 @@ infrastructure:
       - {name: managedByCompanyId, mapping: managed_by_company_id, dbType: uuid}
       - {name: phoneVerifiedAt, mapping: phone_verified_at, dbType: timestamptz(3)}
     - name: Invitations
-      mapping: invitations
+      mapping: crm_invitations
       properties:
       - {name: companyId, mapping: company_id, dbType: uuid}
       - {name: customerId, mapping: customer_id, dbType: uuid}
@@ -6826,7 +6828,7 @@ infrastructure:
       - {name: invitedByIdentityId, mapping: invited_by_identity_id, dbType: uuid}
       - {name: id, mapping: id, dbType: bigint}
     - name: Locations
-      mapping: locations
+      mapping: crm_locations
       properties:
       - {name: id, mapping: id, dbType: uuid}
       - {name: companyId, mapping: company_id, dbType: uuid}
@@ -6868,7 +6870,7 @@ infrastructure:
       - {name: biometricsInCloudGrantedByIdentityId, mapping: biometrics_in_cloud_granted_by_identity_id, dbType: uuid}
       - {name: biometricsInCloudRevokedByIdentityId, mapping: biometrics_in_cloud_revoked_by_identity_id, dbType: uuid}
     - name: PartnershipWorks
-      mapping: partnership_works
+      mapping: crm_partnership_works
       properties:
       - {name: workId, mapping: work_id}
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
@@ -6879,7 +6881,7 @@ infrastructure:
   - name: iam
     entities:
     - name: CloudRoleScreens
-      mapping: cloud_role_screens
+      mapping: iam_cloud_role_screens
       properties:
       - {name: roleId, mapping: role_id}
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
@@ -6887,14 +6889,14 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: CloudRoles
-      mapping: cloud_roles
+      mapping: iam_cloud_roles
       properties:
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
       - {name: createdBy, mapping: created_by}
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: Identities
-      mapping: identities
+      mapping: iam_identities
       properties:
       - {name: id, mapping: id, dbType: uuid}
       - {name: phoneVerifiedAt, mapping: phone_verified_at, dbType: timestamptz(3)}
@@ -6907,7 +6909,7 @@ infrastructure:
       - {name: pictureContentType, mapping: picture_content_type}
       - {name: pictureAt, mapping: picture_at, dbType: timestamptz(3)}
     - name: PhoneVerifications
-      mapping: phone_verifications
+      mapping: iam_phone_verifications
       properties:
       - {name: identityId, mapping: identity_id, dbType: uuid}
       - {name: codeHash, mapping: code_hash}
@@ -6923,7 +6925,7 @@ infrastructure:
   - name: sales
     entities:
     - name: CountryTaxRates
-      mapping: country_tax_rates
+      mapping: sal_country_tax_rates
       properties:
       - {name: countryCode, mapping: country_code, dbType: char(3)}
       - {name: rate, mapping: rate, dbType: 'numeric(7,4)'}
@@ -6934,7 +6936,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: InstallationEvents
-      mapping: installation_events
+      mapping: sal_installation_events
       properties:
       - {name: installationId, mapping: installation_id, dbType: uuid}
       - {name: fromStatus, mapping: from_status}
@@ -6948,7 +6950,7 @@ infrastructure:
       - {name: byIdentityId, mapping: by_identity_id, dbType: uuid}
       - {name: id, mapping: id, dbType: bigint}
     - name: InstallationFiles
-      mapping: installation_files
+      mapping: sal_installation_files
       properties:
       - {name: id, mapping: id, dbType: uuid}
       - {name: installationId, mapping: installation_id, dbType: uuid}
@@ -6962,7 +6964,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: uploadedByIdentityId, mapping: uploaded_by_identity_id, dbType: uuid}
     - name: InstallationWorks
-      mapping: installation_works
+      mapping: sal_installation_works
       properties:
       - {name: installationId, mapping: installation_id, dbType: uuid}
       - {name: workId, mapping: work_id}
@@ -6971,7 +6973,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: Installations
-      mapping: installations
+      mapping: sal_installations
       properties:
       - {name: id, mapping: id, dbType: uuid}
       - {name: companyId, mapping: company_id, dbType: uuid}
@@ -7015,7 +7017,7 @@ infrastructure:
   - name: perception
     entities:
     - name: GalleryVectors
-      mapping: gallery_vectors
+      mapping: per_gallery_vectors
       properties:
       - {name: locationId, mapping: location_id, dbType: uuid}
       - {name: sampleId, mapping: sample_id, dbType: uuid}
@@ -7026,7 +7028,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: Profiles
-      mapping: profiles
+      mapping: per_profiles
       properties:
       - {name: locationId, mapping: location_id, dbType: uuid}
       - {name: embedding, mapping: embedding, dbType: bytea}
@@ -7036,7 +7038,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: RecognitionVectors
-      mapping: recognition_vectors
+      mapping: per_recognition_vectors
       properties:
       - {name: locationId, mapping: location_id, dbType: uuid}
       - {name: sampleId, mapping: sample_id, dbType: uuid}
@@ -7047,7 +7049,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: ScanJobs
-      mapping: scan_jobs
+      mapping: per_scan_jobs
       properties:
       - {name: locationId, mapping: location_id, dbType: uuid}
       - {name: id, mapping: id, dbType: uuid}
@@ -7061,7 +7063,7 @@ infrastructure:
   - name: iotLocation
     entities:
     - name: AreaAutomationSlots
-      mapping: area_automation_slots
+      mapping: loc_area_automation_slots
       properties:
       - {name: locationId, mapping: location_id, dbType: uuid}
       - {name: areaId, mapping: area_id}
@@ -7070,20 +7072,20 @@ infrastructure:
       - {name: setByName, mapping: set_by_name}
       - {name: setAt, mapping: set_at, dbType: timestamptz(3)}
     - name: AreaCapabilityBindingDevices
-      mapping: area_capability_binding_devices
+      mapping: loc_area_capability_binding_devices
       properties:
       - {name: locationId, mapping: location_id, dbType: uuid}
       - {name: areaId, mapping: area_id}
       - {name: capabilityId, mapping: capability_id}
       - {name: deviceId, mapping: device_id}
     - name: AreaCapabilityBindings
-      mapping: area_capability_bindings
+      mapping: loc_area_capability_bindings
       properties:
       - {name: locationId, mapping: location_id, dbType: uuid}
       - {name: areaId, mapping: area_id}
       - {name: capabilityId, mapping: capability_id}
     - name: AreaCaseBindingTargets
-      mapping: area_case_binding_targets
+      mapping: loc_area_case_binding_targets
       properties:
       - {name: locationId, mapping: location_id, dbType: uuid}
       - {name: areaId, mapping: area_id}
@@ -7091,19 +7093,19 @@ infrastructure:
       - {name: deviceId, mapping: device_id}
       - {name: capabilityId, mapping: capability_id}
     - name: AreaCaseBindings
-      mapping: area_case_bindings
+      mapping: loc_area_case_bindings
       properties:
       - {name: locationId, mapping: location_id, dbType: uuid}
       - {name: areaId, mapping: area_id}
       - {name: caseId, mapping: case_id}
     - name: AreaDisabledCases
-      mapping: area_disabled_cases
+      mapping: loc_area_disabled_cases
       properties:
       - {name: locationId, mapping: location_id, dbType: uuid}
       - {name: areaId, mapping: area_id}
       - {name: caseId, mapping: case_id}
     - name: AreaFiles
-      mapping: area_files
+      mapping: loc_area_files
       properties:
       - {name: id, mapping: id, dbType: uuid}
       - {name: areaId, mapping: area_id}
@@ -7121,7 +7123,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: AreaObjects
-      mapping: area_objects
+      mapping: loc_area_objects
       properties:
       - {name: id, mapping: id, dbType: uuid}
       - {name: areaId, mapping: area_id}
@@ -7146,20 +7148,20 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: AreaOrderBindingDevices
-      mapping: area_order_binding_devices
+      mapping: loc_area_order_binding_devices
       properties:
       - {name: locationId, mapping: location_id, dbType: uuid}
       - {name: areaId, mapping: area_id}
       - {name: capabilityId, mapping: capability_id}
       - {name: deviceId, mapping: device_id}
     - name: AreaOrderBindings
-      mapping: area_order_bindings
+      mapping: loc_area_order_bindings
       properties:
       - {name: locationId, mapping: location_id, dbType: uuid}
       - {name: areaId, mapping: area_id}
       - {name: capabilityId, mapping: capability_id}
     - name: AreaScanPasses
-      mapping: area_scan_passes
+      mapping: loc_area_scan_passes
       properties:
       - {name: id, mapping: id, dbType: uuid}
       - {name: scanId, mapping: scan_id, dbType: uuid}
@@ -7170,7 +7172,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: AreaScans
-      mapping: area_scans
+      mapping: loc_area_scans
       properties:
       - {name: id, mapping: id, dbType: uuid}
       - {name: areaId, mapping: area_id}
@@ -7189,7 +7191,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: Areas
-      mapping: areas
+      mapping: loc_areas
       properties:
       - {name: areaTypeId, mapping: area_type_id}
       - {name: locationId, mapping: location_id, dbType: uuid}
@@ -7206,12 +7208,12 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
     - name: BiometricSampleContexts
-      mapping: biometric_sample_contexts
+      mapping: loc_biometric_sample_contexts
       properties:
       - {name: locationId, mapping: location_id, dbType: uuid}
       - {name: sampleId, mapping: sample_id, dbType: uuid}
     - name: BiometricSamples
-      mapping: biometric_samples
+      mapping: loc_biometric_samples
       properties:
       - {name: id, mapping: id, dbType: uuid}
       - {name: subjectId, mapping: subject_id}
@@ -7231,7 +7233,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: CatalogCopies
-      mapping: catalog_copies
+      mapping: loc_catalog_copies
       properties:
       - {name: data, mapping: data, dbType: jsonb}
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
@@ -7240,7 +7242,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: CatalogCopyKinds
-      mapping: catalog_copy_kinds
+      mapping: loc_catalog_copy_kinds
       properties:
       - {name: refreshedAt, mapping: refreshed_at, dbType: timestamptz(3)}
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
@@ -7249,7 +7251,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: ConfigurationChanges
-      mapping: configuration_changes
+      mapping: loc_configuration_changes
       properties:
       - {name: id, mapping: id, dbType: bigint}
       - {name: configurationId, mapping: configuration_id}
@@ -7264,7 +7266,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: Configurations
-      mapping: configurations
+      mapping: loc_configurations
       properties:
       - {name: startedAt, mapping: started_at, dbType: timestamptz(3)}
       - {name: appliedAt, mapping: applied_at, dbType: timestamptz(3)}
@@ -7274,12 +7276,12 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: DetectionEventContexts
-      mapping: detection_event_contexts
+      mapping: loc_detection_event_contexts
       properties:
       - {name: locationId, mapping: location_id, dbType: uuid}
       - {name: detectionEventId, mapping: detection_event_id, dbType: uuid}
     - name: DetectionEvents
-      mapping: detection_events
+      mapping: loc_detection_events
       properties:
       - {name: id, mapping: id, dbType: uuid}
       - {name: eventId, mapping: event_id}
@@ -7304,7 +7306,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: DeviceConnections
-      mapping: device_connections
+      mapping: loc_device_connections
       properties:
       - {name: locationId, mapping: location_id, dbType: uuid}
       - {name: deviceId, mapping: device_id}
@@ -7314,7 +7316,7 @@ infrastructure:
       - {name: macRandomized, mapping: mac_randomized}
       - {name: advertisedName, mapping: advertised_name}
     - name: DeviceDiagramLayouts
-      mapping: device_diagram_layouts
+      mapping: loc_device_diagram_layouts
       properties:
       - {name: nodes, mapping: nodes, dbType: jsonb}
       - {name: wires, mapping: wires, dbType: jsonb}
@@ -7324,13 +7326,13 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: DeviceDisabledControls
-      mapping: device_disabled_controls
+      mapping: loc_device_disabled_controls
       properties:
       - {name: locationId, mapping: location_id, dbType: uuid}
       - {name: deviceId, mapping: device_id}
       - {name: controlId, mapping: control_id}
     - name: DeviceFiles
-      mapping: device_files
+      mapping: loc_device_files
       properties:
       - {name: id, mapping: id, dbType: uuid}
       - {name: deviceId, mapping: device_id}
@@ -7346,7 +7348,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: DeviceLinkConditions
-      mapping: device_link_conditions
+      mapping: loc_device_link_conditions
       properties:
       - {name: locationId, mapping: location_id, dbType: uuid}
       - {name: deviceId, mapping: device_id}
@@ -7355,7 +7357,7 @@ infrastructure:
       - {name: propertyId, mapping: property_id}
       - {name: expectedValue, mapping: expected_value, dbType: jsonb}
     - name: DeviceLinks
-      mapping: device_links
+      mapping: loc_device_links
       properties:
       - {name: locationId, mapping: location_id, dbType: uuid}
       - {name: deviceId, mapping: device_id}
@@ -7366,19 +7368,19 @@ infrastructure:
       - {name: capture, mapping: capture, dbType: jsonb}
       - {name: copy, mapping: copy, dbType: jsonb}
     - name: DeviceStateSampleContexts
-      mapping: device_state_sample_contexts
+      mapping: loc_device_state_sample_contexts
       properties:
       - {name: locationId, mapping: location_id, dbType: uuid}
       - {name: sampleId, mapping: sample_id, dbType: uuid}
     - name: DeviceStateSampleStates
-      mapping: device_state_sample_states
+      mapping: loc_device_state_sample_states
       properties:
       - {name: locationId, mapping: location_id, dbType: uuid}
       - {name: sampleId, mapping: sample_id, dbType: uuid}
       - {name: propertyId, mapping: property_id}
       - {name: value, mapping: value, dbType: jsonb}
     - name: DeviceStateSamples
-      mapping: device_state_samples
+      mapping: loc_device_state_samples
       properties:
       - {name: id, mapping: id, dbType: uuid}
       - {name: linkId, mapping: link_id}
@@ -7396,14 +7398,14 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: DeviceStoredProperties
-      mapping: device_stored_properties
+      mapping: loc_device_stored_properties
       properties:
       - {name: locationId, mapping: location_id, dbType: uuid}
       - {name: deviceId, mapping: device_id}
       - {name: propertyId, mapping: property_id}
       - {name: value, mapping: value, dbType: jsonb}
     - name: Devices
-      mapping: devices
+      mapping: loc_devices
       properties:
       - {name: deviceModelId, mapping: device_model_id}
       - {name: shortName, mapping: short_name}
@@ -7423,7 +7425,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: EdgeHubConfigurations
-      mapping: edge_hub_configurations
+      mapping: loc_edge_hub_configurations
       properties:
       - {name: id, mapping: id, dbType: bigint}
       - {name: document, mapping: document, dbType: jsonb}
@@ -7434,7 +7436,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: FileAnalyses
-      mapping: file_analyses
+      mapping: loc_file_analyses
       properties:
       - {name: id, mapping: id, dbType: uuid}
       - {name: fileId, mapping: file_id, dbType: uuid}
@@ -7450,7 +7452,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: FileDetails
-      mapping: file_details
+      mapping: loc_file_details
       properties:
       - {name: id, mapping: id, dbType: uuid}
       - {name: fileId, mapping: file_id, dbType: uuid}
@@ -7477,7 +7479,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: FileHistory
-      mapping: file_history
+      mapping: loc_file_history
       properties:
       - {name: id, mapping: id, dbType: uuid}
       - {name: fileId, mapping: file_id, dbType: uuid}
@@ -7494,7 +7496,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: FileLinks
-      mapping: file_links
+      mapping: loc_file_links
       properties:
       - {name: fileId, mapping: file_id, dbType: uuid}
       - {name: targetType, mapping: target_type}
@@ -7505,7 +7507,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: Files
-      mapping: files
+      mapping: loc_files
       properties:
       - {name: id, mapping: id, dbType: uuid}
       - {name: groupId, mapping: group_id, dbType: uuid}
@@ -7538,14 +7540,14 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: FloorPlanAreaShapeWalls
-      mapping: floor_plan_area_shape_walls
+      mapping: loc_floor_plan_area_shape_walls
       properties:
       - {name: locationId, mapping: location_id, dbType: uuid}
       - {name: planId, mapping: plan_id}
       - {name: shapeId, mapping: shape_id}
       - {name: wallId, mapping: wall_id}
     - name: FloorPlanAreaShapes
-      mapping: floor_plan_area_shapes
+      mapping: loc_floor_plan_area_shapes
       properties:
       - {name: planId, mapping: plan_id}
       - {name: areaRef, mapping: area_ref}
@@ -7555,7 +7557,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: FloorPlanNodes
-      mapping: floor_plan_nodes
+      mapping: loc_floor_plan_nodes
       properties:
       - {name: planId, mapping: plan_id}
       - {name: refId, mapping: ref_id}
@@ -7578,7 +7580,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: FloorPlanVersions
-      mapping: floor_plan_versions
+      mapping: loc_floor_plan_versions
       properties:
       - {name: id, mapping: id, dbType: uuid}
       - {name: planId, mapping: plan_id}
@@ -7592,7 +7594,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: FloorPlanVertices
-      mapping: floor_plan_vertices
+      mapping: loc_floor_plan_vertices
       properties:
       - {name: planId, mapping: plan_id}
       - {name: x, mapping: x, dbType: double precision}
@@ -7604,7 +7606,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: FloorPlanWalls
-      mapping: floor_plan_walls
+      mapping: loc_floor_plan_walls
       properties:
       - {name: planId, mapping: plan_id}
       - {name: aVertexId, mapping: a_vertex_id}
@@ -7617,7 +7619,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: FloorPlans
-      mapping: floor_plans
+      mapping: loc_floor_plans
       properties:
       - {name: areaRef, mapping: area_ref}
       - {name: nameNormalized, mapping: name_normalized}
@@ -7633,7 +7635,7 @@ infrastructure:
       - {name: backgroundOpacity, mapping: background_opacity, dbType: double precision}
       - {name: backgroundAffine, mapping: background_affine, dbType: jsonb}
     - name: IntegrationCategories
-      mapping: integration_categories
+      mapping: loc_integration_categories
       properties:
       - {name: nameNormalized, mapping: name_normalized}
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
@@ -7642,18 +7644,18 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: IntegrationConnectionTypes
-      mapping: integration_connection_types
+      mapping: loc_integration_connection_types
       properties:
       - {name: locationId, mapping: location_id, dbType: uuid}
       - {name: integrationCode, mapping: integration_code}
       - {name: connectionTypeId, mapping: connection_type_id}
     - name: IntegrationTasks
-      mapping: integration_tasks
+      mapping: loc_integration_tasks
       properties:
       - {name: locationId, mapping: location_id, dbType: uuid}
       - {name: integrationCode, mapping: integration_code}
     - name: Integrations
-      mapping: integrations
+      mapping: loc_integrations
       properties:
       - {name: nameNormalized, mapping: name_normalized}
       - {name: config, mapping: config, dbType: jsonb}
@@ -7666,7 +7668,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: Notifications
-      mapping: notifications
+      mapping: loc_notifications
       properties:
       - {name: id, mapping: id, dbType: bigint}
       - {name: receivedAt, mapping: received_at, dbType: timestamptz(3)}
@@ -7684,7 +7686,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: ParameterCategories
-      mapping: parameter_categories
+      mapping: loc_parameter_categories
       properties:
       - {name: nameNormalized, mapping: name_normalized}
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
@@ -7693,14 +7695,14 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: ParameterValues
-      mapping: parameter_values
+      mapping: loc_parameter_values
       properties:
       - {name: locationId, mapping: location_id, dbType: uuid}
       - {name: parameterCode, mapping: parameter_code}
       - {name: value, mapping: value, dbType: jsonb}
       - {name: options, mapping: options, dbType: jsonb}
     - name: Parameters
-      mapping: parameters
+      mapping: loc_parameters
       properties:
       - {name: nameNormalized, mapping: name_normalized}
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
@@ -7709,7 +7711,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: PlanImports
-      mapping: plan_imports
+      mapping: loc_plan_imports
       properties:
       - {name: id, mapping: id, dbType: uuid}
       - {name: areaId, mapping: area_id}
@@ -7728,7 +7730,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: ProviderRecords
-      mapping: provider_records
+      mapping: loc_provider_records
       properties:
       - {name: recordId, mapping: record_id}
       - {name: data, mapping: data, dbType: jsonb}
@@ -7738,7 +7740,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: ScheduledTaskCategories
-      mapping: scheduled_task_categories
+      mapping: loc_scheduled_task_categories
       properties:
       - {name: nameNormalized, mapping: name_normalized}
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
@@ -7747,12 +7749,12 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: ScheduledTaskEvents
-      mapping: scheduled_task_events
+      mapping: loc_scheduled_task_events
       properties:
       - {name: locationId, mapping: location_id, dbType: uuid}
       - {name: scheduledTaskCode, mapping: scheduled_task_code}
     - name: ScheduledTasks
-      mapping: scheduled_tasks
+      mapping: loc_scheduled_tasks
       properties:
       - {name: nameNormalized, mapping: name_normalized}
       - {name: data, mapping: data, dbType: jsonb}
@@ -7764,7 +7766,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: ScreenSettings
-      mapping: screen_settings
+      mapping: loc_screen_settings
       properties:
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
       - {name: createdBy, mapping: created_by}
@@ -7772,7 +7774,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: Sequences
-      mapping: sequences
+      mapping: loc_sequences
       properties:
       - {name: value, mapping: value, dbType: bigint}
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
@@ -7781,7 +7783,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: Settings
-      mapping: settings
+      mapping: loc_settings
       properties:
       - {name: createdAt, mapping: created_at, dbType: timestamptz(3)}
       - {name: createdBy, mapping: created_by}
@@ -7791,7 +7793,7 @@ infrastructure:
       - {name: mqttLogRotationLines, mapping: mqtt_log_rotation_lines}
       - {name: mqttLogRetentionDays, mapping: mqtt_log_retention_days}
     - name: SubjectFiles
-      mapping: subject_files
+      mapping: loc_subject_files
       properties:
       - {name: id, mapping: id, dbType: uuid}
       - {name: subjectId, mapping: subject_id}
@@ -7806,7 +7808,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: Subjects
-      mapping: subjects
+      mapping: loc_subjects
       properties:
       - {name: subjectTypeId, mapping: subject_type_id}
       - {name: nameNormalized, mapping: name_normalized}
@@ -7822,7 +7824,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: TaskSteps
-      mapping: task_steps
+      mapping: loc_task_steps
       properties:
       - {name: taskId, mapping: task_id, dbType: uuid}
       - {name: request, mapping: request, dbType: jsonb}
@@ -7835,7 +7837,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: Tasks
-      mapping: tasks
+      mapping: loc_tasks
       properties:
       - {name: id, mapping: id, dbType: uuid}
       - {name: ownerType, mapping: owner_type}
@@ -7859,7 +7861,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: WifiCredentials
-      mapping: wifi_credentials
+      mapping: loc_wifi_credentials
       properties:
       - {name: ssId, mapping: ss_id}
       - {name: passwordSealed, mapping: password_sealed}
@@ -7869,7 +7871,7 @@ infrastructure:
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
     - name: ZoneVertices
-      mapping: zone_vertices
+      mapping: loc_zone_vertices
       properties:
       - {name: locationId, mapping: location_id, dbType: uuid}
       - {name: zoneId, mapping: zone_id}
@@ -7878,7 +7880,7 @@ infrastructure:
       - {name: y, mapping: y, dbType: double precision}
       - {name: z, mapping: z, dbType: double precision}
     - name: Zones
-      mapping: zones
+      mapping: loc_zones
       properties:
       - {name: zoneTypeId, mapping: zone_type_id}
       - {name: areaId, mapping: area_id}
