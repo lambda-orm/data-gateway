@@ -34,6 +34,8 @@ export interface ExplorerProps {
 export interface ExplorerAdmin {
 	can: AdminCapabilities
 	onOpenSchemaFile: (schema: string) => void
+	/** the schema as forms (its elements one by one) */
+	onOpenSchemaForms?: (schema: string) => void
 	/** the commands of a ready schema (fetch, push, drop, export, import) */
 	onOpenCommands?: (schema: string) => void
 	onNewSchema: () => void
@@ -105,7 +107,12 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 	const a = adminMessagesOf(locale)
 	// the lambdaORM.yaml of a schema (to fix one that didn't start, too) and removing it
 	const schemaFileRow = (schema: string) => admin?.can.schemaRead
-		? <Row level={2} label={a.schemaFile} icon={<Icons.yaml />} onOpen={() => admin.onOpenSchemaFile(schema)} title={a.schemaFile} />
+		? (
+			<>
+				<Row level={2} label={a.schemaFile} icon={<Icons.yaml />} onOpen={() => admin.onOpenSchemaFile(schema)} title={a.schemaFile} />
+				{admin.onOpenSchemaForms && <Row level={2} label={a.forms} icon={<Icons.edit />} onOpen={() => admin.onOpenSchemaForms!(schema)} title={a.forms} />}
+			</>
+			)
 		: null
 	const removeSchema = (schema: string) => admin?.can.schemaAdmin
 		? <Action label={`${a.removeSchema} ${schema || '/'}`} onClick={() => admin.onRemoveSchema(schema)}><Icons.trash /></Action>

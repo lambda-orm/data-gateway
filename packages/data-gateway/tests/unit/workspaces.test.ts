@@ -82,6 +82,38 @@ describe('supervisor: schemas added, removed and reloaded', () => {
 		await supervisor.stop()
 	})
 
+	test('after a reload the new worker is the schema\'s: its pongs keep it alive, its exit restarts the schema', async () => {
+		const policies = { restart: new RestartPolicy(10, 40), heartbeat: new HeartbeatPolicy(10, 50), graceMs: 50 }
+		const workers: FakeWorker[] = []
+		const edges: FakeEdge[] = []
+		let now = 0
+		const clock = { now: () => new Date(now), uptimeSeconds: () => 0 }
+		const supervisor = new Supervisor([spec('a')],
+			{ start: (s, events) => { const w = new FakeWorker(s, events); workers.push(w); return w as any } },
+			{ start: (events, specs) => { const e = new FakeEdge(events, specs.map(s => s.descriptor.path)); edges.push(e); return e as any } },
+			policies, clock as any, logger)
+		supervisor.start()
+		workers[0].events.ready({})
+		supervisor.reload(spec('a', 2))
+		const v2 = workers[1]
+		v2.events.ready({})
+		// time goes by and the new worker answers its pings: it is not taken for hung
+		for (let i = 0; i < 10; i++) {
+			now += 20
+			v2.events.pong()
+			edges[0].events.pong()
+			await new Promise(resolve => setTimeout(resolve, 12))
+		}
+		expect(supervisor.states()[0].status).toBe('ready')
+		expect(workers).toHaveLength(2)
+		// it falls: the schema restarts with a new worker
+		v2.events.exited('out of memory')
+		expect(supervisor.states()[0]).toMatchObject({ status: 'restarting', reason: 'out of memory' })
+		await new Promise(resolve => setTimeout(resolve, 30))
+		expect(workers).toHaveLength(3)
+		await supervisor.stop()
+	})
+
 	test('a new version that does not start: the last one that did keeps serving, with the reason as pending', async () => {
 		const { supervisor, workers, edges } = setup()
 		supervisor.start()

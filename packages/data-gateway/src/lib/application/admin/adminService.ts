@@ -6,6 +6,8 @@ import {
 import { badRequest, forbidden, GatewayError, notFound } from '../../domain/errors/gatewayError'
 import { SchemaState } from '../../domain/runtime/policies'
 import { normalizeSchemaPath, schemaPathIssues, schemaPathsIssues } from '../../domain/runtime/schemaPath'
+import { applyPatch, PatchError, referencesOf, SchemaPatch } from '../../domain/admin/schemaPatch'
+import { lineDiff } from '../../domain/admin/lineDiff'
 import { SchemaIssue, SchemaValidatorPort, VersionConflict, WorkspaceStorePort, YamlPort } from '../ports/output/adminPorts'
 import { ClockPort, LoggerPort } from '../ports/output/supportPorts'
 
@@ -198,6 +200,44 @@ export class AdminService {
 		})
 		this.audit(principal, 'wrote', `${path}/${SCHEMA_FILE}`)
 		return { version, issues }
+	}
+
+	/**
+	 * One change of one element (a form): applied on the lambdaORM.yaml as it is now, if that element is still as the
+	 * form read it (another element changed meanwhile doesn't matter), written keeping the comments and the rest of the
+	 * file, and only if the schema stays valid.
+	 */
+	public async patchSchema (principal: Principal, path: string, patch: SchemaPatch): Promise<{ version: string, references: string[], added: number, removed: number, issues: SchemaIssue[] }> {
+		this.require(principal, 'schemaWrite')
+		const workspace = this.workspaceOf(path)
+		return this.store.withLock(workspace, async () => {
+			const file = await this.store.read(workspace, SCHEMA_FILE)
+			if (!file) throw notFound(`schema "${path}" has no ${SCHEMA_FILE}`)
+			let changed: { schema: unknown, references: string[] }
+			try {
+				changed = applyPatch(this.yaml.parse(file.text), patch)
+			} catch (error) {
+				if (!(error instanceof PatchError)) throw error
+				if (error.kind === 'conflict') throw preconditionFailed(error.message, { current: error.current, version: file.version })
+				throw error.kind === 'notFound' ? notFound(error.message) : badRequest('ValidationError', error.message)
+			}
+			const text = this.yaml.merge(file.text, changed.schema)
+			const issues = await this.validator.validate(text)
+			if (issues.some(i => i.severity === 'error')) throw invalidSchema(issues)
+			const version = await this.store.write(workspace, SCHEMA_FILE, text, file.version)
+			const diff = lineDiff(file.text, text)
+			this.audit(principal, `${patch.op} ${patch.at.join('/')}${patch.to ? ` to ${patch.to}` : ''} in`, `${path}/${SCHEMA_FILE}`)
+			return { version, references: changed.references, added: diff.added, removed: diff.removed, issues }
+		})
+	}
+
+	/** Who uses an element: what to warn about before removing it */
+	public async references (principal: Principal, path: string, at: unknown): Promise<{ references: string[] }> {
+		this.require(principal, 'schemaRead')
+		if (!Array.isArray(at) || at.some(s => typeof s !== 'string')) throw badRequest('ValidationError', 'at is the path of names of the element')
+		const file = await this.store.read(this.workspaceOf(path), SCHEMA_FILE)
+		if (!file) throw notFound(`schema "${path}" has no ${SCHEMA_FILE}`)
+		return { references: referencesOf(this.yaml.parse(file.text), at as string[]) }
 	}
 
 	// ─── workbench ───────────────────────────────────────────────────────────

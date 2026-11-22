@@ -34,6 +34,26 @@ export class LambdaSchemaValidator implements SchemaValidatorPort {
 				}
 			})
 		})
+		// a name twice in a list (two properties price): λORM takes either, a form would edit only one
+		const named: string[][] = [['domain', 'entities'], ['domain', 'enums'], ['infrastructure', 'sources'], ['infrastructure', 'mappings'], ['infrastructure', 'stages'], ['infrastructure', 'views']]
+		entities.forEach((_e: any, i: number) => { for (const list of ['properties', 'relations', 'indexes']) named.push(['domain', 'entities', i as any, list]) })
+		;(Array.isArray(schema.infrastructure?.mappings) ? schema.infrastructure.mappings : []).forEach((_m: any, i: number) => named.push(['infrastructure', 'mappings', i as any, 'entities']))
+		;(Array.isArray(schema.infrastructure?.stages) ? schema.infrastructure.stages : []).forEach((_s: any, i: number) => named.push(['infrastructure', 'stages', i as any, 'sources']))
+		for (const path of named) {
+			const list = path.reduce((v: any, k) => v?.[k], schema)
+			if (!Array.isArray(list)) continue
+			const seen = new Set<string>()
+			list.forEach((item: any, k: number) => {
+				const name = item?.name
+				if (typeof name !== 'string') return
+				if (seen.has(name)) {
+					const owner = path.length > 2 ? `${path.slice(0, 3).reduce((v: any, key) => v?.[key], schema)?.name ?? ''}.` : ''
+					const node = document.getIn([...path, k, 'name'], true) as any
+					issues.push({ severity: 'error', message: `${owner}${path[path.length - 1]}: "${name}" twice`, ...at(node?.range?.[0]) })
+				}
+				seen.add(name)
+			})
+		}
 		if (issues.some(i => i.severity === 'error')) return issues
 		// λORM completes it: what it can't (an entity extends one that doesn't exist, a relation to nothing) is an error
 		const rest = { ...schema }

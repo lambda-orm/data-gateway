@@ -88,6 +88,10 @@ export interface AdminApiPort {
 	/** undefined when the gateway has no administration (admin off) */
 	capabilities (): Promise<AdminCapabilities | undefined>
 	readSchema (schema: string): Promise<{ text: string, version: string }>
+	/** one change of one element (a form): 412 when that element changed since it was read (details.current) */
+	patchSchema (schema: string, patch: SchemaPatch): Promise<{ version: string, references: string[], added: number, removed: number }>
+	/** who uses an element (to warn before removing it) */
+	references (schema: string, at: string[]): Promise<{ references: string[] }>
 	writeSchema (schema: string, text: string, version: string): Promise<{ version: string, issues: SchemaIssue[] }>
 	validate (text: string): Promise<{ valid: boolean, issues: SchemaIssue[] }>
 	createWorkspace (path: string, copyOf?: string): Promise<{ path: string, version: string }>
@@ -138,4 +142,14 @@ export interface CommandPreview {
 	rows?: Record<string, number>
 	/** pull, introspect, incorporate: what changes in the lambdaORM.yaml */
 	diff?: { added: number, removed: number, hunks: { oldStart: number, newStart: number, lines: { op: ' ' | '+' | '-', text: string }[] }[] }
+}
+
+/** One change of one element of a schema, named by names (['domain', 'entities', 'Products']) */
+export interface SchemaPatch {
+	op: 'set' | 'add' | 'remove' | 'rename'
+	at: string[]
+	value?: unknown
+	to?: string
+	/** the element as it was read */
+	expected?: unknown
 }

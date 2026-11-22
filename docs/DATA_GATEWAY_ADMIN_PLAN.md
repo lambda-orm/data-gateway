@@ -282,6 +282,12 @@ por defecto.
 - **Fase 3b (hecha):** `pull`, `introspect`, `incorporate`, con el diff del `lambdaORM.yaml` como vista previa y escrito
   conservando comentarios, orden y estilo (`DATA_GATEWAY.md` §11.3). `pull` actualiza el estado del stage en el worker
   sin dejar que λORM escriba el YAML. Probado contra PostgreSQL, `incorporate` completo con el supervisor.
+- **Fase 4 (hecha):** el `PATCH` por elemento (`set`, `add`, `remove`, `rename` con sus referencias), con concurrencia
+  por elemento, y **Esquema (formularios)** en la UI (`DATA_GATEWAY.md` §11.4). Views y las columnas de cada
+  propiedad en los mappings quedan en YAML por ahora.
+- Encontrado en la fase 4: tras una recarga blue-green, los eventos del worker nuevo seguían atados al candidato (sus
+  pongs no lo mantenían vivo y su caída no reiniciaba el esquema): a los 30 s el supervisor lo terminaba. Corregido
+  con su prueba. Y λORM acepta un nombre repetido en una lista: la validación lo marca.
 - Queda de la fase 2 para después: los borradores personales del navegador **junto** a lo compartido (hoy es uno u otro
   según `workbenchWrite`, con la copia del navegador al workspace), y el diff de tres vías (hoy son dos lados).
 - Encontrado en la fase 1: λORM arranca un esquema con un tipo que no existe (`type: nope`) sin error; la validación de
