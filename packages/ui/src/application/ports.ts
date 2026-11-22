@@ -66,6 +66,13 @@ export interface AdminCapabilities {
 	workbenchWrite: boolean
 }
 
+/** A file of workbench/ that is not an item (not valid YAML): nothing saved from here replaces it */
+export interface WorkbenchProblem {
+	schema: string
+	file: string
+	message: string
+}
+
 export interface SchemaIssue {
 	severity: 'error' | 'warning'
 	message: string
@@ -86,7 +93,7 @@ export interface AdminApiPort {
 	createWorkspace (path: string, copyOf?: string): Promise<{ path: string, version: string }>
 	removeWorkspace (path: string): Promise<{ trash: string }>
 	/** what is saved in every workspace; undefined when it didn't change since that version */
-	workbench (version?: string): Promise<{ version: string, items: (SavedItem & { version?: string })[] } | undefined>
+	workbench (version?: string): Promise<{ version: string, items: (SavedItem & { version?: string })[], problems?: WorkbenchProblem[] } | undefined>
 	putItems (items: (SavedItem & { version?: string })[]): Promise<{ items: { id: string, version: string }[] }>
 	removeItems (ids: string[]): Promise<{ removed: string[] }>
 }

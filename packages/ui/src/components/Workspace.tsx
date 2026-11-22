@@ -5,7 +5,7 @@ import { DomainInfo, edgesOf } from '../domain/diagram'
 import { explorerMessagesOf } from '../domain/explorerI18n'
 import { messagesOf } from '../domain/i18n'
 import { toYaml } from '../domain/results'
-import { folderPaths, SavedDiagram, SavedItem, SavedQuery, SavedQueryContent } from '../domain/savedItems'
+import { folderPaths, SavedDiagram, SavedItem, SavedQuery, SavedQueryContent, toExport } from '../domain/savedItems'
 import { RestQueryApi } from '../infrastructure/restQueryApi'
 import { IndexedDbWorkspaceStore } from '../infrastructure/workspaceStores'
 import { CodeEditor } from './CodeEditor'
@@ -16,6 +16,7 @@ import { Explorer, problemText } from './Explorer'
 import { QueryWorkbench, QueryWorkbenchProps } from './QueryWorkbench'
 import { SchemaEditor } from './SchemaEditor'
 import { RestAdminApi } from '../infrastructure/restAdminApi'
+import { GatewayWorkspaceStore } from '../infrastructure/gatewayWorkspaceStore'
 import { adminMessagesOf, format } from '../domain/adminI18n'
 import { AdminApiPort, AdminCapabilities } from '../application/ports'
 
@@ -37,6 +38,10 @@ export interface WorkspaceProps extends Omit<QueryWorkbenchProps, 'initial' | 'o
 	 */
 	admin?: AdminApiPort | false
 }
+
+/** A flag of this browser (a convenience: without storage it is never set) */
+const readFlag = (key: string): boolean => { try { return globalThis.localStorage?.getItem(key) === '1' } catch { return false } }
+const writeFlag = (key: string): void => { try { globalThis.localStorage?.setItem(key, '1') } catch { /* no storage */ } }
 
 /** What tells that the schemas changed: their routes, states and the version each serves */
 const revisionOf = (schemas: SchemaInfo[]): string => schemas.map(s => `${s.path}|${s.status}|${s.since ?? ''}|${s.pending ?? ''}|${s.reason ?? ''}`).join('\n')
@@ -103,7 +108,38 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 	const m = messagesOf(workbench.locale)
 	const x = explorerMessagesOf(workbench.locale)
 	const api = useMemo(() => workbench.api ?? new RestQueryApi(workbench.baseUrl ?? '', workbench.headers), [workbench.api, workbench.baseUrl, workbench.headers])
-	const controller = useMemo(() => new WorkspaceController(store ?? new IndexedDbWorkspaceStore(workspaceKey ?? workbench.baseUrl ?? 'default')), [store, workspaceKey, workbench.baseUrl])
+	const a = adminMessagesOf(workbench.locale)
+	const adminApi = useMemo<AdminApiPort | undefined>(() => admin === false ? undefined : admin ?? (workbench.api ? undefined : new RestAdminApi(workbench.baseUrl ?? '', workbench.headers)),
+		[admin, workbench.api, workbench.baseUrl, workbench.headers])
+	const [can, setCan] = useState<AdminCapabilities>()
+	// what the gateway allows is known (or there is no administration): until then nothing saved is read
+	const [known, setKnown] = useState(false)
+	useEffect(() => {
+		setCan(undefined)
+		setKnown(!adminApi)
+		adminApi?.capabilities().then(setCan, () => setCan(undefined)).finally(() => setKnown(true))
+	}, [adminApi])
+	// with workbenchWrite what is saved goes to the workspaces of the gateway, shared; without it, to this browser
+	const shared = !store && !!adminApi && !!can?.workbenchWrite
+	const browserKey = workspaceKey ?? workbench.baseUrl ?? 'default'
+	const browserStore = useMemo(() => store ?? new IndexedDbWorkspaceStore(browserKey), [store, browserKey])
+	const sharedStore = useMemo(() => shared ? new GatewayWorkspaceStore(adminApi!) : undefined, [shared, adminApi])
+	const controller = useMemo(() => new WorkspaceController(sharedStore ?? browserStore), [sharedStore, browserStore])
+	// what this browser kept before the workspace was shared: offered to copy there
+	const [inBrowser, setInBrowser] = useState<SavedItem[]>([])
+	useEffect(() => {
+		if (!shared) { setInBrowser([]); return }
+		if (readFlag(`lambdaorm-ui.copied:${browserKey}`)) return
+		browserStore.all().then(items => setInBrowser(items), () => setInBrowser([]))
+	}, [shared, browserStore, browserKey])
+	const copyToWorkspace = async () => {
+		try {
+			await controller.importText(JSON.stringify(toExport(inBrowser)), 'merge')
+			setNotice(format(a.copiedToWorkspace, { n: inBrowser.length }))
+			writeFlag(`lambdaorm-ui.copied:${browserKey}`)
+			setInBrowser([])
+		} catch (e) { setNotice(problemText(e, x)) }
+	}
 	const state = useSyncExternalStore(controller.subscribe, controller.getState)
 	const [schemas, setSchemas] = useState<SchemaInfo[]>([])
 	const [tabs, setTabs] = useState<Tab[]>([{ id: 1, kind: 'query', title: `${m.tabNamed} 1` }])
@@ -118,14 +154,6 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 	const [creatingDiagram, setCreatingDiagram] = useState<{ schema: string, parentId?: string }>()
 	const [choosingEntities, setChoosingEntities] = useState<Tab>()
 	const [notice, setNotice] = useState<string>()
-	const a = adminMessagesOf(workbench.locale)
-	const adminApi = useMemo<AdminApiPort | undefined>(() => admin === false ? undefined : admin ?? (workbench.api ? undefined : new RestAdminApi(workbench.baseUrl ?? '', workbench.headers)),
-		[admin, workbench.api, workbench.baseUrl, workbench.headers])
-	const [can, setCan] = useState<AdminCapabilities>()
-	useEffect(() => {
-		setCan(undefined)
-		adminApi?.capabilities().then(setCan, () => setCan(undefined))
-	}, [adminApi])
 	const [newSchema, setNewSchema] = useState(false)
 	const [removing, setRemoving] = useState<string>()
 	// the schemas read again now (after creating or removing one), not at the next tick
@@ -162,7 +190,13 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 		}
 	}
 
-	useEffect(() => { controller.load() }, [controller])
+	useEffect(() => { if (known) controller.load() }, [controller, known])
+	// someone else saved in the workspace (or a file of workbench/ changed): read again
+	useEffect(() => {
+		if (!sharedStore || refreshMs <= 0) return
+		const timer = setInterval(() => { sharedStore.changed().then(changed => { if (changed) controller.load() }, () => undefined) }, refreshMs)
+		return () => clearInterval(timer)
+	}, [controller, sharedStore, refreshMs])
 	// the explorer also shows the schemas that didn't start, with their reason; the rest of the workspace only the ready ones
 	const [listed, setListed] = useState<SchemaInfo[]>([])
 	const revision = useMemo(() => revisionOf(listed), [listed])
@@ -309,6 +343,17 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 			{!collapsed && (
 				<>
 					<div className="lw-space-side" style={{ width }} ref={side}>
+						{(sharedStore?.problems.length ?? 0) > 0 && state.loaded && (
+							<div className="lw-notice" role="alert">
+								{a.unreadableFiles}
+								<ul className="lw-issues">{sharedStore!.problems.map(p => <li key={`${p.schema}/${p.file}`}>{p.schema || '/'}/{p.file}: {p.message}</li>)}</ul>
+							</div>
+						)}
+						{inBrowser.length > 0 && (
+							<div className="lw-notice" role="note">
+								{format(a.browserItems, { n: inBrowser.length })} <button type="button" onClick={copyToWorkspace}>{a.copyToWorkspace}</button>
+							</div>
+						)}
 						<Explorer schemas={listed} controller={controller} api={api} locale={workbench.locale} theme={theme} activeId={activeTab?.savedId}
 							loadDomain={domainOf} onOpen={openSaved} onOpenDomain={openDomain} onOpenEntity={openEntity}
 							onNewQuery={(schema, parentId) => newQuery(schema, parentId)}

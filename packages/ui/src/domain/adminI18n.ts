@@ -32,6 +32,10 @@ export interface AdminMessages {
 	removeConfirm: string
 	remove: string
 	removed: string
+	browserItems: string
+	copyToWorkspace: string
+	copiedToWorkspace: string
+	unreadableFiles: string
 }
 
 type Row = [keyof AdminMessages, ...string[]]
@@ -68,6 +72,13 @@ const ROWS: Row[] = [
 	['remove', 'Remove', 'Eliminar', 'Remover', 'Supprimer', 'Rimuovi', 'Entfernen', 'Verwijderen', 'Elimina', 'Eliminar', 'Kendu'],
 	['removed', 'Schema {name} removed (its workspace is in .trash)', 'Esquema {name} eliminado (su workspace está en .trash)', 'Esquema {name} removido (o workspace está em .trash)', 'Schéma {name} supprimé (son espace de travail est dans .trash)', 'Schema {name} rimosso (il workspace è in .trash)', 'Schema {name} entfernt (sein Workspace liegt in .trash)', 'Schema {name} verwijderd (de workspace staat in .trash)', 'Esquema {name} eliminat (el workspace és a .trash)', 'Esquema {name} eliminado (o seu workspace está en .trash)', '{name} eskema kenduta (bere workspace-a .trash-en dago)']
 ]
+
+ROWS.push(
+	['browserItems', '{n} items are saved in this browser only.', '{n} elementos están guardados solo en este navegador.', '{n} itens estão salvos só neste navegador.', '{n} éléments sont enregistrés seulement dans ce navigateur.', '{n} elementi sono salvati solo in questo browser.', '{n} Elemente sind nur in diesem Browser gespeichert.', '{n} items zijn alleen in deze browser opgeslagen.', '{n} elements estan desats només en aquest navegador.', '{n} elementos están gardados só neste navegador.', '{n} elementu nabigatzaile honetan bakarrik daude gordeta.'],
+	['copyToWorkspace', 'Copy them to the workspace', 'Copiarlos al workspace', 'Copiá-los para o workspace', 'Les copier dans l’espace de travail', 'Copiali nel workspace', 'In den Workspace kopieren', 'Naar de workspace kopiëren', 'Copia’ls al workspace', 'Copialos ao workspace', 'Kopiatu workspace-ra'],
+	['unreadableFiles', 'Files of workbench/ that can’t be read (fix them by hand):', 'Archivos de workbench/ que no se pueden leer (corregilos a mano):', 'Arquivos de workbench/ que não podem ser lidos (corrija à mão):', 'Fichiers de workbench/ illisibles (corrigez-les à la main) :', 'File di workbench/ che non si possono leggere (correggili a mano):', 'Dateien in workbench/, die nicht gelesen werden können (von Hand korrigieren):', 'Bestanden in workbench/ die niet gelezen kunnen worden (handmatig herstellen):', 'Fitxers de workbench/ que no es poden llegir (corregeix-los a mà):', 'Ficheiros de workbench/ que non se poden ler (corríxeos a man):', 'Irakur ezin diren workbench/-eko fitxategiak (zuzendu eskuz):'],
+	['copiedToWorkspace', '{n} items copied to the workspace', '{n} elementos copiados al workspace', '{n} itens copiados para o workspace', '{n} éléments copiés dans l’espace de travail', '{n} elementi copiati nel workspace', '{n} Elemente in den Workspace kopiert', '{n} items naar de workspace gekopieerd', '{n} elements copiats al workspace', '{n} elementos copiados ao workspace', '{n} elementu workspace-ra kopiatuta']
+)
 
 const ORDER: Locale[] = ['en', 'es', 'pt', 'fr', 'it', 'de', 'nl', 'ca', 'gl', 'eu']
 

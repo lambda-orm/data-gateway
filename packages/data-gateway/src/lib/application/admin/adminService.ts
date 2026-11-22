@@ -203,25 +203,45 @@ export class AdminService {
 	// ─── workbench ───────────────────────────────────────────────────────────
 
 	/** What is saved in every workspace (or in one), and a version of the whole to ask again only if it changed */
-	public async workbench (principal: Principal, path?: string): Promise<{ version: string, items: WorkbenchItem[] }> {
+	public async workbench (principal: Principal, path?: string): Promise<{ version: string, items: WorkbenchItem[], problems?: WorkbenchProblem[] }> {
 		if (!this.can(principal).workbenchRead) throw forbidden(principal.name, 'read')
 		const schemas = path === undefined ? this.schemas() : [{ path, workspace: this.workspaceOf(path) }]
-		const items = (await Promise.all(schemas.map(s => this.itemsOf(s.path, s.workspace)))).flat()
-		return { version: versionOfAll(items), items }
+		const read = await Promise.all(schemas.map(s => this.read(s.path, s.workspace)))
+		const items = read.flatMap(r => r.items)
+		const problems = read.flatMap(r => r.problems)
+		return { version: versionOfAll(items, problems), items, ...(problems.length ? { problems } : {}) }
 	}
 
 	private async itemsOf (schema: string, workspace: string): Promise<WorkbenchItem[]> {
+		return (await this.read(schema, workspace)).items
+	}
+
+	/**
+	 * The items of a workspace. A file that isn't valid YAML (written by hand) is not an item: it is a problem, so that
+	 * nothing saved from the UI replaces what it holds.
+	 */
+	private async read (schema: string, workspace: string): Promise<{ items: WorkbenchItem[], problems: WorkbenchProblem[], files: Set<string> }> {
 		const entries = await this.store.list(workspace, WORKBENCH)
 		const folders = new Map<string, WorkbenchItem>()
 		const items: WorkbenchItem[] = []
+		const problems: WorkbenchProblem[] = []
+		const files = new Set(entries.map(e => e.path.toLowerCase()))
+		let current = ''
 		const parse = (text: string): unknown => {
-			try { return this.yaml.parse(text) } catch { return undefined }
+			try {
+				return this.yaml.parse(text)
+			} catch (error: any) {
+				problems.push({ schema, file: current, message: String(error?.message ?? error).split('\n')[0] })
+				return PARSE_FAILED
+			}
 		}
 		// the folders first, from the top: a folder's id is in its .folder.yaml
 		for (const entry of entries.filter(e => e.dir).sort((a, b) => a.path.length - b.path.length)) {
 			const meta = await this.store.read(workspace, `${entry.path}/${FOLDER_FILE}`)
 			const parent = folders.get(entry.path.slice(0, entry.path.lastIndexOf('/')))
-			const folder = workbenchFolderOf(schema, entry.path, meta ? parse(meta.text) : undefined, parent?.id, meta?.version ?? '', entry.modified)
+			current = `${entry.path}/${FOLDER_FILE}`
+			const content = meta ? parse(meta.text) : undefined
+			const folder = workbenchFolderOf(schema, entry.path, content === PARSE_FAILED ? undefined : content, parent?.id, meta?.version ?? '', entry.modified)
 			folders.set(entry.path, folder)
 			items.push(folder)
 		}
@@ -231,10 +251,13 @@ export class AdminService {
 			const file = await this.store.read(workspace, entry.path)
 			if (!file) continue
 			const parent = folders.get(entry.path.slice(0, entry.path.lastIndexOf('/')))
-			const item = workbenchItemOf(schema, entry.path, parse(file.text), parent?.id, file.version, file.modified)
+			current = entry.path
+			const content = parse(file.text)
+			if (content === PARSE_FAILED) continue
+			const item = workbenchItemOf(schema, entry.path, content, parent?.id, file.version, file.modified)
 			if (item) items.push(item)
 		}
-		return items
+		return { items, problems, files }
 	}
 
 	/**
@@ -257,7 +280,7 @@ export class AdminService {
 		for (const [schema, items] of bySchema) {
 			const workspace = this.workspaceOf(schema)
 			await this.store.withLock(workspace, async () => {
-				const current = await this.itemsOf(schema, workspace)
+				const { items: current, files } = await this.read(schema, workspace)
 				const currentById = new Map(current.map(i => [i.id, i]))
 				const changed = items.filter(i => currentById.has(i.id) && i.version !== undefined && currentById.get(i.id)!.version !== i.version)
 				if (changed.length) throw preconditionFailed(`${changed.map(i => `"${i.name}"`).join(', ')} changed since they were read`, { ids: changed.map(i => i.id) })
@@ -269,6 +292,10 @@ export class AdminService {
 				const { places, issues } = workbenchPlaces([...next.values()])
 				if (issues.length) throw badRequest('ValidationError', issues.join('; '))
 				const oldPlaces = workbenchPlaces(current).places
+				// a place taken by a file that is not this item (one that can't be read, or written by hand meanwhile)
+				const owned = new Set([...oldPlaces.values()].map(p => p.toLowerCase()))
+				const taken = items.filter(i => i.kind !== 'folder' && files.has(places.get(i.id)!.toLowerCase()) && !owned.has(places.get(i.id)!.toLowerCase()))
+				if (taken.length) throw new GatewayError(409, 'ConflictError', `${taken.map(i => places.get(i.id)).join(', ')} already exists and is not that item (fix or rename the file)`)
 				// the folders first (the shallowest first: a moved folder takes what is inside)
 				const ordered = [...items].sort((a, b) => (a.kind === 'folder' ? 0 : 1) - (b.kind === 'folder' ? 0 : 1) || (places.get(a.id)!.length - places.get(b.id)!.length))
 				for (const item of ordered) {
@@ -327,10 +354,20 @@ export class AdminService {
 	}
 }
 
+/** A file of workbench/ that is not an item: what is wrong with it */
+export interface WorkbenchProblem {
+	schema: string
+	file: string
+	message: string
+}
+
+const PARSE_FAILED = Symbol('parse failed')
+
 /** One version for a set of items: it changes when any of them changes */
-const versionOfAll = (items: WorkbenchItem[]): string => {
+const versionOfAll = (items: WorkbenchItem[], problems: WorkbenchProblem[] = []): string => {
 	let hash = 0
-	for (const text of items.map(i => `${i.schema}\0${i.id}\0${i.version}\0${i.parentId ?? ''}\0${i.name}`).sort()) {
+	const keys = [...items.map(i => `${i.schema}\0${i.id}\0${i.version}\0${i.parentId ?? ''}\0${i.name}`), ...problems.map(p => `!${p.schema}\0${p.file}\0${p.message}`)]
+	for (const text of keys.sort()) {
 		for (let i = 0; i < text.length; i++) hash = (hash * 31 + text.charCodeAt(i)) | 0
 	}
 	return `${items.length}-${(hash >>> 0).toString(16)}`

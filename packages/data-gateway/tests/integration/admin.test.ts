@@ -176,6 +176,18 @@ describe('admin over REST (inline)', () => {
 		const item = (await call(base, '/admin/workbench?schema=iot%2Fv1', { headers: READER })).body.items.find((i: any) => i.name === 'by hand')
 		expect(item).toMatchObject({ id: 'file:workbench/by hand.query.yaml', kind: 'query', query: 'Customers.page(1, 10)', data: '{"a":1}' })
 	})
+
+	test('a file of workbench/ that is not valid YAML is a problem, not an item, and nothing saved replaces it', async () => {
+		const broken = path.join(root, 'iot/v1/workbench/broken.query.yaml')
+		fs.writeFileSync(broken, 'query: Orders.map(p => ({ month: month(p.orderDate) }))\n')
+		const listed = (await call(base, '/admin/workbench?schema=iot%2Fv1', { headers: READER })).body
+		expect(listed.items.find((i: any) => i.name === 'broken')).toBeUndefined()
+		expect(listed.problems).toEqual([expect.objectContaining({ schema: 'iot/v1', file: 'workbench/broken.query.yaml', message: expect.any(String) })])
+		const saved = await call(base, '/admin/workbench', { method: 'PUT', body: { items: [{ id: 'new', kind: 'query', schema: 'iot/v1', name: 'broken', mode: 'query', query: 'x' }] }, headers: ANALYST })
+		expect(saved.status).toBe(409)
+		expect(fs.readFileSync(broken, 'utf8')).toMatch(/month: month/)
+		fs.rmSync(broken)
+	})
 })
 
 describe('admin with the supervisor: what is written here is served', () => {

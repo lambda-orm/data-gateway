@@ -39,9 +39,9 @@ class FakeAdmin implements AdminApiPort {
 	}
 	async createWorkspace (path: string, copyOf?: string) { this.calls.push(`create ${path} ${copyOf ?? ''}`.trim()); if (path === 'admin') throw status(400, 'segment "admin" is reserved'); return { path, version: 'v1' } }
 	async removeWorkspace (path: string) { this.calls.push(`remove ${path}`); return { trash: `.trash/${path}` } }
-	async workbench () { return { version: '0', items: [] } }
-	async putItems () { return { items: [] } }
-	async removeItems () { return { removed: [] } }
+	async workbench (_version?: string): Promise<{ version: string, items: any[] } | undefined> { return { version: '0', items: [] } }
+	async putItems (_items: any[]): Promise<{ items: { id: string, version: string }[] }> { return { items: [] } }
+	async removeItems (_ids: string[]): Promise<{ removed: string[] }> { return { removed: [] } }
 }
 
 const row = (name: string) => screen.getAllByRole('treeitem').find(r => r.querySelector('.lw-tree-label')?.textContent === name)!
@@ -155,5 +155,62 @@ describe('the REST adapter of the administration', () => {
 		expect(seen[1].url).toBe('http://g/admin/workspaces/iot%2Fv1/schema')
 		await expect(api.writeSchema('', 'x', 'a')).rejects.toMatchObject({ status: 412, details: { version: 'b' } })
 		expect(seen[2]).toMatchObject({ url: 'http://g/admin/workspaces/~/schema', init: { method: 'PUT', headers: { 'If-Match': '"a"', 'X-Api-Key': 'k' } } })
+	})
+})
+
+describe('what is saved, in the workspaces of the gateway', () => {
+	class SharedAdmin extends FakeAdmin {
+		public items: any[] = [{ id: 'f1', kind: 'folder', schema: 'northwind/v1', name: 'shared reports', createdAt: 'a', updatedAt: 'a', version: 'x1' }]
+		public puts: any[][] = []
+		public reject = false
+		async workbench (version?: string) {
+			const all = `${this.items.length}:${this.items.map(i => i.version).join(',')}`
+			return version === all ? undefined : { version: all, items: this.items }
+		}
+
+		async putItems (items: any[]) {
+			this.puts.push(items)
+			if (this.reject) throw status(412, '"x" changed since they were read', { ids: [items[0].id] })
+			for (const item of items) this.items = [...this.items.filter(i => i.id !== item.id), { ...item, version: `v-${item.id}` }]
+			return { items: items.map(i => ({ id: i.id, version: `v-${i.id}` })) }
+		}
+
+		async removeItems (ids: string[]) { this.items = this.items.filter(i => !ids.includes(i.id)); return { removed: ids } }
+	}
+
+	test('with workbenchWrite: the items of the gateway, and each change sent with the version it read', async () => {
+		const { GatewayWorkspaceStore } = await import('../src/infrastructure/gatewayWorkspaceStore')
+		const admin = new SharedAdmin()
+		const store = new GatewayWorkspaceStore(admin)
+		const items = await store.all()
+		expect(items).toEqual([expect.objectContaining({ id: 'f1', name: 'shared reports' })])
+		expect((items[0] as any).version).toBeUndefined()
+		expect(await store.changed()).toBe(false)
+		await store.put([{ ...items[0], name: 'renamed' } as any])
+		expect(admin.puts[0][0]).toMatchObject({ id: 'f1', name: 'renamed', version: 'x1' })
+		admin.items = [...admin.items, { id: 'other', kind: 'folder', schema: 'northwind/v1', name: 'by someone else', version: 'o1' }]
+		expect(await store.changed()).toBe(true)
+		admin.reject = true
+		await expect(store.put([{ ...items[0], name: 'again' } as any])).rejects.toMatchObject({ status: 412, message: expect.stringMatching(/someone else changed it/) })
+		await expect(store.clear()).rejects.toThrow(/shared/)
+	})
+
+	test('the explorer shows what is saved in the workspace and saves there', async () => {
+		const admin = new SharedAdmin()
+		render(<Workspace api={new FakeApi()} admin={admin} history={false} locale="en" refreshMs={0} />)
+		await waitFor(() => expect(row('shared reports')).toBeTruthy())
+		fireEvent.click(within(row('northwind/v1')).getByRole('button', { name: 'Add' }))
+		fireEvent.click(screen.getByRole('menuitem', { name: /New folder/ }))
+		fireEvent.change(screen.getByLabelText('name'), { target: { value: 'mine' } })
+		fireEvent.click(screen.getByRole('button', { name: 'Create' }))
+		await waitFor(() => expect(admin.puts.some(p => p[0].name === 'mine' && p[0].version === undefined)).toBe(true))
+		await waitFor(() => expect(row('mine')).toBeTruthy())
+	})
+
+	test('without workbenchWrite what is saved stays in this browser', async () => {
+		const admin = new SharedAdmin({ ...ALL, workbenchWrite: false })
+		render(<Workspace api={new FakeApi()} admin={admin} history={false} locale="en" refreshMs={0} />)
+		await waitFor(() => expect(row('northwind/v1')).toBeTruthy())
+		expect(screen.queryByText('shared reports')).toBeNull()
 	})
 })

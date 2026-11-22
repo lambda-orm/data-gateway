@@ -1008,4 +1008,17 @@ junto al esquema):
   `data` / `options` pueden ser YAML en lugar de texto JSON.
 - Un nombre no puede tener `/ \ : * ? " < > |`, empezar con un punto ni pasar de 120 caracteres; dos elementos del mismo
   tipo no pueden llamarse igual en una carpeta.
+- Un archivo que no es YAML válido (escrito a mano) **no es un elemento**: va en `problems` (`{ schema, file, message }`)
+  y la UI lo avisa. Guardar un elemento nunca pisa un archivo que no es suyo (`409`): lo que tiene no se pierde.
+
+### 11.2 En la UI (`@lambdaorm/ui` 0.5.0)
+
+- Con `schemaRead`, cada esquema del explorador (también uno en error, para arreglarlo) tiene **Esquema
+  (lambdaORM.yaml)**: el archivo entero en Monaco, validado mientras se escribe (cada error en su línea) y, con
+  `schemaWrite`, guardado con Ctrl+S con la versión leída. Si otro guardó otra versión, se muestran las dos lado a lado
+  para elegir; si la gateway sirve una versión nueva y no hay cambios sin guardar, se toma sola.
+- Con `schemaAdmin`, **Nuevo esquema** (vacío o copia de otro) y **Eliminar el esquema** (escribiendo su ruta).
+- Con `workbenchWrite`, lo guardado (carpetas, consultas, scripts, diagramas) va a `workbench/` de cada workspace, en
+  lugar del navegador, y se relee cuando cambia (`ETag`). Lo que el navegador tenía guardado se ofrece copiar al
+  workspace. Sin `workbenchWrite`, se guarda en el navegador como antes.
 

@@ -1,4 +1,4 @@
-import { AdminApiPort, AdminCapabilities, SchemaIssue } from '../application/ports'
+import { AdminApiPort, AdminCapabilities, SchemaIssue, WorkbenchProblem } from '../application/ports'
 import { SavedItem } from '../domain/savedItems'
 import { GatewayRequestError, HeadersProvider } from './restQueryApi'
 
@@ -61,7 +61,7 @@ export class RestAdminApi implements AdminApiPort {
 
 	public async workbench (version?: string) {
 		const answer = await this.request('/workbench', { headers: version ? { 'If-None-Match': `"${version}"` } : {} })
-		return answer.status === 304 ? undefined : answer.body as { version: string, items: (SavedItem & { version?: string })[] }
+		return answer.status === 304 ? undefined : answer.body as { version: string, items: (SavedItem & { version?: string })[], problems?: WorkbenchProblem[] }
 	}
 
 	public async putItems (items: (SavedItem & { version?: string })[]) {

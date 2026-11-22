@@ -140,3 +140,5 @@
 .lw-conflict p { margin: 0; }
 .lw-conflict-sides { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 8px; }
 .lw-conflict .lw-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.lw-space-side .lw-notice { overflow-wrap: anywhere; }
+.lw-space-side .lw-notice .lw-issues { overflow-x: hidden; }
