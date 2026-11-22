@@ -1,5 +1,32 @@
 # @lambdaorm/ui
 
+## 0.5.0
+
+### Minor Changes
+
+- dc07e86: The administration of the workspaces of a gateway with admin.enabled: the lambdaORM.yaml of a schema editable in Monaco
+  (validated while typed, with the line of each issue; saved with Ctrl+S with the version it read; when someone else saved
+  another version, both side by side to choose), new schemas (empty or a copy of another one) and removed ones (their
+  route typed again). `SchemaEditor`, `RestAdminApi` and `AdminApiPort`; the Workspace takes `admin` (by default the
+  gateway's own).
+- 3a0fafa: The panel of commands of a workspace (`CommandsPanel`, a **Commands** row of each ready schema): fetch and export as
+  jobs (an export downloaded or saved in data/), push, drop and import after their preview (the sentences by source, the
+  rows of each entity; drop asks for its stage again), and the last jobs with their result.
+- 37a1e21: The variables of the connections (.env) in the schema's forms, set without ever being shown; the code of the domain
+  (build) written in src/ or downloaded as a zip from the panel of commands; and the completion of the keys and known
+  values of the lambdaORM.yaml in its editor.
+- af7cced: pull, introspect and incorporate in the panel of commands: their preview is the diff of the lambdaORM.yaml (added and
+  removed lines in color); introspect and incorporate take a data file and the entity of its rows.
+- c61218c: The schema as forms (`SchemaForms`, **Schema (forms)** of each schema): entities (with their properties, relations and
+  indexes in tables), enums, sources, mappings and stages, created, changed, renamed and removed one element at a time;
+  a remove first shows who uses the element, and a change of someone else to the same element is shown to choose.
+- 36ac834: The Workspace reads the schemas again (`refreshMs`, default 5000): a schema added, removed or reloaded on the gateway
+  shows without reloading the page, its domain and typings are read again, and a new version that didn't start is marked
+  with its reason (`SchemaInfo.since`, `SchemaInfo.pending`).
+- 3cfd879: With `workbenchWrite` on a gateway with the administration, what is saved (folders, queries, scripts, diagrams) goes to
+  the workspaces of the gateway (`GatewayWorkspaceStore`), shared and read again when it changes; what the browser kept is
+  offered to copy there. A file of workbench/ that can't be read is shown, never replaced.
+
 ## 0.4.0
 
 ### Minor Changes
