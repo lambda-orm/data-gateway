@@ -7,6 +7,8 @@ import { filterEntities } from '../domain/entityFilter'
 import { Locale } from '../domain/i18n'
 import { childrenOf, folderPaths, SavedItem, subtreeOf } from '../domain/savedItems'
 import { ConfirmDialog, Icons, ItemDialog, MenuButton, Modal } from './dialogs'
+import { adminMessagesOf } from '../domain/adminI18n'
+import { AdminCapabilities } from '../application/ports'
 
 export interface ExplorerProps {
 	schemas: SchemaInfo[]
@@ -25,6 +27,15 @@ export interface ExplorerProps {
 	onNewQuery: (schema: string, parentId?: string) => void
 	/** Without it, no diagrams are offered */
 	onNewDiagram?: (schema: string, parentId?: string) => void
+	/** The administration of the workspaces (admin.enabled), with what this credential may do there */
+	admin?: ExplorerAdmin
+}
+
+export interface ExplorerAdmin {
+	can: AdminCapabilities
+	onOpenSchemaFile: (schema: string) => void
+	onNewSchema: () => void
+	onRemoveSchema: (schema: string) => void
 }
 
 type Dialog =
@@ -87,8 +98,16 @@ const Action: React.FC<{ label: string, onClick: () => void, children: React.Rea
  * saved in it (folders, queries, diagrams) with a name and a description. Folders nest; items are dragged into them.
  * The whole workspace is exported to and imported from a JSON file.
  */
-export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, locale, theme, activeId, onOpen, onOpenEntity, onOpenDomain, onNewQuery, onNewDiagram, loadDomain: domainOf }) => {
+export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, locale, theme, activeId, onOpen, onOpenEntity, onOpenDomain, onNewQuery, onNewDiagram, loadDomain: domainOf, admin }) => {
 	const m = explorerMessagesOf(locale)
+	const a = adminMessagesOf(locale)
+	// the lambdaORM.yaml of a schema (to fix one that didn't start, too) and removing it
+	const schemaFileRow = (schema: string) => admin?.can.schemaRead
+		? <Row level={2} label={a.schemaFile} icon={<Icons.yaml />} onOpen={() => admin.onOpenSchemaFile(schema)} title={a.schemaFile} />
+		: null
+	const removeSchema = (schema: string) => admin?.can.schemaAdmin
+		? <Action label={`${a.removeSchema} ${schema || '/'}`} onClick={() => admin.onRemoveSchema(schema)}><Icons.trash /></Action>
+		: null
 	const state = useSyncExternalStore(controller.subscribe, controller.getState)
 	const [expanded, setExpanded] = useState<Set<string>>(new Set())
 	// the text that narrows the entities of each schema
@@ -240,6 +259,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 			<div className="lw-explorer-head">
 				<strong>{m.explorer}</strong>
 				<span className="lw-spacer" />
+				{admin?.can.schemaAdmin && <Action label={a.newSchema} onClick={admin.onNewSchema}><Icons.plus /></Action>}
 				<Action label={m.exportWorkspace} onClick={download}><Icons.download /></Action>
 				<Action label={m.importWorkspace} onClick={() => file.current?.click()}><Icons.upload /></Action>
 				<input ref={file} type="file" accept="application/json,.json" hidden onChange={chooseFile} aria-label={m.importWorkspace} />
@@ -255,8 +275,9 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 						return (
 							<React.Fragment key={s.path}>
 								<Row level={1} label={<span>{s.path || '/'} <span className="lw-type">{format(m.schemaStatus, { status: s.status })}</span></span>}
-									icon={<Icons.schema />} muted expanded={expanded.has(key)} onToggle={() => toggle(key)} title={s.reason ?? s.status} />
+									icon={<Icons.schema />} muted expanded={expanded.has(key)} onToggle={() => toggle(key)} title={s.reason ?? s.status} actions={removeSchema(s.path)} />
 								{expanded.has(key) && <div className="lw-schema-reason" role="note" style={{ paddingLeft: 6 + 14 + 22 }}>{s.reason ?? m.noReason}</div>}
+								{expanded.has(key) && schemaFileRow(s.path)}
 							</React.Fragment>
 						)
 					}
@@ -267,10 +288,11 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 							<Row level={1} label={s.pending ? <span>{s.path || '/'} <span className="lw-pending" aria-label={m.schemaPending}>⚠</span></span> : s.path || '/'}
 								icon={<Icons.schema />} expanded={expanded.has(key)} onToggle={() => toggle(key)}
 								title={s.pending ? `${m.schemaPending}: ${s.pending}` : undefined}
-								dropTarget={{ onDrop: id => move(id, undefined) }} actions={creators(s.path)} />
+								dropTarget={{ onDrop: id => move(id, undefined) }} actions={<>{creators(s.path)}{removeSchema(s.path)}</>} />
 							{expanded.has(key) && (
 								<>
 									{s.pending && <div className="lw-schema-reason lw-schema-pending" role="note" style={{ paddingLeft: 6 + 14 + 22 }}>{m.schemaPending}: {s.pending}</div>}
+									{schemaFileRow(s.path)}
 									<Row level={2} label={m.domainYaml} icon={<Icons.yaml />} onOpen={() => onOpenDomain(s.path)} title={`${m.domainYaml} — ${m.readOnly}`} />
 									<Row level={2} label={m.entities} icon={<Icons.entity />} expanded={expanded.has(entitiesKey)}
 										onToggle={() => { toggle(entitiesKey); loadDomain(s.path) }} />

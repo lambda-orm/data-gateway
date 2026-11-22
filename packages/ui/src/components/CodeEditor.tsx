@@ -77,7 +77,7 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ value, onChange, languag
 		const model = editor.current?.getModel()
 		const monaco = monacoRef.current
 		if (!model || !monaco) return
-		monaco.editor.setModelMarkers(model, 'lambdaorm', markers.map(m => ({ ...m, severity: monaco.MarkerSeverity.Error })))
+		monaco.editor.setModelMarkers(model, 'lambdaorm', markers.map(m => ({ ...m, severity: m.severity === 'warning' ? monaco.MarkerSeverity.Warning : monaco.MarkerSeverity.Error })))
 	}, [markers, ready])
 
 	useEffect(() => {

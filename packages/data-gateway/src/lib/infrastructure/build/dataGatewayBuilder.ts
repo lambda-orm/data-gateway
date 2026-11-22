@@ -15,6 +15,11 @@ import { ConsoleLogger, WinstonLogger } from '../output/logger/loggers'
 import { NoMetrics, PromClientMetrics } from '../output/metrics/promClientMetrics'
 import { AuthenticatorRegistry, TransportRegistry } from './registries'
 import { composeSchema, ComposedSchema } from './schemaComposer'
+import { AdminService } from '../../application/admin/adminService'
+import { SchemaDirectoryPort } from '../../application/ports/input/schemaDirectoryPort'
+import { FileWorkspaceStore } from '../output/admin/fileWorkspaceStore'
+import { LambdaSchemaValidator } from '../output/admin/lambdaSchemaValidator'
+import { YamlAdapter } from '../output/admin/yamlAdapter'
 
 export interface BuildOptions {
 	logger?: LoggerPort
@@ -85,6 +90,19 @@ export const resolveConfiguredSchemas = (config: DataGatewayConfig, logger?: Log
 	return schemas.map(descriptor => ({ descriptor, settings: effectiveSettings(config, descriptor) }))
 }
 
+/** admin.enabled: the administration of the workspaces of the schemas the directory serves */
+export const buildAdmin = (config: DataGatewayConfig, directory: SchemaDirectoryPort, logger: LoggerPort, clock: ClockPort): AdminService | undefined => {
+	if (!config.admin.enabled) return undefined
+	return new AdminService({
+		root: config.orm.workspacePath ? path.resolve(config.orm.workspacePath) : undefined,
+		anonymousAdmin: config.admin.allowAnonymous && config.authentication.adapter === 'none',
+		maxFileBytes: config.admin.maxFileBytes
+	},
+	() => directory.schemas().filter(s => s.workspace !== undefined).map(s => ({ path: s.path, workspace: s.workspace! })),
+	() => directory.states(),
+	new FileWorkspaceStore(), new LambdaSchemaValidator(), new YamlAdapter(), clock, logger)
+}
+
 /** The authenticator of a schema on each transport that exposes it: schema → transport → global */
 export const schemaAuthenticators = (config: DataGatewayConfig, descriptor: SchemaDescriptor, settings: SchemaSettings, registry: AuthenticatorRegistry): Partial<Record<TransportName, AuthenticatorPort>> =>
 	Object.fromEntries(settings.transports.map(transport => [transport, registry.build(effectiveAuthentication(config, descriptor, transport))]))
@@ -122,6 +140,7 @@ export class DataGatewayBuilder {
 				composed.push(schema)
 				inline.push({
 					path: descriptor.path,
+					workspace: descriptor.workspace,
 					gateway: schema.gateway,
 					mcp: schema.mcp,
 					transports: settings.transports,
@@ -136,7 +155,8 @@ export class DataGatewayBuilder {
 		}
 		const inlineDirectory = new InlineSchemaDirectory(inline, clock, version)
 		const directory = metrics.enabled ? new MeasuredSchemaDirectory(inlineDirectory, metrics) : inlineDirectory
-		const transports = (options.transports ?? new TransportRegistry()).build({ config, directory, metrics, logger })
+		const admin = buildAdmin(config, directory, logger, clock)
+		const transports = (options.transports ?? new TransportRegistry()).build({ config, directory, metrics, logger, admin })
 		measureConnections(metrics, transports)
 		logger.info(`[data-gateway] ${version} (inline): schemas ${inline.map(s => `/${s.path}`).join(', ')}; rate limit ${config.rateLimit.max > 0 ? `${config.rateLimit.max} per ${config.rateLimit.windowMs} ms` : 'off'}; ` +
 			`scripts ${config.scripts.enabled ? 'enabled' : 'disabled'}; audit ${config.audit.enabled ? 'on' : 'off'}; authentication ${config.authentication.adapter}`)

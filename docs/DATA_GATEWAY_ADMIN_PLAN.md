@@ -270,6 +270,14 @@ por defecto.
 - **Fase 1 (hecha, 3.2.0):** `orm.watch`, alta, baja y recarga blue-green de un esquema (el último que arrancó sigue si
   el nuevo no arranca, con el motivo en `pending`), el ruteo dinámico de los cuatro transportes, el monitor del volumen
   (eventos + recorrido, por contenido) y `workspace.changed`. En la UI, ver §3.1.
+- **Fase 2a (hecha):** la API `/admin` (`DATA_GATEWAY.md` §11): workspaces creados y eliminados (a `.trash`), el
+  `lambdaORM.yaml` con versión (`412` / `428`), su validación (con línea; sin ejecutar `application.start`) y
+  `workbench/` como archivos. Permisos `schemaRead`, `schemaWrite`, `schemaAdmin`, `workbenchWrite`, nunca por defecto.
+- **Fase 2b y 2c (hechas):** en la UI, el `lambdaORM.yaml` editable (validación con línea, versión, conflicto lado a lado),
+  nuevo y eliminar esquema, y lo guardado en `workbench/` del workspace con `workbenchWrite` (`DATA_GATEWAY.md` §11.2).
+  Un archivo de `workbench/` que no es YAML válido se avisa y nunca se pisa.
+- Queda de la fase 2 para después: los borradores personales del navegador **junto** a lo compartido (hoy es uno u otro
+  según `workbenchWrite`, con la copia del navegador al workspace), y el diff de tres vías (hoy son dos lados).
 - Encontrado en la fase 1: λORM arranca un esquema con un tipo que no existe (`type: nope`) sin error; la validación de
   la fase 2 tiene que marcarlo.
 

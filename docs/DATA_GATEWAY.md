@@ -291,6 +291,9 @@ transports:
 | `orm.watch` | `true` | recarga en caliente de los workspaces (§2.2); `false`, o `{ enabled, intervalMs, debounceMs }` |
 | `orm.watch.intervalMs` | `5000` | cada cuánto se recorren los workspaces (`0`: solo los eventos del sistema de archivos) |
 | `orm.watch.debounceMs` | `300` | cuánto se juntan los cambios antes de aplicarlos (un editor escribe un archivo en varios pasos) |
+| `admin.enabled` | `false` | la administración de los workspaces en `/admin` del transporte `http` (§11) |
+| `admin.allowAnonymous` | `false` | con `authentication: none`, cualquiera administra (solo desarrollo local) |
+| `admin.maxFileBytes` | `2MB` | el archivo más grande que se puede escribir (un `lambdaORM.yaml`, una consulta guardada) |
 | `runtime.transports` | `shared` | `shared` / `thread` / `process` (§3.1); en 3.0.0 solo `shared` (los otros dos avisan y usan `shared`) |
 | `runtime.schemas` | `thread` | `thread` / `process` |
 | `runtime.maxMemoryMb` | `512` | por worker |
@@ -730,6 +733,13 @@ en el edge, antes de enviar nada al esquema. Cada tipo es un `AuthenticatorPort`
 | `script` | `executeScript` / `POST /script` (un script de 3xpr puede hacer cualquier cosa adentro: no se clasifica, es un permiso aparte) |
 | `queue` | `executeQueued` (y además `write` si la consulta escribe) |
 | `stageImport` | `stage_import` / `POST /stages/:stage/import` |
+| `schemaRead` | administración (§11): el `lambdaORM.yaml` de cada workspace y su validación |
+| `schemaWrite` | administración: cambiar el `lambdaORM.yaml` |
+| `schemaAdmin` | administración: crear y eliminar workspaces |
+| `workbenchWrite` | administración: guardar consultas, scripts y diagramas en los workspaces, sin tocar el esquema |
+
+Los cuatro de administración **nunca se dan por defecto**: una credencial sin lista de permisos tiene los cinco de los
+datos, y para administrar hay que nombrarlos.
 
 - Se autoriza en el **schema worker**, en la capa de aplicación, antes de ejecutar, con `AuthorizationPolicy` (dominio,
   sin red). Aplica igual en REST, MCP y WebSocket.
@@ -938,4 +948,77 @@ transports:
   empaquetados, sin CDN), `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`.
 - Desactivada por defecto: exponer una herramienta para escribir y ejecutar consultas es una decisión explícita del
   despliegue.
+
+## 11. Administración de los workspaces (`admin`, 3.2.0)
+
+`DATA_GATEWAY_ADMIN_PLAN.md`, fase 2. Con `admin.enabled`, el transporte `http` expone `{basePath}/admin`, con la
+autenticación de ese transporte (o la global) y los permisos de §6.2. **Solo escribe archivos del volumen**: lo que
+escribe lo toma el monitor de los workspaces (`orm.watch`, §2.2), que agrega, recarga (blue-green) o quita el esquema.
+Corre en el borde, sin conectar a ninguna base y sin ejecutar nada del esquema.
+
+Un workspace se nombra por su ruta en **un** segmento, codificada: `iot%2Fv1` (`~` es el esquema en la raíz).
+
+| Método | Ruta | Hace | Permiso |
+| --- | --- | --- | --- |
+| `GET` | `/admin` | `{ enabled, can }`: qué puede hacer esta credencial (la UI muestra las acciones con eso) | cualquiera autenticado |
+| `GET` | `/admin/workspaces` | los esquemas con su estado y la versión de su `lambdaORM.yaml` | `schemaRead` |
+| `POST` | `/admin/workspaces` | crea uno bajo `orm.workspacePath`: `{ path, template?: 'empty', copyOf?: <ruta> }` → `201`; `409` si la carpeta existe | `schemaAdmin` |
+| `DELETE` | `/admin/workspaces/{ruta}?confirm={ruta}` | lo mueve a `<workspacePath>/.trash/<ruta>-<fecha>` (no borra nada) | `schemaAdmin` |
+| `GET` | `/admin/workspaces/{ruta}/schema` | `{ text, version }` del `lambdaORM.yaml`, `ETag` | `schemaRead` |
+| `PUT` | `/admin/workspaces/{ruta}/schema` | `{ text }` con `If-Match: <version>`: lo valida y lo escribe atómico | `schemaWrite` |
+| `POST` | `/admin/validate` | `{ text }` → `{ valid, issues: [{ severity, message, line?, column? }] }` | `schemaRead` |
+| `GET` | `/admin/workbench[?schema={ruta}]` | lo guardado en los workspaces (§11.1), `ETag`; con `If-None-Match` igual, `304` | `read` o `workbenchWrite` |
+| `PUT` | `/admin/workbench` | `{ items }`: guarda, mueve o renombra; cada uno que existía dice su `version` | `workbenchWrite` |
+| `POST` | `/admin/workbench/remove` | `{ ids }`: elimina (una carpeta con lo que tiene) | `workbenchWrite` |
+
+**Concurrencia.** Cada lectura devuelve la versión (un hash del contenido) y cada escritura dice cuál cambia:
+
+| Respuesta | Cuándo |
+| --- | --- |
+| `428 PreconditionRequiredError` | un `PUT` del esquema sin `If-Match` |
+| `412 PreconditionFailedError` | otro lo cambió desde que se leyó; `details` trae lo que hay ahora (`{ version, text }` del esquema, `{ ids }` del workbench) |
+| `422 SchemaValidationError` | el `lambdaORM.yaml` no es válido; `details.issues` con la línea de cada error (no se escribe nada) |
+| `409 ConflictError` | el workspace está ocupado más de 10 s (otra escritura en curso), o la carpeta de uno nuevo existe |
+
+Las escrituras a un workspace van de a una: en el proceso, en fila; entre réplicas sobre el mismo volumen, un
+`.lambdaorm.lock` creado con `O_EXCL` (uno de más de 30 s se considera abandonado). Cada archivo se escribe atómico
+(temporal + `rename`): quien lee ve el anterior o el nuevo, nunca la mitad.
+
+**Validación.** El YAML (cada error en su línea), la forma, los tipos de las propiedades (uno que λORM no conoce es una
+advertencia, no un error: λORM lo acepta) y λORM completando el esquema sin conectar (`extends`, relaciones, mappings).
+`application.start` y los listeners no se ejecutan: son código del esquema.
+
+### 11.1 Lo guardado en un workspace (`workbench/`)
+
+Las carpetas, consultas, scripts y diagramas de la UI, un archivo por elemento y carpetas reales (se versionan con git
+junto al esquema):
+
+```text
+/workspaces/iot/v1/workbench/
+  reportes/                       una carpeta; .folder.yaml con su id y su descripción
+    ventas por mes.query.yaml     { id, description, mode: query, query, script, data, options, createdAt, updatedAt }
+    cierre.script.yaml            una consulta en modo script
+  modelo.diagram.yaml             { id, description, entities, positions, bends, compact, relationNames }
+```
+
+- Los elementos son los `SavedItem` de `@lambdaorm/ui`: `id`, `kind` (`folder`, `query`, `diagram`), `schema`,
+  `parentId`, `name`, `description`. El lugar de cada uno sale de sus carpetas y su nombre; mover o renombrar una
+  carpeta mueve lo que tiene.
+- Un archivo escrito a mano (sin `id`) también es un elemento: su id es su lugar (`file:workbench/a.query.yaml`), y
+  `data` / `options` pueden ser YAML en lugar de texto JSON.
+- Un nombre no puede tener `/ \ : * ? " < > |`, empezar con un punto ni pasar de 120 caracteres; dos elementos del mismo
+  tipo no pueden llamarse igual en una carpeta.
+- Un archivo que no es YAML válido (escrito a mano) **no es un elemento**: va en `problems` (`{ schema, file, message }`)
+  y la UI lo avisa. Guardar un elemento nunca pisa un archivo que no es suyo (`409`): lo que tiene no se pierde.
+
+### 11.2 En la UI (`@lambdaorm/ui` 0.5.0)
+
+- Con `schemaRead`, cada esquema del explorador (también uno en error, para arreglarlo) tiene **Esquema
+  (lambdaORM.yaml)**: el archivo entero en Monaco, validado mientras se escribe (cada error en su línea) y, con
+  `schemaWrite`, guardado con Ctrl+S con la versión leída. Si otro guardó otra versión, se muestran las dos lado a lado
+  para elegir; si la gateway sirve una versión nueva y no hay cambios sin guardar, se toma sola.
+- Con `schemaAdmin`, **Nuevo esquema** (vacío o copia de otro) y **Eliminar el esquema** (escribiendo su ruta).
+- Con `workbenchWrite`, lo guardado (carpetas, consultas, scripts, diagramas) va a `workbench/` de cada workspace, en
+  lugar del navegador, y se relee cuando cambia (`ETag`). Lo que el navegador tenía guardado se ofrece copiar al
+  workspace. Sin `workbenchWrite`, se guarda en el navegador como antes.
 

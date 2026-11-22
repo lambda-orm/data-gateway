@@ -6,7 +6,8 @@ All notable changes to this project will be documented in this file.
 
 ### Unreleased (3.2.0)
 
-Phase 1 of `docs/DATA_GATEWAY_ADMIN_PLAN.md`. Nothing to change in the configuration: `orm.watch` is on by default.
+Phases 1 and 2 of `docs/DATA_GATEWAY_ADMIN_PLAN.md`. Nothing to change in the configuration: `orm.watch` is on by
+default, `admin` off.
 
 **Features:**
 
@@ -21,6 +22,16 @@ Phase 1 of `docs/DATA_GATEWAY_ADMIN_PLAN.md`. Nothing to change in the configura
   `files`), on the connections to that schema and to the root.
 - With `orm.watch`, an empty volume starts and waits for its first schema, and an `orm.schemas` adjustment of a schema
   not there yet is a warning, applied when it appears.
+- **The administration of the workspaces** (`admin.enabled`, off by default; `docs/DATA_GATEWAY.md` §11), on
+  `/admin` of the http transport, with new permissions never given by default (`schemaRead`, `schemaWrite`,
+  `schemaAdmin`, `workbenchWrite`): workspaces created (empty or a copy) and removed (to `.trash`), the
+  `lambdaORM.yaml` read and written with its version (`If-Match`; `412` with what there is now, `428` without it), its
+  validation with the line of each issue (without running `application.start`), and what the UI saves as files in
+  `workbench/` of each workspace. Writes to a workspace go one at a time (a lock file, also across replicas) and are
+  atomic; the monitor of the workspaces serves what is written.
+- The UI at `/ui` (`@lambdaorm/ui` 0.5.0), with those permissions: the `lambdaORM.yaml` of each schema editable in Monaco
+  (validated while typed, saved with Ctrl+S, a conflict shown side by side), new and removed schemas, and what is saved
+  shared in the workspaces.
 - The UI at `/ui` reads the schemas again every 5 s: a schema added, removed or reloaded shows without reloading the
   page (its domain and typings are read again), and a version that didn't start is marked ⚠ with its reason.
 

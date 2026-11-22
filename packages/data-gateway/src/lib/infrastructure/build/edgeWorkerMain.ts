@@ -5,7 +5,7 @@ import { SchemaRouter } from '../../application/runtime/schemaRouter'
 import { MessagePortChannel, SocketChannel } from '../output/channel/channelClients'
 import { SystemClock } from '../output/clock/systemClock'
 import { NoMetrics, PromClientMetrics } from '../output/metrics/promClientMetrics'
-import { buildLogger, measureConnections, schemaAuthenticators } from './dataGatewayBuilder'
+import { buildAdmin, buildLogger, measureConnections, schemaAuthenticators } from './dataGatewayBuilder'
 import { MeasuredSchemaDirectory } from '../../application/runtime/measuredDirectory'
 import { AuthenticatorRegistry, TransportRegistry } from './registries'
 import { control, EdgeWorkerData } from './workerControl'
@@ -18,6 +18,7 @@ const run = async (): Promise<void> => {
 	const registry = new AuthenticatorRegistry()
 	const routed = ({ descriptor, settings }: EdgeWorkerData['schemas'][number]) => ({
 		path: descriptor.path,
+		workspace: descriptor.workspace,
 		transports: settings.transports,
 		maxConcurrent: settings.server.maxConcurrent,
 		timeout: settings.server.timeout,
@@ -29,7 +30,8 @@ const run = async (): Promise<void> => {
 	// /metrics: the edge's and every schema worker's, asked through its channel (the ones served at that moment)
 	metrics.addSource(() => Promise.all(router.states().map(s => router.workerMetrics(s.path).catch(() => []))))
 	const directory = metrics.enabled ? new MeasuredSchemaDirectory(router, metrics) : router
-	const transports = new TransportRegistry().build({ config, directory, metrics, logger })
+	const admin = buildAdmin(config, directory, logger, new SystemClock())
+	const transports = new TransportRegistry().build({ config, directory, metrics, logger, admin })
 	measureConnections(metrics, transports)
 	ctl.on(async request => {
 		switch (request.type) {

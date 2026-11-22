@@ -9,7 +9,9 @@ export type HeadersProvider = () => Record<string, string> | Promise<Record<stri
 export class GatewayRequestError extends Error {
 	constructor (public readonly status: number, name: string, message: string, public readonly code?: string,
 		/** names of the query that don't exist, with the closest ones */
-		public readonly suggestions?: { name: string, didYouMean: string[] }[]) {
+		public readonly suggestions?: { name: string, didYouMean: string[] }[],
+		/** what the caller needs to go on: the issues of an invalid schema, what there is now after a conflict */
+		public readonly details?: any) {
 		super(message)
 		this.name = name
 	}
@@ -35,7 +37,7 @@ export class RestQueryApi implements QueryApiPort {
 		if (!response.ok) {
 			let error: any = {}
 			try { error = JSON.parse(text) } catch { /* not JSON */ }
-			throw new GatewayRequestError(response.status, error.error ?? `HTTP ${response.status}`, error.message ?? (text || response.statusText), error.code, error.suggestions)
+			throw new GatewayRequestError(response.status, error.error ?? `HTTP ${response.status}`, error.message ?? (text || response.statusText), error.code, error.suggestions, error.details)
 		}
 		if (accept === 'text') return text
 		return text ? JSON.parse(text) : undefined

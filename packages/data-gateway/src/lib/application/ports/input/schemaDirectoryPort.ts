@@ -8,6 +8,8 @@ import { McpServerPort } from './mcpServerPort'
 /** One schema as a transport sees it: its route, its ports and who may call it there */
 export interface ServedSchema {
 	path: string
+	/** The folder of its workspace (the administration reads and writes its files) */
+	workspace?: string
 	gateway: DataGatewayPort
 	mcp: McpServerPort
 	/** Whether this transport exposes it (schemas[].transports) */

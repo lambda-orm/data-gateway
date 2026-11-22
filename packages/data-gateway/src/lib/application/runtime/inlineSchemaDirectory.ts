@@ -9,6 +9,7 @@ import { Listeners } from './listeners'
 
 export interface InlineSchema {
 	path: string
+	workspace?: string
 	gateway: DataGatewayPort
 	mcp: McpServerPort
 	transports: TransportName[]
@@ -58,6 +59,7 @@ export class InlineSchemaDirectory implements SchemaDirectoryPort {
 	private serve (s: InlineSchema): ServedSchema {
 		return {
 			path: s.path,
+			workspace: s.workspace,
 			gateway: s.gateway,
 			mcp: s.mcp,
 			features: s.features ?? { scripts: false },
