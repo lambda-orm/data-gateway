@@ -89,7 +89,9 @@ export class McpWebSocketTransport implements Transport {
 			handleProtocols: protocols => protocols.has(SUBPROTOCOL) ? SUBPROTOCOL : false
 		})
 		this.asyncapi = options.asyncapiEnabled ? this.loadAsyncapi() : undefined
+		deps.directory.onSchemasChange(() => this.closeRemoved())
 	}
+
 
 	public get address () {
 		const info = this.server?.address() as AddressInfo | null | undefined
@@ -180,12 +182,26 @@ export class McpWebSocketTransport implements Transport {
 		}
 		this.wss.handleUpgrade(req, socket, head, ws => {
 			const server = createSdkServer(schema.mcp, { principal: principal!, transport: TRANSPORT_NAME }, this.deps.logger)
-			ws.on('close', () => { server.close().catch(() => undefined) })
+			this.schemaOf.set(ws, schema.path)
+			ws.on('close', () => {
+				this.schemaOf.delete(ws)
+				server.close().catch(() => undefined)
+			})
 			server.connect(new ServerSocketTransport(ws)).catch(error => {
 				this.deps.logger.error(error as Error)
 				ws.close(1011)
 			})
 		})
+	}
+
+	/** The schema of each connection: the ones of a schema that went are closed (4404) */
+	private readonly schemaOf = new Map<WebSocket, string>()
+
+	private closeRemoved (): void {
+		const paths = new Set(this.served.map(s => s.path))
+		for (const [ws, path] of this.schemaOf) {
+			if (!paths.has(path)) ws.close(4404, `schema "${path || '/'}" was removed`)
+		}
 	}
 
 	private loadAsyncapi (): unknown {

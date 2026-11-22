@@ -11,6 +11,7 @@ import { LoggerPort } from '../../../application/ports/output/supportPorts'
 import { DataGatewayConfig } from '../../../domain/config/dataGatewayConfig'
 import { SchemaState } from '../../../domain/runtime/policies'
 import { SchemaDescriptor, SchemaSettings } from '../../../domain/runtime/schemas'
+import { WorkspaceChange } from '../../../domain/runtime/workspaces'
 
 /** Where the composition roots are: next to this build (.js) or to the sources (.ts, through tsx) */
 const BUILD_DIR = path.join(__dirname, '../../build')
@@ -192,15 +193,31 @@ class EdgeThreadHandle extends ThreadHandle implements EdgeHandle {
 	public state (state: SchemaState): void {
 		try { this.post({ type: 'state', state }) } catch { /* ended */ }
 	}
+
+	public add (spec: SchemaWorkerSpec): void {
+		try { this.post({ type: 'add', schema: withoutEnv(spec) }) } catch { /* ended */ }
+	}
+
+	public remove (path: string): void {
+		try { this.post({ type: 'remove', path }) } catch { /* ended */ }
+	}
+
+	public workspace (change: WorkspaceChange): void {
+		try { this.post({ type: 'workspace', change }) } catch { /* ended */ }
+	}
 }
+
+/** What the edge knows of a schema: not its variables (it doesn't need them; they may be secrets) */
+const withoutEnv = (s: { descriptor: SchemaDescriptor, settings: SchemaSettings }) =>
+	({ descriptor: { ...s.descriptor, overrides: { ...s.descriptor.overrides, env: undefined } }, settings: s.settings })
 
 /** The edge in a worker thread (runtime.transports: shared) */
 export class EdgeWorkerRuntime implements EdgeRuntimePort {
 	// eslint-disable-next-line no-useless-constructor
-	constructor (private readonly settings: WorkerRuntimeSettings, private readonly schemas: { descriptor: SchemaDescriptor, settings: SchemaSettings }[]) {}
+	constructor (private readonly settings: WorkerRuntimeSettings) {}
 
-	public start (events: WorkerEvents): EdgeHandle {
-		const schemas = this.schemas.map(s => ({ descriptor: { ...s.descriptor, overrides: { ...s.descriptor.overrides, env: undefined } }, settings: s.settings }))
+	public start (events: WorkerEvents, specs: SchemaWorkerSpec[]): EdgeHandle {
+		const schemas = specs.map(withoutEnv)
 		// the edge has the gateway's variables only if they are passthrough: it doesn't need them, the config is resolved
 		const config = { ...this.settings.config, orm: { ...this.settings.config.orm, schemas: this.settings.config.orm.schemas.map(s => ({ ...s, env: undefined })) } }
 		return new EdgeThreadHandle('edge', EDGE_ENTRY, { config, schemas, version: this.settings.version }, events, {

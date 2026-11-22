@@ -93,6 +93,16 @@ export class WorkbenchController {
 		}
 	}
 
+	/** The schema was reloaded: its typings and the credential's permissions again, keeping the text and the result */
+	public async refreshSchema (): Promise<void> {
+		const schema = this.state.schema
+		if (schema === undefined) return
+		try {
+			const [whoami, typings] = await Promise.all([this.api.whoami(schema), this.api.typings(schema).catch(() => undefined)])
+			if (this.state.schema === schema) this.set({ whoami, typings })
+		} catch { /* the next refresh */ }
+	}
+
 	public available (operation: Operation) {
 		return availability(operation, this.state.whoami)
 	}

@@ -100,7 +100,9 @@ export class PromClientMetrics implements MetricsPort {
 	/** This worker and the sources (a source that doesn't answer is left out); a schema keeps only its samples */
 	public async render (filter: { schema?: string } = {}) {
 		const own = await this.register.getMetricsAsJSON()
-		const others = await Promise.all(this.sources.map(source => source().catch(() => [])))
+		// a source answers one registry, or several (the edge: one per schema worker served at that moment)
+		const others = (await Promise.all(this.sources.map(source => source().catch(() => []))))
+			.flatMap(m => Array.isArray(m) && Array.isArray(m[0]) ? m : [m])
 		let metrics: any[] = [own, ...others].filter(m => Array.isArray(m) && m.length)
 		if (filter.schema !== undefined) {
 			const worker = `schema:${filter.schema}`

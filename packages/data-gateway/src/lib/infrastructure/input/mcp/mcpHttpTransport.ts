@@ -54,9 +54,12 @@ export class McpHttpTransport implements Transport {
 	private server: http.Server | undefined
 	private readonly sseSessions = new Map<string, Session<SSEServerTransport>>()
 	private readonly streamSessions = new Map<string, Session<StreamableHTTPServerTransport>>()
+	private schemaRouter: express.Router = express.Router()
 
 	constructor (private readonly options: McpHttpTransportOptions, private readonly deps: McpHttpTransportDeps) {
 		this.app = this.createApp()
+		this.mountSchemas()
+		deps.directory.onSchemasChange(() => this.mountSchemas())
 	}
 
 	public get address () {
@@ -128,27 +131,43 @@ export class McpHttpTransport implements Transport {
 		if (this.options.rateLimit.max > 0) {
 			app.use(rateLimit({ windowMs: this.options.rateLimit.windowMs, max: this.options.rateLimit.max, standardHeaders: true, legacyHeaders: false }))
 		}
-		const json = express.json({ limit: this.options.requestBodySize })
 		const base = this.options.basePath
 		app.get(`${base}/status`, (_req, res) => { res.json(this.status()) })
 		app.get(`${base}/health`, async (_req, res) => { res.json(await this.deps.directory.health()) })
-		for (const schema of this.served) {
-			const prefix = this.prefix(schema)
-			const authenticate = this.authenticate(schema.authenticator(TRANSPORT_NAME))
-			app.post(`${prefix}/mcp`, json, authenticate, (req, res) => this.streamable(schema, req, res))
-			app.get(`${prefix}/mcp`, authenticate, (req, res) => this.streamableSession(schema, req, res))
-			app.delete(`${prefix}/mcp`, authenticate, (req, res) => this.streamableSession(schema, req, res))
-			if (this.options.legacySse) {
-				app.get(`${prefix}/sse`, authenticate, (req, res) => this.sse(schema, req, res))
-				app.post(`${prefix}/messages`, json, authenticate, (req, res) => this.sseMessage(schema, req, res))
-			}
-		}
+		// the schemas: the router of the moment (a schema added or removed replaces it)
+		app.use((req, res, next) => this.schemaRouter(req, res, next))
 		app.use((err: any, _req: express.Request, res: express.Response, next: express.NextFunction) => {
 			if (res.headersSent) return next(err)
 			const status = Number.isInteger(err?.status) ? err.status : 500
 			rpcError(res, status, status === 400 ? -32700 : -32603, err?.message ?? String(err))
 		})
 		return app
+	}
+
+	/** The routes of every schema served now; the sessions of a schema that went are closed */
+	private mountSchemas (): void {
+		const router = express.Router()
+		const json = express.json({ limit: this.options.requestBodySize })
+		for (const schema of this.served) {
+			const prefix = this.prefix(schema)
+			const authenticate = this.authenticate(schema.authenticator(TRANSPORT_NAME))
+			router.post(`${prefix}/mcp`, json, authenticate, (req, res) => this.streamable(schema, req, res))
+			router.get(`${prefix}/mcp`, authenticate, (req, res) => this.streamableSession(schema, req, res))
+			router.delete(`${prefix}/mcp`, authenticate, (req, res) => this.streamableSession(schema, req, res))
+			if (this.options.legacySse) {
+				router.get(`${prefix}/sse`, authenticate, (req, res) => this.sse(schema, req, res))
+				router.post(`${prefix}/messages`, json, authenticate, (req, res) => this.sseMessage(schema, req, res))
+			}
+		}
+		this.schemaRouter = router
+		const paths = new Set(this.served.map(s => s.path))
+		for (const sessions of [this.sseSessions, this.streamSessions] as Map<string, Session<any>>[]) {
+			for (const [id, session] of sessions) {
+				if (paths.has(session.schema)) continue
+				sessions.delete(id)
+				session.server.close().catch(() => undefined)
+			}
+		}
 	}
 
 	private authenticate (authenticator: AuthenticatorPort) {

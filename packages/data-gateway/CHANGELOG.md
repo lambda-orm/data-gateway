@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ## Versions
 
+### Unreleased (3.2.0)
+
+Phase 1 of `docs/DATA_GATEWAY_ADMIN_PLAN.md`. Nothing to change in the configuration: `orm.watch` is on by default.
+
+**Features:**
+
+- **The workspaces are watched while the gateway runs** (`orm.watch`): a folder with a `lambdaORM.yaml` that appears
+  is a new schema, served on every transport without restarting the gateway; a folder that goes takes its schema (its
+  routes answer `404`, its WebSocket connections are closed with `4404`).
+- **A `lambdaORM.yaml` or `.env` whose content changed reloads its schema blue-green**: the new worker starts next to
+  the current one, which keeps serving until the new one is ready, without a moment out of service. If the new
+  version doesn't start (an invalid YAML), the last one that did keeps serving, and the state of the schema says why
+  in `pending` (`GET /schemas`, `schema.statusChanged`).
+- WebSocket notification `workspace.changed` (`{ path, kind, files?, at }`; `added`, `removed`, `schema`, `env`,
+  `files`), on the connections to that schema and to the root.
+- With `orm.watch`, an empty volume starts and waits for its first schema, and an `orm.schemas` adjustment of a schema
+  not there yet is a warning, applied when it appears.
+- The UI at `/ui` reads the schemas again every 5 s: a schema added, removed or reloaded shows without reloading the
+  page (its domain and typings are read again), and a version that didn't start is marked ⚠ with its reason.
+
 ### 3.1.0 (2026-11-21)
 
 Uses `@lambdaorm/lib` 3.8.0 and `@lambdaorm/ui` 0.4.0. Nothing to change in the configuration; the API gains routes,

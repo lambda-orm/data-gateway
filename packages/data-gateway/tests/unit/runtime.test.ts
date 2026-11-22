@@ -55,8 +55,11 @@ describe('schemas and their settings', () => {
 	})
 
 	test('an adjustment of nothing, nothing at all, a duplicated route', () => {
-		expect(resolveSchemas(c, [{ path: 'iot/v2', workspace: '/w/iot/v2' }]).issues[0]).toMatch(/orm.schemas "iot\/v1" has no workspace and adjusts no discovered schema/)
-		expect(resolveSchemas(config({ orm: { workspacePath: '/empty' } }), []).issues).toEqual(['no schema found: /empty has no lambdaORM.yaml'])
+		expect(resolveSchemas(c, [{ path: 'iot/v2', workspace: '/w/iot/v2' }]).waiting[0]).toMatch(/orm.schemas "iot\/v1" has no workspace and adjusts no discovered schema/)
+		expect(resolveSchemas(config({ orm: { workspacePath: '/empty', watch: false } }), []).issues).toEqual(['no schema found: /empty has no lambdaORM.yaml'])
+		// watched: an empty volume, or an adjustment of a schema not there yet, waits for it
+		const watched = resolveSchemas(config({ orm: { workspacePath: '/empty' } }), [])
+		expect(watched).toMatchObject({ schemas: [], issues: [], waiting: ['no schema found: /empty has no lambdaORM.yaml'] })
 		expect(resolveSchemas(c, [...discovered, { path: 'accounts/v1', workspace: '/w/accounts/v1' }]).issues).toContain('schema path "accounts/v1" is used by two schemas')
 	})
 

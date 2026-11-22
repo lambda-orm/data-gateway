@@ -1,5 +1,6 @@
 import { TransportName } from '../../domain/config/dataGatewayConfig'
 import { SchemaState } from '../../domain/runtime/policies'
+import { WorkspaceChange } from '../../domain/runtime/workspaces'
 import { DataGatewayPort } from '../ports/input/dataGatewayPort'
 import { McpServerPort } from '../ports/input/mcpServerPort'
 import { GatewayHealth, SchemaDirectoryPort, ServedSchema } from '../ports/input/schemaDirectoryPort'
@@ -19,15 +20,43 @@ export interface InlineSchema {
 
 /**
  * Schemas in the same thread as the transports (no workers): tests, and transports wired straight to the facade.
- * Every schema is ready; there is nobody to restart.
+ * Every schema is ready; there is nobody to restart. add / remove change the set (tests of the transports).
  */
 export class InlineSchemaDirectory implements SchemaDirectoryPort {
-	private readonly served: ServedSchema[]
+	private served: ServedSchema[]
 	private readonly started: string
+	private readonly schemasChanges = new Listeners<void>()
+	private readonly workspaceChanges = new Listeners<WorkspaceChange>()
 
 	constructor (schemas: InlineSchema[], private readonly clock: ClockPort, private readonly gatewayVersion: string) {
 		this.started = clock.now().toISOString()
-		this.served = schemas.map(s => ({
+		this.served = schemas.map(s => this.serve(s))
+	}
+
+	public add (schema: InlineSchema): void {
+		this.served = [...this.served.filter(s => s.path !== schema.path), this.serve(schema)].sort((a, b) => a.path.localeCompare(b.path))
+		this.schemasChanges.emit()
+	}
+
+	public remove (path: string): void {
+		this.served = this.served.filter(s => s.path !== path)
+		this.schemasChanges.emit()
+	}
+
+	public workspaceChanged (change: WorkspaceChange): void {
+		this.workspaceChanges.emit(change)
+	}
+
+	public onSchemasChange (listener: () => void): () => void {
+		return this.schemasChanges.subscribe(listener)
+	}
+
+	public onWorkspaceChange (listener: (change: WorkspaceChange) => void): () => void {
+		return this.workspaceChanges.subscribe(listener)
+	}
+
+	private serve (s: InlineSchema): ServedSchema {
+		return {
 			path: s.path,
 			gateway: s.gateway,
 			mcp: s.mcp,
@@ -39,7 +68,7 @@ export class InlineSchemaDirectory implements SchemaDirectoryPort {
 				if (!authenticator) throw new Error(`schema "${s.path}" has no authenticator for ${transport}`)
 				return authenticator
 			}
-		}))
+		}
 	}
 
 	public schemas (): ServedSchema[] {

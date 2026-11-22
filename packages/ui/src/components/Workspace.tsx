@@ -22,7 +22,15 @@ export interface WorkspaceProps extends Omit<QueryWorkbenchProps, 'initial' | 'o
 	workspaceKey?: string
 	/** At most this many tabs (default 20) */
 	maxTabs?: number
+	/**
+	 * How often the schemas are read again, in ms (default 5000; 0: never): a schema added, removed or reloaded on the
+	 * gateway (orm.watch) shows without reloading the page
+	 */
+	refreshMs?: number
 }
+
+/** What tells that the schemas changed: their routes, states and the version each serves */
+const revisionOf = (schemas: SchemaInfo[]): string => schemas.map(s => `${s.path}|${s.status}|${s.since ?? ''}|${s.pending ?? ''}|${s.reason ?? ''}`).join('\n')
 
 type TabKind = 'query' | 'domain' | 'entity' | 'diagram'
 
@@ -81,7 +89,7 @@ const storedWidth = (): number | undefined => {
 }
 const rememberWidth = (value: number) => { try { window.localStorage.setItem(WIDTH_KEY, String(value)) } catch { /* private window */ } }
 
-export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTabs = 20, ...workbench }) => {
+export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTabs = 20, refreshMs = 5000, ...workbench }) => {
 	const theme = workbench.theme ?? 'light'
 	const m = messagesOf(workbench.locale)
 	const x = explorerMessagesOf(workbench.locale)
@@ -135,7 +143,29 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 	useEffect(() => { controller.load() }, [controller])
 	// the explorer also shows the schemas that didn't start, with their reason; the rest of the workspace only the ready ones
 	const [listed, setListed] = useState<SchemaInfo[]>([])
-	useEffect(() => { api.schemas().then(all => { setListed(all); setSchemas(all.filter(s => s.status === 'ready')) }, () => { setListed([]); setSchemas([]) }) }, [api])
+	const revision = useMemo(() => revisionOf(listed), [listed])
+	useEffect(() => {
+		let current: SchemaInfo[] | undefined
+		const read = () => api.schemas().then(all => {
+			if (current && revisionOf(all) === revisionOf(current)) return
+			// a schema reloaded (another since): its domain is read again by whoever shows it
+			for (const s of all) {
+				const before = current?.find(c => c.path === s.path)
+				if (before && before.since !== s.since) {
+					domains.current.delete(s.path)
+					loaders.current.delete(s.path)
+				}
+			}
+			current = all
+			setListed(all)
+			setSchemas(all.filter(s => s.status === 'ready'))
+		}, () => { if (!current) { setListed([]); setSchemas([]) } })
+		read()
+		if (refreshMs <= 0) return
+		const timer = setInterval(read, refreshMs)
+		return () => clearInterval(timer)
+	}, [api, refreshMs])
+	const sinceOf = (schema: string | undefined) => listed.find(s => s.path === schema)?.since ?? ''
 	useEffect(() => { if (!notice) return; const t = setTimeout(() => setNotice(undefined), 5000); return () => clearTimeout(t) }, [notice])
 
 	const savedOf = (tab: Tab): SavedItem | undefined => tab.savedId ? state.items.find(i => i.id === tab.savedId) : undefined
@@ -288,9 +318,9 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 						return (
 							<div key={tab.id} role="tabpanel" aria-label={saved?.name ?? tab.title} hidden={tab.id !== active}
 								onKeyDownCapture={tab.kind === 'query' || tab.kind === 'diagram' ? saveKeys(tab) : undefined}>
-								{tab.kind === 'domain' && <DomainYaml domain={loaderOf(tab.schema ?? '')} schema={tab.schema ?? ''} theme={theme} loading={x.loading} readOnly={x.readOnly} />}
+								{tab.kind === 'domain' && <DomainYaml key={sinceOf(tab.schema)} domain={loaderOf(tab.schema ?? '')} schema={tab.schema ?? ''} theme={theme} loading={x.loading} readOnly={x.readOnly} />}
 								{tab.kind === 'entity' && (
-									<EntityView api={api} schema={tab.schema ?? ''} entity={tab.entity ?? ''} domain={loaderOf(tab.schema ?? '')} theme={theme} locale={workbench.locale}
+									<EntityView key={sinceOf(tab.schema)} api={api} schema={tab.schema ?? ''} entity={tab.entity ?? ''} domain={loaderOf(tab.schema ?? '')} theme={theme} locale={workbench.locale}
 										onOpenEntity={openEntity} onQuery={queryEntity} />
 								)}
 								{tab.kind === 'diagram' && tab.draft && (
@@ -312,7 +342,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 									</div>
 								)}
 								{tab.kind === 'query' && (
-									<QueryPanel tab={tab} workbench={{ ...workbench, api }} onContent={onContent}
+									<QueryPanel tab={tab} workbench={{ ...workbench, api, schemasRevision: revision }} onContent={onContent}
 										toolbar={(
 											<span className="lw-save">
 												<button onClick={() => save(tab)} disabled={contents.current.get(tab.id)?.schema === undefined} title="Ctrl+S">{x.save}</button>

@@ -255,7 +255,7 @@ Decidido: 3.
 
 | Fase | Qué | Resultado |
 | --- | --- | --- |
-| 1 | **Registro dinámico**: `orm.workspacesPath`, alta, baja y recarga de un esquema sin reiniciar la gateway, el watcher y `workspace.changed` | una carpeta nueva en el volumen aparece en la UI; un YAML editado a mano se recarga |
+| 1 ✅ | **Registro dinámico**: `orm.workspacesPath`, alta, baja y recarga de un esquema sin reiniciar la gateway, el watcher y `workspace.changed` | una carpeta nueva en el volumen aparece en la UI; un YAML editado a mano se recarga |
 | 2 | **Editar el YAML**: `GET` / `PUT` / `validate` con versión, Monaco editable, el diff de conflicto, crear y eliminar workspaces; **`workbench/`**: carpetas, consultas, scripts y diagramas en el workspace, con su versión y su refresh, y pasar lo del navegador | el esquema se edita entero desde la UI, y lo guardado se comparte |
 | 3 | **Comandos**: los comandos en un módulo común, jobs, la vista previa de los destructivos y el panel de la UI | todos los comandos de la CLI desde la UI |
 | 4 | **Formularios**: `PATCH` por elemento, `rename` con referencias, el árbol y los formularios de cada sección | el esquema se edita sin escribir YAML |
@@ -265,7 +265,15 @@ Decidido: 3.
 Cada fase se publica como una versión menor de la gateway (3.2.0, 3.3.0, …) y de `@lambdaorm/ui`, con el admin apagado
 por defecto.
 
-## 9. Pruebas
+## 9. Estado
+
+- **Fase 1 (hecha, 3.2.0):** `orm.watch`, alta, baja y recarga blue-green de un esquema (el último que arrancó sigue si
+  el nuevo no arranca, con el motivo en `pending`), el ruteo dinámico de los cuatro transportes, el monitor del volumen
+  (eventos + recorrido, por contenido) y `workspace.changed`. En la UI, ver §3.1.
+- Encontrado en la fase 1: λORM arranca un esquema con un tipo que no existe (`type: nope`) sin error; la validación de
+  la fase 2 tiene que marcarlo.
+
+## 10. Pruebas
 
 - Unitarias: los cambios por elemento sobre el `Document` (que no toquen comentarios ni el resto), `rename` con sus
   referencias, la versión por elemento.

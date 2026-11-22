@@ -133,8 +133,9 @@ combinan). Ajustes por la combinación esquema × transporte no existen en 3.0.0
 
 **Reglas:**
 
-- Hay que declarar al menos uno de `orm.workspacePath` u `orm.schemas` con `workspace`, y tiene que resultar al menos
-  un esquema.
+- Hay que declarar al menos uno de `orm.workspacePath` u `orm.schemas` con `workspace`. Sin `orm.watch`, tiene que
+  resultar al menos un esquema; con `orm.watch` (por defecto) un volumen vacío arranca y espera, y un ajuste de un esquema
+  que todavía no está se avisa y se aplica cuando aparece.
 - Descubiertos + explícitos se sirven todos. Dos esquemas con la misma ruta son error de configuración.
 - Cada segmento de la ruta: `[a-zA-Z0-9_.-]`, y ninguno puede ser un nombre reservado: `health`, `ping`, `metrics`,
   `version`, `schemas`, `mcp`, `sse`, `messages`, `status`, `doc`, `api-docs`, `swagger`, `asyncapi`, `ui`, `whoami`,
@@ -142,7 +143,20 @@ combinan). Ajustes por la combinación esquema × transporte no existen en 3.0.0
 - La ruta de un esquema no puede ser prefijo de la de otro (`iot` e `iot/v1` a la vez es error de configuración).
 - **Esquema en la raíz:** si `workspacePath` tiene `lambdaORM.yaml` en su raíz (o un explícito usa `path: ""`), ese
   esquema se sirve en la raíz (`/execute`), como hoy. Solo se permite si es el **único** esquema.
-- Sin recarga en caliente: un esquema nuevo en el directorio se toma al reiniciar.
+- **Recarga en caliente (`orm.watch`, 3.2.0, `DATA_GATEWAY_ADMIN_PLAN.md` fase 1).** Mientras la gateway corre:
+    - una carpeta nueva con un `lambdaORM.yaml` es un **esquema nuevo**: arranca su worker y sus rutas aparecen en
+      todos los transportes, sin reiniciar la gateway ni tocar los demás esquemas;
+    - un `lambdaORM.yaml` o un `.env` **cuyo contenido cambió** recarga ese esquema **blue-green**: el worker nuevo
+      arranca al lado del actual, que sigue atendiendo hasta que el nuevo está `ready` (sin un instante fuera de
+      servicio). Si el nuevo no arranca (un YAML inválido), **sigue el último que arrancó**, y el estado del esquema lo
+      dice en `pending` (`GET /schemas`, `schema.statusChanged`);
+    - una carpeta que se va (o pierde su `lambdaORM.yaml`) **quita** el esquema: sus rutas pasan a `404` y las conexiones
+      WebSocket a él se cierran con el código `4404`;
+    - cualquier otro archivo de un workspace (`workbench/`, `data/`, `src/`) solo se **notifica**
+      (`workspace.changed`, §7); `orm_state/` y los temporales de los editores no.
+  Los eventos del sistema de archivos son el camino rápido; un recorrido cada `orm.watch.intervalMs` ve lo que no
+  llega por eventos (algunos volúmenes montados). Lo que cambió se decide por el contenido (un hash), no por el evento.
+  Los ajustes de `orm.schemas[]` y el resto de `data-gateway.config.yaml` se leen al arrancar.
 - Cola Kafka: cada esquema usa la `infrastructure.queue` de su propio `lambdaORM.yaml`, si la tiene.
 
 ### 2.3 Variables de entorno por esquema
@@ -274,6 +288,9 @@ transports:
 | --- | --- | --- |
 | `orm.workspacePath` | — | raíz donde se descubren esquemas (§2.2) |
 | `orm.schemas[]` | `[]` | `path` (obligatorio), `workspace` (define un esquema) y ajustes (§2.2) |
+| `orm.watch` | `true` | recarga en caliente de los workspaces (§2.2); `false`, o `{ enabled, intervalMs, debounceMs }` |
+| `orm.watch.intervalMs` | `5000` | cada cuánto se recorren los workspaces (`0`: solo los eventos del sistema de archivos) |
+| `orm.watch.debounceMs` | `300` | cuánto se juntan los cambios antes de aplicarlos (un editor escribe un archivo en varios pasos) |
 | `runtime.transports` | `shared` | `shared` / `thread` / `process` (§3.1); en 3.0.0 solo `shared` (los otros dos avisan y usan `shared`) |
 | `runtime.schemas` | `thread` | `thread` / `process` |
 | `runtime.maxMemoryMb` | `512` | por worker |
@@ -748,7 +765,8 @@ upgrade; en la raíz solo están `general.*` y `gateway.schemas`.
 | Notificación | Cuándo |
 | --- | --- |
 | `queue.completed` / `queue.failed` | terminó una ejecución encolada con `executeQueued` y `notify: true` en esa conexión |
-| `schema.statusChanged` | el esquema de la conexión pasó a `error` / `restarting` o volvió a `ready` |
+| `schema.statusChanged` | el esquema de la conexión pasó a `error` / `restarting` o volvió a `ready`; `pending`: una versión nueva de su workspace no arrancó y sigue la anterior |
+| `workspace.changed` | cambió algo en el workspace del esquema (una conexión a la raíz: en cualquiera): `{ path, kind, files?, at }`, `kind` `added` / `removed` / `schema` (`lambdaORM.yaml`, recargado) / `env` (`.env`, recargado) / `files` (otros: `workbench/`, `data/`, …) |
 
 ```json
 → { "jsonrpc": "2.0", "id": 7, "method": "query.executeQueued", "params": { "topic": "…", "query": "…", "notify": true } }

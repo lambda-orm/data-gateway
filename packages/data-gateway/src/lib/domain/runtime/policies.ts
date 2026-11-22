@@ -29,4 +29,9 @@ export interface SchemaState {
 	reason?: string
 	since: string
 	restarts: number
+	/**
+	 * A new version of its workspace (lambdaORM.yaml, .env) that didn't start: the last one that did keeps serving
+	 * until it is fixed (only while ready)
+	 */
+	pending?: string
 }

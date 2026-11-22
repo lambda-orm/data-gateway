@@ -1,3 +1,4 @@
+import { WorkspaceChange } from '../../../domain/runtime/workspaces'
 import { ChannelEvent, ChannelRequest } from '../../../domain/runtime/channelProtocol'
 import { SchemaState } from '../../../domain/runtime/policies'
 import { SchemaDescriptor, SchemaSettings } from '../../../domain/runtime/schemas'
@@ -47,11 +48,17 @@ export interface SchemaRuntimePort {
 
 /** Starts the edge worker (every transport) and talks to it */
 export interface EdgeRuntimePort {
-	start (events: WorkerEvents): EdgeHandle
+	/** With the schemas served at that moment (a restarted edge gets the ones added since) */
+	start (events: WorkerEvents, schemas: SchemaWorkerSpec[]): EdgeHandle
 }
 
 export interface EdgeHandle extends WorkerHandle {
 	/** Opens a channel from the edge to that schema worker (a new one each time either restarts) */
 	connect (path: string, worker: WorkerHandle, info: McpServerInfo): void
 	state (state: SchemaState): void
+	/** A schema that appeared (starting until it connects) / went */
+	add (spec: SchemaWorkerSpec): void
+	remove (path: string): void
+	/** Something changed in a workspace: the edge notifies it (WebSocket workspace.changed) */
+	workspace (change: WorkspaceChange): void
 }
