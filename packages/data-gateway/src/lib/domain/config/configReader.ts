@@ -1,4 +1,4 @@
-import { ALL_PERMISSIONS, isPermission, Permission } from '../auth/permission'
+import { ALL_PERMISSIONS, isPermission, KNOWN_PERMISSIONS, Permission } from '../auth/permission'
 import {
 	AuthenticationConfig, AuthenticationType, ConfigReading, CredentialConfig, DataGatewayConfig, LoggerConfig, McpConfig,
 	OrmConfig, RuntimeConfig, RuntimeMode, SchemaConfig, TransportConfig, TransportName, TransportsConfig, WatchConfig
@@ -9,7 +9,7 @@ import { parseSize } from './sizes'
 /** Transports of the design that this version does not serve yet (docs/DATA_GATEWAY_PLAN.md). */
 const LATER_TRANSPORTS: string[] = []
 const TRANSPORTS = ['http', 'mcpHttp', 'mcpWebSocket', 'webSocket']
-const KNOWN_SECTIONS = ['orm', 'server', 'logger', 'metrics', 'audit', 'authentication', 'rateLimit', 'scripts', 'mcp', 'runtime', 'transports']
+const KNOWN_SECTIONS = ['orm', 'admin', 'server', 'logger', 'metrics', 'audit', 'authentication', 'rateLimit', 'scripts', 'mcp', 'runtime', 'transports']
 const SCHEMA_KEYS = ['path', 'workspace', 'transports', 'authentication', 'env', 'scripts', 'mcp', 'server', 'runtime']
 /** The tools of docs/DATA_GATEWAY.md §5.1: mcp.tools.include / exclude must name them */
 export const TOOL_NAMES = [
@@ -46,6 +46,11 @@ export class ConfigReader {
 		const authentication = this.authentication(raw.authentication, 'authentication') ?? { adapter: 'none', credentials: [] }
 		const config: DataGatewayConfig = {
 			orm: this.orm(raw.orm),
+			admin: {
+				enabled: this.bool(raw.admin?.enabled, false, 'admin.enabled'),
+				allowAnonymous: this.bool(raw.admin?.allowAnonymous, false, 'admin.allowAnonymous'),
+				maxFileBytes: this.size(raw.admin?.maxFileBytes, 2 * 1024 ** 2, 'admin.maxFileBytes')
+			},
 			server: {
 				timeout: this.int(raw.server?.timeout, 120000, 'server.timeout', 1),
 				requestBodySize: this.str(raw.server?.requestBodySize, '14MB'),
@@ -77,6 +82,10 @@ export class ConfigReader {
 			for (const transport of schema.transports ?? []) {
 				if (!TRANSPORTS.includes(transport)) this.issues.push(`orm.schemas "${schema.path}": unknown transport "${transport}"`)
 			}
+		}
+		if (config.admin.enabled && !config.orm.workspacePath) this.notes.push('admin.enabled without orm.workspacePath: the workspaces can be edited, but none can be created')
+		if (config.admin.enabled && config.authentication.adapter === 'none' && !config.admin.allowAnonymous) {
+			this.warnings.push('admin.enabled with authentication none: nobody can administer (admin.allowAnonymous: true, only for local development)')
 		}
 		const reading: ConfigReading = { issues: this.issues, warnings: this.warnings, notes: this.notes }
 		if (this.issues.length === 0) reading.config = config
@@ -425,7 +434,7 @@ export class ConfigReader {
 			return []
 		}
 		const invalid = raw.filter(p => !isPermission(p))
-		if (invalid.length) this.issues.push(`${key}: unknown permissions ${invalid.join(', ')} (valid: ${ALL_PERMISSIONS.join(', ')})`)
+		if (invalid.length) this.issues.push(`${key}: unknown permissions ${invalid.join(', ')} (valid: ${KNOWN_PERMISSIONS.join(', ')})`)
 		return raw.filter(isPermission)
 	}
 

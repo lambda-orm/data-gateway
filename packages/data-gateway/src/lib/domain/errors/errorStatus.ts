@@ -2,7 +2,7 @@
 export interface HttpError {
 	status: number
 	/** suggestions: names of the query that don't exist and the closest ones, for a client to offer (L41) */
-	body: { error: string, code?: string, message: string, suggestions?: { name: string, didYouMean: string[] }[] }
+	body: { error: string, code?: string, message: string, suggestions?: { name: string, didYouMean: string[] }[], details?: unknown }
 }
 
 /**
@@ -46,5 +46,7 @@ export const toHttpError = (error: any): HttpError => {
 	if (status === 500 && name === 'ConnectionError') status = 503
 	const body: HttpError['body'] = { error: name, code, message }
 	if (Array.isArray(error?.suggestions) && error.suggestions.length > 0) body.suggestions = error.suggestions
+	// what the caller needs to go on: the issues of an invalid schema, what there is now after a conflict (admin)
+	if (error?.details !== undefined && Number.isInteger(error?.status)) body.details = error.details
 	return { status, body }
 }

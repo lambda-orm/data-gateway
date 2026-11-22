@@ -162,8 +162,21 @@ export interface McpConfig {
 
 export type TransportName = keyof TransportsConfig
 
+/**
+ * admin: the administration of the workspaces from the gateway (docs/DATA_GATEWAY_ADMIN_PLAN.md): create, edit and
+ * remove schemas, what is saved in them. Off by default; on, it is still only for credentials with its permissions.
+ */
+export interface AdminConfig {
+	enabled: boolean
+	/** with authentication none, anyone may administer (local development only) */
+	allowAnonymous: boolean
+	/** the largest file that can be written (a lambdaORM.yaml, a saved query) */
+	maxFileBytes: number
+}
+
 export interface DataGatewayConfig {
 	orm: OrmConfig
+	admin: AdminConfig
 	server: ServerConfig
 	logger: LoggerConfig
 	metrics: MetricsConfig

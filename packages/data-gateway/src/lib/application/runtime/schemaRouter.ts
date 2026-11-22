@@ -14,6 +14,7 @@ import { toolError } from '../mcp/resultSerializer'
 /** What the edge knows of a schema, fixed when it is added */
 export interface RoutedSchemaSettings {
 	path: string
+	workspace?: string
 	transports: TransportName[]
 	/** 0 = no limit */
 	maxConcurrent: number
@@ -221,6 +222,7 @@ export class SchemaRouter implements SchemaDirectoryPort {
 		const settings = this.route(path).settings
 		return {
 			path,
+			workspace: settings.workspace,
 			gateway: gateway as unknown as DataGatewayPort,
 			mcp: mcp as unknown as McpServerPort,
 			features: { scripts: settings.scriptsEnabled ?? false },

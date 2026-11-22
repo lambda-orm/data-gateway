@@ -15,6 +15,8 @@ import { toHttpError } from './httpErrors'
 import { closestNames } from '@lambdaorm/base'
 import { badRequest } from '../../../domain/errors/gatewayError'
 import { withSecurity } from './openApi'
+import { adminRouter } from './adminRoutes'
+import { AdminService } from '../../../application/admin/adminService'
 const YAML = require('js-yaml')
 
 export interface HttpTransportOptions {
@@ -34,6 +36,8 @@ export interface HttpTransportDeps {
 	directory: SchemaDirectoryPort
 	metrics: MetricsPort
 	logger: LoggerPort
+	/** admin.enabled: the administration of the workspaces at {basePath}/admin, with this authentication */
+	admin?: { service: AdminService, authenticator: AuthenticatorPort }
 }
 
 /** Paths that never need a credential: Kubernetes probes and Prometheus. */
@@ -130,6 +134,7 @@ export class HttpTransport implements Transport {
 			res.status(200).type(contentType).send(body)
 		})
 		app.get(`${base}/schemas`, this.handle(async () => this.deps.directory.states()))
+		if (this.deps.admin) app.use(`${base}/admin`, adminRouter(this.deps.admin.service, this.authenticate(this.deps.admin.authenticator)))
 		// the schemas: the router of the moment (a schema added or removed replaces it)
 		app.use((req, res, next) => this.schemaRouter(req, res, next))
 		// a route that doesn't exist: JSON like every other answer, with the closest routes (L42)
