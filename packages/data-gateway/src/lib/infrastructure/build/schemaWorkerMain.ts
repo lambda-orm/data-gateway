@@ -54,7 +54,8 @@ const run = async (): Promise<void> => {
 			mcpName: data.mcp.name,
 			pageSize: data.mcp.pageSize,
 			version: data.version,
-			checkConnections: data.settings.runtime.checkConnections
+			checkConnections: data.settings.runtime.checkConnections,
+			admin: data.admin
 		}, {
 			logger,
 			audit: new StdoutAuditAdapter(),

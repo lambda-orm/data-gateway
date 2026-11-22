@@ -36,6 +36,8 @@ export interface SchemaWorkerData {
 	version: string
 	socketDir: string
 	metricsEnabled: boolean
+	/** admin.enabled: the read-only administration tools in its MCP server */
+	admin?: boolean
 }
 
 /** What the edge gets: the configuration (credentials included: it authenticates) and the schemas, without their env */

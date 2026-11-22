@@ -6,7 +6,7 @@ All notable changes to this project will be documented in this file.
 
 ### Unreleased (3.2.0)
 
-Phases 1 and 2 of `docs/DATA_GATEWAY_ADMIN_PLAN.md`. Nothing to change in the configuration: `orm.watch` is on by
+Phases 1 to 6 of `docs/DATA_GATEWAY_ADMIN_PLAN.md`. Nothing to change in the configuration: `orm.watch` is on by
 default, `admin` off.
 
 **Features:**
@@ -45,6 +45,8 @@ default, `admin` off.
   workspace, listed (defined or not, used by which sources) and set or removed keeping the rest of the file, never
   answered; and `build` of the model and repositories (node, client-node) in `src/` of the workspace or as a `.zip`.
   New permission `build`.
+- **The administration over MCP, read only** (`DATA_GATEWAY.md` §11.6): `admin_schema_get`, `admin_schema_validate` and
+  `admin_stage_fetch`, for credentials with `schemaRead` when `admin.enabled`. Writing is not offered over MCP.
 - The UI at `/ui` (`@lambdaorm/ui` 0.5.0), with those permissions: the `lambdaORM.yaml` of each schema editable in Monaco
   (validated while typed, saved with Ctrl+S, a conflict shown side by side), new and removed schemas, what is saved
   shared in the workspaces, the panel of commands, the schema as forms with
