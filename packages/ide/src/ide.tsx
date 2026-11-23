@@ -1,7 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { BrowserSessionStore, Workspace } from '@lambdaorm/ui'
 import { Cable, Menu as MenuIcon, Pencil, Plus, Settings, Trash2 } from 'lucide-react'
-import { ConnectionPage, ConnectionTools, Credential, CredentialFields, getJson, Header, HeaderMenu, headersOf, Kind, OUT, PreferencesPage, usePrefs, Who, whoIs, wikiUrl } from './shared'
+import { ConnectionPage, ConnectionTools, Credential, CredentialFields, getJson, Header, HeaderMenu, headersOf, Kind, OUT, PreferencesPage, usePrefs, Who, wikiUrl } from './shared'
+import { ManagementClient, ManagementState, testConnection } from './management'
+import { SessionsPanel } from './sessions'
 import { endpointsOf, McpTab, SwaggerTab, useTransports, WebSocketTab } from './tools'
 import { forbiddenTarget, unreachable, viaProxy } from './proxy'
 
@@ -57,7 +59,9 @@ const ConnectionEditor: React.FC<{
 	onSave: (connection: IdeConnection, secret: string) => void
 	onRemove?: () => void
 	onOpenTool?: (tool: 'swagger' | 'websocket' | 'mcp') => void
-}> = ({ initial, secret: givenSecret, who, problem, onSave, onRemove, onOpenTool }) => {
+	/** its session of management: its lists of sessions */
+	client?: ManagementClient
+}> = ({ initial, secret: givenSecret, who, problem, onSave, onRemove, onOpenTool, client }) => {
 	const { t } = usePrefs()
 	const [draft, setDraft] = useState<IdeConnection>(initial ?? { id: '', name: '', protocol: 'http', address: '', kind: 'apikey', header: 'X-Api-Key', user: '', remember: false })
 	const [secret, setSecret] = useState(givenSecret)
@@ -70,7 +74,8 @@ const ConnectionEditor: React.FC<{
 		setBusy(true)
 		try {
 			const version = await getJson(apiOf(draft), '/version').catch(() => undefined)
-			const found = await whoIs(apiOf(draft), credential, t.noReady)
+			// a session opened and closed at once: the credential works on its management
+			const found = await testConnection(urlOf(draft), credential)
 			setTested({ ok: true, text: `${t.connectedAs.replace('{name}', found.name)}${version?.version ? ` · data-gateway ${version.version}` : ''}` })
 		} catch (e: any) {
 			setTested({ ok: false, text: problemOf(e, t) })
@@ -115,7 +120,7 @@ const ConnectionEditor: React.FC<{
 	)
 	return initial
 		? <ConnectionPage name={initial.name} url={urlOf(initial)} credential={credentialOf(initial, { [initial.id]: givenSecret })} who={who}
-			tools={onOpenTool && <ToolsOf connection={initial} onOpen={onOpenTool} />}>{form}</ConnectionPage>
+			tools={onOpenTool && <ToolsOf connection={initial} onOpen={onOpenTool} />}>{form}{client && who && <SessionsPanel client={client} who={who} />}</ConnectionPage>
 		: <div className="dg-pane"><h2>{t.newConnection}</h2>{form}</div>
 }
 
@@ -137,36 +142,57 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 	const { t, locale, culture } = usePrefs()
 	const [connections, setConnections] = useState<IdeConnection[]>(() => read(local, CONNECTIONS, []))
 	const [secrets, setSecrets] = useState<Record<string, string>>(() => read(tab, SECRETS, {}))
-	const [whos, setWhos] = useState<Record<string, Who | undefined>>({})
-	const [problems, setProblems] = useState<Record<string, string | undefined>>({})
 	const [openPage, setOpenPage] = useState<{ key: string, at: number }>(() => ({ key: read<IdeConnection[]>(local, CONNECTIONS, []).length ? '' : 'connection:new', at: Date.now() }))
 	const openOf = (key: string) => setOpenPage({ key, at: Date.now() })
 	// the connection about to be removed (its confirmation)
 	const [removing, setRemoving] = useState<IdeConnection>()
 	useEffect(() => { write(local, CONNECTIONS, connections) }, [connections])
 	useEffect(() => { write(tab, SECRETS, secrets) }, [secrets])
-	// who each credential is on its gateway (its roles); what fails, said in its explorer and its page
-	const signature = connections.map(c => `${c.id}|${urlOf(c)}|${c.kind}|${c.header}|${c.user}|${hasSecret(c, secrets) ? credentialOf(c, secrets).secret.length : 0}`).join('\n')
+	// a client of the management of each connection: its session, who it is, its events (docs/DATA_GATEWAY_SESSIONS_PLAN.md §8)
+	const clients = useRef(new Map<string, { client: ManagementClient, signature: string }>())
+	const [states, setStates] = useState<Record<string, ManagementState>>({})
+	const now = useRef({ connections, secrets })
+	now.current = { connections, secrets }
+	/** connections saved again without changes: connect again (after a revocation, say) */
+	const reconnecting = useRef(new Set<string>())
 	useEffect(() => {
+		const seen = new Set<string>()
 		for (const c of connections) {
-			if (!hasSecret(c, secrets)) {
-				setWhos(w => ({ ...w, [c.id]: undefined }))
-				setProblems(p => ({ ...p, [c.id]: t.needsKey }))
+			seen.add(c.id)
+			const signature = `${urlOf(c)}|${c.kind}|${c.header}|${c.user}|${hasSecret(c, secrets) ? credentialOf(c, secrets).secret : ''}`
+			const existing = clients.current.get(c.id)
+			if (existing && existing.signature === signature) {
+				if (reconnecting.current.delete(c.id)) existing.client.reconnect().catch(() => undefined)
 				continue
 			}
-			whoIs(apiOf(c), credentialOf(c, secrets), t.noReady).then(
-				who => { setWhos(w => ({ ...w, [c.id]: who })); setProblems(p => ({ ...p, [c.id]: undefined })) },
-				(e: any) => {
-					setWhos(w => ({ ...w, [c.id]: undefined }))
-					setProblems(p => ({ ...p, [c.id]: problemOf(e, t) }))
-				})
+			reconnecting.current.delete(c.id)
+			// another gateway or credential: the session of the old one ends
+			if (existing) { existing.client.logout().catch(() => undefined); existing.client.close() }
+			const credential = () => {
+				const current = now.current.connections.find(x => x.id === c.id)
+				return current && hasSecret(current, now.current.secrets) ? credentialOf(current, now.current.secrets) : undefined
+			}
+			const client = new ManagementClient(c.id, urlOf(c), credential, { invalid: t.invalid, unreachable: t.unreachable, needsKey: t.needsKey, sessionEnded: t.sessionEnded })
+			client.subscribe(state => setStates(all => ({ ...all, [c.id]: state })))
+			clients.current.set(c.id, { client, signature })
+			;(existing ? client.reconnect() : client.start()).catch(() => undefined)
 		}
-	}, [signature, t])
+		for (const [id, { client }] of clients.current) {
+			if (seen.has(id)) continue
+			client.logout().catch(() => undefined)
+			client.close()
+			clients.current.delete(id)
+		}
+	}, [connections, secrets, t])
+	useEffect(() => () => { for (const { client } of clients.current.values()) client.close() }, [])
+	const whos = useMemo(() => Object.fromEntries(Object.entries(states).map(([id, state]) => [id, state.who])), [states])
+	const problems = useMemo(() => Object.fromEntries(Object.entries(states).map(([id, state]) => [id, state.problem ?? (state.expiring ? t.sessionExpiring : undefined)])), [states, t])
 	const save = (existing: IdeConnection | undefined) => (connection: IdeConnection, secret: string) => {
 		const id = existing?.id ?? `c${Date.now().toString(36)}`
 		const kept: IdeConnection = { ...connection, id, secret: connection.remember && secret ? secret : undefined }
 		setConnections(all => existing ? all.map(c => c.id === id ? kept : c) : [...all, kept])
 		setSecrets(s => ({ ...s, [id]: secret }))
+		if (existing) reconnecting.current.add(id)
 		if (!existing) openOf(`connection:${id}`)
 	}
 	const remove = (id: string) => {
@@ -174,13 +200,17 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 		setSecrets(s => { const n = { ...s }; delete n[id]; return n })
 	}
 	const specs = useMemo(() => connections.map(c => {
-		const credential = credentialOf(c, secrets)
+		const client = clients.current.get(c.id)?.client
 		return {
 			id: c.id,
 			name: c.name,
 			description: urlOf(c),
 			baseUrl: apiOf(c),
-			headers: () => headersOf(credential),
+			// its session in every request (the credential only in its login), and a new login when it expires
+			fetch: client?.fetch,
+			// the gateway says what changed: read at once; the polling, slower while its events come
+			changes: client?.changes,
+			refreshMs: states[c.id]?.live ? 60000 : undefined,
 			// what is saved without the gateway's workspaces: per gateway and per user of the credential
 			workspaceKey: `${urlOf(c)}|${whos[c.id]?.name ?? c.user ?? ''}`,
 			problem: problems[c.id],
@@ -191,7 +221,7 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 				</>
 			)
 		}
-	}), [connections, secrets, problems, whos, t])
+	}), [connections, states, problems, whos, t])
 	const pages = useMemo(() => ({
 		preferences: { title: t.preferences, icon: <Settings size={14} aria-hidden="true" />, render: () => <PreferencesPage /> },
 		'connection:new': { title: t.newConnection, icon: <Plus size={14} aria-hidden="true" />, render: () => <ConnectionEditor secret="" onSave={save(undefined)} /> },
@@ -199,7 +229,7 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 			title: `${t.connection}: ${c.name}`,
 			icon: <Cable size={14} aria-hidden="true" />,
 			render: () => <ConnectionEditor key={c.id} initial={c} secret={credentialOf(c, secrets).secret} who={whos[c.id]} problem={problems[c.id]} onSave={save(c)} onRemove={() => remove(c.id)}
-				onOpenTool={tool => openOf(`${tool}:${c.id}`)} />
+				onOpenTool={tool => openOf(`${tool}:${c.id}`)} client={clients.current.get(c.id)?.client} />
 		}])),
 		// its tools, with its credential
 		...Object.fromEntries(connections.flatMap(c => (['swagger', 'websocket', 'mcp'] as const).map(tool => [`${tool}:${c.id}`, {
@@ -208,8 +238,20 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 			render: () => <ToolTab connection={c} tool={tool} headers={() => headersOf(credentialOf(c, secrets))} theme={dark ? 'dark' : 'light'} />
 		}])))
 	}), [connections, secrets, whos, problems, t, dark])
-	// where the IDE was (its tabs across the connections): in this browser
-	const session = useMemo(() => new BrowserSessionStore('data-gateway-ide.session'), [])
+	// where the IDE was (its tabs across the connections): in this browser; its active tab, told to the gateways as what
+	// the person is looking at (session.activity)
+	const session = useMemo(() => {
+		const browser = new BrowserSessionStore('data-gateway-ide.session')
+		return {
+			load: () => browser.load(),
+			save: (state: unknown) => {
+				const kept = state as { tabs?: { kind: string, title: string, schema?: string }[], active?: number } | undefined
+				const active = kept?.tabs?.[kept.active ?? -1]
+				if (active) for (const { client } of clients.current.values()) client.activity({ schema: active.schema, tab: `${active.kind}: ${active.title}` })
+				return browser.save(state)
+			}
+		}
+	}, [])
 	return (
 		<div className="dg-page">
 			<Header brand="Data Gateway IDE" version={__APP_VERSION__}

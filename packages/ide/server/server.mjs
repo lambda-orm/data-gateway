@@ -51,6 +51,16 @@ const DROPPED_RESPONSE = [...HOP, 'set-cookie']
 
 const without = (headers, names) => Object.fromEntries(Object.entries(headers).filter(([name]) => !names.includes(name.toLowerCase())))
 
+/**
+ * Who the gateway is told the client is (X-Forwarded-For): the address of the browser as this server sees it. The
+ * gateway believes it only from its trusted proxies (transports.management.trustedProxies: this IDE); what the browser
+ * sent in that header is dropped (it could say anything).
+ */
+const forwardedFor = (req) => {
+	const address = req.socket.remoteAddress ?? ''
+	return address.startsWith('::ffff:') ? address.slice(7) : address
+}
+
 const sendJson = (res, status, body) => {
 	res.writeHead(status, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' })
 	res.end(JSON.stringify(body))
@@ -64,7 +74,7 @@ const proxy = (req, res, allowed) => {
 	if (!target.url) return sendJson(res, target.status, { error: target.error, message: target.message })
 	const { url } = target
 	const client = url.protocol === 'https:' ? https : http
-	const upstream = client.request(url, { method: req.method, headers: { ...without(req.headers, DROPPED_REQUEST), host: url.host } }, (answer) => {
+	const upstream = client.request(url, { method: req.method, headers: { ...without(req.headers, DROPPED_REQUEST), host: url.host, 'x-forwarded-for': forwardedFor(req) } }, (answer) => {
 		log(req.method, url, answer.statusCode)
 		res.writeHead(answer.statusCode ?? 502, answer.statusMessage, without(answer.headers, DROPPED_RESPONSE))
 		answer.pipe(res)
@@ -88,7 +98,7 @@ const upgrade = (req, socket, head, allowed) => {
 	if (!target.url) return refuse(target.status, { error: target.error, message: target.message })
 	const { url } = target
 	const client = url.protocol === 'https:' ? https : http
-	const headers = { ...without(req.headers, DROPPED_REQUEST), host: url.host, connection: 'Upgrade', upgrade: req.headers.upgrade ?? 'websocket' }
+	const headers = { ...without(req.headers, DROPPED_REQUEST), host: url.host, 'x-forwarded-for': forwardedFor(req), connection: 'Upgrade', upgrade: req.headers.upgrade ?? 'websocket' }
 	const upstream = client.request(url, { method: req.method, headers })
 	upstream.on('upgrade', (answer, gatewaySocket, gatewayHead) => {
 		log('WS', url, 101)

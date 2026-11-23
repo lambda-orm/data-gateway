@@ -2,7 +2,7 @@ import type { Locale } from '@lambdaorm/ui'
 
 /** The permissions of the gateway (docs/DATA_GATEWAY.md §6.2): those of the data and those of the administration */
 export const DATA_PERMISSIONS = ['read', 'write', 'script', 'queue', 'stageImport']
-export const ADMIN_PERMISSIONS = ['schemaRead', 'schemaWrite', 'schemaAdmin', 'workbenchWrite', 'ddl', 'build']
+export const ADMIN_PERMISSIONS = ['schemaRead', 'schemaWrite', 'schemaAdmin', 'workbenchWrite', 'ddl', 'build', 'sessionAdmin']
 
 type Descriptions = Record<string, string> & { data: string, admin: string, granted: string, notGranted: string, other: string }
 
@@ -18,7 +18,8 @@ const EN: Descriptions = {
 	schemaAdmin: 'Create and remove workspaces (schemas).',
 	workbenchWrite: 'Save queries, scripts and diagrams in the projects of the workspaces.',
 	ddl: 'Change the structure of the databases of a stage (push, drop).',
-	build: 'Generate the code of the domain (model and repositories) in src/ of the workspace.'
+	build: 'Generate the code of the domain (model and repositories) in src/ of the workspace.',
+	sessionAdmin: 'See every session of management (who is connected) and revoke those of other credentials.'
 }
 const ES: Descriptions = {
 	data: 'Datos', admin: 'Administración', granted: 'otorgado', notGranted: 'no otorgado', other: 'Otros',
@@ -32,7 +33,8 @@ const ES: Descriptions = {
 	schemaAdmin: 'Crear y eliminar workspaces (esquemas).',
 	workbenchWrite: 'Guardar consultas, scripts y diagramas en los proyectos de los workspaces.',
 	ddl: 'Cambiar la estructura de las bases de un stage (push, drop).',
-	build: 'Generar el código del dominio (modelo y repositorios) en src/ del workspace.'
+	build: 'Generar el código del dominio (modelo y repositorios) en src/ del workspace.',
+	sessionAdmin: 'Ver todas las sesiones de management (quién está conectado) y revocar las de otras credenciales.'
 }
 const PT: Descriptions = {
 	data: 'Dados', admin: 'Administração', granted: 'concedida', notGranted: 'não concedida', other: 'Outras',
@@ -46,7 +48,8 @@ const PT: Descriptions = {
 	schemaAdmin: 'Criar e remover workspaces (esquemas).',
 	workbenchWrite: 'Salvar consultas, scripts e diagramas nos projetos dos workspaces.',
 	ddl: 'Alterar a estrutura dos bancos de um stage (push, drop).',
-	build: 'Gerar o código do domínio (modelo e repositórios) em src/ do workspace.'
+	build: 'Gerar o código do domínio (modelo e repositórios) em src/ do workspace.',
+	sessionAdmin: 'Ver todas as sessões do management (quem está conectado) e revogar as de outras credenciais.'
 }
 const FR: Descriptions = {
 	data: 'Données', admin: 'Administration', granted: 'accordée', notGranted: 'non accordée', other: 'Autres',
@@ -60,7 +63,8 @@ const FR: Descriptions = {
 	schemaAdmin: 'Créer et supprimer des workspaces (schémas).',
 	workbenchWrite: 'Enregistrer requêtes, scripts et diagrammes dans les projets des workspaces.',
 	ddl: 'Modifier la structure des bases d’un stage (push, drop).',
-	build: 'Générer le code du domaine (modèle et dépôts) dans src/ du workspace.'
+	build: 'Générer le code du domaine (modèle et dépôts) dans src/ du workspace.',
+	sessionAdmin: 'Voir toutes les sessions de management (qui est connecté) et révoquer celles des autres identifiants.'
 }
 const IT: Descriptions = {
 	data: 'Dati', admin: 'Amministrazione', granted: 'concesso', notGranted: 'non concesso', other: 'Altri',
@@ -74,7 +78,8 @@ const IT: Descriptions = {
 	schemaAdmin: 'Creare ed eliminare workspace (schemi).',
 	workbenchWrite: 'Salvare query, script e diagrammi nei progetti dei workspace.',
 	ddl: 'Modificare la struttura dei database di uno stage (push, drop).',
-	build: 'Generare il codice del dominio (modello e repository) in src/ del workspace.'
+	build: 'Generare il codice del dominio (modello e repository) in src/ del workspace.',
+	sessionAdmin: 'Vedere tutte le sessioni di management (chi è connesso) e revocare quelle di altre credenziali.'
 }
 const DE: Descriptions = {
 	data: 'Daten', admin: 'Verwaltung', granted: 'erteilt', notGranted: 'nicht erteilt', other: 'Weitere',
@@ -88,7 +93,8 @@ const DE: Descriptions = {
 	schemaAdmin: 'Workspaces (Schemas) anlegen und entfernen.',
 	workbenchWrite: 'Abfragen, Skripte und Diagramme in den Projekten der Workspaces speichern.',
 	ddl: 'Die Struktur der Datenbanken eines Stage ändern (push, drop).',
-	build: 'Den Code der Domäne (Modell und Repositories) in src/ des Workspace erzeugen.'
+	build: 'Den Code der Domäne (Modell und Repositories) in src/ des Workspace erzeugen.',
+	sessionAdmin: 'Alle Sitzungen von management sehen (wer verbunden ist) und die anderer Anmeldedaten widerrufen.'
 }
 const NL: Descriptions = {
 	data: 'Gegevens', admin: 'Beheer', granted: 'toegekend', notGranted: 'niet toegekend', other: 'Overige',
@@ -102,7 +108,8 @@ const NL: Descriptions = {
 	schemaAdmin: 'Workspaces (schema’s) aanmaken en verwijderen.',
 	workbenchWrite: 'Queries, scripts en diagrammen opslaan in de projecten van de workspaces.',
 	ddl: 'De structuur van de databases van een stage wijzigen (push, drop).',
-	build: 'De code van het domein (model en repositories) genereren in src/ van de workspace.'
+	build: 'De code van het domein (model en repositories) genereren in src/ van de workspace.',
+	sessionAdmin: 'Alle sessies van management zien (wie verbonden is) en die van andere inloggegevens intrekken.'
 }
 const CA: Descriptions = {
 	data: 'Dades', admin: 'Administració', granted: 'atorgat', notGranted: 'no atorgat', other: 'Altres',
@@ -116,7 +123,8 @@ const CA: Descriptions = {
 	schemaAdmin: 'Crear i eliminar workspaces (esquemes).',
 	workbenchWrite: 'Desar consultes, scripts i diagrames als projectes dels workspaces.',
 	ddl: 'Canviar l’estructura de les bases d’un stage (push, drop).',
-	build: 'Generar el codi del domini (model i repositoris) a src/ del workspace.'
+	build: 'Generar el codi del domini (model i repositoris) a src/ del workspace.',
+	sessionAdmin: 'Veure totes les sessions de management (qui està connectat) i revocar les d’altres credencials.'
 }
 const GL: Descriptions = {
 	data: 'Datos', admin: 'Administración', granted: 'outorgado', notGranted: 'non outorgado', other: 'Outros',
@@ -130,7 +138,8 @@ const GL: Descriptions = {
 	schemaAdmin: 'Crear e eliminar workspaces (esquemas).',
 	workbenchWrite: 'Gardar consultas, scripts e diagramas nos proxectos dos workspaces.',
 	ddl: 'Cambiar a estrutura das bases dun stage (push, drop).',
-	build: 'Xerar o código do dominio (modelo e repositorios) en src/ do workspace.'
+	build: 'Xerar o código do dominio (modelo e repositorios) en src/ do workspace.',
+	sessionAdmin: 'Ver todas as sesións de management (quen está conectado) e revogar as doutras credenciais.'
 }
 const EU: Descriptions = {
 	data: 'Datuak', admin: 'Administrazioa', granted: 'emanda', notGranted: 'eman gabe', other: 'Besteak',
@@ -144,7 +153,8 @@ const EU: Descriptions = {
 	schemaAdmin: 'Workspaceak (eskemak) sortu eta ezabatu.',
 	workbenchWrite: 'Kontsultak, scriptak eta diagramak workspaceen proiektuetan gorde.',
 	ddl: 'Stage baten datu-baseen egitura aldatu (push, drop).',
-	build: 'Domeinuaren kodea (eredua eta biltegiak) workspaceko src/ karpetan sortu.'
+	build: 'Domeinuaren kodea (eredua eta biltegiak) workspaceko src/ karpetan sortu.',
+	sessionAdmin: 'Management-eko saio guztiak ikusi (nor dagoen konektatuta) eta beste kredentzialenak baliogabetu.'
 }
 
 const BY_LOCALE: Record<string, Descriptions> = { en: EN, es: ES, pt: PT, fr: FR, it: IT, de: DE, nl: NL, ca: CA, gl: GL, eu: EU }

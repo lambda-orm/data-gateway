@@ -80,6 +80,8 @@ test('a request: method, body, query and the credential forwarded; cookies, orig
 	assert.equal(last.headers.host, `127.0.0.1:${gatewayPort}`)
 	assert.equal(last.headers.cookie, undefined)
 	assert.equal(last.headers.origin, undefined)
+	// the address of the browser, as this server sees it (what the browser said there is dropped)
+	assert.equal(last.headers['x-forwarded-for'], '127.0.0.1')
 })
 
 test('a target not allowed: 403 that says how; a gateway not reached: 502', async () => {

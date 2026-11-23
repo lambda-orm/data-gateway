@@ -139,3 +139,12 @@ div.dg-error { border: 1px solid var(--bad); border-radius: 6px; padding: 6px 10
 @media (max-width: 900px) { .dg-tool-split { grid-template-columns: 1fr; } }
 .dg-clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 
+/* the sessions of a connection (its page): its own and, with sessionAdmin, every one by credential */
+.dg-sessions h3 + p { margin-top: 0; }
+.dg-table-scroll { overflow-x: auto; max-width: 100%; }
+.dg-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.dg-table th, .dg-table td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.dg-table th { color: var(--muted); font-weight: 600; }
+.dg-table .dg-chip { margin-left: 6px; }
+.dg-session-group { margin: 10px 0 14px; }
+.dg-session-credential { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }

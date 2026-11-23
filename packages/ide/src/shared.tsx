@@ -56,14 +56,6 @@ export const getJson = async (base: string, path: string, headers: Record<string
 	return response.json()
 }
 
-/** Who a credential is on a gateway: checked against a schema that is ready (whoami needs one) */
-export const whoIs = async (base: string, credential: Credential, noReady: string): Promise<Who> => {
-	const schemas: SchemaState[] = await getJson(base, '/schemas')
-	const schema = schemas.find(s => s.status === 'ready')
-	if (!schema) throw new Error(noReady)
-	return getJson(base, `${schema.path ? `/${schema.path}` : ''}/whoami`, headersOf(credential))
-}
-
 /** A window over the page: its title, what it shows, Close (Escape or a click outside close it too) */
 export const Dialog: React.FC<{ title: string, onClose: () => void, children: React.ReactNode }> = ({ title, onClose, children }) => {
 	const { t } = usePrefs()

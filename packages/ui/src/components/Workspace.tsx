@@ -80,6 +80,18 @@ export interface WorkspaceConnection {
 	actions?: React.ReactNode
 	/** it can't be reached now: why (its explorer says it) */
 	problem?: string
+	/**
+	 * How its requests are made (by default fetch): the IDE puts its session in them and logs in again when it ends
+	 * (docs/DATA_GATEWAY_SESSIONS_PLAN.md). Used by the API, the administration and the store of where it was
+	 */
+	fetch?: typeof fetch
+	/**
+	 * The gateway says something changed (its WebSocket of events: schema.statusChanged, workspace.changed): the schemas
+	 * and what is saved are read again at once. A subscription; it answers how to unsubscribe
+	 */
+	changes?: (listener: () => void) => () => void
+	/** How often its schemas are read again while `changes` works (it replaces refreshMs of the workspace) */
+	refreshMs?: number
 }
 
 /** A flag of this browser (a convenience: without storage it is never set) */
@@ -202,13 +214,14 @@ const ConnectionSection: React.FC<{
 	open: Openers
 	onRuntime: (id: string, runtime: Runtime | undefined) => void
 	onNotice: (notice: string) => void
-}> = ({ spec, heading, refreshMs, theme, locale, activeId, expanded, onExpandedChange, open, onRuntime, onNotice }) => {
+}> = ({ spec, heading, refreshMs: workspaceRefreshMs, theme, locale, activeId, expanded, onExpandedChange, open, onRuntime, onNotice }) => {
+	const refreshMs = spec.refreshMs ?? workspaceRefreshMs
 	const x = explorerMessagesOf(locale)
 	const a = adminMessagesOf(locale)
 	const id = spec.id
-	const api = useMemo(() => spec.api ?? new RestQueryApi(spec.baseUrl ?? '', spec.headers), [spec.api, spec.baseUrl, spec.headers])
-	const adminApi = useMemo<AdminApiPort | undefined>(() => spec.admin === false ? undefined : spec.admin ?? (spec.api ? undefined : new RestAdminApi(spec.baseUrl ?? '', spec.headers)),
-		[spec.admin, spec.api, spec.baseUrl, spec.headers])
+	const api = useMemo(() => spec.api ?? new RestQueryApi(spec.baseUrl ?? '', spec.headers, spec.fetch), [spec.api, spec.baseUrl, spec.headers, spec.fetch])
+	const adminApi = useMemo<AdminApiPort | undefined>(() => spec.admin === false ? undefined : spec.admin ?? (spec.api ? undefined : new RestAdminApi(spec.baseUrl ?? '', spec.headers, spec.fetch)),
+		[spec.admin, spec.api, spec.baseUrl, spec.headers, spec.fetch])
 	const [can, setCan] = useState<AdminCapabilities>()
 	// what the gateway allows is known (or there is no administration): until then nothing saved is read
 	const [known, setKnown] = useState(false)
@@ -242,10 +255,12 @@ const ConnectionSection: React.FC<{
 	useEffect(() => { if (known) controller.load() }, [controller, known])
 	// someone else saved in the workspace (or a file of workbench/ changed): read again
 	useEffect(() => {
-		if (!sharedStore || refreshMs <= 0) return
-		const timer = setInterval(() => { sharedStore.changed().then(changed => { if (changed) controller.load() }, () => undefined) }, refreshMs)
-		return () => clearInterval(timer)
-	}, [controller, sharedStore, refreshMs])
+		if (!sharedStore) return
+		const check = () => { sharedStore.changed().then(changed => { if (changed) controller.load() }, () => undefined) }
+		const off = spec.changes?.(check)
+		const timer = refreshMs > 0 ? setInterval(check, refreshMs) : undefined
+		return () => { off?.(); if (timer) clearInterval(timer) }
+	}, [controller, sharedStore, refreshMs, spec.changes])
 
 	// the domain of each schema is read once, for the explorer, the forms, the diagrams and the YAML
 	const domains = useRef(new Map<string, Promise<DomainInfo>>())
@@ -285,10 +300,11 @@ const ConnectionSection: React.FC<{
 			setListed(all)
 		}, () => { if (!current) setListed([]) })
 		read()
-		if (refreshMs <= 0) return
-		const timer = setInterval(read, refreshMs)
-		return () => clearInterval(timer)
-	}, [api, refreshMs, poke])
+		// the gateway says it changed (its events): read at once; the timer stays, slower, for when they don't come
+		const off = spec.changes?.(read)
+		const timer = refreshMs > 0 ? setInterval(read, refreshMs) : undefined
+		return () => { off?.(); if (timer) clearInterval(timer) }
+	}, [api, refreshMs, poke, spec.changes])
 	const pokeSoon = useCallback(() => { for (const ms of [300, 1500, 4000]) setTimeout(() => setPoke(p => p + 1), ms) }, [])
 	const revision = useMemo(() => revisionOf(listed), [listed])
 	const schemas = useMemo(() => listed.filter(s => s.status === 'ready'), [listed])
@@ -403,7 +419,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 		? undefined
 		: session ?? (connections.length !== 1 || primary?.api
 			? (connections.length > 1 ? new BrowserSessionStore(`lambdaorm-ui.session:${connections.map(c => c.id).join(',')}`) : undefined)
-			: new FallbackSessionStore(new GatewaySessionStore(primary?.baseUrl ?? '', primary?.headers), new BrowserSessionStore(`lambdaorm-ui.session:${browserKey}`))),
+			: new FallbackSessionStore(new GatewaySessionStore(primary?.baseUrl ?? '', primary?.headers, primary?.fetch), new BrowserSessionStore(`lambdaorm-ui.session:${browserKey}`))),
 	[session, connections, primary, browserKey])
 	const [restored, setRestored] = useState(!sessionStore)
 	const tabsNow = useRef(tabs)

@@ -1,6 +1,6 @@
 # Sesiones de `management`
 
-> **Estado (2026-11-23): fases 1 y 2 hechas** (rama `feature/management-sessions`); faltan las fases 3 a 5. Sigue a [`DATA_GATEWAY.md`](DATA_GATEWAY.md) §12 (el transporte
+> **Estado (2026-11-23): fases 1 a 4 hechas** (rama `feature/management-sessions`); falta la documentación de usuario (fase 5). Sigue a [`DATA_GATEWAY.md`](DATA_GATEWAY.md) §12 (el transporte
 > `management`), que lo resume en §12.1. Aplica igual al IDE web (la imagen) y al de escritorio
 > ([`DATA_GATEWAY_IDE_DESKTOP_PLAN.md`](DATA_GATEWAY_IDE_DESKTOP_PLAN.md)). Las decisiones de §9 están cerradas (el
 > usuario, 2026-11-23).
@@ -146,10 +146,12 @@ transports:
 
 - **Probar / Conectar** hace el login (`POST /sessions`) con la credencial de la connection y guarda el token **en
   memoria de la pestaña** (`sessionStorage`), nunca en `localStorage`. Todo pedido a `management` lleva el token.
-- **Al vencer o ser revocada:**
-  - con la clave recordada, el IDE hace login solo y repite el pedido (una vez);
-  - sin la clave, pide la credencial en la página de la connection, con el motivo: "venció por inactividad",
-    "la revocó *admin* a las 10:42", "se superó el límite de sesiones".
+- **Al vencer** (inactividad, duración máxima) con la clave a mano (recordada, o en la pestaña), el IDE hace login solo
+  y repite el pedido (una vez); con `session.expiring`, antes de que venza. Sin la clave, la pide en la página de la
+  connection.
+- **Al ser revocada**, no vuelve a entrar solo, aunque tenga la clave (si no, revocar no serviría): dice el motivo
+  ("la revocó *admin* a las 10:42", "se superó el límite de sesiones") y espera a que la persona guarde la connection
+  otra vez.
 - Las pestañas REST, WebSocket y MCP siguen usando la clave (son transportes de datos).
 - El IDE manda en el login `client` (`data-gateway-ide`, su versión, `web` o `desktop`).
 
@@ -182,8 +184,8 @@ transports:
 | --- | --- | --- |
 | 1 ✅ | **Gateway:** la tabla `sessions` (puerto `SessionStorePort`, adaptador SQLite y en memoria), las rutas de §3, el middleware que exige la sesión en `management`, `sessionAdmin`, la configuración de §5, la auditoría | unitarios (vencimientos, límite, permisos) e integración (login, pedidos con token, `401` de cada tipo, revocar, clave directa rechazada) |
 | 2 ✅ | **Gateway:** `/events` (presencia, `session.*`, `schema.statusChanged`, `workspace.changed`), presencia y revocación entre réplicas | integración con dos gateways sobre el mismo volumen: revocar en una cierra el socket de la otra |
-| 3 | **IDE:** login, token por pestaña, re-login, motivos; eventos en lugar del polling; Mis sesiones / Sesiones activas | pruebas de la UI; en Ilusor, dos navegadores con la misma clave se ven y se cortan |
-| 4 | **Proxy del IDE:** `X-Forwarded-For` (y el subprotocolo de la sesión, que ya pasa) | `server.test.mjs` |
+| 3 ✅ | **IDE:** login, token por pestaña, re-login, motivos; eventos en lugar del polling; Mis sesiones / Sesiones activas | pruebas de la UI; en Ilusor, dos navegadores con la misma clave se ven y se cortan |
+| 4 ✅ | **Proxy del IDE:** `X-Forwarded-For` (y el subprotocolo de la sesión, que ya pasa) | `server.test.mjs` |
 | 5 | **Documentación:** `DATA_GATEWAY.md` §12.1 completo, el CHANGELOG (cambio que rompe: `management` exige sesión), la guía del IDE y "Configuration" en la wiki (cuatro idiomas) | `mkdocs build --strict` |
 
 Es un cambio que rompe para quien llame a `management` con la clave directa: va en la misma 4.0.0 si sale antes de
