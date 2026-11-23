@@ -105,7 +105,7 @@ describe('DomainDiagram', () => {
 		const { container } = render(<DomainDiagram api={new DomainApi()} schema="northwind/v1" layout={rowLayout} onQuery={onQuery} />)
 		await waitFor(() => expect(container.querySelectorAll('[data-entity]')).toHaveLength(3))
 		expect([...container.querySelectorAll('[data-entity]')].map(e => e.getAttribute('data-entity')).sort()).toEqual(['OrderDetails', 'Orders', 'Products'])
-		expect(screen.getByText('3 entities · 2 relations')).toBeTruthy()
+		expect(screen.getByText('entities: 3 · relations: 2')).toBeTruthy()
 		expect(container.querySelector('[data-entity=Orders]')!.textContent).toContain('FKcustomerId')
 		fireEvent.click(container.querySelector('[data-entity=Orders]')!)
 		await waitFor(() => expect(container.querySelector('[data-entity=Customers]')).toBeTruthy())

@@ -6,6 +6,15 @@ html, body { margin: 0; font: 14px/1.5 system-ui, -apple-system, "Segoe UI", san
 .dg-app button { cursor: pointer; }
 .dg-app button:disabled { opacity: .5; cursor: progress; }
 .dg-app .dg-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* the states of the controls of the app's own pages (the workspace has those of the library) */
+.dg-app button, .dg-app select, .dg-app input { transition: background-color .12s, border-color .12s, box-shadow .12s; }
+.dg-app button:where(:not(:disabled):not(.lw-link):not(.dg-primary):not(.dg-selected):not(.lw-primary):not(.lw-danger):not(.lw-active):not([role="tab"]):not([aria-pressed="true"])):hover { background: color-mix(in srgb, var(--fg) 7%, var(--panel)); border-color: color-mix(in srgb, var(--fg) 24%, var(--border)); }
+.dark .dg-primary, .dark .dg-pill.dg-selected, .dark .dg-avatar { color: #0b1220 !important; }
+.dg-app .dg-primary:not(:disabled):hover { background: color-mix(in srgb, var(--accent) 86%, #000); border-color: color-mix(in srgb, var(--accent) 86%, #000); }
+.dg-app input:not([type="checkbox"]):not([type="radio"]):focus, .dg-app select:focus, .dg-app textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent); }
+.dg-app button:focus-visible, .dg-app a:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: 1px; }
+.dg-app input[type="checkbox"], .dg-app input[type="radio"] { accent-color: var(--accent); }
+.dg-app { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--fg) 22%, transparent) transparent; }
 .dg-big { padding: 8px 20px !important; font-size: 15px !important; }
 .dg-header { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
 .dg-brand { font-weight: 700; font-size: 17px; color: var(--fg); text-decoration: none; }
@@ -45,11 +54,11 @@ div.dg-error { border: 1px solid var(--bad); border-radius: 6px; padding: 6px 10
 .dg-account { position: relative; display: inline-flex; }
 .dg-app .dg-account-button { display: inline-flex; align-items: center; gap: 6px; border-radius: 18px; padding: 4px 10px 4px 6px; }
 .dg-account-name { font-size: 13px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dg-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 60; min-width: 190px; display: flex; flex-direction: column; padding: 4px 0; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, .18); }
-.dg-app .dg-menu button { display: flex; align-items: center; gap: 8px; border: 0; border-radius: 0; background: none; text-align: left; padding: 7px 14px; }
+.dg-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 60; min-width: 190px; display: flex; flex-direction: column; padding: 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 20px rgba(15, 23, 42, .16), 0 1px 3px rgba(15, 23, 42, .08); }
+.dg-app .dg-menu button { display: flex; align-items: center; gap: 8px; border: 0; border-radius: 4px; background: none; text-align: left; padding: 7px 12px; }
 .dg-app .dg-menu button:hover, .dg-app .dg-menu button:focus-visible { background: var(--panel); }
-.dg-dialog-back { position: fixed; inset: 0; z-index: 70; background: rgba(0, 0, 0, .35); display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; }
-.dg-dialog { width: min(460px, calc(100vw - 32px)); background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; box-shadow: 0 12px 40px rgba(0, 0, 0, .3); }
+.dg-dialog-back { position: fixed; inset: 0; z-index: 70; background: rgba(15, 23, 42, .42); backdrop-filter: blur(1.5px); display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; }
+.dg-dialog { width: min(460px, calc(100vw - 32px)); background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; box-shadow: 0 20px 60px rgba(15, 23, 42, .30), 0 2px 8px rgba(15, 23, 42, .10); }
 .dg-dialog h2 { margin: 0 0 14px; font-size: 17px; }
 .dg-dialog-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
 .dg-facts { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 0; }
