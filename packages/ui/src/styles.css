@@ -313,3 +313,20 @@
 .lw-diagram > .lw-header { padding: 6px 8px; background: var(--lw-panel); border: 1px solid var(--lw-border); border-radius: 6px; }
 .lw-diagram > .lw-header .lw-who { font-size: 12px; }
 .lw-header > .lw-save:last-child, .lw-header > .lw-modes:last-child { padding-right: 0; margin-right: 0; border-right: 0; }
+
+/* the options of a query as a form: a label, its control and what is valid under it */
+.lw-options { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.lw-options-head { display: flex; align-items: center; gap: 8px; }
+.lw-options-head .lw-label { margin: 0; flex: 1; }
+.lw-modes-small > button { height: 24px; padding: 0 8px; font-size: 12px; }
+.lw-options-form { display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; border: 1px solid var(--lw-border); border-radius: 6px; background: var(--lw-bg); }
+.lw-option { display: grid; grid-template-columns: 120px 1fr; gap: 2px 10px; align-items: start; }
+.lw-option-label { color: var(--lw-muted); padding-top: 5px; overflow-wrap: anywhere; }
+.lw-option > div { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.lw-option input, .lw-option select { width: 100%; max-width: 320px; box-sizing: border-box; height: 28px; }
+.lw-option .lw-hint { font-size: 11px; line-height: 1.35; }
+.lw-option-pair { display: flex; gap: 4px; align-items: center; max-width: 360px; }
+.lw-option-pair input { flex: 1; min-width: 0; }
+.lw-option > div > button { align-self: flex-start; height: 26px; padding: 0 8px; font-size: 12px; }
+.lw-option input.lw-invalid { border-color: var(--lw-error); }
+@media (max-width: 700px) { .lw-option { grid-template-columns: 1fr; } }

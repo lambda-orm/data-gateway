@@ -17,6 +17,7 @@ import { HeadersProvider, RestQueryApi } from '../infrastructure/restQueryApi'
 import { LocalStorageHistory } from '../infrastructure/localStorageHistory'
 import { setSchemaTypings } from '../infrastructure/monaco/monacoSetup'
 import { CodeEditor } from './CodeEditor'
+import { OptionsForm } from './OptionsForm'
 import { ResultViewer } from './ResultViewer'
 import { applySuggestion } from '../domain/workspace'
 
@@ -177,8 +178,7 @@ export const QueryWorkbench: React.FC<QueryWorkbenchProps> = props => {
 					<CodeEditor ariaLabel="data" language="json" theme={theme} value={s.data} onChange={data => controller.update({ data })} height={110} />
 				</div>
 				<div className="lw-col">
-					<div className="lw-label">{m.options}</div>
-					<CodeEditor ariaLabel="options" language="json" theme={theme} value={s.options} onChange={options => controller.update({ options })} height={110} />
+					<OptionsForm label={m.options} value={s.options} onChange={options => controller.update({ options })} api={api} schema={s.schema} mode={s.mode} theme={theme} locale={locale} />
 					{s.mode === 'query' && operations.includes('executeQueued') && (
 						<div className="lw-queue">
 							<input aria-label="topic" placeholder={m.topic} value={s.topic} onChange={e => controller.update({ topic: e.target.value })} />
