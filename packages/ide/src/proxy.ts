@@ -13,7 +13,9 @@ export const viaProxy = (target: string): string => {
 	const socket = url.protocol === 'ws:' || url.protocol === 'wss:'
 	// the backend reaches it by HTTP (it upgrades a WebSocket itself): the target is always http(s)
 	const http = `${secure ? 'https' : 'http'}://${url.host}${url.pathname.replace(/\/+$/, '')}`
-	const proxy = new URL(`gw/${base64url(http)}`, document.baseURI)
+	// the desktop app gives the base of its local proxy (with its token); the web image, the page itself
+	const base = (window as { ideDesktop?: { proxyBase?: string } }).ideDesktop?.proxyBase ?? document.baseURI
+	const proxy = new URL(`gw/${base64url(http)}`, base)
 	if (socket) proxy.protocol = proxy.protocol === 'https:' ? 'wss:' : 'ws:'
 	return proxy.toString()
 }

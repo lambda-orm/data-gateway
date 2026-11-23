@@ -164,16 +164,66 @@ const serveStatic = (req, res, dist) => {
 	fs.createReadStream(file).pipe(res)
 }
 
-export const createServer = ({ dist = path.resolve(process.env.DATA_GATEWAY_IDE_DIST ?? path.join(here, '..', 'dist')), targets = targetsOf(process.env.DATA_GATEWAY_IDE_TARGETS) } = {}) => {
+/**
+ * The desktop app (docs/DATA_GATEWAY_IDE_DESKTOP_PLAN.md §3.2): this server only proxies, on 127.0.0.1, for the page of
+ * the app (its origin, app://ide). A request needs the token of this run in its path (/t/<token>/gw/…: a WebSocket
+ * can't send headers), comes from that origin (CORS answered only to it) and names this server as its Host (DNS
+ * rebinding). Anything else is a 403: another process or web page of the machine can't use it as a proxy.
+ */
+const desktopGuard = (req, desktop, port) => {
+	const prefix = `/t/${desktop.token}`
+	if (!req.url.startsWith(`${prefix}/`)) return { status: 403, error: 'ForbiddenError', message: 'not a request of the app' }
+	if (req.headers.host !== `127.0.0.1:${port}`) return { status: 403, error: 'ForbiddenError', message: 'not a host of the app' }
+	if (req.headers.origin !== desktop.appOrigin) return { status: 403, error: 'ForbiddenError', message: 'not an origin of the app' }
+	return { url: req.url.slice(prefix.length) }
+}
+
+/** CORS for the page of the desktop app only: whatever headers and method it asks for (a connection names its own key header) */
+const corsFor = (req, appOrigin) => ({
+	'Access-Control-Allow-Origin': appOrigin,
+	'Access-Control-Allow-Methods': req.headers['access-control-request-method'] ?? 'GET, POST, PUT, PATCH, DELETE',
+	'Access-Control-Allow-Headers': req.headers['access-control-request-headers'] ?? '*',
+	'Access-Control-Expose-Headers': '*',
+	'Access-Control-Max-Age': '600',
+	// Private Network Access: the page (app://) reaches a loopback address
+	...(req.headers['access-control-request-private-network'] ? { 'Access-Control-Allow-Private-Network': 'true' } : {}),
+	Vary: 'Origin'
+})
+
+/**
+ * @param options.dist the app (static files); none in the desktop app, which serves it itself
+ * @param options.targets the origins the proxy may reach ('*': any)
+ * @param options.desktop { token, appOrigin }: the desktop mode (only proxy, only for that page)
+ */
+export const createServer = ({ dist = path.resolve(process.env.DATA_GATEWAY_IDE_DIST ?? path.join(here, '..', 'dist')), targets = targetsOf(process.env.DATA_GATEWAY_IDE_TARGETS), desktop } = {}) => {
+	const portOf = () => server.address()?.port
 	const server = http.createServer((req, res) => {
 		if (req.url === '/health') {
 			res.writeHead(200, { 'Content-Type': 'text/plain' })
 			return res.end('ok')
 		}
+		if (desktop) {
+			const guard = desktopGuard(req, desktop, portOf())
+			if (!guard.url) return sendJson(res, guard.status, { error: guard.error, message: guard.message })
+			const cors = corsFor(req, desktop.appOrigin)
+			if (req.method === 'OPTIONS') {
+				res.writeHead(204, cors)
+				return res.end()
+			}
+			for (const [name, value] of Object.entries(cors)) res.setHeader(name, value)
+			req.url = guard.url
+			if (req.url.startsWith('/gw/')) return proxy(req, res, targets)
+			return sendJson(res, 404, { error: 'NotFoundError', message: req.url })
+		}
 		if (req.url.startsWith('/gw/')) return proxy(req, res, targets)
 		serveStatic(req, res, dist)
 	})
 	server.on('upgrade', (req, socket, head) => {
+		if (desktop) {
+			const guard = desktopGuard(req, desktop, portOf())
+			if (!guard.url) return socket.end(`HTTP/1.1 403 Forbidden\r\nConnection: close\r\n\r\n`)
+			req.url = guard.url
+		}
 		if (req.url.startsWith('/gw/')) return upgrade(req, socket, head, targets)
 		socket.end('HTTP/1.1 404 Not Found\r\nConnection: close\r\n\r\n')
 	})

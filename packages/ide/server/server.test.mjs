@@ -137,3 +137,44 @@ test('the app: its page (also for its own routes) never cached, its assets for a
 	assert.equal((await fetch(`http://127.0.0.1:${idePort}/../../etc/passwd`)).status, 200) // the app, never a file outside
 	assert.equal(await (await fetch(`http://127.0.0.1:${idePort}/health`)).text(), 'ok')
 })
+
+test('the desktop mode: only the page of the app, with the token of this run, on its own host; CORS only to it', async () => {
+	const desktop = createServer({ targets: '*', desktop: { token: 'tok123', appOrigin: 'app://ide' } })
+	const port = await listen(desktop)
+	const base = `http://127.0.0.1:${port}`
+	const target = `/gw/${b64(`http://127.0.0.1:${gatewayPort}/base`)}/x`
+	const app = { Origin: 'app://ide' }
+	try {
+		// without the token, from another origin, or naming another host: 403
+		assert.equal((await fetch(`${base}${target}`, { headers: app })).status, 403)
+		assert.equal((await fetch(`${base}/t/tok123${target}`, { headers: { Origin: 'http://evil.example' } })).status, 403)
+		assert.equal((await fetch(`${base}/t/tok123${target}`)).status, 403)
+		const otherHost = await new Promise(resolve => http.get({ host: '127.0.0.1', port, path: `/t/tok123${target}`, headers: { ...app, Host: `evil.example:${port}` } }, res => { res.resume(); resolve(res.statusCode) }))
+		assert.equal(otherHost, 403)
+		// the preflight of the page: its method and headers, and the private network
+		const preflight = await fetch(`${base}/t/tok123${target}`, { method: 'OPTIONS', headers: { ...app, 'Access-Control-Request-Method': 'POST', 'Access-Control-Request-Headers': 'x-api-key, content-type', 'Access-Control-Request-Private-Network': 'true' } })
+		assert.equal(preflight.status, 204)
+		assert.equal(preflight.headers.get('access-control-allow-origin'), 'app://ide')
+		assert.equal(preflight.headers.get('access-control-allow-headers'), 'x-api-key, content-type')
+		assert.equal(preflight.headers.get('access-control-allow-private-network'), 'true')
+		// the request of the page goes through
+		const ok = await fetch(`${base}/t/tok123${target}`, { method: 'POST', headers: { ...app, 'Content-Type': 'application/json' }, body: '{}' })
+		assert.equal(ok.status, 201)
+		assert.equal(ok.headers.get('access-control-allow-origin'), 'app://ide')
+		// no static files: the app serves the page itself
+		assert.equal((await fetch(`${base}/t/tok123/index.html`, { headers: app })).status, 404)
+		// a WebSocket: the token and the origin too
+		const refused = await new Promise(resolve => {
+			const req = http.request(`${base}${`/gw/${b64(`http://127.0.0.1:${gatewayPort}`)}`}/iot`, { headers: { Connection: 'Upgrade', Upgrade: 'websocket', Origin: 'app://ide' } })
+			req.on('response', res => resolve(res.statusCode)); req.on('upgrade', () => resolve(101)); req.end()
+		})
+		assert.equal(refused, 403)
+		const accepted = await new Promise(resolve => {
+			const req = http.request(`${base}/t/tok123/gw/${b64(`http://127.0.0.1:${gatewayPort}`)}/iot`, { headers: { Connection: 'Upgrade', Upgrade: 'websocket', Origin: 'app://ide', 'Sec-WebSocket-Version': '13', 'Sec-WebSocket-Key': 'dGhlIHNhbXBsZSBub25jZQ==', 'Sec-WebSocket-Protocol': 'lambdaorm, lambdaorm.headers.abc' } })
+			req.on('upgrade', (res, socket) => { socket.destroy(); resolve(res.statusCode) }); req.on('response', res => resolve(res.statusCode)); req.end()
+		})
+		assert.equal(accepted, 101)
+	} finally {
+		desktop.close()
+	}
+})

@@ -119,7 +119,7 @@ export class ManagementClient {
 			response = await fetch(`${this.base}/sessions`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json', ...headersOf(credential) },
-				body: JSON.stringify({ client: { app: 'data-gateway-ide', version: __APP_VERSION__, kind: 'web' } })
+				body: JSON.stringify({ client: { app: 'data-gateway-ide', version: __APP_VERSION__, kind: (window as { ideDesktop?: unknown }).ideDesktop ? 'desktop' : 'web' } })
 			})
 		} catch (e) {
 			// the backend of the IDE itself doesn't answer
@@ -291,7 +291,7 @@ export const testConnection = async (url: string, credential: Credential): Promi
 	const response = await fetch(`${base}/sessions`, {
 		method: 'POST',
 		headers: { 'Content-Type': 'application/json', ...headersOf(credential) },
-		body: JSON.stringify({ client: { app: 'data-gateway-ide', version: __APP_VERSION__, kind: 'web' } })
+		body: JSON.stringify({ client: { app: 'data-gateway-ide', version: __APP_VERSION__, kind: (window as { ideDesktop?: unknown }).ideDesktop ? 'desktop' : 'web' } })
 	})
 	if (!response.ok) throw await failure(response)
 	const session = await response.json()
