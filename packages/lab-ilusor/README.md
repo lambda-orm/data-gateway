@@ -84,9 +84,9 @@ and in any order (`--randomize`).
 # the published image on 59291
 docker compose -f src/dev/labs/ilusor-cloud/docker-compose.yaml -p ilusor-cloud-lab --profile svc up -d --wait
 ORM_SVC=1 npx jest -c src/dev/labs/ilusor-cloud/jest.config.json tests/service.spec.ts
-# this repo's packages/data-gateway on 59292
+# the gateway from source on 59292: lambda-orm/data-gateway checked out next to this repository (../data-gateway)
 # (--env-file, not `set -a && . .env`: the shell strips the quotes inside the JSON connections)
-(cd ../data-gateway && LAB=$(realpath ../lib/src/dev/labs/ilusor-cloud) && \
+(LAB=$(realpath src/dev/labs/ilusor-cloud) && cd ../../../data-gateway/packages/data-gateway && \
   DATA_GATEWAY_CONFIG_PATH=$LAB/data-gateway.config.yaml WORKSPACE=$LAB PORT=59292 RATE_LIMIT_MAX=0 SCRIPT_ENABLED=true \
   SERVICE_TOKEN=lab-token npx tsx --env-file=$LAB/.env src/lib/index.ts)
 ORM_SVC=1 ORM_URL=http://127.0.0.1:59292 ORM_SVC_TOKEN=lab-token npx jest -c src/dev/labs/ilusor-cloud/jest.config.json tests/service.spec.ts

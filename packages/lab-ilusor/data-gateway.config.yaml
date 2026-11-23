@@ -1,5 +1,5 @@
-# The data-gateway (packages/data-gateway) for the service tests: the same environment variables the former service
-# read (docs/DATA_GATEWAY.md §2.7). Mounted as /config/data-gateway.config.yaml, or DATA_GATEWAY_CONFIG_PATH=<this file>.
+# The data-gateway (lambda-orm/data-gateway) for the service tests: the same environment variables the former service
+# read (docs/DATA_GATEWAY.md §2.7 of lambda-orm/data-gateway). Mounted as /config/data-gateway.config.yaml, or DATA_GATEWAY_CONFIG_PATH=<this file>.
 # The published image of the compose file (flaviorita/lambdaorm-svc:2.4.0) doesn't use it: it reads
 # infrastructure.service of lambdaORM.yaml.
 orm:

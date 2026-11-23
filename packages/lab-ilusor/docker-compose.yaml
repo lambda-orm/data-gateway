@@ -47,7 +47,7 @@ services:
     ports:
       - 127.0.0.1:57017:27017
   # The published service, to compare with the one built from this repo
-  # (packages/data-gateway: WORKSPACE=<this folder> PORT=59292 …, see README).
+  # (the gateway from source, lambda-orm/data-gateway: WORKSPACE=<this folder> PORT=59292 …, see README).
   orm:
     profiles: [svc]
     container_name: ilusor-cloud-lab-orm
