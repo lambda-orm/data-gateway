@@ -1,6 +1,6 @@
 // Transactional scripts (docs/EXPRESSION_PLAN.md F3, docs/LAMBDAORM_PENDING.md L32): orm.executeScript evaluates a 3xpr
 // script whose orm.execute calls all run in one transaction, also across sources (catalog + accounts).
-import { Orm } from '../../../../lib'
+import { Orm } from '@lambdaorm/lib'
 import { id, newOrm } from './helpers'
 
 describe('script', () => {

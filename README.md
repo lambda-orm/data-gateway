@@ -10,6 +10,7 @@ workspaces of its schemas, and the tools to work with it.
 | [`packages/ui`](packages/ui/README.md) | npm [`@lambdaorm/ui`](https://www.npmjs.com/package/@lambdaorm/ui) | React components: the workspace, the query editor with λORM's suggestions, the diagrams |
 | [`packages/client-node`](packages/client-node/README.md) | npm [`@lambdaorm/data-gateway-client`](https://www.npmjs.com/package/@lambdaorm/data-gateway-client) | The Node client: the same queries over REST, WebSocket or MCP, chosen by the connection string |
 | [`packages/conformance`](packages/conformance/README.md) | — | The conformance suite every client passes, on the five transports |
+| [`packages/lab-ilusor`](packages/lab-ilusor/README.md) | — | The ilusor-cloud lab: λORM and the gateway as Ilusor's Cloud uses them, on Postgres and FerretDB |
 
 λORM itself (`@lambdaorm/base`, `@lambdaorm/lib`, `@lambdaorm/cli`) lives in [lambda-orm/core](https://github.com/lambda-orm/core)
 and comes from npm. The design of the gateway: [`docs/DATA_GATEWAY.md`](docs/DATA_GATEWAY.md). The user documentation:
@@ -24,6 +25,7 @@ pnpm lint
 pnpm test
 scripts/ci-local.sh check     # what the CI does, in a clean checkout of HEAD
 scripts/ci-local.sh clients   # the conformance suite against the gateway from source (Docker)
+scripts/ci-local.sh lab       # the ilusor-cloud lab (Docker)
 ```
 
 Contributing: [CONTRIBUTING.md](CONTRIBUTING.md). Releases: [DEPLOY.md](DEPLOY.md).

@@ -4,15 +4,15 @@
 // another location's row with the same id).
 //
 // The lab's own models always; Ilusor's real model when it is on this machine (ILUSOR_MODEL, by default
-// ~/ilusor/dev/cloud/data-gateway/workspace/lambdaORM.yaml). `npm run lab:ilusor:model` runs it without the lab's
+// ~/ilusor/dev/cloud/data-gateway/workspace/ilusor/lambdaORM.yaml). `npm run model` runs it without the lab's
 // Postgres.
 import fs from 'fs'
 import os from 'os'
 import path from 'path'
-import { Orm } from '../../../../lib'
+import { Orm } from '@lambdaorm/lib'
 import { relationKeys, RelationType } from '@lambdaorm/base'
 
-const ilusorModel = process.env.ILUSOR_MODEL || path.join(os.homedir(), 'ilusor/dev/cloud/data-gateway/workspace/lambdaORM.yaml')
+const ilusorModel = process.env.ILUSOR_MODEL || path.join(os.homedir(), 'ilusor/dev/cloud/data-gateway/workspace/ilusor/lambdaORM.yaml')
 const models: [string, string][] = [
 	['lab', path.join(__dirname, '..', 'lambdaORM.yaml')],
 	['lab composite', path.join(__dirname, 'composite', 'lambdaORM.yaml')],

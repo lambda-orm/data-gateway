@@ -3,7 +3,7 @@
 // Listeners are awaited one after the other and run in the sentence's transaction (an implicit one when the sentence
 // runs alone): their orm.execute uses the same connections, an error fails the sentence and rolls everything back.
 // `transactional: false` runs a listener outside the transaction.
-import { Orm } from '../../../../lib'
+import { Orm } from '@lambdaorm/lib'
 import fs from 'fs'
 import os from 'os'
 import path from 'path'

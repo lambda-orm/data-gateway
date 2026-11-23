@@ -18,6 +18,7 @@ released from core first, then its version is bumped here.
 | `ui` | `@lambdaorm/ui` | yes | React components (Vite library mode, Vitest). Reads `@lambdaorm/base`'s `queryable.d.ts` from node_modules at build time. |
 | `client-node` | `@lambdaorm/data-gateway-client` | yes | Node client over REST, WebSocket, MCP. Depends on `@lambdaorm/base` (npm). |
 | `conformance` | — | no | The conformance suite (cases, compose, reference runner) the clients pass. |
+| `lab-ilusor` | `@lambdaorm/lab-ilusor` | no | The ilusor-cloud lab (from core's `packages/lib/src/dev/labs/ilusor-cloud`): λORM from npm on Postgres and FerretDB as Ilusor's Cloud uses it; specs named after the items `L<n>` of core's `docs/LAMBDAORM_PENDING.md`. No `test` script: `npm run up && npm run setup && npm run lab`. |
 
 ## Commands
 
@@ -31,6 +32,7 @@ pnpm test
 pnpm --filter @lambdaorm/data-gateway run test:integration
 scripts/ci-local.sh check             # the CI in a clean checkout of HEAD
 scripts/ci-local.sh clients [<image>] # the conformance suite (Docker)
+scripts/ci-local.sh lab               # the ilusor-cloud lab (Docker)
 ```
 
 Per package (`packages/<pkg>`): `npm run lint|build|test|dist`. `client-node` and `ui` use the shared

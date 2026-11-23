@@ -11,7 +11,8 @@ Everything is published by GitHub Actions from `main`; `main` and `develop` take
 
 `ci.yml` builds, lints and tests every push to `develop`/`main` and every pull request, runs the integration tests of
 the gateway and the conformance suite against the gateway from source, and checks the commit messages of a pull
-request. `scripts/ci-local.sh check` and `clients` do the same locally.
+request. `lab-ilusor.yml` runs the ilusor-cloud lab. `scripts/ci-local.sh check`, `clients` and `lab` do the same
+locally.
 
 ## Secrets
 

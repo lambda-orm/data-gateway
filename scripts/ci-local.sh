@@ -3,6 +3,8 @@
 #
 #   scripts/ci-local.sh check             build, lint and test every package in a clean checkout of HEAD, the
 #                                         integration tests of the gateway, and the READMEs' links to the wiki (ci.yml)
+#   scripts/ci-local.sh lab               the ilusor-cloud lab (packages/lab-ilusor) on its Postgres and FerretDB in
+#                                         Docker (lab-ilusor.yml)
 #   scripts/ci-local.sh clients [<image>] the conformance suite (packages/conformance) on its five transports, with the
 #                                         reference runner and the Node client, against the gateway from source, or
 #                                         against <image> (e.g. flaviorita/data-gateway:3.2.0)
@@ -46,6 +48,16 @@ check () {
 	ok 'check passed'
 }
 
+lab () {
+	local dir="$ROOT/packages/lab-ilusor"
+	step 'ilusor-cloud lab: the databases'
+	on_exit "(cd '$dir' && npm run down)"
+	(cd "$dir" && npm run up && npm run setup > /dev/null)
+	step 'ilusor-cloud lab'
+	(cd "$dir" && npm run lab -- --verbose)
+	ok 'ilusor-cloud lab passed'
+}
+
 clients () {
 	local suite log svc
 	suite="$ROOT/packages/conformance"
@@ -80,6 +92,7 @@ command=${1:-}
 shift || true
 case "$command" in
 check) check ;;
+lab) lab ;;
 clients) clients "${1:-}" ;;
-*) sed -n '2,9p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2 ;;
+*) sed -n '2,10p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

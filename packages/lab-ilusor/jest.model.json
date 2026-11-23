@@ -9,7 +9,7 @@
 		"^.+\\.ts$": [
 			"ts-jest",
 			{
-				"tsconfig": "<rootDir>/../../../../tsconfig.json",
+				"tsconfig": "<rootDir>/tsconfig.json",
 				"diagnostics": false
 			}
 		]
@@ -19,9 +19,5 @@
 		"js",
 		"json",
 		"node"
-	],
-	"moduleNameMapper": {
-		"^@lambdaorm/base$": "<rootDir>/../../../../../base/build/lib",
-		"^@lambdaorm/base/(.*)$": "<rootDir>/../../../../../base/build/lib/$1"
-	}
+	]
 }

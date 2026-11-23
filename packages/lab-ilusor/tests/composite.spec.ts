@@ -3,7 +3,7 @@
 import path from 'path'
 import { randomUUID } from 'crypto'
 import { Client } from 'pg'
-import { Orm } from '../../../../lib'
+import { Orm } from '@lambdaorm/lib'
 import { newOrm } from './helpers'
 
 const admin = { host: '127.0.0.1', port: 55432, user: 'admin', password: 'admin', database: 'ilusor' }

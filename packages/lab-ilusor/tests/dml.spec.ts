@@ -1,5 +1,5 @@
 // Writes and list queries Ilusor's repositories need (docs/LAMBDAORM_PENDING.md L4, L5, L18, L23).
-import { Orm } from '../../../../lib'
+import { Orm } from '@lambdaorm/lib'
 import { affected, id, newOrm } from './helpers'
 
 describe('dml', () => {

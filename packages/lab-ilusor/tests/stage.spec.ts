@@ -5,7 +5,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 import yaml from 'js-yaml'
-import { Orm } from '../../../../lib'
+import { Orm } from '@lambdaorm/lib'
 import { newOrm, workspace } from './helpers'
 
 /** A copy of the lab's workspace in a temp folder, so pull/push experiments never touch the lab's own files. */

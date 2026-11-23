@@ -92,7 +92,7 @@ describeSvc('service', () => {
 
 	test('L32 @lambdaorm/client executeScript runs a script on the service', async () => {
 		// eslint-disable-next-line @typescript-eslint/no-var-requires
-		const { Orm: ClientOrm } = require('../../../../../../client/src/lib')
+		const { Orm: ClientOrm } = require('@lambdaorm/client')
 		const client = new ClientOrm(svcUrl)
 		await client.init(undefined, { token: svcToken })
 		const typeId = id()

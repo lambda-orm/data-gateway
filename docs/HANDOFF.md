@@ -37,6 +37,7 @@ Lo que dicen [`CLAUDE.md`](../CLAUDE.md), [`README.md`](../README.md) y [`DEPLOY
 | `packages/ui` | `@lambdaorm/ui` 0.5.0, con el changeset pendiente `.changeset/ui-workspace-tree.md` (minor) | npm (`release.yml`, Changesets) |
 | `packages/client-node` | `@lambdaorm/data-gateway-client` 0.1.1, nunca publicado | npm (`release.yml`): la primera publicación necesita un token Automation |
 | `packages/conformance` | — | no se publica: los clientes la pasan |
+| `packages/lab-ilusor` | `@lambdaorm/lab-ilusor`, privado | no se publica: es el lab ilusor-cloud que estaba en `packages/lib/src/dev/labs/ilusor-cloud` de core, traído con su historia. Usa λORM de npm, Postgres y FerretDB (`npm run up && npm run setup && npm run lab`, o `scripts/ci-local.sh lab`; el workflow es `lab-ilusor.yml`) |
 
 - **Dependencias de core:** `@lambdaorm/base`, `lib` y `client` vienen **de npm**. Si la gateway necesita un cambio de
   λORM, primero se libera desde core y después se sube la versión acá.
@@ -58,6 +59,7 @@ pnpm --filter @lambdaorm/data-gateway run test:integration
 pnpm --filter @lambdaorm/data-gateway-ide run typecheck
 scripts/ci-local.sh check      # todo lo anterior, en un checkout limpio de HEAD: antes de cada push
 scripts/ci-local.sh clients    # la suite de conformidad (Docker, puertos 19080-19083 y 19432)
+scripts/ci-local.sh lab        # el lab ilusor-cloud (Docker, puertos 55432 y 57017)
 ```
 
 Si `pnpm` no está en el PATH, se usa `corepack pnpm`. `ci-local.sh` ya lo resuelve por su cuenta.
@@ -132,13 +134,26 @@ Ilusor usa la gateway de este repo, construida a mano. Su compose está en `~/il
    - IDE **1.0.0**, la primera imagen;
    - `@lambdaorm/ui`, la minor del changeset pendiente;
    - la primera publicación de `@lambdaorm/data-gateway-client`.
-4. **Bug de `yamlMerge`:** al renombrar, el administrador de schemas reescribe líneas que no cambiaron. En Ilusor, un
+4. **El lab encontró un problema en el modelo de Ilusor:** `model.spec.ts` lee el modelo real, en
+   `~/ilusor/dev/cloud/data-gateway/workspace/ilusor/lambdaORM.yaml`. Antes se salteaba sin avisar, porque buscaba el
+   modelo en la raíz del workspace y ese archivo ya no existía.
+   - **Resultado:** ahora falla con 8 relaciones que unen entidades cuyas claves empiezan por `locationId` sin emparejar
+     ese campo.
+   - **Relaciones:**
+     - `GalleryVectors.sample` y `BiometricSamples.galleryVectors`;
+     - `RecognitionVectors.sample` y `DeviceStateSamples.recognitionVectors`;
+     - `ScanJobs.scan` y `ScanJobs.areaScans`;
+     - `AreaScans.job` y `AreaScans.scanJobs`.
+   - **Qué hay que hacer:** corregir el modelo, en `ci/deploy/` de Ilusor y en `tests/fixtures/ilusor`, o revisar la
+     regla de L34.
+   - **Resto del lab:** pasa, con 79 tests en verde.
+5. **Bug de `yamlMerge`:** al renombrar, el administrador de schemas reescribe líneas que no cambiaron. En Ilusor, un
    cambio de 113 líneas salió como un diff de 557.
-5. **Ilusor:**
+6. **Ilusor:**
    - llevar a `ci/deploy/` del repo de Ilusor la configuración local: `path: ilusor`, `admin`, la clave del modeler, y
      el `.data-gateway/` ignorado;
    - la rama `feat/data-gateway` sigue sin pushear; lo decide el usuario.
-6. **Anteriores:**
+7. **Anteriores:**
    - las fases siguientes del plan de clientes ([`DATA_GATEWAY_CLIENTS_PLAN.md`](DATA_GATEWAY_CLIENTS_PLAN.md):
      Python, Go, Rust, CLI);
    - los mensajes de 3xpr para paréntesis sin cerrar;

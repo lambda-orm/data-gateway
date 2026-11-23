@@ -40,6 +40,22 @@ export default [
     },
   },
 
+  // the labs: scripts and specs against real databases, with the rules of the sources and jest's globals
+  {
+    files: ['packages/lab-*/**/*.ts'],
+    languageOptions: {
+      globals: {
+        ...globals.node,
+        ...globals.jest,
+      },
+    },
+    rules: {
+      'no-console': 'off',
+      '@typescript-eslint/no-require-imports': 'off',
+      '@typescript-eslint/no-explicit-any': 'off',
+    },
+  },
+
   // Jest specific rules
   {
     files: ['**/__tests__/**/*.ts', '**/*.test.ts'],

@@ -1,7 +1,7 @@
 // Creates (or updates) the lab's tables with the schema owners (stage ddl).
-//   npx tsx src/dev/labs/ilusor-cloud/setup.ts          # push
-//   npx tsx src/dev/labs/ilusor-cloud/setup.ts --dry    # only print the DDL (what Ilusor saves as a SQL script)
-//   npx tsx src/dev/labs/ilusor-cloud/setup.ts --drop   # drop the lab's tables
+//   npx tsx setup.ts          # push
+//   npx tsx setup.ts --dry    # only print the DDL (what Ilusor saves as a SQL script)
+//   npx tsx setup.ts --drop   # drop the lab's tables
 import { newOrm } from './tests/helpers'
 
 (async () => {

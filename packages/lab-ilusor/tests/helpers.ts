@@ -2,7 +2,7 @@ import path from 'path'
 import { randomUUID } from 'crypto'
 import dotenv from 'dotenv'
 import { Client } from 'pg'
-import { Orm } from '../../../../lib'
+import { Orm } from '@lambdaorm/lib'
 
 export const workspace = path.join(__dirname, '..')
 dotenv.config({ path: path.join(workspace, '.env') })

@@ -3,7 +3,7 @@
 // and its drift check are untouched.
 import path from 'path'
 import { Client } from 'pg'
-import { Orm } from '../../../../lib'
+import { Orm } from '@lambdaorm/lib'
 import { id, newOrm } from './helpers'
 
 // a schema of its own (the lab's drift check reads site, catalog and accounts): the lab's administrator creates it

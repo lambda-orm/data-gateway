@@ -1,5 +1,5 @@
 // Column types and values Ilusor stores (docs/LAMBDAORM_PENDING.md L1, L2, L3, L6).
-import { Orm } from '../../../../lib'
+import { Orm } from '@lambdaorm/lib'
 import { id, newOrm, pgColumn } from './helpers'
 
 describe('types', () => {

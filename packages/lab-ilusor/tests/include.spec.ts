@@ -1,6 +1,6 @@
 // One expression per use case: aggregates, includes across Postgres schemas (sources) and transactions
 // (docs/LAMBDAORM_PENDING.md L15, L16, L17, L31).
-import { Orm } from '../../../../lib'
+import { Orm } from '@lambdaorm/lib'
 import { id, newOrm } from './helpers'
 
 describe('include', () => {

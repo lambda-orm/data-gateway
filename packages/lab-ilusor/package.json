@@ -1,0 +1,30 @@
+{
+	"name": "@lambdaorm/lab-ilusor",
+	"version": "1.0.0",
+	"private": true,
+	"description": "The ilusor-cloud lab: λORM (from npm) and the Data Gateway against a Postgres with the model of Ilusor's Cloud",
+	"license": "MIT",
+	"scripts": {
+		"lint": "cd ../.. && npx eslint \"packages/lab-ilusor/**/*.ts\"",
+		"up": "docker compose -f docker-compose.yaml -p ilusor-cloud-lab up -d --wait",
+		"setup": "npx tsx setup.ts",
+		"lab": "npx jest -c jest.config.json",
+		"model": "npx jest -c jest.model.json",
+		"down": "docker compose -f docker-compose.yaml -p ilusor-cloud-lab --profile svc down",
+		"reset": "npm run down && npm run up && npm run setup"
+	},
+	"devDependencies": {
+		"@lambdaorm/base": "^3.6.0",
+		"@lambdaorm/client": "^0.10.7",
+		"@lambdaorm/lib": "^3.8.1",
+		"@types/js-yaml": "4.0.9",
+		"dotenv": "^16.5.0",
+		"jest": "^29.7.0",
+		"js-yaml": "^4.1.0",
+		"mongodb": "4.17.2",
+		"pg": "^8.16.0",
+		"ts-jest": "^29.1.4",
+		"tsx": "^4.21.0",
+		"typescript": "^5.8.3"
+	}
+}
