@@ -1,0 +1,34 @@
+{
+	// Tasks of the debugging configurations (.vscode/launch.json)
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "data-gateway: dev workspace",
+			"detail": "Seeds packages/data-gateway/dev/workspace with the northwind schema of the tests, once",
+			"type": "shell",
+			"command": "test -f packages/data-gateway/dev/workspace/northwind/lambdaORM.yaml || (mkdir -p packages/data-gateway/dev/workspace/northwind && cp packages/data-gateway/tests/fixtures/northwind/lambdaORM.yaml packages/data-gateway/dev/workspace/northwind/)",
+			"presentation": { "reveal": "silent" },
+			"problemMatcher": []
+		},
+		{
+			"label": "ide: build",
+			"detail": "The IDE app (packages/ide/dist), served by its backend",
+			"type": "shell",
+			"command": "corepack pnpm --filter @lambdaorm/ui run build && corepack pnpm --filter @lambdaorm/data-gateway-ide run build",
+			"problemMatcher": []
+		},
+		{
+			"label": "ide: vite",
+			"detail": "The IDE app with hot reload on http://localhost:5173; /gw/ goes to the backend on :8080",
+			"type": "shell",
+			"command": "npx vite --port 5173 --strictPort",
+			"options": { "cwd": "${workspaceFolder}/packages/ide" },
+			"isBackground": true,
+			"problemMatcher": {
+				"owner": "vite",
+				"pattern": { "regexp": "^__never__$" },
+				"background": { "activesBegin": true, "beginsPattern": "VITE", "endsPattern": "Local:" }
+			}
+		}
+	]
+}

@@ -47,3 +47,7 @@ packages/ide/dist
 
 # the state the gateway keeps in a workspace (sessions)
 .data-gateway/
+
+# the workspace of the gateway for development (.vscode, packages/data-gateway/dev)
+packages/data-gateway/dev/workspace
+.vscode/.chrome-ide
