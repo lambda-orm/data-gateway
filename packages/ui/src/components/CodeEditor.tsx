@@ -135,7 +135,9 @@ export const CodeEditor: React.FC<CodeEditorProps> = ({ value, onChange, languag
 				ariaLabel,
 				readOnly,
 				domReadOnly: readOnly,
-				folding: !compact
+				folding: !compact,
+				// a short editor (in a box, a dialog): its suggestions float over what is around, not cut by its box
+				fixedOverflowWidgets: compact
 			})
 			instance.onDidChangeModelContent(() => handlers.current.onChange(instance.getValue()))
 			instance.addCommand(monaco.KeyMod.CtrlCmd | monaco.KeyCode.Enter, () => handlers.current.onRun?.())

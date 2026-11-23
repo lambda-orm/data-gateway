@@ -12,6 +12,8 @@ export const Modal: React.FC<{ title: string, onClose: () => void, children: Rea
 			if (e.key !== 'Escape') return
 			const open = document.querySelectorAll('.lw-modal')
 			if (open[open.length - 1] !== box.current) return
+			// an editor of the dialog with its suggestions (or its hints, its find) open: Escape closes those, not the dialog
+			if (box.current?.querySelector('.monaco-editor .suggest-widget.visible, .monaco-editor .parameter-hints-widget.visible, .monaco-editor .find-widget.visible')) return
 			e.stopPropagation()
 			onClose()
 		}

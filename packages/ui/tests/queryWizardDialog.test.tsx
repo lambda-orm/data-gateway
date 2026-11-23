@@ -62,7 +62,7 @@ describe('QueryWizard', () => {
 			'\t.sort(p => desc(p.customerName))',
 			'\t.page(1, 20)'
 		].join('\n')
-		expect(screen.getByLabelText('the query').textContent).toBe(query)
+		expect((screen.getByRole('textbox', { name: 'the query' }) as HTMLTextAreaElement).value).toBe(query)
 		fireEvent.click(screen.getByRole('button', { name: 'create the query' }))
 		expect(accepted[0].query).toBe(query)
 		expect(accepted[0].state.tables).toEqual([{ entity: 'Customers', from: 'Orders', relation: 'customer' }])
@@ -78,7 +78,7 @@ describe('QueryWizard', () => {
 		expect(screen.queryByRole('button', { name: /remove Orders|take out Orders/i })).toBeNull()
 		fireEvent.click(screen.getByRole('checkbox', { name: 'Orders.orderDate' }))
 		await waitFor(() => expect(screen.queryByLabelText('order 1')).toBeNull())
-		expect(screen.getByLabelText('the query').textContent).toBe('Orders\n\t.map(p => ({ id: p.id }))')
+		expect((screen.getByRole('textbox', { name: 'the query' }) as HTMLTextAreaElement).value).toBe('Orders\n\t.map(p => ({ id: p.id }))')
 		expect(screen.getByRole('button', { name: 'update the query' })).toBeTruthy()
 	})
 })

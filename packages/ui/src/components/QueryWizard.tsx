@@ -91,7 +91,15 @@ export const QueryWizard: React.FC<QueryWizardProps> = ({ api, schema, domain, i
 		<Modal title={m.title} onClose={onClose} theme={theme}>
 			<div className="lw-wizard">
 				<div className="lw-wizard-diagram">
-					<div className="lw-hint">{m.tablesHint}</div>
+					<div className="lw-wizard-start">
+						<label className="lw-wizard-field">
+							<span>{m.startFrom}</span>
+							<select aria-label={m.startFrom} value={state.root} onChange={e => { setState(emptyWizard(e.target.value)); setNotice(undefined) }}>
+								{names.map(name => <option key={name} value={name}>{name}</option>)}
+							</select>
+						</label>
+						<span className="lw-hint">{m.tablesHint}</span>
+					</div>
 					{state.root && (
 						<DomainDiagram key={state.root} api={api} schema={schema} theme={theme} locale={locale as Locale | undefined} entities={entities} keep={state.root}
 							positions={state.positions} onPositionsChange={positions => setState(s => ({ ...s, positions }))}
@@ -100,18 +108,19 @@ export const QueryWizard: React.FC<QueryWizardProps> = ({ api, schema, domain, i
 					{notice && <div className="lw-hint lw-error-text" role="status">{notice}</div>}
 				</div>
 				<div className="lw-wizard-side">
-					<label className="lw-wizard-field">
-						<span>{m.startFrom}</span>
-						<select aria-label={m.startFrom} value={state.root} onChange={e => { setState(emptyWizard(e.target.value)); setNotice(undefined) }}>
-							{names.map(name => <option key={name} value={name}>{name}</option>)}
-						</select>
-					</label>
+					<div className="lw-wizard-field">
+						<span>{m.query}</span>
+						<div className="lw-wizard-query">
+							<CodeEditor ariaLabel={m.query} language="typescript" theme={theme} value={query} readOnly lambda compact onChange={() => undefined} height={200} />
+						</div>
+					</div>
+					{edited && <div className="lw-hint lw-warning-text" role="alert">{m.edited}</div>}
 					<div className="lw-wizard-field">
 						<span>{m.filter}</span>
 						<div className="lw-wizard-filter">
 							<code aria-hidden="true">{state.root}.filter(p =&gt;</code>
 							<CodeEditor ariaLabel={m.filter} language="typescript" theme={theme} value={state.filter} lambda compact completion={suggest} triggerCharacters={['.']}
-								onChange={filter => setState(s => ({ ...s, filter }))} height={64} />
+								onChange={filter => setState(s => ({ ...s, filter }))} height={80} />
 						</div>
 						<div className="lw-hint">{format(m.filterHint, { entity: state.root })}</div>
 					</div>
@@ -140,11 +149,6 @@ export const QueryWizard: React.FC<QueryWizardProps> = ({ api, schema, domain, i
 						</div>
 						<div className="lw-hint">{m.pageHint}</div>
 					</div>
-					<div className="lw-wizard-field">
-						<span>{m.query}</span>
-						<pre className="lw-wizard-query" aria-label={m.query}>{query}</pre>
-					</div>
-					{edited && <div className="lw-hint lw-warning-text" role="alert">{m.edited}</div>}
 					<div className="lw-form-actions">
 						<button type="button" onClick={onClose}>{m.cancel}</button>
 						<button type="button" className="lw-primary" disabled={!state.root} onClick={() => onAccept(state, query)}>{initial ? m.update : m.create}</button>
