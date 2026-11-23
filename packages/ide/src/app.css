@@ -152,3 +152,31 @@ div.dg-error { border: 1px solid var(--bad); border-radius: 6px; padding: 6px 10
 .dg-sections { display: flex; gap: 2px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .dg-app .dg-sections button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 6px 12px; color: var(--muted); }
 .dg-app .dg-sections button.dg-section-active { color: var(--fg); border-bottom-color: var(--accent); font-weight: 600; }
+/* the layout of the IDE: the whole window, the header on top and the workspace below; the explorer and the open tab
+   scroll each on their own, the tab bar stays; no strip of another color under them */
+.dg-page { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+.dg-page > .dg-header { flex: none; }
+.dg-page > .lw-space { flex: 1; min-height: 0; height: auto; }
+.dg-page > .lw-space > .lw-space-side { max-height: none; height: auto; position: static; }
+.dg-page > .lw-space > .lw-space-main { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.dg-page > .lw-space > .lw-space-main > .lw-tabs { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.dg-page > .lw-space > .lw-space-main > .lw-tabs > .lw-tabbar { flex: none; }
+.dg-page > .lw-space > .lw-space-main > .lw-tabs > [role="tabpanel"], .dg-page > .lw-space > .lw-space-main > .lw-tabs > .lw-workbench { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.dg-page > .lw-space > .lw-space-main > .lw-tabs > .lw-notice { flex: none; }
+/* the theme of the app reaches the whole workspace (its explorer and tabs too), not only the workbenches */
+.dg-app[data-theme] .lw-space, .dg-app[data-theme] .lw-tabs { --lw-bg: var(--bg); --lw-fg: var(--fg); --lw-muted: var(--muted); --lw-border: var(--border); --lw-accent: var(--accent); --lw-panel: var(--panel); }
+/* the open tab sits on the color of the app; the explorer, the tab bar and the header on its surface */
+.dg-app[data-theme] .lw-tabs { background: var(--panel); }
+.dg-app[data-theme] .lw-tabbar { background: var(--bg); }
+.dg-app[data-theme] .lw-tab.lw-active, .dg-app[data-theme] .lw-tab:hover { background: var(--panel); }
+.dg-app[data-theme] .lw-tab-add:hover { background: var(--panel); }
+/* the buttons of the workspace keep their own look: the general style of the buttons of the app (a box) is not for them */
+.dg-app .lw-tab button { background: none; border: 0; border-radius: 0; padding: 0; }
+.dg-app .lw-tab button[role="tab"] { padding: 0 6px 0 12px; }
+.dg-app .lw-tab .lw-tab-close { border-radius: 4px; padding: 0; }
+.dg-app .lw-tab-add, .dg-app .lw-icon-button { background: none; border: 1px solid transparent; border-radius: 4px; padding: 3px; }
+.dg-app .lw-tab-add { padding: 0; }
+.dg-app .lw-icon-button:hover, .dg-app .lw-icon-button:focus-visible, .dg-app .lw-tab-add:hover, .dg-app .lw-tab-add:focus-visible { border-color: var(--border); background: var(--panel); }
+.dg-app .lw-tabbar .lw-icon-button:hover, .dg-app .lw-tabbar .lw-tab-add:hover { background: var(--panel); }
+/* the content of a tab fills its height: a workbench or a diagram doesn't stop where its content does */
+.dg-page > .lw-space > .lw-space-main > .lw-tabs > [role="tabpanel"] > .lw-workbench { min-height: 100%; box-sizing: border-box; }
