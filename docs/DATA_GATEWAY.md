@@ -15,6 +15,7 @@
   | `mcpHttp` | MCP Streamable HTTP (estándar actual) + HTTP+SSE (obsoleto, por compatibilidad) en el mismo puerto | agentes LLM y clientes MCP (Claude Code, Claude Desktop, otros gateways) | 3.0.0 |
   | `mcpWebSocket` | MCP sobre WebSocket (**no estándar**: la especificación MCP solo define stdio y Streamable HTTP) | clientes MCP que lo soportan por su cuenta | 3.0.0 |
   | `webSocket` | JSON-RPC 2.0 sobre WebSocket, con notificaciones del servidor | `@lambdaorm/client` (adaptador WebSocket), UIs, procesos con muchas consultas | 3.2.0 |
+  | `management` | API REST de administración y consultas, en su propio puerto (§12) | el backend del data-gateway-ide | 4.0.0 |
 
 - **para varios esquemas a la vez** (varios `lambdaORM.yaml`: distintos dominios o distintas versiones de uno), cada
   uno en su ruta: `/iot/v1`, `/iot/v2`, `/accounts/v1` (§2.2, §4);
@@ -23,7 +24,8 @@
 - con **credenciales con permisos** (`read`, `write`, `script`, `queue`, `stageImport`) aplicados igual en todos los
   transportes (§6), y **auditoría** de cada escritura (§8.1);
 - con una **UI web para escribir y probar consultas** (Monaco con autocompletado del modelo del esquema), construida
-  como librería React reutilizable `@lambdaorm/ui` y servida por el gateway en `/ui` (§10).
+  como librería React reutilizable `@lambdaorm/ui` (§10), que usa el **data-gateway-ide**, una imagen aparte que llega a
+  la gateway por su transporte `management` (§11.9, §12). Desde 4.0.0 la gateway no sirve ninguna UI.
 
 Todos los transportes exponen los mismos métodos, incluidas las escrituras, sujetas a los permisos de la credencial.
 
@@ -46,7 +48,7 @@ la idea "un núcleo, varios transportes activados por configuración").
 | Workflow | `.github/workflows/service-image.yml` | `.github/workflows/data-gateway-image.yml` |
 
 Se publica por etapas: `3.0.0-rc.1` (núcleo + `http`), `3.0.0-rc.2` (+ MCP, un esquema), **`3.0.0`** (+ varios esquemas y workers),
-`3.1.0` (+ UI), `3.2.0` (+ `webSocket`), `3.3.0` (observabilidad completa). Las versiones `-rc.N` se publican en Docker Hub **sin**
+`3.1.0` (+ UI), `3.2.0` (+ `webSocket`), **`4.0.0`** (+ `management`; sin `/ui`, sin `/admin` en `http` y sin CORS, §12). Las versiones `-rc.N` se publican en Docker Hub **sin**
 mover `latest`. `flaviorita/lambdaorm-svc` queda congelada en 2.4.0; su descripción en Docker Hub apunta a la nueva.
 
 ## 2. Configuración
@@ -272,7 +274,6 @@ mcp:
 transports:
   http:
     port: $DATA_GATEWAY_HTTP_PORT
-    ui: { enabled: true }          # 3.1.0; por defecto false
   mcpHttp:
     port: $DATA_GATEWAY_MCP_HTTP_PORT
     legacySse: true
@@ -280,6 +281,8 @@ transports:
     port: $DATA_GATEWAY_MCP_WS_PORT
   webSocket:                       # 3.2.0
     port: $DATA_GATEWAY_WS_PORT
+  management:                      # 4.0.0; sin la variable, no se expone (producción)
+    port: $DATA_GATEWAY_MANAGEMENT_PORT
 ```
 
 ### 2.6 Referencia
@@ -291,7 +294,7 @@ transports:
 | `orm.watch` | `true` | recarga en caliente de los workspaces (§2.2); `false`, o `{ enabled, intervalMs, debounceMs }` |
 | `orm.watch.intervalMs` | `5000` | cada cuánto se recorren los workspaces (`0`: solo los eventos del sistema de archivos) |
 | `orm.watch.debounceMs` | `300` | cuánto se juntan los cambios antes de aplicarlos (un editor escribe un archivo en varios pasos) |
-| `admin.enabled` | `false` | la administración de los workspaces en `/admin` del transporte `http` (§11) |
+| `admin.enabled` | — | **quitado en 4.0.0**: la administración está si se expone `transports.management` (§12); si aparece, se avisa y se ignora |
 | `admin.allowAnonymous` | `false` | con `authentication: none`, cualquiera administra (solo desarrollo local) |
 | `admin.maxFileBytes` | `2MB` | el archivo más grande que se puede escribir (un `lambdaORM.yaml`, una consulta guardada) |
 | `admin.commandTimeoutMs` | `600000` | cuánto puede tardar un comando (§11.3) |
@@ -327,7 +330,8 @@ transports:
 | `transports.mcpHttp.legacySse` | `true` | además de Streamable HTTP, expone HTTP+SSE para clientes viejos |
 | `transports.mcpHttp.stateful` | `false` | Streamable HTTP sin estado: cualquier réplica atiende cualquier request |
 | `transports.http.swagger.enabled` | `true` | `/doc`, `/api-docs` (y `/` con esquema en la raíz) |
-| `transports.http.ui.enabled` | `false` | sirve la UI en `/ui` (§10) |
+| `transports.http.ui` | — | **quitado en 4.0.0**: la UI es el data-gateway-ide (§11.9); si aparece, se avisa y se ignora |
+| `transports.management.port` | **ninguno** | sin puerto no hay administración ni API para el IDE (§12); en producción, normalmente sin puerto |
 | `transports.<ws>.asyncapi.enabled` | `true` | `GET /asyncapi` y `/asyncapi.json` en `webSocket` y `mcpWebSocket` |
 
 ### 2.7 Migración desde el service 2.x
@@ -546,7 +550,8 @@ Cada esquema se alcanza por su ruta en todos los transportes que lo exponen (`{b
 
 | Transporte | Esquema `iot/v1` | Nivel gateway |
 | --- | --- | --- |
-| `http` | `POST /iot/v1/execute`, `GET /iot/v1/entities`, … (todos los endpoints actuales bajo el prefijo) | `GET /health`, `/ping`, `/metrics`, `/version`, `/schemas`, `/whoami`, `/doc`, `/ui` |
+| `http` | `POST /iot/v1/execute`, `GET /iot/v1/entities`, … (todos los endpoints actuales bajo el prefijo) | `GET /health`, `/ping`, `/metrics`, `/version`, `/schemas`, `/whoami`, `/transports`, `/doc` |
+| `management` (4.0.0) | los mismos que `http`, de todos los esquemas | los de `http` (sin `/doc`) y `/admin/…` (§11, §12) |
 | `mcpHttp` | `POST/GET/DELETE /iot/v1/mcp` (Streamable HTTP); `GET /iot/v1/sse` + `POST /iot/v1/messages?sessionId=` (SSE viejo) | `GET /status` |
 | `mcpWebSocket` | upgrade en `/iot/v1/mcp` | `GET /status` |
 | `webSocket` (3.1.0) | conexión a `ws://host:port/iot/v1` | conexión a la raíz: solo `general.*` y `gateway.schemas` |
@@ -618,9 +623,9 @@ MCP, pero es una decisión explícita: el agente puede hacer lo mismo que una ap
 | `stage_import` | `stage`, `data` | `POST /stages/:stage/import` | `stageImport` | `destructiveHint: true` |
 | `gateway_version` | — | `GET /version` | `read` | `readOnlyHint: true` |
 | `gateway_health` | — | `GET /health` | `read` | `readOnlyHint: true` |
-| `admin_schema_get` | — | `GET /admin/workspaces/{ruta}/schema` | `schemaRead` (con `admin.enabled`) | `readOnlyHint: true` |
-| `admin_schema_validate` | `text` | `POST /admin/validate` | `schemaRead` (con `admin.enabled`) | `readOnlyHint: true` |
-| `admin_stage_fetch` | `stage?` | `POST …/commands/fetch` | `schemaRead` (con `admin.enabled`) | `readOnlyHint: true` |
+| `admin_schema_get` | — | `GET /admin/workspaces/{ruta}/schema` | `schemaRead` (con `management`) | `readOnlyHint: true` |
+| `admin_schema_validate` | `text` | `POST /admin/validate` | `schemaRead` (con `management`) | `readOnlyHint: true` |
+| `admin_stage_fetch` | `stage?` | `POST …/commands/fetch` | `schemaRead` (con `management`) | `readOnlyHint: true` |
 
 - **`tools/list` se filtra por los permisos de la credencial:** una credencial sin `script` no ve
   `orm_execute_script`; con solo `read`, `orm_execute` aparece con la descripción "solo consultas de lectura con esta
@@ -770,7 +775,7 @@ el MCP sobre WebSocket (con su subprotocolo `mcp`).
 
 `GET {basePath}/transports` (HTTP, sin credencial) dice los transportes de la gateway: su puerto, su ruta base, cómo se
 llega a un esquema y dónde está su documento (`/openapi.json` del HTTP, `/asyncapi.json` de los WebSocket, que se pueden
-leer desde cualquier origen). Detrás de un proxy sus URLs públicas son otras: el IDE las toma de su connection (§11.9).
+leer sin credencial). Detrás de un proxy sus URLs son otras: el IDE las toma de su connection (§11.9).
 
 ```json
 → { "jsonrpc": "2.0", "id": 1, "method": "query.execute", "params": { "query": "Products.filter(p => p.price > 10)", "data": {} } }
@@ -876,7 +881,7 @@ del modelo. Sirve para probar, para aprender el lenguaje y para validar lo que d
 | Pieza | Qué es | Dónde |
 | --- | --- | --- |
 | **`@lambdaorm/ui`** | librería de componentes **React (web)**, publicada en npm (Changesets, como `base` / `lib` / `client` / `cli`) | `packages/ui` |
-| **app del gateway** | la del data-gateway-ide compilada en modo embebido (`build:embedded`): su presentación, su login y el workspace sobre su connection, la actual; se compila a estáticos que van en la imagen | `packages/ide` |
+| **data-gateway-ide** | la app que usa la librería: sus connections, su workspace y su backend, que llega a cada gateway por `management` (§11.9) | `packages/ide` |
 
 La librería no depende del gateway: cualquier proyecto (por ejemplo un Portal) la instala y monta el componente
 apuntando a un data-gateway. `react` y `react-dom` son `peerDependencies`. `@lambdaorm/lib` y `@lambdaorm/base` no se
@@ -947,28 +952,17 @@ aparte.
 - **Validación real con λORM:** mientras se escribe (con una espera de ~500 ms), la UI llama a `constraints` /
   `metadata` y muestra los errores de λORM como marcas en el editor, con su posición.
 
-### 10.4 Servida por el gateway
+### 10.4 Ya no la sirve el gateway (4.0.0)
 
-```yaml
-transports:
-  http:
-    port: $DATA_GATEWAY_HTTP_PORT
-    ui: { enabled: true }      # por defecto false
-```
-
-- La sirve el transporte `http` en `/ui` (estáticos con caché larga y nombres con hash). Usa la API REST del mismo
-  origen: sin CORS.
-- La credencial la ingresa la persona y queda solo en memoria de la pestaña; la app no trae ninguna. Ejecuta con los
-  permisos de esa credencial, con auditoría, `maxConcurrent` y las demás reglas de REST.
-- Cabeceras de seguridad en `/ui`: `Content-Security-Policy` sin orígenes externos (Monaco y sus workers van
-  empaquetados, sin CDN), `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`.
-- Desactivada por defecto: exponer una herramienta para escribir y ejecutar consultas es una decisión explícita del
-  despliegue.
+Hasta 3.x el transporte `http` servía la app en `/ui` (`transports.http.ui`). Desde 4.0.0 la app es solo el
+data-gateway-ide (§11.9), con su propia imagen, y sus cabeceras de seguridad (`Content-Security-Policy` sin orígenes
+externos, `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`) las pone su backend.
 
 ## 11. Administración de los workspaces (`admin`, 3.2.0)
 
-`DATA_GATEWAY_ADMIN_PLAN.md`, fase 2. Con `admin.enabled`, el transporte `http` expone `{basePath}/admin`, con la
-autenticación de ese transporte (o la global) y los permisos de §6.2. **Solo escribe archivos del volumen**: lo que
+`DATA_GATEWAY_ADMIN_PLAN.md`, fase 2. El transporte `management` (§12) expone `{basePath}/admin`, con la autenticación
+de ese transporte (o la global) y los permisos de §6.2; sin `management` no hay administración (hasta 3.x estaba en
+`http` con `admin.enabled`). **Solo escribe archivos del volumen**: lo que
 escribe lo toma el monitor de los workspaces (`orm.watch`, §2.2), que agrega, recarga (blue-green) o quita el esquema.
 Corre en el borde, sin conectar a ninguna base y sin ejecutar nada del esquema.
 
@@ -1130,7 +1124,7 @@ Lo que manda cada formulario de la UI: un cambio de **un** elemento, nombrado po
 
 ### 11.6 Por MCP, solo lectura (`DATA_GATEWAY_ADMIN_PLAN.md` fase 6)
 
-Con `admin.enabled`, el MCP de cada esquema suma `admin_schema_get` (el `lambdaORM.yaml` como está escrito, con sus
+Con `management` expuesto, el MCP de cada esquema suma `admin_schema_get` (el `lambdaORM.yaml` como está escrito, con sus
 comentarios; las conexiones como `${VARIABLES}`), `admin_schema_validate` (un cambio revisado sin guardarlo) y
 `admin_stage_fetch` (las diferencias entre las bases y el modelo), solo para credenciales con `schemaRead`. Escribir
 (el esquema, `push`, `drop`, …) no se ofrece por MCP: un modelo lo haría sin la vista previa ni la confirmación de la
@@ -1161,7 +1155,7 @@ un botón para abrir su pestaña con los comandos.
 La UI guarda dónde estaba cada persona: sus pestañas (lo que muestra cada una, y el texto de las consultas tal como se
 escribió), la activa, lo desplegado del explorador y si está oculto. La gateway lo guarda por credencial en un SQLite del
 workspace, `<orm.workspacePath>/.data-gateway/state.sqlite` (con `node:sqlite`; el monitor y el descubrimiento lo
-ignoran), con `GET`/`PUT /admin/session`: un refresco, u otro navegador, empieza donde estaba. Sin `admin.enabled` o sin
+ignoran), con `GET`/`PUT /admin/session`: un refresco, u otro navegador, empieza donde estaba. Sin `management` o sin
 `orm.workspacePath` la UI lo guarda en el navegador. Los proyectos siguen siendo archivos de `workbench/`.
 
 La credencial queda en la pestaña (`sessionStorage`: un refresco la mantiene, cerrar la pestaña la olvida), o en el
@@ -1182,20 +1176,85 @@ nombre (`detail`, guardado con el diagrama); el **+** de una caja agrega sus tab
 
 ### 11.9 El data-gateway-ide
 
-El IDE de la data-gateway es `packages/ide`, con su propia imagen (`flaviorita/data-gateway-ide`, nginx
-con estáticos, puerto 8080). Como un IDE de bases de datos, **no tiene workspaces**: se conecta a data-gateways, y sus
-esquemas, workspaces (`src/`, `data/`, `workbench/`) y proyectos están en cada una. Abre directo en el área de trabajo,
-sin presentación ni login: cada **connection** tiene su URL (protocolo `http`/`https`, host, puerto y ruta base) y su
-credencial (API key, bearer, basic o ninguna), y su página muestra quién es esa credencial y sus roles (cada permiso con
-lo que permite). El árbol empieza por las connections, cada una con sus esquemas; se pueden tener pestañas de varias a
-la vez. Las connections quedan en el navegador (la clave solo si se pide recordarla; si no, en la pestaña).
+El IDE de la data-gateway es `packages/ide`, con su propia imagen (`flaviorita/data-gateway-ide`, Node, puerto 8080):
+los estáticos de la app y un **backend** que la sirve y le hace de proxy. Como un IDE de bases de datos, **no tiene
+workspaces**: se conecta a data-gateways, y sus esquemas, workspaces (`src/`, `data/`, `workbench/`) y proyectos están en
+cada una. Abre directo en el área de trabajo, sin presentación ni login.
 
-Desde una connection se abren en pestañas, con su credencial: su **API REST** (Swagger, sus pedidos a la URL de la
-connection), su **WebSocket** (los métodos de su AsyncAPI, un pedido JSON-RPC y lo que vuelve) y su **MCP** (sus tools
-de un esquema, llamadas con sus argumentos). Dónde están los sale de `GET /transports`; detrás de un proxy, la connection
-fija sus URLs públicas.
+**Connections.** Cada **connection** tiene la URL del `management` de una gateway (protocolo `http`/`https`, host,
+puerto y ruta base) **tal como la alcanza el backend del IDE** (en un compose, `http://data-gateway:9292`), y su
+credencial (API key, bearer, basic o ninguna); su página muestra quién es esa credencial y sus roles (cada permiso con lo
+que permite). El árbol empieza por las connections, cada una con sus esquemas; se pueden tener pestañas de varias a la
+vez. Las connections quedan en el navegador (la clave solo si se pide recordarla; si no, en la pestaña): el backend no
+guarda ninguna.
 
-La misma app compilada en modo embebido es la UI que la gateway sirve en `{basePath}/ui` (§11.7), con su login y su
-connection como *actual*. La gateway responde a cualquier origen (CORS), así que en producción puede no servir la UI
-(`transports.http.ui.enabled: false`) y usarse desde un IDE desplegado en otro lado, o local.
+**El navegador solo habla con el backend del IDE** (mismo origen: la gateway no necesita CORS). Todo pedido a una
+gateway va por el proxy, con la URL de destino en la ruta:
 
+```text
+{IDE}/gw/{base64url de la URL de destino}/{resto de la ruta}
+  /gw/aHR0cDovL2RhdGEtZ2F0ZXdheTo5Mjky/admin/workspaces  →  http://data-gateway:9292/admin/workspaces
+```
+
+- Sirve igual para REST, para el upgrade de un WebSocket (la credencial en el subprotocolo, §7, se reenvía tal cual) y
+  para MCP (Streamable HTTP y SSE).
+- **Destinos permitidos:** `DATA_GATEWAY_IDE_TARGETS`, una lista de orígenes separados por coma
+  (`http://data-gateway:9292,http://data-gateway:9291`), o `*` para cualquiera (un IDE local). Sin la variable el proxy
+  no va a ningún lado (`403` que lo explica): un proxy abierto deja llegar a cualquier host de la red del IDE.
+- Reenvía el método, el cuerpo y las cabeceras del pedido salvo `Cookie`, `Origin`, `Referer` y las de salto
+  (`Connection`, `Host`, …); de la respuesta, todo salvo `Set-Cookie`. No guarda ni registra credenciales: el log nombra
+  el destino, el método y el estado.
+- Cabeceras de seguridad de la app: `Content-Security-Policy` sin orígenes externos (Monaco y sus workers van
+  empaquetados), `X-Frame-Options: DENY`, `Referrer-Policy: no-referrer`. `GET /health` responde `ok`.
+
+**Las pestañas de los transportes de datos.** Desde una connection se abren en pestañas, con su credencial y por el
+proxy: su **API REST** (Swagger, con sus pedidos a la URL de `http`), su **WebSocket** (los métodos de su AsyncAPI, un
+pedido JSON-RPC y lo que vuelve) y su **MCP** (sus tools de un esquema, llamadas con sus argumentos). Dónde están lo dice
+`GET /transports` del `management`: con el host de la connection y el puerto de cada uno; si el backend del IDE los
+alcanza por otras URLs, la connection las fija. Un transporte que la gateway no expone aparece deshabilitado.
+
+Hasta 3.x la misma app, compilada en modo embebido, era la UI que la gateway servía en `{basePath}/ui`, y la gateway
+respondía a cualquier origen (CORS). Las dos cosas se quitaron en 4.0.0 (§12).
+
+## 12. El transporte `management` (4.0.0)
+
+La API que usa el data-gateway-ide, en **su propio puerto**, separada de los transportes de datos para poder no
+desplegarla: en producción los esquemas pueden venir ya configurados en los volúmenes, y entonces la gateway se despliega
+sin `management` (sin administración, sin IDE) y solo con los transportes de datos.
+
+```yaml
+transports:
+  http:
+    port: $DATA_GATEWAY_HTTP_PORT          # los clientes
+  management:
+    port: $DATA_GATEWAY_MANAGEMENT_PORT    # el IDE; sin la variable, no se expone
+    host: 0.0.0.0
+    basePath: ''
+    # authentication: …                    # como cualquier transporte; si no, la global
+```
+
+- **Como cualquier transporte** (§2.1): se expone si y solo si tiene puerto, con su `host`, su `basePath` y su
+  `authentication` (o la global). Corre en el mismo proceso que la gateway, en el edge, y llega a los esquemas como
+  `http`. Un puerto igual al de otro transporte es error de configuración.
+- **Qué expone:** las rutas de `http` (las de nivel gateway salvo Swagger, y las de cada esquema: consultas, scripts,
+  modelo, metadata, `typings`, stages…) **de todos los esquemas**, aunque `orm.schemas[].transports` no lo nombre, y la
+  administración, `{basePath}/admin/…` (§11). Mismas rutas, mismos cuerpos y mismos permisos que en `http`: la UI usa el
+  mismo adaptador REST.
+- **Credenciales:** las mismas de la gateway y los mismos permisos (§6.2); la sesión de la UI sigue guardándose por
+  credencial (§11.8). Sin `rateLimit`: es la API de una persona en un IDE, no de clientes.
+- **Ya no en `http`:** `{basePath}/admin` y `{basePath}/ui`. `admin.enabled` y `transports.http.ui` se avisan y se
+  ignoran; los demás `admin.*` (`allowAnonymous`, `maxFileBytes`, `commandTimeoutMs`) siguen y aplican a `management`.
+  Las tools `admin_*` de MCP (§11.6) están si `management` está expuesto.
+- **Sin CORS en ningún transporte:** ni `management` ni los de datos responden a un navegador de otro origen. Los
+  clientes de servidor (`@lambdaorm/client`, `@lambdaorm/data-gateway-client`, agentes MCP) no lo usan; una app web que
+  llamaba a la gateway desde el navegador pasa por su propio backend, como el IDE.
+- **Red:** `management` escribe el esquema, sus variables (`.env`) y ejecuta DDL: se publica solo en la red del IDE (en
+  un compose, sin `ports:`; en Kubernetes, un `Service` interno sin ingress).
+
+**Migración desde 3.x:**
+
+| 3.x | 4.0.0 |
+| --- | --- |
+| `admin: { enabled: true }` | `transports.management.port` |
+| `transports.http.ui: { enabled: true }`, la UI en `{basePath}/ui` | el data-gateway-ide, con una connection al `management` |
+| un navegador llamando a la gateway (CORS) | por un backend propio (el del IDE, o el de la app) |
