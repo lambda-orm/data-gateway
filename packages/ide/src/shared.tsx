@@ -180,22 +180,43 @@ export const PermissionsOf: React.FC<{ who: Who }> = ({ who }) => {
  * A connection to a data-gateway: where it is, how it authenticates, who that credential is and what it may do (its
  * roles). The IDE puts its form above (children); the gateway's UI shows its current connection.
  */
-export const ConnectionPage: React.FC<{ name: string, url: string, credential: Credential, who?: Who, current?: boolean, children?: React.ReactNode, tools?: React.ReactNode }> = ({ name, url, credential, who, current, children, tools }) => {
+export const ConnectionPage: React.FC<{ name: string, url: string, credential: Credential, who?: Who, current?: boolean, children?: React.ReactNode, tools?: React.ReactNode, sessions?: React.ReactNode }> = ({ name, url, credential, who, current, children, tools, sessions }) => {
 	const { t } = usePrefs()
+	// its sections in tabs: the connection (its form and who it is), its tools, its roles, its sessions
+	const sections = [
+		{ key: 'connection', label: t.connection, show: true },
+		{ key: 'tools', label: t.tools, show: !!tools },
+		{ key: 'roles', label: t.roles, show: !!who },
+		{ key: 'sessions', label: t.sessions, show: !!sessions }
+	].filter(s => s.show)
+	const [section, setSection] = useState('connection')
+	const active = sections.some(s => s.key === section) ? section : 'connection'
 	return (
 		<div className="dg-pane">
 			<h2>{t.connection}: {name}{current && <span className="dg-badge">{t.current}</span>}</h2>
-			{children}
-			<section className="dg-card dg-account-card">
-				<span className="dg-avatar" aria-hidden="true">{(who?.name ?? name).slice(0, 1).toUpperCase()}</span>
-				<span>
-					<strong className="dg-account-title">{who?.name ?? t.notConnected}</strong>
-					<span className="dg-muted"><code>{url}</code></span>
-					<span className="dg-muted">{t.accountAuthentication}: {authenticationOf(credential, t)}</span>
-				</span>
-			</section>
-			{tools}
-			{who && <PermissionsOf who={who} />}
+			{sections.length > 1 && (
+				<div className="dg-sections" role="tablist" aria-label={`${t.connection}: ${name}`}>
+					{sections.map(s => (
+						<button key={s.key} type="button" role="tab" aria-selected={s.key === active} className={s.key === active ? 'dg-section-active' : ''} onClick={() => setSection(s.key)}>{s.label}</button>
+					))}
+				</div>
+			)}
+			{active === 'connection' && (
+				<>
+					{children}
+					<section className="dg-card dg-account-card">
+						<span className="dg-avatar" aria-hidden="true">{(who?.name ?? name).slice(0, 1).toUpperCase()}</span>
+						<span>
+							<strong className="dg-account-title">{who?.name ?? t.notConnected}</strong>
+							<span className="dg-muted"><code>{url}</code></span>
+							<span className="dg-muted">{t.accountAuthentication}: {authenticationOf(credential, t)}</span>
+						</span>
+					</section>
+				</>
+			)}
+			{active === 'tools' && tools}
+			{active === 'roles' && who && <PermissionsOf who={who} />}
+			{active === 'sessions' && sessions}
 		</div>
 	)
 }

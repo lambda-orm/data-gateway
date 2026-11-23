@@ -120,7 +120,8 @@ const ConnectionEditor: React.FC<{
 	)
 	return initial
 		? <ConnectionPage name={initial.name} url={urlOf(initial)} credential={credentialOf(initial, { [initial.id]: givenSecret })} who={who}
-			tools={onOpenTool && <ToolsOf connection={initial} onOpen={onOpenTool} />}>{form}{client && who && <SessionsPanel client={client} who={who} />}</ConnectionPage>
+			tools={onOpenTool && <ToolsOf connection={initial} onOpen={onOpenTool} />}
+			sessions={client && who && <SessionsPanel client={client} who={who} />}>{form}</ConnectionPage>
 		: <div className="dg-pane"><h2>{t.newConnection}</h2>{form}</div>
 }
 
