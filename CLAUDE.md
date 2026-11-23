@@ -13,8 +13,8 @@ released from core first, then its version is bumped here.
 
 | Package | npm name | Published? | Purpose |
 | --- | --- | --- | --- |
-| `data-gateway` | `@lambdaorm/data-gateway` | **no** (image `flaviorita/data-gateway`) | The gateway. Builds with Grunt (`Gruntfile.js`); its `/ui` is the IDE in embedded mode. Depends on `@lambdaorm/base`, `lib`, `client` (npm) and `ide` (workspace). |
-| `ide` | `@lambdaorm/data-gateway-ide` | **no** (image `flaviorita/data-gateway-ide`) | Vite app: the IDE (connections in the browser, no login) and, with `--mode embedded`, the UI a gateway serves. Depends on `ui`. |
+| `data-gateway` | `@lambdaorm/data-gateway` | **no** (image `flaviorita/data-gateway`) | The gateway. Builds with Grunt (`Gruntfile.js`); serves no UI: its `management` port (optional) is the API of the IDE and the administration. No CORS. Depends on `@lambdaorm/base`, `lib`, `client` (npm). |
+| `ide` | `@lambdaorm/data-gateway-ide` | **no** (image `flaviorita/data-gateway-ide`) | Vite app (connections in the browser, no login) and its backend `server/server.mjs` (Node, no dependencies), which serves it and proxies to the gateways' `management` (`/gw/{base64url}/…`, `DATA_GATEWAY_IDE_TARGETS`). Depends on `ui`. |
 | `ui` | `@lambdaorm/ui` | yes | React components (Vite library mode, Vitest). Reads `@lambdaorm/base`'s `queryable.d.ts` from node_modules at build time. |
 | `client-node` | `@lambdaorm/data-gateway-client` | yes | Node client over REST, WebSocket, MCP. Depends on `@lambdaorm/base` (npm). |
 | `conformance` | — | no | The conformance suite (cases, compose, reference runner) the clients pass. |
