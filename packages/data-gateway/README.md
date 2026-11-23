@@ -75,7 +75,7 @@ Then open the IDE (its own image, next to the gateway: see [The IDE](#the-ide)),
 claude mcp add --transport http northwind http://localhost:8081/mcp --header "X-Api-Key: reader-demo-key"
 ```
 
-![The UI](https://raw.githubusercontent.com/lambda-orm/wiki/main/docs/data-gateway/images/ui-diagram.png)
+![The UI](https://raw.githubusercontent.com/lambda-orm/wiki/main/docs/ide/images/ide-wizard.png)
 
 ## From any language
 
