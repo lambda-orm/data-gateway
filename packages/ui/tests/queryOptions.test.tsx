@@ -100,3 +100,32 @@ describe('OptionsForm', () => {
 		expect(screen.getByRole('textbox', { name: 'options' })).toBeTruthy()
 	})
 })
+
+describe('the options and the data in the workbench', () => {
+	test('the options in one line; Edit opens them in a dialog, as a form or JSON', async () => {
+		const { QueryWorkbench } = await import('../src/components/QueryWorkbench')
+		render(<QueryWorkbench api={new ChoicesApi()} history={false} initial={{ options: '{"stage":"test","chunkSize":500}' }} />)
+		expect(await screen.findByText('stage: test · chunk size: 500')).toBeTruthy()
+		fireEvent.click(screen.getByRole('button', { name: 'edit' }))
+		const dialog = await screen.findByRole('dialog', { name: 'options' })
+		expect(dialog).toBeTruthy()
+		expect(screen.getByRole('radio', { name: 'form' })).toBeTruthy()
+		expect(screen.getByRole('radio', { name: 'JSON' })).toBeTruthy()
+		fireEvent.change(screen.getByLabelText('options · chunk size'), { target: { value: '' } })
+		fireEvent.click(screen.getByRole('button', { name: 'done' }))
+		expect(screen.queryByRole('dialog')).toBeNull()
+		expect(screen.getByText('stage: test')).toBeTruthy()
+	})
+
+	test('the data folds while empty and opens when something fills it', async () => {
+		const { QueryWorkbench } = await import('../src/components/QueryWorkbench')
+		const { container } = render(<QueryWorkbench api={new ChoicesApi()} history={false} />)
+		await screen.findByText('none: the defaults')
+		const data = container.querySelector('details.lw-data') as HTMLDetailsElement
+		expect(data.open).toBe(false)
+		expect(screen.queryByRole('textbox', { name: 'data' })).toBeNull()
+		// a query whose data has something (a saved one, the history): open
+		render(<QueryWorkbench api={new ChoicesApi()} history={false} initial={{ data: '{"id":1}' }} />)
+		await waitFor(() => expect([...document.querySelectorAll('details.lw-data')].some(d => (d as HTMLDetailsElement).open)).toBe(true))
+	})
+})

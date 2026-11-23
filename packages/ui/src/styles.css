@@ -330,3 +330,19 @@
 .lw-option > div > button { align-self: flex-start; height: 26px; padding: 0 8px; font-size: 12px; }
 .lw-option input.lw-invalid { border-color: var(--lw-error); }
 @media (max-width: 700px) { .lw-option { grid-template-columns: 1fr; } }
+
+/* under the query: the data, folding; the options in one line, edited in a dialog */
+.lw-data > summary { display: flex; align-items: center; gap: 8px; cursor: pointer; list-style: none; padding: 2px 0; }
+.lw-data > summary::-webkit-details-marker { display: none; }
+.lw-data > summary::before { content: '▸'; color: var(--lw-muted); font-size: 11px; width: 10px; transition: transform .1s; }
+.lw-data[open] > summary::before { transform: rotate(90deg); }
+.lw-data > summary .lw-label { margin: 0; }
+.lw-data-preview { color: var(--lw-muted); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.lw-data[open] > summary { margin-bottom: 4px; }
+.lw-options-line { display: flex; align-items: center; gap: 8px; min-width: 0; flex-wrap: wrap; }
+.lw-options-line > .lw-label { margin: 0; }
+.lw-options-summary { flex: 1 1 200px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--lw-muted); font-size: 12px;
+  padding: 0 8px; height: 30px; line-height: 30px; border: 1px solid var(--lw-border); border-radius: 6px; background: var(--lw-bg); }
+.lw-options-line > button { height: 30px; box-sizing: border-box; }
+.lw-options-line .lw-queue input { height: 30px; box-sizing: border-box; width: 140px; }
+.lw-modal:has(.lw-options) { width: min(640px, calc(100vw - 32px)); max-height: 85vh; overflow: auto; }

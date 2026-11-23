@@ -29,6 +29,11 @@ export interface OptionsMessages {
 	invalid: string
 	kept: string
 	notInSchema: string
+	none: string
+	edit: string
+	done: string
+	invalidShort: string
+	headersCount: string
 }
 
 const en: OptionsMessages = {
@@ -45,7 +50,8 @@ const en: OptionsMessages = {
 	wholeNumber: 'a whole number greater than 0',
 	invalid: 'The options are not a JSON object: fix them in JSON.',
 	kept: 'Other options, kept as they are: {names}',
-	notInSchema: 'not in this schema'
+	notInSchema: 'not in this schema',
+	none: 'none: the defaults', edit: 'edit', done: 'done', invalidShort: 'not a JSON object', headersCount: '{n} headers'
 }
 
 const MESSAGES: Record<Locale, OptionsMessages> = {
@@ -64,7 +70,8 @@ const MESSAGES: Record<Locale, OptionsMessages> = {
 		wholeNumber: 'un entero mayor que 0',
 		invalid: 'Las opciones no son un objeto JSON: corregilas en JSON.',
 		kept: 'Otras opciones, que se mantienen como están: {names}',
-		notInSchema: 'no está en este esquema'
+		notInSchema: 'no está en este esquema',
+	none: 'ninguna: las de por defecto', edit: 'editar', done: 'listo', invalidShort: 'no es un objeto JSON', headersCount: '{n} cabeceras'
 	},
 	pt: {
 		form: 'formulário', json: 'JSON',
@@ -80,7 +87,8 @@ const MESSAGES: Record<Locale, OptionsMessages> = {
 		wholeNumber: 'um inteiro maior que 0',
 		invalid: 'As opções não são um objeto JSON: corrija-as em JSON.',
 		kept: 'Outras opções, mantidas como estão: {names}',
-		notInSchema: 'não está neste esquema'
+		notInSchema: 'não está neste esquema',
+	none: 'nenhuma: as padrão', edit: 'editar', done: 'pronto', invalidShort: 'não é um objeto JSON', headersCount: '{n} cabeçalhos'
 	},
 	fr: {
 		form: 'formulaire', json: 'JSON',
@@ -96,7 +104,8 @@ const MESSAGES: Record<Locale, OptionsMessages> = {
 		wholeNumber: 'un entier supérieur à 0',
 		invalid: 'Les options ne sont pas un objet JSON : corrigez-les en JSON.',
 		kept: 'Autres options, gardées telles quelles : {names}',
-		notInSchema: 'absent de ce schéma'
+		notInSchema: 'absent de ce schéma',
+	none: 'aucune : celles par défaut', edit: 'modifier', done: 'terminé', invalidShort: 'pas un objet JSON', headersCount: '{n} en-têtes'
 	},
 	it: {
 		form: 'modulo', json: 'JSON',
@@ -112,7 +121,8 @@ const MESSAGES: Record<Locale, OptionsMessages> = {
 		wholeNumber: 'un intero maggiore di 0',
 		invalid: 'Le opzioni non sono un oggetto JSON: correggile in JSON.',
 		kept: 'Altre opzioni, mantenute così come sono: {names}',
-		notInSchema: 'non è in questo schema'
+		notInSchema: 'non è in questo schema',
+	none: 'nessuna: quelle predefinite', edit: 'modifica', done: 'fatto', invalidShort: 'non è un oggetto JSON', headersCount: '{n} intestazioni'
 	},
 	de: {
 		form: 'Formular', json: 'JSON',
@@ -128,7 +138,8 @@ const MESSAGES: Record<Locale, OptionsMessages> = {
 		wholeNumber: 'eine ganze Zahl größer als 0',
 		invalid: 'Die Optionen sind kein JSON-Objekt: korrigiere sie im JSON.',
 		kept: 'Weitere Optionen, unverändert beibehalten: {names}',
-		notInSchema: 'nicht in diesem Schema'
+		notInSchema: 'nicht in diesem Schema',
+	none: 'keine: die Standardwerte', edit: 'bearbeiten', done: 'fertig', invalidShort: 'kein JSON-Objekt', headersCount: '{n} Header'
 	},
 	nl: {
 		form: 'formulier', json: 'JSON',
@@ -144,7 +155,8 @@ const MESSAGES: Record<Locale, OptionsMessages> = {
 		wholeNumber: 'een geheel getal groter dan 0',
 		invalid: 'De opties zijn geen JSON-object: corrigeer ze in JSON.',
 		kept: 'Andere opties, ongewijzigd bewaard: {names}',
-		notInSchema: 'niet in dit schema'
+		notInSchema: 'niet in dit schema',
+	none: 'geen: de standaard', edit: 'bewerken', done: 'klaar', invalidShort: 'geen JSON-object', headersCount: '{n} headers'
 	},
 	ca: {
 		form: 'formulari', json: 'JSON',
@@ -160,7 +172,8 @@ const MESSAGES: Record<Locale, OptionsMessages> = {
 		wholeNumber: 'un enter més gran que 0',
 		invalid: 'Les opcions no són un objecte JSON: corregeix-les en JSON.',
 		kept: 'Altres opcions, mantingudes tal com són: {names}',
-		notInSchema: 'no és en aquest esquema'
+		notInSchema: 'no és en aquest esquema',
+	none: 'cap: les per defecte', edit: 'editar', done: 'fet', invalidShort: 'no és un objecte JSON', headersCount: '{n} capçaleres'
 	},
 	gl: {
 		form: 'formulario', json: 'JSON',
@@ -176,7 +189,8 @@ const MESSAGES: Record<Locale, OptionsMessages> = {
 		wholeNumber: 'un enteiro maior que 0',
 		invalid: 'As opcións non son un obxecto JSON: corríxeas en JSON.',
 		kept: 'Outras opcións, mantidas como están: {names}',
-		notInSchema: 'non está neste esquema'
+		notInSchema: 'non está neste esquema',
+	none: 'ningunha: as predeterminadas', edit: 'editar', done: 'listo', invalidShort: 'non é un obxecto JSON', headersCount: '{n} cabeceiras'
 	},
 	eu: {
 		form: 'formularioa', json: 'JSON',
@@ -192,7 +206,8 @@ const MESSAGES: Record<Locale, OptionsMessages> = {
 		wholeNumber: '0 baino handiagoa den zenbaki oso bat',
 		invalid: 'Aukerak ez dira JSON objektu bat: zuzendu JSONean.',
 		kept: 'Beste aukera batzuk, dauden bezala gordeta: {names}',
-		notInSchema: 'ez dago eskema honetan'
+		notInSchema: 'ez dago eskema honetan',
+	none: 'bat ere ez: lehenetsiak', edit: 'editatu', done: 'eginda', invalidShort: 'ez da JSON objektu bat', headersCount: '{n} goiburu'
 	}
 }
 

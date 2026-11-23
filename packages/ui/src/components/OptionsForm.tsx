@@ -18,13 +18,34 @@ export interface OptionsFormProps {
 	locale?: string
 	/** the label over the form */
 	label: string
+	/** show the label over the form (in a dialog its title says it) */
+	heading?: boolean
+}
+
+/** The options in one line: what is set (or that none is), for the bar of a query */
+export const optionsSummary = (text: string, locale?: string): { text: string, invalid: boolean } => {
+	const m = optionsMessagesOf(locale)
+	const read = optionsFieldsOf(text)
+	if (read.error) return { text: m.invalidShort, invalid: true }
+	const f = read.fields
+	const parts = [
+		f.stage && `${m.stage}: ${f.stage}`,
+		f.view && `${m.view}: ${f.view}`,
+		f.chunkSize && `${m.chunkSize}: ${f.chunkSize}`,
+		f.tryAllCan && `${m.tryAllCan}: ${f.tryAllCan === 'true' ? m.yes : m.no}`,
+		f.headers.length > 0 && format(m.headersCount, { n: f.headers.length }),
+		f.timeout && `${m.timeout}: ${f.timeout}`,
+		f.maxIterations && `${m.maxIterations}: ${f.maxIterations}`,
+		...Object.keys(read.extra)
+	].filter(Boolean) as string[]
+	return { text: parts.length ? parts.join(' · ') : m.none, invalid: false }
 }
 
 /**
  * The options of a query (QueryOptions / ScriptOptions of λORM) as a form: each field may stay empty, and says what is
  * valid; stage and view offer those of the schema. The JSON stays what is kept, and can be written as such (JSON).
  */
-export const OptionsForm: React.FC<OptionsFormProps> = ({ value, onChange, api, schema, mode, theme, locale, label }) => {
+export const OptionsForm: React.FC<OptionsFormProps> = ({ value, onChange, api, schema, mode, theme, locale, label, heading = true }) => {
 	const m = optionsMessagesOf(locale)
 	const [asJson, setAsJson] = useState(false)
 	const read = useMemo(() => optionsFieldsOf(value), [value])
@@ -101,7 +122,7 @@ export const OptionsForm: React.FC<OptionsFormProps> = ({ value, onChange, api, 
 	return (
 		<div className="lw-options">
 			<div className="lw-options-head">
-				<span className="lw-label">{label}</span>
+				{heading ? <span className="lw-label">{label}</span> : <span className="lw-spacer" />}
 				<span className="lw-modes lw-modes-small" role="radiogroup" aria-label={label}>
 					<button type="button" role="radio" aria-checked={!json} className={!json ? 'lw-active' : ''} disabled={!!read.error} onClick={() => setAsJson(false)}>{m.form}</button>
 					<button type="button" role="radio" aria-checked={json} className={json ? 'lw-active' : ''} onClick={() => setAsJson(true)}>{m.json}</button>

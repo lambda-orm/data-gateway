@@ -17,7 +17,9 @@ import { HeadersProvider, RestQueryApi } from '../infrastructure/restQueryApi'
 import { LocalStorageHistory } from '../infrastructure/localStorageHistory'
 import { setSchemaTypings } from '../infrastructure/monaco/monacoSetup'
 import { CodeEditor } from './CodeEditor'
-import { OptionsForm } from './OptionsForm'
+import { OptionsForm, optionsSummary } from './OptionsForm'
+import { Modal } from './dialogs'
+import { optionsMessagesOf } from '../domain/optionsI18n'
 import { ResultViewer } from './ResultViewer'
 import { applySuggestion } from '../domain/workspace'
 
@@ -94,6 +96,11 @@ export const QueryWorkbench: React.FC<QueryWorkbenchProps> = props => {
 	// what the editor suggests: the domain of the schema (its entities, the types of their properties) and the functions
 	const [domain, setDomain] = useState<DomainInfo>()
 	const [copied, setCopied] = useState(false)
+	// the data folds while it is empty (more room for the query); it opens when something fills it (parameters, a saved query)
+	const emptyData = (text: string) => text.replace(/\s+/g, '') === '{}' || text.trim() === ''
+	const [dataOpen, setDataOpen] = useState(() => !emptyData(s.data))
+	useEffect(() => { if (!emptyData(s.data)) setDataOpen(true) }, [s.data])
+	const [editingOptions, setEditingOptions] = useState(false)
 	useEffect(() => {
 		setDomain(undefined)
 		const read = props.loadDomain ?? (api.domain ? (schema: string) => api.domain!(schema) : undefined)
@@ -139,6 +146,9 @@ export const QueryWorkbench: React.FC<QueryWorkbenchProps> = props => {
 	const queryActions = operations.filter(o => o !== 'executeScript')
 	const actions = s.mode === 'query' ? queryActions : operations.filter(o => o === 'executeScript')
 	const main: Operation = s.mode === 'query' ? 'execute' : 'executeScript'
+	const om = optionsMessagesOf(locale)
+	const summary = optionsSummary(s.options, locale)
+	const dataPreview = s.data.replace(/\s+/g, ' ').trim().slice(0, 120)
 	const run = (operation: Operation) => operation === 'parameters' ? controller.fillParameters() : controller.run(operation)
 
 	return (
@@ -170,23 +180,34 @@ export const QueryWorkbench: React.FC<QueryWorkbenchProps> = props => {
 			{s.notice && <div className="lw-notice" role="alert">{localize(s.notice, m)}</div>}
 			{s.mode === 'query'
 				? <CodeEditor ariaLabel="query" language="typescript" theme={theme} value={s.query} markers={s.markers} lambda completion={suggest} triggerCharacters={['.']}
-					onChange={query => { controller.update({ query }); controller.scheduleValidation() }} onRun={() => run(main)} />
-				: <CodeEditor ariaLabel="script" language="javascript" theme={theme} value={s.script} lambda completion={suggest} triggerCharacters={['.']} onChange={script => controller.update({ script })} onRun={() => run(main)} height={220} />}
-			<div className="lw-row">
-				<div className="lw-col">
-					<div className="lw-label">{m.data}</div>
-					<CodeEditor ariaLabel="data" language="json" theme={theme} value={s.data} onChange={data => controller.update({ data })} height={110} />
-				</div>
-				<div className="lw-col">
-					<OptionsForm label={m.options} value={s.options} onChange={options => controller.update({ options })} api={api} schema={s.schema} mode={s.mode} theme={theme} locale={locale} />
-					{s.mode === 'query' && operations.includes('executeQueued') && (
-						<div className="lw-queue">
-							<input aria-label="topic" placeholder={m.topic} value={s.topic} onChange={e => controller.update({ topic: e.target.value })} />
-							<input aria-label="chunk" placeholder={m.chunk} inputMode="numeric" value={s.chunk} onChange={e => controller.update({ chunk: e.target.value })} />
-						</div>
-					)}
-				</div>
+					onChange={query => { controller.update({ query }); controller.scheduleValidation() }} onRun={() => run(main)} height={260} />
+				: <CodeEditor ariaLabel="script" language="javascript" theme={theme} value={s.script} lambda completion={suggest} triggerCharacters={['.']} onChange={script => controller.update({ script })} onRun={() => run(main)} height={300} />}
+			{/* the data, folded while it is empty: more room for the query */}
+			<details className="lw-data" open={dataOpen} onToggle={e => setDataOpen((e.currentTarget as HTMLDetailsElement).open)}>
+				<summary>
+					<span className="lw-label">{m.data}</span>
+					{!dataOpen && <code className="lw-data-preview">{dataPreview}</code>}
+				</summary>
+				{dataOpen && <CodeEditor ariaLabel="data" language="json" theme={theme} value={s.data} onChange={data => controller.update({ data })} height={110} />}
+			</details>
+			{/* the options in one line; Edit opens them as a form or JSON */}
+			<div className="lw-options-line">
+				<span className="lw-label">{m.options}</span>
+				<span className={summary.invalid ? 'lw-options-summary lw-error-text' : 'lw-options-summary'} title={summary.text}>{summary.text}</span>
+				<button type="button" onClick={() => setEditingOptions(true)}>{om.edit}</button>
+				{s.mode === 'query' && operations.includes('executeQueued') && (
+					<span className="lw-queue">
+						<input aria-label="topic" placeholder={m.topic} value={s.topic} onChange={e => controller.update({ topic: e.target.value })} />
+						<input aria-label="chunk" placeholder={m.chunk} inputMode="numeric" value={s.chunk} onChange={e => controller.update({ chunk: e.target.value })} />
+					</span>
+				)}
 			</div>
+			{editingOptions && (
+				<Modal title={m.options} theme={theme} onClose={() => setEditingOptions(false)}>
+					<OptionsForm label={m.options} heading={false} value={s.options} onChange={options => controller.update({ options })} api={api} schema={s.schema} mode={s.mode} theme={theme} locale={locale} />
+					<div className="lw-form-actions"><button type="button" className="lw-primary" onClick={() => setEditingOptions(false)}>{om.done}</button></div>
+				</Modal>
+			)}
 			<div className="lw-actions">
 				{actions.map(operation => {
 					const { enabled, reason } = controller.available(operation)
