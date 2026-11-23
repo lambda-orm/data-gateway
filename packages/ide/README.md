@@ -20,6 +20,10 @@ REST, MCP and the upgrade of a WebSocket go the same way. The gateways answer no
   Without it the proxy reaches none (`403` that says so): an open proxy would reach any host of its network.
 - It keeps no connection and no credential: they stay in the browser (the key only if asked to be remembered). It
   forwards the credential headers and drops cookies, `Origin` and `Referer`.
+- **Sessions:** a connection logs in to `management` (`POST /sessions`) and keeps the token in the tab; every request
+  carries it. An expired session is renewed with the key at hand; a revoked one is not. The page of a connection lists
+  its sessions and, with `sessionAdmin`, all of them. The backend sends the browser's address in `X-Forwarded-For`:
+  list the IDE in `transports.management.trustedProxies` of the gateway to see it.
 
 ## Run it
 
@@ -27,7 +31,11 @@ REST, MCP and the upgrade of a WebSocket go the same way. The gateways answer no
 docker run -p 8098:8080 -e DATA_GATEWAY_IDE_TARGETS='*' flaviorita/data-gateway-ide
 ```
 
-Open http://localhost:8098 and add a connection to the `management` of a gateway. Next to the gateways, in the same
+Open http://localhost:8098 and add a connection to the `management` of a gateway.
+
+To debug it with VS Code, `.vscode/launch.json` has "IDE: all": a gateway from its sources
+(`packages/data-gateway/dev`, management on `127.0.0.1:19199`, key `dev-modeler-key`), this backend and the IDE in
+Chrome through vite. Next to the gateways, in the same
 network, with the management ports published to nobody else:
 
 ```yaml

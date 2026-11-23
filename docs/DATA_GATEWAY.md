@@ -1193,6 +1193,11 @@ que permite). El árbol empieza por las connections, cada una con sus esquemas; 
 vez. Las connections quedan en el navegador (la clave solo si se pide recordarla; si no, en la pestaña): el backend no
 guarda ninguna.
 
+**La sesión.** Al conectar, el IDE hace login en el `management` con la credencial de la connection y guarda el token
+en la pestaña; todo pedido lleva el token (§12.1). Si la sesión vence y la clave está a mano, el IDE entra de nuevo
+solo; si la revocan, dice quién y espera. Su WebSocket de eventos la muestra *conectada* y le avisa lo que cambió. La
+página de cada connection lista sus sesiones y, con `sessionAdmin`, todas las de la gateway.
+
 **El navegador solo habla con el backend del IDE** (mismo origen: la gateway no necesita CORS). Todo pedido a una
 gateway va por el proxy, con la URL de destino en la ruta:
 
@@ -1258,9 +1263,7 @@ transports:
 
 ### 12.1 Sesiones (plan)
 
-> **En curso:** [`DATA_GATEWAY_SESSIONS_PLAN.md`](DATA_GATEWAY_SESSIONS_PLAN.md). Hechas las fases 1 y 2 en la gateway
-> (login, `/sessions`, `sessionAdmin`, la configuración, la auditoría y el WebSocket de eventos `/events` con la
-> presencia entre réplicas); faltan el IDE (fase 3) y su proxy (fase 4).
+> Diseño y decisiones: [`DATA_GATEWAY_SESSIONS_PLAN.md`](DATA_GATEWAY_SESSIONS_PLAN.md).
 
 `management` pasa a trabajar con **sesiones**: el IDE hace login (`POST /sessions`) con la credencial y recibe un
 token; todo pedido lleva el token, no la clave (una clave directa se rechaza). La gateway guarda las sesiones en
