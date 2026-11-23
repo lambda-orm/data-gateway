@@ -68,35 +68,31 @@ Si `pnpm` no está en el PATH, se usa `corepack pnpm`. `ci-local.sh` ya lo resue
 
 Ilusor usa la gateway de este repo, construida a mano. Su compose está en `~/ilusor/dev/cloud`.
 
-- **Contenedor `cloud-data-gateway`**
-  - Corre la imagen `ilusor/data-gateway:3.2.0-tree`.
-  - Se llega por el proxy `cloud-admin-gateway` en `http://localhost:8097/data-gateway`, con la UI embebida en
-    `/data-gateway/ui/`.
+- **Contenedor `cloud-data-gateway`** (gateway 4.0.0, rama `feature/management`)
+  - Corre la imagen `ilusor/data-gateway:4.0.0-management`, puesta por `~/ilusor/dev/cloud/docker-compose.override.yml`
+    (local, sin trackear: el `docker-compose.yml` es generado).
+  - Su REST se llega por el proxy `cloud-admin-gateway` en `http://localhost:8097/data-gateway`. Ya no sirve `/ui`, ni
+    `/admin` en `http`, ni responde CORS.
+  - Su `management` escucha en el puerto 9292, solo en la red interna `admin`: no está publicado.
   - Su configuración es `~/ilusor/dev/cloud/data-gateway/data-gateway.config.yaml`, con `path: ilusor` y
-    `admin: { enabled: true }`.
+    `transports.management.port: 9292` (la de 3.2.0 quedó en `data-gateway.config.yaml.bak-3.2.0`).
   - Su workspace está en `~/ilusor/dev/cloud/data-gateway/workspace/ilusor/`.
-- **Para reconstruirla:**
+- **Contenedor `cloud-data-gateway-ide`** (el IDE, imagen `flaviorita/data-gateway-ide:local`), del mismo override:
+  - en `http://localhost:18098`, en las redes `admin` (para llegar a la gateway) e `ilusor-cloud-ide-local` (para
+    publicarse);
+  - `DATA_GATEWAY_IDE_TARGETS=http://data-gateway:9292,http://data-gateway:9291`;
+  - la conexión a Ilusor es `http://data-gateway:9292` con la clave del modeler. Su pestaña REST usa el `http`
+    (`data-gateway:9291/data-gateway`, de `/transports`); WebSocket y MCP aparecen deshabilitados porque Ilusor no los
+    expone.
+- **Para reconstruirlos:**
 
   ```bash
-  cd packages/data-gateway
-  npx grunt dist            # incluye el IDE en modo embebido (../ide, build:embedded)
-  docker build -q --build-arg CLI_VERSION=1.6.18 -t ilusor/data-gateway:3.2.0-tree .
-  cd ~/ilusor/dev/cloud && docker compose up -d data-gateway
+  cd packages/data-gateway && npx grunt dist
+  docker build -q --build-arg CLI_VERSION=1.6.18 -t ilusor/data-gateway:4.0.0-management .
+  cd ../ide && npm run build && docker build -q -t flaviorita/data-gateway-ide:local .
+  cd ~/ilusor/dev/cloud && docker compose up -d data-gateway data-gateway-ide
   ```
 
-- **IDE de prueba:** contenedor `dgw-ide-test` con la imagen `flaviorita/data-gateway-ide:local`, en
-  `http://localhost:18098`. Para reconstruirlo:
-
-  ```bash
-  cd packages/ide && npm run build
-  docker build -t flaviorita/data-gateway-ide:local .
-  docker rm -f dgw-ide-test
-  docker run -d --name dgw-ide-test -p 127.0.0.1:18098:8080 flaviorita/data-gateway-ide:local
-  ```
-
-  En el IDE, la conexión a Ilusor es `http://localhost:8097/data-gateway` con la clave del modeler. Ilusor solo expone
-  REST, así que los botones de WebSocket y MCP aparecen deshabilitados. Para probarlos se levanta una gateway temporal
-  con esos transportes; los puertos 19291, 19293 y 19294 ya se usaron para eso.
 - **Las claves:** están en `~/ilusor/dev/cloud/.env`, en `DATA_GATEWAY_MODELER_KEY`, `DATA_GATEWAY_READER_KEY` y
   `DATA_GATEWAY_OPERATOR_KEY`. **Nunca se imprimen.** A un script se le pasan por una variable de entorno, por ejemplo
   `KEY=$(grep '^DATA_GATEWAY_MODELER_KEY=' ~/ilusor/dev/cloud/.env | cut -d= -f2-)`.
@@ -129,8 +125,9 @@ Ilusor usa la gateway de este repo, construida a mano. Su compose está en `~/il
    usuario.
 2. **Secrets de GitHub y push**, como dice la §1.
 3. **Releases**, cada uno con su OK:
-   - gateway **3.3.0**: su *Unreleased* ya describe el IDE embebido, `/transports`, `/openapi.json`, la credencial
-     por subprotocolo, la sesión en SQLite, las expresiones y los temas;
+   - gateway **4.0.0**: su *Unreleased* empieza por los cambios que rompen (`management`, sin `/ui`, sin `/admin` en
+     `http`, sin CORS) y sigue con `/transports`, `/openapi.json`, la credencial por subprotocolo, la sesión en SQLite,
+     las expresiones y los temas;
    - IDE **1.0.0**, la primera imagen;
    - `@lambdaorm/ui`, la minor del changeset pendiente;
    - la primera publicación de `@lambdaorm/data-gateway-client`.
@@ -173,7 +170,8 @@ Ilusor usa la gateway de este repo, construida a mano. Su compose está en `~/il
 | §11 | La administración de workspaces |
 | §11.7 | El explorador |
 | §11.8 | La sesión |
-| §11.9 | El IDE y sus modos (embebido e independiente) |
+| §11.9 | El IDE: su backend y su proxy (`/gw/…`) |
+| §12 | El transporte `management` (4.0.0) |
 
 Los demás planes:
 
@@ -185,7 +183,8 @@ Puntos para tener en cuenta:
 
 - **El IDE:** `packages/ide/src/main.tsx` elige el modo:
   - `ide.tsx` es el IDE independiente: guarda las conexiones en localStorage y los secretos en sessionStorage;
-  - `embedded.tsx` es la UI de la gateway, con login, y muestra la conexión como *current*;
+  - `proxy.ts` (`viaProxy`) arma las URLs del proxy; `server/server.mjs` es el backend (estáticos y proxy, con sus tests
+    en `server/server.test.mjs`);
   - `tools.tsx` tiene las pestañas de Swagger, WebSocket y MCP de una conexión.
 - **La UI (`packages/ui`):**
   - `Workspace.tsx` maneja varias conexiones (`connections`, `WorkspaceConnection`);
