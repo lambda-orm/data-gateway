@@ -24,6 +24,7 @@ export interface WizardMessages {
 	update: string
 	edited: string
 	cantJoin: string
+	unread: string
 }
 
 const en: WizardMessages = {
@@ -34,7 +35,8 @@ const en: WizardMessages = {
 	page: 'page', pageNumber: 'page', pageSize: 'rows per page', pageHint: 'whole numbers; without rows per page, every row',
 	query: 'the query', cancel: 'cancel', create: 'create the query', update: 'update the query',
 	edited: 'The query was edited by hand: updating it replaces it.',
-	cantJoin: '{entity} can’t join: no table of the wizard has a relation to it'
+	cantJoin: '{entity} can’t join: no table of the wizard has a relation to it',
+	unread: 'The wizard can’t show these parts of the query: the query it writes leaves them out.'
 }
 
 const MESSAGES: Record<Locale, WizardMessages> = {
@@ -47,7 +49,8 @@ const MESSAGES: Record<Locale, WizardMessages> = {
 		page: 'página', pageNumber: 'página', pageSize: 'filas por página', pageHint: 'enteros; sin filas por página, todas las filas',
 		query: 'la consulta', cancel: 'cancelar', create: 'crear la consulta', update: 'actualizar la consulta',
 		edited: 'La consulta se editó a mano: actualizarla la reemplaza.',
-		cantJoin: '{entity} no se puede unir: ninguna tabla del asistente tiene una relación con ella'
+		cantJoin: '{entity} no se puede unir: ninguna tabla del asistente tiene una relación con ella',
+		unread: 'El asistente no puede mostrar estas partes de la consulta: la consulta que escribe las deja afuera.'
 	},
 	pt: {
 		wizard: 'assistente', title: 'Assistente de consultas', startFrom: 'partir de',
@@ -57,7 +60,8 @@ const MESSAGES: Record<Locale, WizardMessages> = {
 		page: 'página', pageNumber: 'página', pageSize: 'linhas por página', pageHint: 'inteiros; sem linhas por página, todas as linhas',
 		query: 'a consulta', cancel: 'cancelar', create: 'criar a consulta', update: 'atualizar a consulta',
 		edited: 'A consulta foi editada à mão: atualizá-la a substitui.',
-		cantJoin: '{entity} não pode ser unida: nenhuma tabela do assistente tem uma relação com ela'
+		cantJoin: '{entity} não pode ser unida: nenhuma tabela do assistente tem uma relação com ela',
+		unread: 'O assistente não pode mostrar estas partes da consulta: a consulta que ele escreve as deixa de fora.'
 	},
 	fr: {
 		wizard: 'assistant', title: 'Assistant de requêtes', startFrom: 'partir de',
@@ -67,7 +71,8 @@ const MESSAGES: Record<Locale, WizardMessages> = {
 		page: 'page', pageNumber: 'page', pageSize: 'lignes par page', pageHint: 'des entiers ; sans lignes par page, toutes les lignes',
 		query: 'la requête', cancel: 'annuler', create: 'créer la requête', update: 'mettre à jour la requête',
 		edited: 'La requête a été modifiée à la main : la mettre à jour la remplace.',
-		cantJoin: '{entity} ne peut pas être jointe : aucune table de l’assistant n’a de relation vers elle'
+		cantJoin: '{entity} ne peut pas être jointe : aucune table de l’assistant n’a de relation vers elle',
+		unread: 'L’assistant ne peut pas afficher ces parties de la requête : la requête qu’il écrit les laisse de côté.'
 	},
 	it: {
 		wizard: 'procedura guidata', title: 'Procedura guidata delle query', startFrom: 'partire da',
@@ -77,7 +82,8 @@ const MESSAGES: Record<Locale, WizardMessages> = {
 		page: 'pagina', pageNumber: 'pagina', pageSize: 'righe per pagina', pageHint: 'interi; senza righe per pagina, tutte le righe',
 		query: 'la query', cancel: 'annulla', create: 'crea la query', update: 'aggiorna la query',
 		edited: 'La query è stata modificata a mano: aggiornarla la sostituisce.',
-		cantJoin: '{entity} non si può unire: nessuna tabella della procedura ha una relazione con essa'
+		cantJoin: '{entity} non si può unire: nessuna tabella della procedura ha una relazione con essa',
+		unread: 'L’assistente non può mostrare queste parti della query: la query che scrive le lascia fuori.'
 	},
 	de: {
 		wizard: 'Assistent', title: 'Abfrage-Assistent', startFrom: 'ausgehend von',
@@ -87,7 +93,8 @@ const MESSAGES: Record<Locale, WizardMessages> = {
 		page: 'Seite', pageNumber: 'Seite', pageSize: 'Zeilen pro Seite', pageHint: 'ganze Zahlen; ohne Zeilen pro Seite alle Zeilen',
 		query: 'die Abfrage', cancel: 'abbrechen', create: 'Abfrage erstellen', update: 'Abfrage aktualisieren',
 		edited: 'Die Abfrage wurde von Hand bearbeitet: Aktualisieren ersetzt sie.',
-		cantJoin: '{entity} kann nicht verbunden werden: keine Tabelle des Assistenten hat eine Beziehung zu ihr'
+		cantJoin: '{entity} kann nicht verbunden werden: keine Tabelle des Assistenten hat eine Beziehung zu ihr',
+		unread: 'Der Assistent kann diese Teile der Abfrage nicht zeigen: Die Abfrage, die er schreibt, lässt sie weg.'
 	},
 	nl: {
 		wizard: 'wizard', title: 'Querywizard', startFrom: 'vertrekken van',
@@ -97,7 +104,8 @@ const MESSAGES: Record<Locale, WizardMessages> = {
 		page: 'pagina', pageNumber: 'pagina', pageSize: 'rijen per pagina', pageHint: 'gehele getallen; zonder rijen per pagina, alle rijen',
 		query: 'de query', cancel: 'annuleren', create: 'de query maken', update: 'de query bijwerken',
 		edited: 'De query is met de hand bewerkt: bijwerken vervangt hem.',
-		cantJoin: '{entity} kan niet worden gekoppeld: geen tabel van de wizard heeft een relatie ermee'
+		cantJoin: '{entity} kan niet worden gekoppeld: geen tabel van de wizard heeft een relatie ermee',
+		unread: 'De assistent kan deze delen van de query niet tonen: de query die hij schrijft laat ze weg.'
 	},
 	ca: {
 		wizard: 'assistent', title: 'Assistent de consultes', startFrom: 'partir de',
@@ -107,7 +115,8 @@ const MESSAGES: Record<Locale, WizardMessages> = {
 		page: 'pàgina', pageNumber: 'pàgina', pageSize: 'files per pàgina', pageHint: 'enters; sense files per pàgina, totes les files',
 		query: 'la consulta', cancel: 'cancel·lar', create: 'crear la consulta', update: 'actualitzar la consulta',
 		edited: 'La consulta s’ha editat a mà: actualitzar-la la substitueix.',
-		cantJoin: '{entity} no es pot unir: cap taula de l’assistent hi té una relació'
+		cantJoin: '{entity} no es pot unir: cap taula de l’assistent hi té una relació',
+		unread: 'L’assistent no pot mostrar aquestes parts de la consulta: la consulta que escriu les deixa fora.'
 	},
 	gl: {
 		wizard: 'asistente', title: 'Asistente de consultas', startFrom: 'partir de',
@@ -117,7 +126,8 @@ const MESSAGES: Record<Locale, WizardMessages> = {
 		page: 'páxina', pageNumber: 'páxina', pageSize: 'filas por páxina', pageHint: 'enteiros; sen filas por páxina, todas as filas',
 		query: 'a consulta', cancel: 'cancelar', create: 'crear a consulta', update: 'actualizar a consulta',
 		edited: 'A consulta editouse a man: actualizala substitúea.',
-		cantJoin: '{entity} non se pode unir: ningunha táboa do asistente ten unha relación con ela'
+		cantJoin: '{entity} non se pode unir: ningunha táboa do asistente ten unha relación con ela',
+		unread: 'O asistente non pode amosar estas partes da consulta: a consulta que escribe déixaas fóra.'
 	},
 	eu: {
 		wizard: 'morroia', title: 'Kontsulten morroia', startFrom: 'abiapuntua',
@@ -127,7 +137,8 @@ const MESSAGES: Record<Locale, WizardMessages> = {
 		page: 'orria', pageNumber: 'orria', pageSize: 'errenkadak orriko', pageHint: 'zenbaki osoak; orriko errenkadarik gabe, errenkada guztiak',
 		query: 'kontsulta', cancel: 'utzi', create: 'sortu kontsulta', update: 'eguneratu kontsulta',
 		edited: 'Kontsulta eskuz editatu da: eguneratzeak ordezkatzen du.',
-		cantJoin: '{entity} ezin da elkartu: morroiaren taula batek ere ez du harekin erlaziorik'
+		cantJoin: '{entity} ezin da elkartu: morroiaren taula batek ere ez du harekin erlaziorik',
+		unread: 'Laguntzaileak ezin ditu kontsultaren zati hauek erakutsi: idazten duen kontsultak kanpoan uzten ditu.'
 	}
 }
 

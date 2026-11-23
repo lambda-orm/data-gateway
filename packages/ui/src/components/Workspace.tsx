@@ -21,7 +21,7 @@ import { CommandsPanel } from './CommandsPanel'
 import { FormFocus, SchemaForms } from './SchemaForms'
 import { FileView } from './FileView'
 import { QueryWizard } from './QueryWizard'
-import { WizardState } from '../domain/queryWizard'
+import { queryOf, WizardReading, WizardState, wizardFromQuery } from '../domain/queryWizard'
 import { wizardMessagesOf } from '../domain/wizardI18n'
 import { fromYaml } from '../domain/results'
 import { RestAdminApi } from '../infrastructure/restAdminApi'
@@ -413,7 +413,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 	const [rootFolded, setRootFolded] = useState(false)
 	const [saving, setSaving] = useState<{ tab: Tab, as: boolean }>()
 	const [creatingDiagram, setCreatingDiagram] = useState<{ conn: string, schema: string, parentId?: string }>()
-	const [wizarding, setWizarding] = useState<{ tab: Tab, schema: string, domain: DomainInfo }>()
+	const [wizarding, setWizarding] = useState<{ tab: Tab, schema: string, domain: DomainInfo, reading?: WizardReading }>()
 	const [choosingEntities, setChoosingEntities] = useState<Tab>()
 	const [notice, setNotice] = useState<string>()
 	const [newSchema, setNewSchema] = useState<string>()
@@ -659,7 +659,17 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 		const schema = contents.current.get(tab.id)?.schema ?? tab.schema
 		const r = rt(connOf(tab))
 		if (schema === undefined || !r) return
-		try { setWizarding({ tab, schema, domain: await r.domainOf(schema) }) } catch (e) { setNotice(problemText(e, x)) }
+		try {
+			const domain = await r.domainOf(schema)
+			// a query not written by the wizard: read as far as it can show it (its tables, fields, filter, order and page)
+			const query = contents.current.get(tab.id)
+			// one it wrote and was edited by hand since: read too, with its boxes where they were
+			const text = query?.query ?? ''
+			const edited = !tab.wizard || text.trim() !== queryOf(tab.wizard, domain).trim()
+			const read = query?.mode === 'script' || !edited ? undefined : wizardFromQuery(text, domain)
+			const reading = read && tab.wizard?.positions ? { ...read, state: { ...read.state, positions: tab.wizard.positions } } : read
+			setWizarding({ tab, schema, domain, reading })
+		} catch (e) { setNotice(problemText(e, x)) }
 	}
 	const acceptWizard = (state: WizardState, query: string) => {
 		if (!wizarding) return
@@ -879,7 +889,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 					}} />
 			)}
 			{wizarding && rt(connOf(wizarding.tab)) && (
-				<QueryWizard api={rt(connOf(wizarding.tab))!.api} schema={wizarding.schema} domain={wizarding.domain} initial={wizarding.tab.wizard} theme={theme} locale={workbench.locale}
+				<QueryWizard api={rt(connOf(wizarding.tab))!.api} schema={wizarding.schema} domain={wizarding.domain} initial={wizarding.tab.wizard} reading={wizarding.reading} theme={theme} locale={workbench.locale}
 					current={wizarding.tab.wizard ? contents.current.get(wizarding.tab.id)?.query : undefined}
 					start={/^\s*([\w.]+)/.exec(contents.current.get(wizarding.tab.id)?.query ?? '')?.[1]?.replace(/\.(filter|map|include|sort|page|first|having|groupBy|distinct)$/, '')}
 					onClose={() => setWizarding(undefined)} onAccept={acceptWizard} />

@@ -3,7 +3,7 @@ import { QueryApiPort } from '../application/ports'
 import { DomainInfo } from '../domain/diagram'
 import { functionsOf, lambdaCompletions } from '../domain/lambdaCompletion'
 import { QUERYABLE_DECLARATIONS } from '../infrastructure/monaco/queryableDeclarations.generated'
-import { columnsOf, emptyWizard, joinOf, queryOf, WizardState, withoutTable } from '../domain/queryWizard'
+import { columnsOf, emptyWizard, joinOf, queryOf, WizardReading, WizardState, withoutTable } from '../domain/queryWizard'
 import { wizardMessagesOf } from '../domain/wizardI18n'
 import { format, Locale } from '../domain/i18n'
 import { CodeEditor } from './CodeEditor'
@@ -21,6 +21,8 @@ export interface QueryWizardProps {
 	initial?: WizardState
 	/** the entity to start from when there is no wizard yet (the one the query of the tab reads) */
 	start?: string
+	/** the query of the tab read as a wizard (not written by one, or edited by hand since): it starts there, and tells what it couldn't read */
+	reading?: WizardReading
 	/** the query of the tab as it is now: edited by hand since the wizard wrote it, updating it replaces it */
 	current?: string
 	theme?: 'light' | 'dark'
@@ -36,14 +38,17 @@ export interface QueryWizardProps {
  * takes one out (not the one it starts from). A filter on the entity it starts from (with its suggestions), the order
  * by the columns of the result and the page; what is left empty is not applied. The query is shown as it is written.
  */
-export const QueryWizard: React.FC<QueryWizardProps> = ({ api, schema, domain, initial, start, current, theme = 'light', locale, onClose, onAccept, layout }) => {
+export const QueryWizard: React.FC<QueryWizardProps> = ({ api, schema, domain, initial, start, reading, current, theme = 'light', locale, onClose, onAccept, layout }) => {
 	const m = wizardMessagesOf(locale)
 	const names = useMemo(() => domain.entities.map(e => e.name).sort((a, b) => a.localeCompare(b)), [domain])
-	const [state, setState] = useState<WizardState>(() => initial ?? emptyWizard(start && names.includes(start) ? start : names[0] ?? ''))
+	const [state, setState] = useState<WizardState>(() => reading?.state ?? initial ?? emptyWizard(start && names.includes(start) ? start : names[0] ?? ''))
 	const [notice, setNotice] = useState<string>()
+	// what of the query of the tab the wizard can't show: told until the wizard starts from another entity
+	const [unread, setUnread] = useState<string[]>(() => reading?.unread ?? [])
 	const query = useMemo(() => state.root ? queryOf(state, domain) : '', [state, domain])
 	const columns = useMemo(() => columnsOf(state, domain), [state, domain])
-	const edited = !!initial && current !== undefined && current.trim() !== queryOf(initial, domain).trim()
+	// read again from the tab, the edits are in the wizard: only what it couldn't read is told (unread)
+	const edited = !reading && !!initial && current !== undefined && current.trim() !== queryOf(initial, domain).trim()
 
 	/** the order only by columns the result still has */
 	const tidy = (next: WizardState): WizardState => {
@@ -69,8 +74,10 @@ export const QueryWizard: React.FC<QueryWizardProps> = ({ api, schema, domain, i
 		setState(next)
 		setNotice(refused.length ? format(m.cantJoin, { entity: refused.join(', ') }) : undefined)
 	}
-	const remove = (entity: string) => setState(s => {
-		const next = withoutTable(s, entity)
+	const remove = (entity: string) => removeAll([entity])
+	// several boxes selected and removed at once: each one, and those reached from it
+	const removeAll = (gone: string[]) => setState(s => {
+		const next = gone.reduce(withoutTable, s)
 		const positions = next.positions && Object.fromEntries(Object.entries(next.positions).filter(([name]) => name === next.root || next.tables.some(t => t.entity === name)))
 		return { ...next, positions }
 	})
@@ -93,7 +100,7 @@ export const QueryWizard: React.FC<QueryWizardProps> = ({ api, schema, domain, i
 				<div className="lw-wizard-start">
 					<label className="lw-wizard-field">
 						<span>{m.startFrom}</span>
-						<select aria-label={m.startFrom} value={state.root} onChange={e => { setState(emptyWizard(e.target.value)); setNotice(undefined) }}>
+						<select aria-label={m.startFrom} value={state.root} onChange={e => { setState(emptyWizard(e.target.value)); setNotice(undefined); setUnread([]) }}>
 							{names.map(name => <option key={name} value={name}>{name}</option>)}
 						</select>
 					</label>
@@ -109,7 +116,7 @@ export const QueryWizard: React.FC<QueryWizardProps> = ({ api, schema, domain, i
 					{state.root && (
 						<DomainDiagram key={state.root} api={api} schema={schema} theme={theme} locale={locale as Locale | undefined} entities={entities} keep={state.root}
 							positions={state.positions} onPositionsChange={positions => setState(s => ({ ...s, positions }))}
-							fieldSelection={{ chosen: state.fields, onToggle: toggle }} onAddEntities={addEntities} onRemoveEntity={remove} detail="all" height="100%" layout={layout} />
+							fieldSelection={{ chosen: state.fields, onToggle: toggle }} onAddEntities={addEntities} onRemoveEntity={remove} onRemoveEntities={removeAll} detail="all" height="100%" layout={layout} />
 					)}
 					{notice && <div className="lw-hint lw-error-text" role="status">{notice}</div>}
 				</div>
@@ -121,6 +128,12 @@ export const QueryWizard: React.FC<QueryWizardProps> = ({ api, schema, domain, i
 						</div>
 					</div>
 					{edited && <div className="lw-hint lw-warning-text" role="alert">{m.edited}</div>}
+					{unread.length > 0 && (
+						<div className="lw-hint lw-warning-text lw-wizard-unread" role="status">
+							{m.unread}
+							<ul>{unread.map((part, i) => <li key={i}><code>{part}</code></li>)}</ul>
+						</div>
+					)}
 					<div className="lw-wizard-field">
 						<span>{m.filter}</span>
 						<div className="lw-wizard-filter">
