@@ -15,6 +15,41 @@
 La imagen `flaviorita/data-gateway-ide` sigue existiendo: el escritorio es otra forma de distribuir la misma app, para
 quien quiere un IDE local (como un IDE de bases de datos) sin levantar un contenedor.
 
+### 1.1 Las formas de usar el IDE
+
+El mismo IDE (mismo código, misma versión, D6) se usa de dos formas, y la gateway en ningún caso sirve la UI:
+
+| | Escritorio | Web |
+| --- | --- | --- |
+| Qué es | la app de Electron, con el proxy dentro | la imagen `flaviorita/data-gateway-ide`: la app y su backend proxy (Node) |
+| Cómo se obtiene | se descarga de la pestaña IDE de la wiki (§5) | se despliega la imagen (`docker run`, compose, Kubernetes) |
+| Quién la usa | una persona, en su máquina | quienes lleguen a la URL donde se publica |
+| Actualización | sola en Windows y AppImage; aviso en macOS y `.deb` (§4.4) | se despliega la imagen nueva |
+| Desde dónde llega al `management` | desde la máquina de la persona | desde la red del contenedor |
+
+**Lo que se despliega en cada caso:**
+
+| Se despliega | Para | `management` |
+| --- | --- | --- |
+| Solo la gateway, sin `management` | producción con los esquemas en los volúmenes: sin IDE ni administración | sin puerto |
+| La gateway y la imagen web del IDE | un IDE compartido en el navegador | solo en la red interna, nunca publicado: lo alcanza el contenedor del IDE |
+| Solo la gateway, con `management` | el IDE de escritorio (o la imagen web corriendo en la máquina de la persona) | la máquina de la persona tiene que llegar al puerto (abajo) |
+
+**Cómo llega el escritorio a un `management` que no está en su máquina**, sin publicarlo abierto (escribe los esquemas
+y sus variables y ejecuta DDL: es la puerta de la administración, aunque pida credencial):
+
+| Dónde corre la gateway | Cómo llega | `management` publicado |
+| --- | --- | --- |
+| en la misma máquina (desarrollo) | `localhost:9090` | — |
+| en una red interna o con VPN | `host-interno:9090` | solo hacia esa red |
+| en un servidor, sin VPN | túnel SSH, `ssh -L 9090:localhost:9090 servidor`, y la connection a `localhost:9090` | solo en el loopback del servidor |
+| en Kubernetes | `kubectl port-forward svc/data-gateway 9090`, y la connection a `localhost:9090` | un `Service` interno, sin ingress |
+
+Las pestañas REST, WebSocket y MCP llegan a los puertos que la gateway dice en `/transports`, sobre el mismo host de la
+connection; con un túnel, sus URLs se fijan en la connection ("Otras URLs de sus transportes") o se tunelizan también.
+
+La guía de la wiki (`Deploying it`, que se muda a `/ide/Guide/` en §5.6) explica estas combinaciones.
+
 ## 2. Lo que ya hay y se reutiliza
 
 | Pieza | Dónde | Qué aporta al escritorio |
@@ -325,8 +360,10 @@ Sin binarios en la wiki: todos los enlaces son `asset.browser_download_url`.
 4. **Instalación:** la nota de Gatekeeper y SmartScreen (§4.3) y `chmod +x` del AppImage.
 5. **En un contenedor:** para el IDE web, la imagen `flaviorita/data-gateway-ide`, el `docker run` y el enlace a
    "Deploying it" de la guía.
+6. **Cómo llega a una gateway:** las combinaciones de §1.1, en corto (la gateway sola con `management` y el túnel SSH
+   para el escritorio; la imagen junto a la gateway para un IDE compartido), con el enlace a la guía.
 
-Los puntos 1, 4 y 5 son Markdown: se ven aunque la API de GitHub no responda o no haya JavaScript.
+Los puntos 1, 4, 5 y 6 son Markdown: se ven aunque la API de GitHub no responda o no haya JavaScript.
 
 ### 5.6 La guía de uso se muda
 
