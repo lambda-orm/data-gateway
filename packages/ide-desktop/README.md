@@ -2,9 +2,9 @@
 
 The [data-gateway-ide](../ide/README.md) as a desktop app for Linux, Windows and macOS, built with
 [Electron](https://www.electronjs.org/): the same app (`packages/ide/dist`) and the same proxy
-(`packages/ide/server/server.mjs`), inside. Download it from the IDE page of the wiki,
-[lambda-orm.github.io/wiki/ide](https://lambda-orm.github.io/wiki/ide/), or the releases `ide-v<version>` of this
-repository.
+(`packages/ide/server/server.mjs`), inside. Download it from the
+[releases `ide-v<version>`](https://github.com/lambda-orm/data-gateway/releases?q=ide-v&expanded=true) of this
+repository (and, once the wiki publishes it, from its IDE page).
 
 - **No server to deploy:** the app connects from your machine to the `management` port of each gateway (a VPN, an SSH
   tunnel, `kubectl port-forward`: see "Where the IDE runs" in the guide).
