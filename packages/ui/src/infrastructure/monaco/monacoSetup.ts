@@ -29,6 +29,11 @@ export const loadMonaco = (): Promise<MonacoApi> => {
 			})
 			ts.setDiagnosticsOptions({ noSemanticValidation: false, noSyntaxValidation: false, diagnosticCodesToIgnore: IGNORED_DIAGNOSTICS })
 			ts.addExtraLib(QUERYABLE_DECLARATIONS, 'ts:lambdaorm/queryable.d.ts')
+			// the suggestions are λORM's (domain/lambdaCompletion: the types of the properties, the functions of each type);
+			// the errors, the hovers and the help of the signatures stay TypeScript's
+			const modes = { completionItems: false, hovers: true, documentSymbols: true, definitions: true, references: true, documentHighlights: true, rename: true, diagnostics: true, documentRangeFormattingEdits: true, signatureHelp: true, onTypeFormattingEdits: true, codeActions: true, inlayHints: true }
+			ts.setModeConfiguration(modes)
+			monaco.languages.typescript.javascriptDefaults.setModeConfiguration(modes)
 			return monaco
 		})
 	}

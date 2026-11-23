@@ -211,10 +211,47 @@ describe('admin over REST (inline)', () => {
 		expect(started.body.valid).toBe(true)
 	})
 
+	test('the state of the UI: each credential its own, in .data-gateway/state.sqlite; null forgets it', async () => {
+		expect((await call(base, '/admin/session', { method: 'GET', headers: READER })).body).toEqual({ state: null })
+		const state = { version: 1, tabs: [{ kind: 'query', title: 'Query 1', initial: { mode: 'query', query: 'Products.map(p => p.name)' } }], active: 0, expanded: ['s:northwind'] }
+		const saved = await call(base, '/admin/session', { method: 'PUT', body: { state }, headers: READER })
+		expect(saved).toMatchObject({ status: 200, body: { updatedAt: expect.any(String) } })
+		expect((await call(base, '/admin/session', { method: 'GET', headers: READER })).body).toEqual({ state, updatedAt: saved.body.updatedAt })
+		// another credential doesn't see it
+		expect((await call(base, '/admin/session', { method: 'GET', headers: ANALYST })).body).toEqual({ state: null })
+		expect((await call(base, '/admin/session', { method: 'PUT', body: { state: [1] }, headers: READER })).status).toBe(400)
+		expect(fs.existsSync(path.join(root, '.data-gateway/state.sqlite'))).toBe(true)
+		await call(base, '/admin/session', { method: 'PUT', body: { state: null }, headers: READER })
+		expect((await call(base, '/admin/session', { method: 'GET', headers: READER })).body).toEqual({ state: null })
+		// without a credential, nothing
+		expect((await call(base, '/admin/session', { method: 'GET' })).status).toBe(401)
+	})
+
+	test('expressions: the language of 3xpr, the variables of a stage condition, one checked; a bad condition in the schema', async () => {
+		const language = await call(base, '/admin/expressions', { method: 'GET', headers: ADMIN })
+		expect(language.status).toBe(200)
+		expect(language.body.functions).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'in', returnType: 'boolean' })]))
+		expect(language.body.contexts.stageSource.map((v: any) => v.name)).toEqual(['entity', 'action', 'category', 'type', 'read', 'write', 'dml', 'ddl'])
+		const right = await call(base, '/admin/expressions/check', { body: { expression: 'entity.in(["A","B"]) && read' }, headers: ADMIN })
+		expect(right.body).toEqual({ valid: true, variables: ['entity', 'read'], unknown: [] })
+		const unknown = await call(base, '/admin/expressions/check', { body: { expression: 'entity == "A" && foo' }, headers: ADMIN })
+		expect(unknown.body).toMatchObject({ valid: false, unknown: ['foo'] })
+		const broken = await call(base, '/admin/expressions/check', { body: { expression: 'entity.in(["A"' }, headers: ADMIN })
+		expect(broken.body).toMatchObject({ valid: false, error: expect.stringContaining('incomplete') })
+		const stage = 'domain: { entities: [] }\ninfrastructure:\n  sources:\n    - { name: a, dialect: PostgreSQL }\n  stages:\n    - name: default\n      sources:\n        - name: a\n          condition: entity.in(["A"\n'
+		const checked = await call(base, '/admin/validate', { body: { text: stage }, headers: ADMIN })
+		expect(checked.body).toMatchObject({ valid: false, issues: [expect.objectContaining({ severity: 'error', line: 9, message: expect.stringContaining('default.a: the condition incomplete') })] })
+	})
+
 	test('workspaces created and removed (to .trash); bad routes and the ones taken refused', async () => {
 		const created = await call(base, '/admin/workspaces', { body: { path: 'sales/v1' }, headers: ADMIN })
 		expect(created).toMatchObject({ status: 201, body: { path: 'sales/v1', version: expect.any(String) } })
 		expect(fs.existsSync(path.join(root, 'sales/v1/lambdaORM.yaml'))).toBe(true)
+		// with a name and a description: on top of the new file, its comment kept
+		const named = await call(base, '/admin/workspaces', { body: { path: 'shop', name: 'Shop', description: 'The shop: products and orders' }, headers: ADMIN })
+		expect(named.status).toBe(201)
+		const shop = fs.readFileSync(path.join(root, 'shop/lambdaORM.yaml'), 'utf8')
+		expect(shop).toMatch(/^# A schema of λORM[^\n]*\nname: Shop\ndescription: "The shop: products and orders"\ndomain:/)
 		expect((await call(base, '/admin/workspaces', { body: { path: 'sales/v1' }, headers: ADMIN })).status).toBe(409)
 		expect((await call(base, '/admin/workspaces', { body: { path: 'admin' }, headers: ADMIN })).status).toBe(400)
 		expect((await call(base, '/admin/workspaces', { body: { path: 'iot' }, headers: ADMIN })).body.message).toMatch(/prefix/)

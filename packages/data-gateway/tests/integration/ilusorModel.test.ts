@@ -1,6 +1,6 @@
 // A large real model (Ilusor's Cloud: 192 entities in 16 sources, relations of several fields) on the whole gateway,
 // without its databases: the schema, plan and the errors of a query a person or an LLM makes by hand (L41). Copy of
-// ~/ilusor/dev/cloud/data-gateway/workspace/lambdaORM.yaml in tests/fixtures/ilusor (only the model; its connections
+// ~/ilusor/dev/ci/deploy/files/data-gateway/workspace/lambdaORM.yaml in tests/fixtures/ilusor (only the model; its connections
 // are variables, given here unreachable).
 import fs from 'fs'
 import os from 'os'

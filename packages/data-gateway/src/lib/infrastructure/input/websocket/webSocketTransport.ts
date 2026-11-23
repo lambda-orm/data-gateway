@@ -12,6 +12,7 @@ import { Principal } from '../../../domain/auth/principal'
 import { RpcCallError } from '../../../domain/errors/gatewayError'
 import { toHttpError } from '../http/httpErrors'
 import { Transport } from '../transport'
+import { chooseProtocol, headersFromProtocols } from '../../../domain/auth/protocolCredential'
 const YAML = require('js-yaml')
 
 export interface WebSocketTransportOptions {
@@ -65,7 +66,8 @@ export class WebSocketTransport implements Transport {
 	private readonly asyncapi: unknown
 
 	constructor (private readonly options: WebSocketTransportOptions, private readonly deps: WebSocketTransportDeps) {
-		this.wss = new WebSocketServer({ noServer: true, maxPayload: options.maxPayload })
+		// a browser sends its credential in the subprotocols (it can't send headers): lambdaorm is answered
+		this.wss = new WebSocketServer({ noServer: true, maxPayload: options.maxPayload, handleProtocols: chooseProtocol })
 		this.dispatcher = deps.dispatcher ?? new RpcDispatcher()
 		this.asyncapi = options.asyncapiEnabled ? this.loadAsyncapi() : undefined
 		deps.directory.onSchemasChange(() => this.closeRemoved())
@@ -132,7 +134,8 @@ export class WebSocketTransport implements Transport {
 		const url = new URL(req.url ?? '/', 'http://localhost')
 		const base = this.options.basePath
 		const send = (status: number, body: unknown, type = 'application/json') => {
-			res.writeHead(status, { 'Content-Type': type })
+			// its documents and status are read from any page (an IDE elsewhere), as the http transport answers
+			res.writeHead(status, { 'Content-Type': type, 'Access-Control-Allow-Origin': '*' })
 			res.end(typeof body === 'string' ? body : JSON.stringify(body))
 		}
 		if (req.method === 'GET' && url.pathname === `${base}/status`) return send(200, this.status())
@@ -159,7 +162,7 @@ export class WebSocketTransport implements Transport {
 		let principal: Principal
 		try {
 			const authenticator = schema ? schema.authenticator(TRANSPORT_NAME) : this.deps.rootAuthenticator
-			const result = await authenticator.authenticate(req.headers)
+			const result = await authenticator.authenticate({ ...headersFromProtocols(req.headers['sec-websocket-protocol']), ...req.headers })
 			if (!result.valid || !result.principal) return this.reject(socket, 401, result.reason ?? 'a valid credential is required')
 			principal = result.principal
 		} catch (error) {

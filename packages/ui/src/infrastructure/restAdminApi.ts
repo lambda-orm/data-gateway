@@ -1,4 +1,4 @@
-import { AdminApiPort, AdminCapabilities, CommandName, CommandPreview, CommandsSummary, Job, SchemaIssue, SchemaPatch, SchemaVariable, WorkbenchProblem } from '../application/ports'
+import { AdminApiPort, AdminCapabilities, CommandName, CommandPreview, CommandsSummary, ExpressionCheck, ExpressionLanguage, Job, SchemaIssue, SchemaPatch, SchemaVariable, WorkbenchProblem } from '../application/ports'
 import { SavedItem } from '../domain/savedItems'
 import { GatewayRequestError, HeadersProvider } from './restQueryApi'
 
@@ -89,8 +89,16 @@ export class RestAdminApi implements AdminApiPort {
 		return (await this.request('/validate', { body: { text } })).body as { valid: boolean, issues: SchemaIssue[] }
 	}
 
-	public async createWorkspace (path: string, copyOf?: string) {
-		return (await this.request('/workspaces', { body: copyOf ? { path, copyOf } : { path } })).body as { path: string, version: string }
+	public async expressionLanguage () {
+		return (await this.request('/expressions')).body as ExpressionLanguage
+	}
+
+	public async checkExpression (expression: string, context = 'stageSource') {
+		return (await this.request('/expressions/check', { body: { expression, context } })).body as ExpressionCheck
+	}
+
+	public async createWorkspace (path: string, copyOf?: string, about: { name?: string, description?: string } = {}) {
+		return (await this.request('/workspaces', { body: { path, ...(copyOf ? { copyOf } : {}), ...(about.name ? { name: about.name } : {}), ...(about.description ? { description: about.description } : {}) } })).body as { path: string, version: string }
 	}
 
 	public async removeWorkspace (path: string) {

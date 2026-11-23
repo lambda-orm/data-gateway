@@ -2,7 +2,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 // The REST transport over a real socket, with the real facade and use cases on fake λORM ports.
-import { HttpTransport } from '../../src/lib/infrastructure/input/http/httpTransport'
+import { HttpTransport, TransportInfo } from '../../src/lib/infrastructure/input/http/httpTransport'
 import { ApiKeyAuthenticator, BearerAuthenticator } from '../../src/lib/infrastructure/output/auth/authenticators'
 import { NoMetrics, PromClientMetrics } from '../../src/lib/infrastructure/output/metrics/promClientMetrics'
 import { ConsoleLogger } from '../../src/lib/infrastructure/output/logger/loggers'
@@ -18,7 +18,7 @@ const credentials = [
 const agent = { Authorization: 'Bearer agent-token' }
 const backend = { Authorization: 'Bearer backend-token' }
 
-const start = async (fixture: GatewayFixture, options: Partial<{ basePath: string, rateLimit: { windowMs: number, max: number }, metrics: boolean, requestBodySize: string, uiDir: string, authenticator: AuthenticatorPort }> = {}) => {
+const start = async (fixture: GatewayFixture, options: Partial<{ basePath: string, rateLimit: { windowMs: number, max: number }, metrics: boolean, requestBodySize: string, uiDir: string, authenticator: AuthenticatorPort, transports: TransportInfo[] }> = {}) => {
 	const transport = new HttpTransport({
 		port: 0,
 		host: '127.0.0.1',
@@ -27,7 +27,8 @@ const start = async (fixture: GatewayFixture, options: Partial<{ basePath: strin
 		rateLimit: options.rateLimit ?? { windowMs: 1000, max: 0 },
 		swaggerEnabled: true,
 		uiEnabled: options.uiDir !== undefined,
-		uiDir: options.uiDir
+		uiDir: options.uiDir,
+		transports: options.transports
 	}, {
 		directory: new InlineSchemaDirectory([{
 			path: '', gateway: fixture.gateway, mcp: undefined as any, transports: ['http'], authenticators: { http: options.authenticator ?? new BearerAuthenticator(credentials) }
@@ -155,6 +156,23 @@ describe('http transport options', () => {
 			expect((await call(base.replace('/api', ''), '/ping')).status).toBe(404)
 			expect((await call(base, '/ping')).status).toBe(200)
 			expect((await call(base, '/ping')).status).toBe(429)
+		} finally {
+			await transport.stop()
+		}
+	})
+
+	test('its transports and its OpenAPI document, without a credential (an IDE finds there its WebSocket and MCP)', async () => {
+		const transports: TransportInfo[] = [
+			{ name: 'http', port: 9291, basePath: '/data-gateway', docs: '/openapi.json' },
+			{ name: 'webSocket', port: 9293, basePath: '', schemaPath: '/{schema}', docs: '/asyncapi.json' }
+		]
+		const { transport, base } = await start(fakeGateway(), { transports })
+		try {
+			expect(await (await fetch(`${base}/transports`)).json()).toEqual(transports)
+			const document = await (await fetch(`${base}/openapi.json`)).json()
+			expect(document.openapi).toMatch(/^3\./)
+			expect(document.info.version).toBe('9.9.9')
+			expect(Object.keys(document.paths).length).toBeGreaterThan(5)
 		} finally {
 			await transport.stop()
 		}

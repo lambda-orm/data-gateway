@@ -27,10 +27,23 @@ export interface HttpTransportOptions {
 	requestBodySize: string
 	rateLimit: { windowMs: number, max: number }
 	swaggerEnabled: boolean
-	/** Serve the query UI (packages/data-gateway/ui-app) at {basePath}/ui */
+	/** Serve the UI (packages/data-gateway-ide, embedded mode) at {basePath}/ui */
 	uiEnabled?: boolean
 	/** Folder of the built UI (default: ui next to this file) */
 	uiDir?: string
+	/** The transports of this gateway, told at GET {basePath}/transports (an IDE finds there its WebSocket and MCP) */
+	transports?: TransportInfo[]
+}
+
+/** A transport of the gateway as a client sees it: where it listens (its port; behind a proxy its public URL differs) */
+export interface TransportInfo {
+	name: 'http' | 'webSocket' | 'mcpHttp' | 'mcpWebSocket'
+	port: number
+	basePath: string
+	/** where its document is, relative to its base path: openapi.json (http), asyncapi.json (webSocket, mcpWebSocket) */
+	docs?: string
+	/** how a schema is reached: {basePath}/{schema} (webSocket, mcpWebSocket), {basePath}/{schema}/mcp (mcpHttp) */
+	schemaPath?: string
 }
 
 export interface HttpTransportDeps {
@@ -135,6 +148,8 @@ export class HttpTransport implements Transport {
 			res.status(200).type(contentType).send(body)
 		})
 		app.get(`${base}/schemas`, this.handle(async () => this.deps.directory.states()))
+		// its transports (no credential: as /schemas, what a client needs to find them)
+		if (this.options.transports) app.get(`${base}/transports`, this.handle(async () => this.options.transports))
 		if (this.deps.admin) app.use(`${base}/admin`, adminRouter(this.deps.admin.service, this.authenticate(this.deps.admin.authenticator), this.deps.admin.commands, this.deps.directory))
 		// the schemas: the router of the moment (a schema added or removed replaces it)
 		app.use((req, res, next) => this.schemaRouter(req, res, next))
@@ -358,6 +373,8 @@ export class HttpTransport implements Transport {
 		document.security = secured.security
 		const base = this.options.basePath
 		// serveFiles: the document of this transport (serve keeps one for the whole process: the last one set up)
+		// the document itself (an IDE shows it with the credential of its connection)
+		app.get(`${base}/openapi.json`, (_req, res) => { res.json(document) })
 		app.use(`${base}/api-docs`, swaggerUi.serveFiles(document), swaggerUi.setup(document))
 		app.use(`${base}/doc`, swaggerUi.serveFiles(document), swaggerUi.setup(document))
 		app.get(base || '/', (_req, res) => res.redirect(`${base}/doc/`))

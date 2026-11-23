@@ -27,7 +27,7 @@ describe('schema routes', () => {
 		expect(schemaPathsIssues(['iot/v1', 'iot/v2', 'accounts/v1'])).toEqual([])
 		expect(schemaPathsIssues(['iot/v1', 'iot/v1'])).toEqual(['schema path "iot/v1" is used by two schemas'])
 		expect(schemaPathsIssues(['iot', 'iot/v1'])).toEqual(['schema path "iot" is a prefix of "iot/v1"'])
-		expect(schemaPathsIssues(['', 'iot'])).toEqual(['a schema at the root must be the only schema (the others would be under its routes)'])
+		expect(schemaPathsIssues(['', 'iot'])).toEqual(['a schema at the root must be the only schema (the others would be under its routes): move it to a folder of the workspace to add others'])
 		expect(schemaPathsIssues(['iot', 'iotx'])).toEqual([])
 	})
 })

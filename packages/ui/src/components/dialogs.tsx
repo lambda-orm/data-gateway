@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
+import { ArrowDownToLine, ArrowUpToLine, Boxes, Braces, ChartNetwork, ChevronRight, Code, Database, DatabasePlus, Download, Ellipsis, Eraser, FileCode, FileCog, FilePlus, FileSpreadsheet, FileText, Folder, FolderCode, FolderDown, FolderInput, FolderKanban, FolderOutput, FolderPlus, GitCompareArrows, HardDriveDownload, HardDriveUpload, Info, KeyRound, Layers, ListTree, Merge, PanelLeft, Pencil, Plug, Plus, Route, ScanSearch, Server, Settings2, SquareArrowOutUpRight, SquareTerminal, Table2, Trash2, Upload, Workflow, X, Cable, Copy, Hand, Library, MousePointer2, Network, TriangleAlert, WandSparkles, ZoomIn, ZoomOut, type LucideIcon } from 'lucide-react'
 import { createPortal } from 'react-dom'
 
 /** A modal: the page behind can't be used; Escape or Cancel closes it. On the body: no panel clips it or covers it */
@@ -89,36 +90,78 @@ export const ConfirmDialog: React.FC<{ title: string, message: string, confirm: 
 		</Modal>
 	)
 
-const icon = (path: React.ReactNode) => {
-	const Icon: React.FC = () => (
-		<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">{path}</svg>
-	)
+/**
+ * The icons of the workbench: Lucide (https://lucide.dev, ISC), one stroke in currentColor, so they take the color of the
+ * theme (light or dark) and of the state of their button (hover, disabled). Each one imported by name: the bundle keeps
+ * only these.
+ */
+const icon = (Glyph: LucideIcon) => {
+	const Icon: React.FC<{ size?: number }> = ({ size = 16 }) => <Glyph size={size} strokeWidth={1.75} aria-hidden="true" focusable="false" />
 	return Icon
 }
 
 export const Icons = {
-	folder: icon(<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" />),
-	folderPlus: icon(<><path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><path d="M12 11v5M9.5 13.5h5" /></>),
-	query: icon(<><path d="M6 3h9l4 4v14H6z" /><path d="M9 12h7M9 16h5" /></>),
-	queryPlus: icon(<><path d="M6 3h9l4 4v14H6z" /><path d="M12.5 11v6M9.5 14h6" /></>),
-	diagram: icon(<><rect x="3" y="3" width="7" height="6" rx="1" /><rect x="14" y="15" width="7" height="6" rx="1" /><path d="M6.5 9v4.5h11V15" /></>),
-	diagramPlus: icon(<><rect x="3" y="3" width="7" height="6" rx="1" /><path d="M6.5 9v4.5h5M17.5 12v6M14.5 15h6" /></>),
-	entity: icon(<><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M4 9h16" /></>),
-	schema: icon(<><ellipse cx="12" cy="6" rx="8" ry="3" /><path d="M4 6v12c0 1.7 3.6 3 8 3s8-1.3 8-3V6M4 12c0 1.7 3.6 3 8 3s8-1.3 8-3" /></>),
-	yaml: icon(<><path d="M6 3h9l4 4v14H6z" /><path d="M9 11l2 3v3M13 11l-2 3" /></>),
-	edit: icon(<path d="M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4" />),
-	trash: icon(<path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3" />),
-	chevron: icon(<path d="M9 6l6 6-6 6" />),
-	upload: icon(<path d="M12 16V4M7 9l5-5 5 5M4 20h16" />),
-	download: icon(<path d="M12 4v12M7 11l5 5 5-5M4 20h16" />),
-	open: icon(<><path d="M14 4h6v6M20 4l-9 9" /><path d="M19 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V6a1 1 0 0 1 1-1h5" /></>),
-	plus: icon(<path d="M12 5v14M5 12h14" />),
-	panel: icon(<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16" /></>),
-	terminal: icon(<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M7 9l3 3-3 3M13 15h4" /></>)
+	folder: icon(Folder),
+	folderPlus: icon(FolderPlus),
+	query: icon(FileCode),
+	queryPlus: icon(FilePlus),
+	diagram: icon(Workflow),
+	diagramPlus: icon(ChartNetwork),
+	entity: icon(Table2),
+	schema: icon(Database),
+	yaml: icon(FileText),
+	edit: icon(Pencil),
+	trash: icon(Trash2),
+	chevron: icon(ChevronRight),
+	upload: icon(Upload),
+	download: icon(Download),
+	open: icon(SquareArrowOutUpRight),
+	plus: icon(Plus),
+	panel: icon(PanelLeft),
+	terminal: icon(SquareTerminal),
+	compare: icon(GitCompareArrows),
+	exportData: icon(HardDriveDownload),
+	saveData: icon(FolderDown),
+	importData: icon(HardDriveUpload),
+	push: icon(ArrowUpToLine),
+	pull: icon(ArrowDownToLine),
+	drop: icon(Eraser),
+	introspect: icon(ScanSearch),
+	incorporate: icon(Merge),
+	code: icon(Code),
+	info: icon(Info),
+	more: icon(Ellipsis),
+	close: icon(X),
+	schemaPlus: icon(DatabasePlus),
+	exportFolder: icon(FolderOutput),
+	importFolder: icon(FolderInput),
+	config: icon(FileCog),
+	domain: icon(Boxes),
+	enums: icon(ListTree),
+	application: icon(Settings2),
+	infrastructure: icon(Server),
+	mappings: icon(Route),
+	sources: icon(Plug),
+	stages: icon(Layers),
+	variables: icon(KeyRound),
+	data: icon(FileSpreadsheet),
+	src: icon(FolderCode),
+	model: icon(Braces),
+	projects: icon(FolderKanban),
+	metadata: icon(Library),
+	zoomIn: icon(ZoomIn),
+	zoomOut: icon(ZoomOut),
+	pointer: icon(MousePointer2),
+	hand: icon(Hand),
+	copy: icon(Copy),
+	format: icon(WandSparkles),
+	connection: icon(Cable),
+	connections: icon(Network),
+	warning: icon(TriangleAlert)
 }
 
 /** A small button that opens a list of actions; a click outside or Escape closes it */
-export const MenuButton: React.FC<{ label: string, icon: React.ReactNode, items: { label: string, icon?: React.ReactNode, onClick: () => void }[] }> = ({ label, icon: content, items }) => {
+export const MenuButton: React.FC<{ label: string, icon: React.ReactNode, items: { label: string, icon?: React.ReactNode, onClick: () => void }[], disabled?: boolean, text?: boolean }> = ({ label, icon: content, items, disabled, text }) => {
 	const [open, setOpen] = useState(false)
 	const box = useRef<HTMLSpanElement>(null)
 	useEffect(() => {
@@ -131,7 +174,9 @@ export const MenuButton: React.FC<{ label: string, icon: React.ReactNode, items:
 	}, [open])
 	return (
 		<span className="lw-menu" ref={box}>
-			<button className="lw-icon-button" aria-label={label} title={label} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>{content}</button>
+			<button className={text ? 'lw-menu-text' : 'lw-icon-button'} aria-label={label} title={label} aria-haspopup="menu" aria-expanded={open} disabled={disabled} onClick={() => setOpen(!open)}>
+				{content}{text && <> {label} ▾</>}
+			</button>
 			{open && (
 				<span role="menu" className="lw-menu-list">
 					{items.map(item => (
@@ -236,7 +281,7 @@ export const DiagramDialog: React.FC<{
 	)
 }
 
-export interface NewSchemaTexts { title: string, route: string, routeHint: string, startFrom: string, empty: string, copyOf: string, create: string, cancel: string }
+export interface NewSchemaTexts { title: string, route: string, routeHint: string, startFrom: string, empty: string, copyOf: string, create: string, cancel: string, name: string, description: string, rootTaken: string }
 
 /** A new schema: its route and what it starts from (empty, or a copy of another one) */
 export const NewSchemaDialog: React.FC<{
@@ -244,18 +289,22 @@ export const NewSchemaDialog: React.FC<{
 	schemas: string[]
 	theme?: 'light' | 'dark'
 	/** a text it throws is shown and the dialog stays */
-	onSubmit: (value: { path: string, copyOf?: string }) => Promise<void>
+	onSubmit: (value: { path: string, copyOf?: string, name?: string, description?: string }) => Promise<void>
 	onClose: () => void
 }> = ({ texts, schemas, theme, onSubmit, onClose }) => {
 	const [path, setPath] = useState('')
 	const [copyOf, setCopyOf] = useState('')
+	const [name, setName] = useState('')
+	const [description, setDescription] = useState('')
+	// a schema at the root is the only one the gateway serves: the others would be under its routes
+	const rootTaken = schemas.includes('')
 	const [error, setError] = useState<string>()
 	const [busy, setBusy] = useState(false)
 	const send = async (e: React.FormEvent) => {
 		e.preventDefault()
 		setBusy(true)
 		try {
-			await onSubmit({ path: path.trim(), copyOf: copyOf === '' ? undefined : copyOf })
+			await onSubmit({ path: path.trim(), copyOf: copyOf === '' ? undefined : copyOf, name: name.trim() || undefined, description: description.trim() || undefined })
 			onClose()
 		} catch (err: any) {
 			setError(err?.message ?? String(err))
@@ -268,16 +317,19 @@ export const NewSchemaDialog: React.FC<{
 			<form className="lw-form" onSubmit={send}>
 				<label>{texts.route}<input aria-label="route" value={path} placeholder="sales/v1" onChange={e => { setPath(e.target.value); setError(undefined) }} maxLength={200} /></label>
 				<small className="lw-type">{texts.routeHint}</small>
+				<label>{texts.name}<input aria-label={texts.name} value={name} onChange={e => setName(e.target.value)} maxLength={200} /></label>
+				<label>{texts.description}<textarea aria-label={texts.description} rows={3} value={description} onChange={e => setDescription(e.target.value)} /></label>
 				<label>{texts.startFrom}
 					<select aria-label="start from" value={copyOf} onChange={e => setCopyOf(e.target.value)}>
 						<option value="">{texts.empty}</option>
 						{schemas.map(s => <option key={s} value={s}>{texts.copyOf.replace('{name}', s || '/')}</option>)}
 					</select>
 				</label>
+				{rootTaken && <div className="lw-notice" role="alert">{texts.rootTaken}</div>}
 				{error && <div className="lw-notice" role="alert">{error}</div>}
 				<div className="lw-form-actions">
 					<button type="button" onClick={onClose}>{texts.cancel}</button>
-					<button type="submit" className="lw-primary" disabled={busy || path.trim() === ''}>{texts.create}</button>
+					<button type="submit" className="lw-primary" disabled={busy || path.trim() === '' || rootTaken}>{texts.create}</button>
 				</div>
 			</form>
 		</Modal>

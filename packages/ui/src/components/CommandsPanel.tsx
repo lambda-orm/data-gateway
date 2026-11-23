@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useState } from 'react'
 import { AdminApiPort, CommandName, CommandPreview, CommandsSummary, Job } from '../application/ports'
 import { adminMessagesOf, format } from '../domain/adminI18n'
 import { toYaml } from '../domain/results'
+import { Icons, Modal } from './dialogs'
 
 export interface CommandsPanelProps {
 	admin: AdminApiPort
@@ -15,6 +16,8 @@ export interface CommandsPanelProps {
 	canBuild?: boolean
 	/** the heading (the tab of a schema: its name); Commands by default */
 	title?: string
+	/** shown under the toolbar, before what the commands answer (what the schema is) */
+	children?: React.ReactNode
 }
 
 const PREVIEWED: CommandName[] = ['push', 'drop', 'import', 'pull', 'introspect', 'incorporate']
@@ -42,8 +45,10 @@ const download = (name: string, value: unknown) => {
  * job; push, drop and import first show what they will do (the sentences by source, the rows of each entity) and run
  * exactly that. The last jobs, with their result.
  */
-export const CommandsPanel: React.FC<CommandsPanelProps> = ({ admin, schema, canSave = false, locale, pollMs = 1000, canBuild = false, title }) => {
+export const CommandsPanel: React.FC<CommandsPanelProps> = ({ admin, schema, canSave = false, locale, pollMs = 1000, canBuild = false, title, children }) => {
 	const [language, setLanguage] = useState<'node' | 'client-node'>('node')
+	// the form of a command that needs a file (import, introspect, incorporate) or a choice (build)
+	const [form, setForm] = useState<'import' | 'introspect' | 'incorporate' | 'build'>()
 	const [built, setBuilt] = useState<{ path: string, written?: string }[]>()
 	const m = adminMessagesOf(locale)
 	const [summary, setSummary] = useState<CommandsSummary>()
@@ -53,7 +58,6 @@ export const CommandsPanel: React.FC<CommandsPanelProps> = ({ admin, schema, can
 	const [preview, setPreview] = useState<CommandPreview>()
 	const [force, setForce] = useState(false)
 	const [typed, setTyped] = useState('')
-	const [save, setSave] = useState(false)
 	const [data, setData] = useState<unknown>()
 	// introspect, incorporate: the data to read the entities from, and their entity
 	const [source, setSource] = useState<unknown>()
@@ -121,59 +125,91 @@ export const CommandsPanel: React.FC<CommandsPanelProps> = ({ admin, schema, can
 	const can = (command: CommandName) => !!summary?.can[command] && !busy && !anyRunning
 	const confirmable = preview && (preview.command !== 'drop' || typed === preview.stage)
 
+	// a command of the toolbar: its icon, its name to be read, its description on hover
+	const tool = (command: string, label: string, icon: React.ReactNode, enabled: boolean, onClick: () => void) => (
+		<button type="button" className="lw-tool" aria-label={label} title={`${label} — ${(m as any)[`cmd_${command}`] ?? ''}`} disabled={!enabled} onClick={onClick}>{icon}</button>
+	)
+	const downloadZip = () => attempt(async () => {
+		const blob = await admin.buildZip(schema, language)
+		const url = URL.createObjectURL(blob)
+		const link = document.createElement('a')
+		link.href = url
+		link.download = `${schema.replace(/\//g, '_') || 'root'}-${language}.zip`
+		document.body.appendChild(link)
+		link.click()
+		link.remove()
+		setTimeout(() => URL.revokeObjectURL(url), 1000)
+		setForm(undefined)
+	})
+
 	return (
 		<section className="lw-commands" aria-label={`${m.commands} — ${schema || '/'}`}>
-			<div className="lw-toolbar">
+			<div className="lw-toolbar lw-command-toolbar" role="toolbar" aria-label={m.commands}>
 				<strong>{title ?? m.commands}</strong>
-				<label>{m.stage}{' '}
+				<label className="lw-type">{m.stage}{' '}
 					<select aria-label="stage" value={stage} onChange={e => { setStage(e.target.value); setPreview(undefined) }}>
 						{(summary?.stages ?? []).map(s => <option key={s} value={s}>{s}</option>)}
 					</select>
 				</label>
-			</div>
-			<div className="lw-command-list">
-				<button type="button" disabled={!can('fetch')} onClick={() => start('fetch')}>fetch</button>
-				<span className="lw-command-group">
-					<button type="button" disabled={!can('export')} onClick={() => start('export', { save })}>export</button>
-					{canSave && <label className="lw-type"><input type="checkbox" checked={save} onChange={e => setSave(e.target.checked)} /> {m.saveToData}</label>}
+				<span className="lw-tool-group">
+					{tool('fetch', 'fetch', <Icons.compare size={18} />, can('fetch'), () => start('fetch'))}
+					{tool('export', 'export', <Icons.exportData size={18} />, can('export'), () => start('export'))}
+					{canSave && tool('exportSave', 'export → data/', <Icons.saveData size={18} />, can('export'), () => start('export', { save: true }))}
+					{tool('import', 'import…', <Icons.importData size={18} />, can('import'), () => setForm('import'))}
 				</span>
-				<button type="button" disabled={!can('push')} onClick={() => ask('push')}>push…</button>
-				<button type="button" disabled={!can('drop')} onClick={() => ask('drop')}>drop…</button>
-				<span className="lw-command-group">
-					<label className="lw-type">{m.chooseExport} <input type="file" accept="application/json,.json" aria-label={m.chooseExport} onChange={chooseFile} disabled={!summary?.can.import} /></label>
-					<button type="button" disabled={!can('import') || data === undefined} onClick={() => ask('import')}>import…</button>
+				<span className="lw-tool-group">
+					{tool('push', 'push…', <Icons.push size={18} />, can('push'), () => ask('push'))}
+					{tool('pull', 'pull…', <Icons.pull size={18} />, can('pull'), () => ask('pull'))}
+					{tool('drop', 'drop…', <Icons.drop size={18} />, can('drop'), () => ask('drop'))}
 				</span>
-				<button type="button" disabled={!summary?.can.version || busy} onClick={() => start('version')}>version</button>
-			</div>
-			<div className="lw-command-list">
-				<button type="button" disabled={!can('pull')} onClick={() => ask('pull')}>pull…</button>
-				<span className="lw-command-group">
-					<label className="lw-type">{m.dataFile} <input type="file" accept="application/json,.json" aria-label={m.dataFile} onChange={readFile(setSource)} disabled={!summary?.can.introspect} /></label>
-					<label className="lw-type">{m.entityOfData} <input aria-label={m.entityOfData} value={entity} onChange={e => setEntity(e.target.value)} size={14} disabled={!summary?.can.introspect} /></label>
-					<button type="button" disabled={!can('introspect') || source === undefined || !entity.trim()} onClick={() => ask('introspect')}>introspect…</button>
-					<button type="button" disabled={!can('incorporate') || source === undefined || !entity.trim()} onClick={() => ask('incorporate')}>incorporate…</button>
+				<span className="lw-tool-group">
+					{tool('introspect', 'introspect…', <Icons.introspect size={18} />, can('introspect'), () => setForm('introspect'))}
+					{tool('incorporate', 'incorporate…', <Icons.incorporate size={18} />, can('incorporate'), () => setForm('incorporate'))}
+				</span>
+				<span className="lw-tool-group">
+					{canBuild && tool('build', 'build…', <Icons.code size={18} />, !busy, () => setForm('build'))}
+					{tool('version', 'version', <Icons.info size={18} />, !!summary?.can.version && !busy, () => start('version'))}
 				</span>
 			</div>
-			{canBuild && (
-				<div className="lw-command-list" role="group" aria-label={m.build}>
-					<strong>{m.build}</strong>
-					<select aria-label="language" value={language} onChange={e => setLanguage(e.target.value as 'node' | 'client-node')}>
-						<option value="node">node (@lambdaorm/lib)</option>
-						<option value="client-node">client-node (@lambdaorm/client)</option>
-					</select>
-					<button type="button" disabled={busy} onClick={() => attempt(async () => { setBuilt((await admin.build(schema, language)).files) })}>{m.buildWrite}</button>
-					<button type="button" disabled={busy} onClick={() => attempt(async () => {
-						const blob = await admin.buildZip(schema, language)
-						const url = URL.createObjectURL(blob)
-						const link = document.createElement('a')
-						link.href = url
-						link.download = `${schema.replace(/\//g, '_') || 'root'}-${language}.zip`
-						document.body.appendChild(link)
-						link.click()
-						link.remove()
-						setTimeout(() => URL.revokeObjectURL(url), 1000)
-					})}>{m.buildZip}</button>
-				</div>
+			{children}
+			{form && (
+				<Modal title={form === 'build' ? m.build : `${form}…`} onClose={() => setForm(undefined)}>
+					<div className="lw-form">
+						{form === 'import' && (
+							<label>{m.chooseExport}<input type="file" accept="application/json,.json" aria-label={m.chooseExport} onChange={chooseFile} /></label>
+						)}
+						{(form === 'introspect' || form === 'incorporate') && (
+							<>
+								<label>{m.dataFile}<input type="file" accept="application/json,.json" aria-label={m.dataFile} onChange={readFile(setSource)} /></label>
+								<label>{m.entityOfData}<input aria-label={m.entityOfData} value={entity} onChange={e => setEntity(e.target.value)} /></label>
+								{form === 'incorporate' && <small className="lw-type">{m.incorporateNote}</small>}
+							</>
+						)}
+						{form === 'build' && (
+							<label>language
+								<select aria-label="language" value={language} onChange={e => setLanguage(e.target.value as 'node' | 'client-node')}>
+									<option value="node">node (@lambdaorm/lib)</option>
+									<option value="client-node">client-node (@lambdaorm/client)</option>
+								</select>
+							</label>
+						)}
+						<div className="lw-form-actions">
+							<button type="button" onClick={() => setForm(undefined)}>{m.cancel}</button>
+							{form === 'build'
+								? (
+									<>
+										<button type="button" disabled={busy} onClick={downloadZip}>{m.buildZip}</button>
+										<button type="button" className="lw-primary" disabled={busy} onClick={() => attempt(async () => { setBuilt((await admin.build(schema, language)).files); setForm(undefined) })}>{m.buildWrite}</button>
+									</>
+									)
+								: (
+									<button type="button" className="lw-primary"
+										disabled={busy || (form === 'import' ? data === undefined : source === undefined || !entity.trim())}
+										onClick={() => { const command = form; setForm(undefined); ask(command) }}>{m.preview}</button>
+									)}
+						</div>
+					</div>
+				</Modal>
 			)}
 			{built && (
 				<div className="lw-job" role="region" aria-label={m.build}>

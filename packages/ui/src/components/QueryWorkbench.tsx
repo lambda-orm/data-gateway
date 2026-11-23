@@ -1,4 +1,12 @@
-import React, { useEffect, useMemo, useRef, useSyncExternalStore } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
+import { functionsOf, lambdaCompletions } from '../domain/lambdaCompletion'
+import { formatQuery } from '../domain/queryFormat'
+import { Icons } from './dialogs'
+import type { DomainInfo } from '../domain/diagram'
+import { QUERYABLE_DECLARATIONS } from '../infrastructure/monaco/queryableDeclarations.generated'
+
+/** the functions of the λORM expressions, as the editor declares them */
+const LAMBDA_FUNCTIONS = functionsOf(QUERYABLE_DECLARATIONS)
 import { ALL_OPERATIONS, Operation } from '../domain/operations'
 import { QueryResult } from '../domain/results'
 import { HistoryPort, QueryApiPort } from '../application/ports'
@@ -13,6 +21,10 @@ import { ResultViewer } from './ResultViewer'
 import { applySuggestion } from '../domain/workspace'
 
 export interface QueryWorkbenchProps {
+	/** The domain of a schema, for the suggestions (the Workspace gives the one it keeps); by default api.domain */
+	loadDomain?: (schema: string) => Promise<DomainInfo>
+	/** The culture of the numbers and dates of the results (es-AR, en-US…); without it, as they came */
+	culture?: string
 	/** URL of the data-gateway (its REST transport); or api */
 	baseUrl?: string
 	/** Another way to reach the gateway (a backend of your own) */
@@ -78,6 +90,22 @@ export const QueryWorkbench: React.FC<QueryWorkbenchProps> = props => {
 		[api]
 	)
 	const s = useSyncExternalStore(controller.subscribe, controller.getState)
+	// what the editor suggests: the domain of the schema (its entities, the types of their properties) and the functions
+	const [domain, setDomain] = useState<DomainInfo>()
+	const [copied, setCopied] = useState(false)
+	useEffect(() => {
+		setDomain(undefined)
+		const read = props.loadDomain ?? (api.domain ? (schema: string) => api.domain!(schema) : undefined)
+		if (s.schema === undefined || !read) return
+		let alive = true
+		read(s.schema).then(d => { if (alive) setDomain(d) }, () => undefined)
+		return () => { alive = false }
+	}, [api, s.schema, props.loadDomain])
+	const suggest = useCallback((text: string, line: number, column: number) => {
+		const lines = text.split('\n')
+		const before = [...lines.slice(0, line - 1), (lines[line - 1] ?? '').slice(0, column - 1)].join('\n')
+		return lambdaCompletions(before, domain, LAMBDA_FUNCTIONS)
+	}, [domain])
 
 	useEffect(() => {
 		if (fixedSchema !== undefined) controller.selectSchema(fixedSchema)
@@ -122,14 +150,27 @@ export const QueryWorkbench: React.FC<QueryWorkbenchProps> = props => {
 						<button role="radio" aria-checked={s.mode === 'script'} className={s.mode === 'script' ? 'lw-active' : ''} onClick={() => controller.update({ mode: 'script' })}>{m.script}</button>
 					)}
 				</div>
+				<span className="lw-tool-group">
+					<button className="lw-tool" aria-label={m.copyQuery} title={copied ? m.copiedQuery : m.copyQuery} disabled={!(s.mode === 'query' ? s.query : s.script).trim()}
+						onClick={() => navigator.clipboard?.writeText(s.mode === 'query' ? s.query : s.script).then(() => { setCopied(true); setTimeout(() => setCopied(false), 1500) }, () => undefined)}>
+						<Icons.copy size={18} />
+					</button>
+					{s.mode === 'query' && (
+						<button className="lw-tool" aria-label={m.formatQueryText} title={m.formatQueryText} disabled={!s.query.trim()}
+							onClick={() => { controller.update({ query: formatQuery(s.query) }); controller.scheduleValidation() }}>
+							<Icons.format size={18} />
+						</button>
+					)}
+					{copied && <span className="lw-type" role="status">{m.copiedQuery}</span>}
+				</span>
 				{props.toolbar}
 				{s.whoami && props.showWho !== false && <span className="lw-who">{s.whoami.name} · {s.whoami.permissions.join(', ')}</span>}
 			</div>
 			{s.notice && <div className="lw-notice" role="alert">{localize(s.notice, m)}</div>}
 			{s.mode === 'query'
-				? <CodeEditor ariaLabel="query" language="typescript" theme={theme} value={s.query} markers={s.markers}
+				? <CodeEditor ariaLabel="query" language="typescript" theme={theme} value={s.query} markers={s.markers} lambda completion={suggest} triggerCharacters={['.']}
 					onChange={query => { controller.update({ query }); controller.scheduleValidation() }} onRun={() => run(main)} />
-				: <CodeEditor ariaLabel="script" language="javascript" theme={theme} value={s.script} onChange={script => controller.update({ script })} onRun={() => run(main)} height={220} />}
+				: <CodeEditor ariaLabel="script" language="javascript" theme={theme} value={s.script} lambda completion={suggest} triggerCharacters={['.']} onChange={script => controller.update({ script })} onRun={() => run(main)} height={220} />}
 			<div className="lw-row">
 				<div className="lw-col">
 					<div className="lw-label">{m.data}</div>
@@ -157,7 +198,7 @@ export const QueryWorkbench: React.FC<QueryWorkbenchProps> = props => {
 					)
 				})}
 			</div>
-			<ResultViewer result={s.result} maxRows={maxViewRows} locale={locale} fileName={s.result ? `${(s.schema || 'root').replace(/\//g, '-')}-${s.result.operation}` : undefined}
+			<ResultViewer result={s.result} maxRows={maxViewRows} locale={locale} theme={theme} culture={props.culture} fileName={s.result ? `${(s.schema || 'root').replace(/\//g, '-')}-${s.result.operation}` : undefined}
 				onSuggestion={s.mode === 'query' ? (name, replacement) => { controller.update({ query: applySuggestion(s.query, name, replacement) }); controller.scheduleValidation() } : undefined} />
 			{s.history.length > 0 && (
 				<details className="lw-history">

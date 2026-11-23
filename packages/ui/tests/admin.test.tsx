@@ -34,6 +34,15 @@ class FakeAdmin implements AdminApiPort {
 		this.version = `v${Number(this.version.slice(1)) + 1}`
 		return { version: this.version, issues: [] }
 	}
+	async expressionLanguage () {
+		return { functions: [{ name: 'in', params: [{ name: 'value' }, { name: 'list' }], returnType: 'boolean' }], operators: [], constants: ['true', 'false'],
+			contexts: { stageSource: [{ name: 'entity', type: 'string', description: '' }, { name: 'read', type: 'boolean', description: '' }] } }
+	}
+
+	async checkExpression (expression: string) {
+		return expression.includes('foo') ? { valid: false, variables: ['entity', 'foo'], unknown: ['foo'] } : { valid: true, variables: ['entity'], unknown: [] }
+	}
+
 	public patches: any[] = []
 	public conflictOnce = false
 	async patchSchema (_schema: string, patch: any): Promise<any> {
@@ -64,7 +73,7 @@ class FakeAdmin implements AdminApiPort {
 	async validate (text: string): Promise<{ valid: boolean, issues: SchemaIssue[] }> {
 		return text.includes('nope') ? { valid: false, issues: [{ severity: 'error', message: 'bad indentation', line: 2, column: 3 }] } : { valid: true, issues: [] }
 	}
-	async createWorkspace (path: string, copyOf?: string) { this.calls.push(`create ${path} ${copyOf ?? ''}`.trim()); if (path === 'admin') throw status(400, 'segment "admin" is reserved'); return { path, version: 'v1' } }
+	async createWorkspace (path: string, copyOf?: string, about: { name?: string, description?: string } = {}) { this.calls.push(`create ${path} ${copyOf ?? ''}${about.name ? ` name=${about.name}` : ''}${about.description ? ` description=${about.description}` : ''}`.trim()); if (path === 'admin') throw status(400, 'segment "admin" is reserved'); return { path, version: 'v1' } }
 	async removeWorkspace (path: string) { this.calls.push(`remove ${path}`); return { trash: `.trash/${path}` } }
 	async workbench (_version?: string): Promise<{ version: string, items: any[] } | undefined> { return { version: '0', items: [] } }
 	async putItems (_items: any[]): Promise<{ items: { id: string, version: string }[] }> { return { items: [] } }
@@ -88,7 +97,14 @@ class FakeAdmin implements AdminApiPort {
 	async job (_schema: string, id: string) { return this.jobList.find(j => j.id === id) }
 }
 
-const row = (name: string) => screen.getAllByRole('treeitem').find(r => r.querySelector('.lw-tree-label')?.textContent === name)!
+const findRow = (name: string) => screen.queryAllByRole('treeitem').find(r => r.querySelector('.lw-tree-label')?.textContent === name)
+/** a row of the tree; config, domain, data… are inside the Metadata of the schema: unfolded when the row is not there */
+const row = (name: string) => {
+	const found = findRow(name)
+	if (found || name === 'Metadata' || name === 'Metadatos') return found!
+	for (const meta of screen.queryAllByRole('treeitem').filter(r => ['Metadata', 'Metadatos'].includes(r.querySelector('.lw-tree-label')?.textContent ?? '') && r.getAttribute('aria-expanded') !== 'true')) fireEvent.click(meta)
+	return findRow(name)!
+}
 /** A row of the tree once it is there */
 const rowSoon = (name: string) => waitFor(() => { const found = row(name); expect(found).toBeTruthy(); return found })
 const show = (admin: FakeAdmin) => render(<Workspace api={new FakeApi()} admin={admin} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" refreshMs={0} />)
@@ -174,9 +190,21 @@ describe('new and removed schemas', () => {
 		await within(dialog).findByText('segment "admin" is reserved')
 		fireEvent.change(within(dialog).getByLabelText('route'), { target: { value: 'sales/v1' } })
 		fireEvent.change(within(dialog).getByLabelText('start from'), { target: { value: 'northwind/v1' } })
+		fireEvent.change(within(dialog).getByLabelText('Name'), { target: { value: 'Sales' } })
+		fireEvent.change(within(dialog).getByLabelText('Description'), { target: { value: 'Orders and invoices' } })
 		fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
 		await screen.findByText('Schema sales/v1 created: it starts in a moment')
-		expect(admin.calls).toContain('create sales/v1 northwind/v1')
+		expect(admin.calls).toContain('create sales/v1 northwind/v1 name=Sales description=Orders and invoices')
+	})
+
+	test('with a schema at the root, a new one is not offered to be created: the dialog says why', async () => {
+		class RootApi extends FakeApi { async schemas () { return [{ path: '', status: 'ready' }] as any } }
+		render(<Workspace api={new RootApi()} admin={new FakeAdmin()} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" refreshMs={0} />)
+		fireEvent.click(await screen.findByRole('button', { name: 'New schema' }))
+		const dialog = screen.getByRole('dialog')
+		fireEvent.change(within(dialog).getByLabelText('route'), { target: { value: 'sales' } })
+		expect(within(dialog).getByText(/move it to a folder of the workspace/)).toBeTruthy()
+		expect((within(dialog).getByRole('button', { name: 'Create' }) as HTMLButtonElement).disabled).toBe(true)
 	})
 
 	test('removed only once its route is typed again', async () => {
@@ -336,10 +364,25 @@ describe('commands that change the schema', () => {
 		show(new FakeAdmin())
 		await waitFor(() => expect(row('northwind/v1')).toBeTruthy())
 		fireEvent.doubleClick(row('northwind/v1'))
-		const introspect = await screen.findByRole('button', { name: 'introspect…' }) as HTMLButtonElement
-		expect(introspect.disabled).toBe(true)
-		fireEvent.change(screen.getByLabelText('Entity of the data'), { target: { value: 'Brands' } })
-		expect(introspect.disabled).toBe(true)
+		// a command that needs a file opens its form; its preview waits for the file and the entity
+		fireEvent.click(await screen.findByRole('button', { name: 'introspect…' }))
+		const dialog = await screen.findByRole('dialog')
+		const preview = within(dialog).getByRole('button', { name: 'See what it will do' }) as HTMLButtonElement
+		expect(preview.disabled).toBe(true)
+		fireEvent.change(within(dialog).getByLabelText('Entity of the data'), { target: { value: 'Brands' } })
+		expect(preview.disabled).toBe(true)
+		fireEvent.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+		expect(screen.queryByRole('dialog')).toBeNull()
+	})
+
+	test('the commands are a toolbar of icons: the name is read, the description shows on hover', async () => {
+		show(new FakeAdmin())
+		await waitFor(() => expect(row('northwind/v1')).toBeTruthy())
+		fireEvent.doubleClick(row('northwind/v1'))
+		const toolbar = await screen.findByRole('toolbar', { name: 'Commands' })
+		const push = within(toolbar).getByRole('button', { name: 'push…' })
+		expect(push.getAttribute('title')).toBe('push… — apply the model to the databases')
+		expect(push.textContent).toBe('')
 	})
 })
 
@@ -360,6 +403,21 @@ describe('the schema as forms', () => {
 		fireEvent.click(within(await waitFor(() => row(name))).getByRole('button', { name: `Edit ${name}` }))
 		fireEvent.click(await screen.findByRole('button', { name: 'Edit' }))
 	}
+
+	test('a click on an entity opens it as before (properties, relations, keys, data, diagram); its Edit opens its form', async () => {
+		const admin = new FakeAdmin()
+		await openForms(admin)
+		fireEvent.click(row('domain'))
+		fireEvent.click(await rowSoon('Entities'))
+		fireEvent.click(await rowSoon('Products'))
+		const tabs = await screen.findByRole('tablist', { name: 'Products' })
+		expect(within(tabs).getAllByRole('tab').map(t => t.textContent)).toEqual(['Properties (1)', 'Relations (0)', 'Keys and indexes', 'Data', 'Diagram'])
+		fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+		// its form, in a tab of its own, read first
+		const form = await waitFor(() => { const found = document.querySelector('[role=tabpanel]:not([hidden]) .lw-schema-forms'); expect(found).toBeTruthy(); return found as HTMLElement })
+		expect(within(form).getByRole('button', { name: 'Edit' })).toBeTruthy()
+		expect(screen.getAllByRole('tab').filter(t => t.textContent?.trim() === 'Products')).toHaveLength(2)
+	})
 
 	test('an entity: a property added and saved as one change, with the entity as it was read', async () => {
 		const admin = new FakeAdmin()
@@ -388,6 +446,49 @@ describe('the schema as forms', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 		await screen.findByText('Someone else changed it meanwhile: this is what it has now')
 		expect((screen.getByLabelText('price name') as HTMLInputElement).value).toBe('price')
+	})
+
+	test('a stage: its sources with their conditions in colors; a condition written in its own form, checked; the order kept', async () => {
+		const admin = new FakeAdmin()
+		await openForms(admin)
+		admin.text = FORMS_SCHEMA.replace('    - { name: main, dialect: PostgreSQL }\n', '    - { name: main, dialect: PostgreSQL }\n    - { name: replica, dialect: MySQL }\n')
+		fireEvent.click(row('infrastructure'))
+		fireEvent.click(await rowSoon('Stages'))
+		fireEvent.click(await rowSoon('default'))
+		// read: the source and its condition (none: the rest)
+		expect((await screen.findByLabelText('source 1')).textContent).toBe('main')
+		expect(screen.getByLabelText('Condition 1').textContent).toBe('no condition: the rest')
+		// its edit button opens the form of the condition (and the stage goes to edit)
+		fireEvent.click(screen.getByRole('button', { name: 'Edit the condition of main' }))
+		const dialog = await screen.findByRole('dialog', { name: 'Condition of main' })
+		expect(within(dialog).getByRole('complementary', { name: 'Variables of the sentence' }).textContent).toContain('entity')
+		const editor = within(dialog).getByLabelText('Condition', { selector: 'textarea' })
+		fireEvent.change(editor, { target: { value: 'entity.in(["Products"]) && foo' } })
+		expect(await within(dialog).findByText('foo: not a variable of a sentence (entity, read)')).toBeTruthy()
+		fireEvent.change(editor, { target: { value: 'entity.in(["Products"]) && ' } })
+		// a variable of the panel goes into the expression
+		fireEvent.click(within(dialog).getByRole('button', { name: 'read' }))
+		expect((editor as HTMLTextAreaElement).value).toBe('entity.in(["Products"]) && read')
+		await waitFor(() => expect(within(dialog).queryByText(/not a variable/)).toBeNull())
+		fireEvent.click(within(dialog).getByRole('button', { name: 'Apply' }))
+		// shown in colors: the variables, the function, the string
+		const condition = screen.getByLabelText('Condition 1')
+		expect(condition.textContent).toBe('entity.in(["Products"]) && read')
+		expect([...condition.querySelectorAll('.lw-tok-variable')].map(e => e.textContent)).toEqual(['entity', 'read'])
+		expect(condition.querySelector('.lw-tok-function')?.textContent).toBe('in')
+		expect(condition.querySelector('.lw-tok-string')?.textContent).toBe('"Products"')
+		fireEvent.click(screen.getByRole('button', { name: 'Add source' }))
+		expect((screen.getByLabelText('source 2') as HTMLSelectElement).value).toBe('replica')
+		expect((screen.getByRole('button', { name: 'Add source' }) as HTMLButtonElement).disabled).toBe(true)
+		fireEvent.click(screen.getByRole('button', { name: 'Move up 2' }))
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+		await waitFor(() => expect(admin.patches).toHaveLength(1))
+		expect(admin.patches[0]).toEqual({
+			op: 'set',
+			at: ['infrastructure', 'stages', 'default'],
+			value: { name: 'default', sources: [{ name: 'replica' }, { name: 'main', condition: 'entity.in(["Products"]) && read' }] },
+			expected: { name: 'default', sources: [{ name: 'main' }] }
+		})
 	})
 
 	test('a new source, a rename, and a remove that first says who uses the element', async () => {
@@ -436,6 +537,7 @@ describe('the variables of the connections and the code of the domain', () => {
 		show(admin)
 		await waitFor(() => expect(row('northwind/v1')).toBeTruthy())
 		fireEvent.doubleClick(row('northwind/v1'))
+		fireEvent.click(await screen.findByRole('button', { name: 'build…' }))
 		fireEvent.click(await screen.findByRole('button', { name: 'Write in src/ of the workspace' }))
 		await screen.findByText('src/domain/model.ts')
 		expect(screen.getByText(/created and updated: 1/)).toBeTruthy()
@@ -448,8 +550,10 @@ describe('the explorer as the workspace is', () => {
 		admin.text = 'domain: {}\napplication:\n  start: []\n'
 		render(<Workspace api={new FakeApi()} admin={admin} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" refreshMs={0} />)
 		await waitFor(() => expect(row('data')).toBeTruthy())
-		const labels = screen.getAllByRole('treeitem').filter(r => r.getAttribute('aria-level') === '2').map(r => r.querySelector('.lw-tree-label')?.textContent)
-		expect(labels).toEqual(['config', 'domain', 'application', 'infrastructure', 'data', 'src', 'projects'])
+		const level = (n: number) => screen.getAllByRole('treeitem').filter(r => r.getAttribute('aria-level') === String(n)).map(r => r.querySelector('.lw-tree-label')?.textContent)
+		// the schema: its metadata (the files of its workspace) and its projects
+		expect(level(2)).toEqual(['Metadata', 'projects'])
+		expect(level(3)).toEqual(['config', 'domain', 'application', 'infrastructure', 'data', 'src'])
 		fireEvent.click(row('data'))
 		fireEvent.click(await rowSoon('seed.sql'))
 		const file = await screen.findByLabelText('data/seed.sql', { selector: 'textarea' }) as HTMLTextAreaElement
@@ -466,5 +570,134 @@ describe('the explorer as the workspace is', () => {
 		fireEvent.click(row('northwind/v1'))
 		expect(await screen.findByRole('button', { name: 'fetch' })).toBeTruthy()
 		expect(screen.getAllByText('Schema northwind/v1').length).toBe(2) // its tab and its heading
+	})
+})
+
+describe('what the schema is, and the tabs', () => {
+	test('name, description and version: read first, then each change saved as one set, an emptied one removed', async () => {
+		const admin = new FakeAdmin()
+		admin.text = 'name: Shop\nversion: 1.0.0\ndomain: {}\n'
+		show(admin)
+		// what the schema is: in its tab, under the toolbar of its commands
+		await waitFor(() => expect(row('northwind/v1')).toBeTruthy())
+		fireEvent.doubleClick(row('northwind/v1'))
+		await screen.findByRole('toolbar', { name: 'Commands' })
+		const name = await screen.findByLabelText('Name') as HTMLInputElement
+		await waitFor(() => expect(name.value).toBe('Shop'))
+		expect(name.readOnly).toBe(true)
+		fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
+		fireEvent.change(screen.getByLabelText('Name'), { target: { value: '' } })
+		fireEvent.change(screen.getByLabelText('Description'), { target: { value: 'The shop' } })
+		fireEvent.change(screen.getByLabelText('Version'), { target: { value: '1.1.0' } })
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+		await waitFor(() => expect(admin.patches).toHaveLength(3))
+		expect(admin.patches).toEqual([
+			{ op: 'remove', at: ['name'], expected: 'Shop' },
+			{ op: 'set', at: ['description'], value: 'The shop', expected: undefined },
+			{ op: 'set', at: ['version'], value: '1.1.0', expected: '1.0.0' }
+		])
+	})
+
+	test('a tab closes, the others close, all close', async () => {
+		show(new FakeAdmin())
+		await waitFor(() => expect(row('northwind/v1')).toBeTruthy())
+		fireEvent.doubleClick(row('northwind/v1'))
+		await screen.findByRole('toolbar', { name: 'Commands' })
+		fireEvent.click(screen.getByRole('button', { name: 'new tab' }))
+		const tabs = () => screen.getAllByRole('tab').map(t => t.textContent)
+		expect(tabs()).toHaveLength(3)
+		// the menu of the second tab: close the others
+		fireEvent.contextMenu(screen.getAllByRole('tab')[1].parentElement!)
+		fireEvent.click(screen.getByRole('menuitem', { name: 'Close others' }))
+		expect(tabs()).toHaveLength(1)
+		expect(screen.getAllByRole('tab')[0].getAttribute('aria-selected')).toBe('true')
+		fireEvent.click(screen.getByRole('button', { name: 'new tab' }))
+		fireEvent.click(screen.getByRole('button', { name: 'tab actions' }))
+		fireEvent.click(screen.getByRole('menuitem', { name: 'Close all' }))
+		expect(screen.queryAllByRole('tab')).toHaveLength(0)
+	})
+})
+
+describe('where the workspace was', () => {
+	class MemorySession {
+		public saved: any[] = []
+		constructor (private readonly kept: unknown) {}
+		async load () { return this.kept }
+		async save (session: unknown) { this.saved.push(session) }
+	}
+
+	test('a reload starts where it was: its tabs (the text of a query as it was typed), the active one, what was unfolded', async () => {
+		const session = new MemorySession({
+			version: 1,
+			tabs: [{ kind: 'query', title: 'Prices', schema: 'northwind/v1', initial: { mode: 'query', query: 'Products.map(p => p.price)', data: '{}', options: '{}' } }, { kind: 'schema', title: 'Schema northwind/v1', schema: 'northwind/v1' }],
+			active: 1,
+			expanded: ['s:northwind/v1', 'md:northwind/v1'],
+			collapsed: false
+		})
+		render(<Workspace api={new FakeApi()} admin={new FakeAdmin()} session={session} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" refreshMs={0} />)
+		await waitFor(() => expect(screen.getAllByRole('tab').map(t => t.textContent?.trim())).toEqual(['Prices', 'Schema northwind/v1']))
+		expect(screen.getAllByRole('tab')[1].getAttribute('aria-selected')).toBe('true')
+		await screen.findByRole('toolbar', { name: 'Commands' })
+		// the metadata of the schema, unfolded as it was
+		expect(findRow('config')).toBeTruthy()
+		fireEvent.click(screen.getAllByRole('tab')[0])
+		expect((screen.getAllByLabelText('query', { selector: 'textarea' })[0] as HTMLTextAreaElement).value).toBe('Products.map(p => p.price)')
+		// and it is kept as it changes
+		await waitFor(() => expect(session.saved.at(-1)?.active).toBe(0), { timeout: 2000 })
+		expect(session.saved.at(-1)).toMatchObject({ version: 1, expanded: expect.arrayContaining(['md:northwind/v1']), tabs: [{ kind: 'query', initial: { query: 'Products.map(p => p.price)' } }, { kind: 'schema' }] })
+	})
+
+	test('the schema has an open button: its tab, with its commands', async () => {
+		show(new FakeAdmin())
+		await waitFor(() => expect(row('northwind/v1')).toBeTruthy())
+		fireEvent.click(within(row('northwind/v1')).getByRole('button', { name: 'Open northwind/v1: its commands' }))
+		expect(await screen.findByRole('toolbar', { name: 'Commands' })).toBeTruthy()
+	})
+})
+
+
+describe('the pages of the application', () => {
+	test('a page opens in a tab, asked again shows the same one; a restored page tab stays only if the application has it', async () => {
+		const pages = { account: { title: 'Account', render: () => <p>the account of modeler</p> } }
+		const session = { saved: [] as any[], load: async () => ({ version: 1, tabs: [{ kind: 'page', title: 'Old', page: 'gone' }, { kind: 'query', title: 'Q' }], active: 0, expanded: [], collapsed: false }), save: async (s: any) => { session.saved.push(s) } }
+		const { rerender } = render(<Workspace api={new FakeApi()} admin={new FakeAdmin()} session={session} pages={pages} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" refreshMs={0} />)
+		await waitFor(() => expect(screen.getAllByRole('tab').map(t => t.textContent?.trim())).toEqual(['Q']))
+		rerender(<Workspace api={new FakeApi()} admin={new FakeAdmin()} session={session} pages={pages} openPage={{ key: 'account', at: 1 }} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" refreshMs={0} />)
+		expect(await screen.findByText('the account of modeler')).toBeTruthy()
+		expect(screen.getAllByRole('tab').map(t => t.textContent?.trim())).toEqual(['Q', 'Account'])
+		fireEvent.click(screen.getAllByRole('tab')[0])
+		rerender(<Workspace api={new FakeApi()} admin={new FakeAdmin()} session={session} pages={pages} openPage={{ key: 'account', at: 2 }} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" refreshMs={0} />)
+		await waitFor(() => expect(screen.getAllByRole('tab')[1].getAttribute('aria-selected')).toBe('true'))
+		expect(screen.getAllByRole('tab')).toHaveLength(2)
+	})
+})
+
+describe('several data-gateways', () => {
+	test('each connection with its heading and its schemas; a tab of the second runs on its gateway and says which', async () => {
+		class SalesApi extends FakeApi { async schemas () { return [{ path: 'sales', status: 'ready' }] as any } }
+		const first = new FakeApi()
+		const second = new SalesApi()
+		const session = { saved: [] as any[], load: async () => ({ version: 1, tabs: [{ kind: 'query', title: 'Orders', schema: 'sales', connection: 'b', initial: { mode: 'query', query: 'Orders.page(1, 2)', data: '{}', options: '{}' } }], active: 0, expanded: ['b␟s:sales'], collapsed: false }), save: async (s: any) => { session.saved.push(s) } }
+		const a = { id: 'a', name: 'local', description: 'http://localhost:8097/data-gateway', api: first, admin: false as const, store: new MemoryWorkspaceStore([], true) }
+		const b = { id: 'b', name: 'staging', description: 'https://staging/data-gateway', api: second, admin: false as const, store: new MemoryWorkspaceStore([], true) }
+		const { rerender } = render(<Workspace locale="en" refreshMs={0} history={false} session={session} connections={[a, b]} />)
+		// a heading per connection, its schemas under it
+		const local = await screen.findByRole('region', { name: 'local' })
+		const staging = screen.getByRole('region', { name: 'staging' })
+		expect(within(local).getByText('http://localhost:8097/data-gateway')).toBeTruthy()
+		await waitFor(() => expect(within(local).getAllByRole('treeitem').map(r => r.querySelector('.lw-tree-label')?.textContent)).toContain('northwind/v1'))
+		await waitFor(() => expect(within(staging).getAllByRole('treeitem').map(r => r.querySelector('.lw-tree-label')?.textContent)).toContain('sales'))
+		// the restored tab is of staging: it says so, and runs there
+		await waitFor(() => expect(screen.getAllByRole('tab').map(t => t.textContent?.trim().replace(' •', ''))).toEqual(['Orders · staging']))
+		fireEvent.click(await screen.findByRole('button', { name: 'execute' }))
+		await waitFor(() => expect(second.calls.some(c => c.operation === 'execute' && c.args[0] === 'sales')).toBe(true))
+		expect(first.calls.some(c => c.operation === 'execute')).toBe(false)
+		// a connection folds
+		fireEvent.click(within(staging).getByRole('button', { name: /staging$/ }))
+		expect(within(staging).queryAllByRole('treeitem')).toHaveLength(0)
+		// a connection removed: its section and its tabs go
+		rerender(<Workspace locale="en" refreshMs={0} history={false} session={session} connections={[a]} />)
+		await waitFor(() => expect(screen.queryAllByRole('tab')).toHaveLength(0))
+		expect(screen.queryByRole('region', { name: 'staging' })).toBeNull()
 	})
 })

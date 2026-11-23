@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
+import { CodeEditor } from './CodeEditor'
 import { format, Locale, messagesOf } from '../domain/i18n'
+import { formatValue } from '../domain/culture'
 import { cellText, columnsOf, formatBytes, isTable, QueryResult, toJson, toTsv, toYaml } from '../domain/results'
 
 export type View = 'tree' | 'table' | 'json' | 'yaml'
@@ -12,6 +14,10 @@ export interface ResultViewerProps {
 	fileName?: string
 	/** Language of the labels (default English) */
 	locale?: Locale
+	/** the culture of the numbers and dates of the tree and the table (es-AR, en-US…); without it, as they came */
+	culture?: string
+	/** the theme of the editors of the json and yaml views */
+	theme?: 'light' | 'dark'
 	/** The view at the start (default tree) */
 	initialView?: View
 	/** A name of the error replaced by one the gateway suggests (`nme` → `name`): without it, no buttons */
@@ -66,24 +72,25 @@ const ExportMenu: React.FC<{ label: string, formats: { format: Format, label: st
 	)
 }
 
-const Tree: React.FC<{ value: unknown, name?: string, depth?: number }> = ({ value, name, depth = 0 }) => {
+const Tree: React.FC<{ value: unknown, name?: string, depth?: number, culture?: string }> = ({ value, name, depth = 0, culture }) => {
 	const label = name !== undefined ? <span className="lw-key">{name}: </span> : null
 	if (value === null || typeof value !== 'object') {
 		const kind = value === null ? 'null' : typeof value
-		return <div className="lw-leaf">{label}<span className={`lw-${kind}`}>{JSON.stringify(value)}</span></div>
+		const shown = formatValue(value, culture)
+		return <div className="lw-leaf">{label}<span className={`lw-${kind}`} title={shown !== undefined ? JSON.stringify(value) : undefined}>{shown ?? JSON.stringify(value)}</span></div>
 	}
 	const entries = Array.isArray(value) ? value.map((v, i) => [String(i), v] as const) : Object.entries(value as object)
 	const summary = Array.isArray(value) ? `[${value.length}]` : `{${entries.length}}`
 	return (
 		<details className="lw-node" open={depth < 2}>
 			<summary>{label}<span className="lw-summary">{summary}</span></summary>
-			{entries.map(([key, child]) => <Tree key={key} name={key} value={child} depth={depth + 1} />)}
+			{entries.map(([key, child]) => <Tree key={key} name={key} value={child} depth={depth + 1} culture={culture} />)}
 		</details>
 	)
 }
 
 /** The result of an action: tree, table, JSON and YAML views, copy and download, status / time / rows / size */
-export const ResultViewer: React.FC<ResultViewerProps> = ({ result, maxRows = 200, fileName = 'result', locale, initialView = 'tree', onSuggestion }) => {
+export const ResultViewer: React.FC<ResultViewerProps> = ({ result, maxRows = 200, fileName = 'result', locale, initialView = 'tree', onSuggestion, theme = 'light', culture }) => {
 	const m = messagesOf(locale)
 	const [copied, setCopied] = useState(false)
 	useEffect(() => { if (!copied) return; const timer = setTimeout(() => setCopied(false), 1500); return () => clearTimeout(timer) }, [copied])
@@ -146,19 +153,22 @@ export const ResultViewer: React.FC<ResultViewerProps> = ({ result, maxRows = 20
 			</div>
 			{cut && (view === 'tree' || view === 'table') && <div className="lw-notice">{format(m.showing, { shown: maxRows, total: (value as unknown[]).length })}</div>}
 			<div className="lw-view">
-				{view === 'tree' && <Tree value={shown} />}
+				{view === 'tree' && <Tree value={shown} culture={culture} />}
 				{view === 'table' && table && (
 					<table className="lw-table">
 						<thead><tr>{columnsOf(shown as Record<string, unknown>[]).map(c => <th key={c}>{c}</th>)}</tr></thead>
 						<tbody>
 							{(shown as Record<string, unknown>[]).map((row, i) => (
-								<tr key={i}>{columnsOf(shown as Record<string, unknown>[]).map(c => <td key={c}>{cellText(row[c])}</td>)}</tr>
+								<tr key={i}>{columnsOf(shown as Record<string, unknown>[]).map(c => <td key={c} title={formatValue(row[c], culture) !== undefined ? cellText(row[c]) : undefined}>{formatValue(row[c], culture) ?? cellText(row[c])}</td>)}</tr>
 							))}
 						</tbody>
 					</table>
 				)}
-				{view === 'json' && <pre className="lw-code">{json}</pre>}
-				{view === 'yaml' && <pre className="lw-code">{yaml}</pre>}
+				{(view === 'json' || view === 'yaml') && (
+					// in Monaco, read only: colors, folding, search; as tall as the text (up to 600 px)
+					<CodeEditor key={view} ariaLabel={`result ${view}`} language={view} readOnly theme={theme} value={view === 'json' ? json : yaml} onChange={() => undefined}
+						height={Math.max(120, Math.min(Math.round((typeof window === 'undefined' ? 800 : window.innerHeight) * 0.75), (view === 'json' ? json : yaml).split('\n').length * 19 + 12))} />
+				)}
 			</div>
 		</div>
 	)

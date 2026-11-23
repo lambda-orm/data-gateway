@@ -74,6 +74,10 @@ export const adminRouter = (admin: AdminService, authenticate: express.RequestHa
 	router.get('/workspaces/:schema/variables', handle(async (req, res) => admin.variables(principal(res), schemaParam(req.params.schema))))
 	router.put('/workspaces/:schema/variables', handle(async (req, res) => admin.setVariables(principal(res), schemaParam(req.params.schema), req.body ?? {})))
 	router.post('/validate', handle(async (req, res) => admin.validate(principal(res), req.body?.text)))
+	router.get('/session', handle(async (_req, res) => admin.session(principal(res))))
+	router.put('/session', handle(async (req, res) => admin.saveSession(principal(res), req.body ?? {})))
+	router.get('/expressions', handle(async (_req, res) => admin.expressionLanguage(principal(res))))
+	router.post('/expressions/check', handle(async (req, res) => admin.checkExpression(principal(res), req.body ?? {})))
 	router.get('/workbench', handle(async (req, res) => {
 		const schema = typeof req.query.schema === 'string' ? schemaParam(req.query.schema) : undefined
 		const result = await admin.workbench(principal(res), schema)

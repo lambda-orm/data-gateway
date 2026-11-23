@@ -30,7 +30,7 @@ export type { DomainInfo, EntityInfo, PropertyInfo, RelationInfo, DiagramEdge } 
 export { elkLayout } from './infrastructure/elkLayout'
 export type { LayoutPort, LayoutInput, LayoutResult } from './infrastructure/elkLayout'
 export { Workspace } from './components/Workspace'
-export type { WorkspaceProps } from './components/Workspace'
+export type { WorkspaceProps, WorkspaceConnection } from './components/Workspace'
 export { Explorer } from './components/Explorer'
 export type { ExplorerProps } from './components/Explorer'
 export { WorkspaceController, WorkspaceError } from './application/workspaceController'
@@ -56,3 +56,14 @@ export type { CommandName, CommandPreview, CommandsSummary, Job } from './applic
 export { SchemaForms } from './components/SchemaForms'
 export type { SchemaFormsProps } from './components/SchemaForms'
 export type { SchemaPatch, SchemaVariable } from './application/ports'
+
+// where the workspace was (its tabs, what is unfolded): kept by the gateway for the credential, or in the browser
+export type { SessionStorePort, ExpressionLanguage, ExpressionCheck, ExpressionSign } from './application/ports'
+export type { WorkspaceSession, SessionTab } from './domain/session'
+export { readSession } from './domain/session'
+export { GatewaySessionStore, BrowserSessionStore, FallbackSessionStore } from './infrastructure/sessionStores'
+export { ExpressionInput } from './components/ExpressionInput'
+export type { ExpressionInputProps } from './components/ExpressionInput'
+// the numbers and dates of a result in the format of a culture
+export { formatValue, culturePreview, validCulture } from './domain/culture'
+

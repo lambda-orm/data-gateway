@@ -10,6 +10,16 @@ import { McpHttpTransport } from '../input/mcp/mcpHttpTransport'
 import { McpWebSocketTransport } from '../input/mcp/mcpWebSocketTransport'
 import { WebSocketTransport } from '../input/websocket/webSocketTransport'
 import { Transport } from '../input/transport'
+import { TransportInfo } from '../input/http/httpTransport'
+import { TransportsConfig } from '../../domain/config/dataGatewayConfig'
+
+/** The transports of the configuration as GET /transports tells them */
+export const transportsOf = (t: TransportsConfig): TransportInfo[] => [
+	...(t.http ? [{ name: 'http' as const, port: t.http.port, basePath: t.http.basePath, ...(t.http.swagger.enabled ? { docs: '/openapi.json' } : {}) }] : []),
+	...(t.webSocket ? [{ name: 'webSocket' as const, port: t.webSocket.port, basePath: t.webSocket.basePath, schemaPath: '/{schema}', ...(t.webSocket.asyncapi.enabled ? { docs: '/asyncapi.json' } : {}) }] : []),
+	...(t.mcpHttp ? [{ name: 'mcpHttp' as const, port: t.mcpHttp.port, basePath: t.mcpHttp.basePath, schemaPath: '/{schema}/mcp' }] : []),
+	...(t.mcpWebSocket ? [{ name: 'mcpWebSocket' as const, port: t.mcpWebSocket.port, basePath: t.mcpWebSocket.basePath, schemaPath: '/{schema}', ...(t.mcpWebSocket.asyncapi.enabled ? { docs: '/asyncapi.json' } : {}) }] : [])
+]
 
 type AuthenticatorFactory = (config: AuthenticationConfig) => AuthenticatorPort
 
@@ -62,7 +72,8 @@ export class TransportRegistry {
 				requestBodySize: config.server.requestBodySize,
 				rateLimit: config.rateLimit,
 				swaggerEnabled: http.swagger.enabled,
-				uiEnabled: http.ui.enabled
+				uiEnabled: http.ui.enabled,
+				transports: transportsOf(config.transports)
 			}, {
 				directory,
 				metrics,

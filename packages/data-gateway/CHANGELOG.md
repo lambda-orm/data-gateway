@@ -8,10 +8,37 @@ All notable changes to this project will be documented in this file.
 
 **Features:**
 
+- The UI at `/ui` is the data-gateway-ide (`packages/data-gateway-ide`) built in embedded mode: its home and login
+  as before, the workspace on its connection shown as the current one, and the page of that connection (where it is, how
+  it authenticates, its roles) instead of the account. The IDE itself has its own image, `flaviorita/data-gateway-ide`,
+  that connects to data-gateways (`DATA_GATEWAY.md` §11.9): in production the gateway may serve no UI.
+- `GET {basePath}/transports`: the transports of the gateway (port, base path, how a schema is reached, its document),
+  and `GET {basePath}/openapi.json`; the `/asyncapi.json` of the WebSocket transports answers any origin.
+- A WebSocket from a browser authenticates with the credential in its subprotocols (`lambdaorm`,
+  `lambdaorm.headers.<base64url>`): a browser can't send headers in a WebSocket. Also the MCP over WebSocket.
 - `GET /admin/workspaces/{path}/files` and `…/files/content`: the files of `data/` and `src/` of a workspace, listed and
   read (never the `.env`, `orm_state/` or a hidden file), for the explorer of the UI.
-- A `set` of a section the `lambdaORM.yaml` doesn't have yet (`application`) creates it.
-- The UI at `/ui` (`@lambdaorm/ui`): the explorer as the workspace is (`DATA_GATEWAY.md` §11.7).
+- `GET /admin/expressions` and `POST /admin/expressions/check`: the language of the expressions (3xpr) and the variables
+  of the condition of a source of a stage, and one expression checked, for the editor of the UI. The validator of a
+  schema says a condition that doesn't parse (an error) and a variable that is not of a sentence (a warning).
+- `GET`/`PUT /admin/session`: where the UI of each credential was (its tabs and their drafts, what is unfolded), in
+  `<orm.workspacePath>/.data-gateway/state.sqlite` (`node:sqlite`), so that a reload or another browser starts there.
+  The UI keeps its credential across a reload (in the tab, or in the browser with "remember me").
+- The UI at `/ui`: the account at the right of the header (its icon and name), with Account (the user, how it
+  authenticates, each permission with what it allows) and Preferences (the language and the theme with their previews),
+  both opened as tabs, and Logout. The suggestions of the queries and scripts show the type of each property and the
+  functions of each type; the json and yaml views of a result are Monaco editors.
+- The UI at `/ui`: the themes of Ilusor (Light, Dark, Dracula, Night, Nord, Solarized, Monokai, High Contrast) and a
+  regional format for the numbers and dates of the results; the query of a diagram in a new tab; copy and format a query.
+- `POST /admin/workspaces` takes a `name` and a `description`, written on top of the new `lambdaORM.yaml`.
+- A `set` of a section or key the `lambdaORM.yaml` doesn't have yet (`application`, `name`, `description`) creates it.
+- The UI at `/ui` (`@lambdaorm/ui`): the explorer as the workspace is (`DATA_GATEWAY.md` §11.7); the name, description
+  and version of a schema, in its tab and when it is created; the commands as a toolbar of icons, with a form for those that need a file; closing tabs
+  one by one, all but one or all; the sources of a stage chosen with their condition, an expression with suggestions
+  checked while it is written: shown in the colors of 3xpr and written in a form with its suggestions and the variables
+  of a sentence; diagrams with what each box shows (all, keys, PK, names), the related tables of a box added with its +,
+  exported as PDF, PNG or SVG, several boxes selected (by click or a rectangle) to move or remove them together, and
+  the select and move tools and the zoom in their bar. A diagram of `workbench/` keeps its `detail`.
 
 ### 3.2.0 (2026-11-22)
 

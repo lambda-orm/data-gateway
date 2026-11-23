@@ -2,10 +2,14 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react'
 import { AdminApiPort, SchemaVariable } from '../application/ports'
 import { adminMessagesOf, format } from '../domain/adminI18n'
 import { fromYaml, toYaml } from '../domain/results'
+import { ExpressionDialog } from './ExpressionDialog'
+import { ExpressionView } from './ExpressionView'
+import { Icons } from './dialogs'
 import { CodeEditor } from './CodeEditor'
 
 export interface SchemaFormsProps {
 	admin: AdminApiPort
+	theme?: 'light' | 'dark'
 	schema: string
 	/** the credential may change it (schemaWrite) */
 	writable: boolean
@@ -70,7 +74,7 @@ const Variables: React.FC<{ admin: AdminApiPort, schema: string, canAdmin: boole
 type Json = any
 type Section = 'entities' | 'enums' | 'sources' | 'mappings' | 'stages'
 /** What a tab of one element shows: an element of a section, the application section as YAML, or the variables */
-export type FormFocus = { section: Section, name?: string } | { section: 'application' } | { section: 'variables' }
+export type FormFocus = { section: Section, name?: string } | { section: 'application' } | { section: 'variables' } | { section: 'about' }
 
 const SECTIONS: { key: Section, at: string[] }[] = [
 	{ key: 'entities', at: ['domain', 'entities'] },
@@ -149,23 +153,26 @@ const Rows: React.FC<{
 	)
 }
 
+const ABOUT = ['name', 'description', 'version'] as const
+type About = Record<typeof ABOUT[number], string>
+
 /**
  * The schema as forms (docs/DATA_GATEWAY_ADMIN_PLAN.md §3.3): each section of the lambdaORM.yaml and each of its
  * elements, to create, change, rename and remove without writing YAML. Each save is one change of one element, sent
  * with the element as it was read: someone else's change to another element doesn't collide; to the same one, the
  * form shows what it has now. The gateway writes it keeping the comments and the rest of the file.
  */
-export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, schema, writable, revision, locale, canAdmin = false, focus, onChanged }) => {
+export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, theme, schema, writable, revision, locale, canAdmin = false, focus, onChanged }) => {
 	const [showVariables, setShowVariables] = useState(focus?.section === 'variables')
 	const [showApplication] = useState(focus?.section === 'application')
 	// a focused element is read first: Edit to change it; the forms of the whole schema edit at once
 	// a new element (focused on a section without a name) starts blank, in edit
-	const creating = !!focus && focus.section !== 'application' && focus.section !== 'variables' && (focus as any).name === undefined
+	const creating = !!focus && focus.section !== 'application' && focus.section !== 'variables' && focus.section !== 'about' && (focus as any).name === undefined
 	const [editing, setEditing] = useState(!focus || creating)
 	const m = adminMessagesOf(locale)
 	const [doc, setDoc] = useState<Json>()
 	const [selected, setSelected] = useState<{ section: Section, name?: string } | undefined>(
-		focus && focus.section !== 'application' && focus.section !== 'variables' ? { section: focus.section, name: (focus as any).name } : undefined)
+		focus && focus.section !== 'application' && focus.section !== 'variables' && focus.section !== 'about' ? { section: focus.section, name: (focus as any).name } : undefined)
 	const [draft, setDraft] = useState<Json>(creating ? {} : undefined)
 	const [read, setRead] = useState<Json>()
 	const [error, setError] = useState<string>()
@@ -173,6 +180,8 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, schema, writabl
 	const [busy, setBusy] = useState(false)
 	const [removing, setRemoving] = useState<string[]>()
 	const [renaming, setRenaming] = useState<string>()
+	// the source of the stage whose condition is being written (its form)
+	const [conditionOf, setConditionOf] = useState<number>()
 
 	const load = useCallback(async () => {
 		try {
@@ -221,6 +230,24 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, schema, writabl
 		}
 		setNotice(m.saved)
 		if (focus) setEditing(false)
+		await load()
+	})
+
+	// what the schema is: its name, description and version (keys of the top of the lambdaORM.yaml)
+	const showAbout = focus?.section === 'about'
+	const aboutRead = useMemo(() => Object.fromEntries(ABOUT.map(k => [k, doc?.[k] === undefined || doc?.[k] === null ? '' : String(doc[k])])) as About, [doc])
+	const [about, setAbout] = useState<About>()
+	useEffect(() => { if (showAbout && doc && !editing) setAbout(aboutRead) }, [doc, showAbout, editing])
+	const saveAbout = () => attempt(async () => {
+		if (!about) return
+		for (const key of ABOUT) {
+			const value = about[key].trim()
+			if (value === aboutRead[key]) continue
+			const expected = doc?.[key]
+			await admin.patchSchema(schema, value ? { op: 'set', at: [key], value, expected } : { op: 'remove', at: [key], expected })
+		}
+		setNotice(m.saved)
+		setEditing(false)
 		await load()
 	})
 
@@ -318,20 +345,60 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, schema, writabl
 			)
 		case 'mappings':
 			return <>{isNew && text('name')}{select('extends', names.mappings.filter(n => n !== draft.name))}{rows('entities', [{ key: 'name', kind: 'select', options: names.entities }, { key: 'mapping' }])}</>
-		case 'stages':
+		case 'stages': {
+			const list: Json[] = Array.isArray(draft.sources) ? draft.sources : []
+			const setList = (next: Json[]) => setDraft({ ...draft, sources: next })
+			const at = (i: number, patch: Json) => setList(list.map((x, j) => j === i ? { ...x, ...patch } : x))
+			const move = (i: number, to: number) => { const next = [...list]; const [x] = next.splice(i, 1); next.splice(to, 0, x); setList(next) }
+			const used = new Set(list.map(s => s?.name))
 			return (
 				<>
 					{isNew && text('name')}
 					<fieldset className="lw-form-group"><legend>sources</legend>
-						{names.sources.map(source => (
-							<label key={source} className="lw-type">
-								<input type="checkbox" disabled={!editable} checked={(draft.sources ?? []).some((s: Json) => s?.name === source)}
-									onChange={e => setDraft({ ...draft, sources: e.target.checked ? [...(draft.sources ?? []), { name: source }] : (draft.sources ?? []).filter((s: Json) => s?.name !== source) })} /> {source}
-							</label>
-						))}
+						<p className="lw-type">{m.stageSourcesNote}</p>
+						<ol className="lw-stage-sources">
+							{list.map((item, i) => (
+								<li key={i} className="lw-stage-source">
+									{editable
+										? (
+											<select aria-label={`source ${i + 1}`} value={item?.name ?? ''} onChange={e => at(i, { name: e.target.value })}>
+												<option value="" disabled>—</option>
+												{[...new Set([...names.sources, ...(item?.name ? [item.name] : [])])].map(s => <option key={s} value={s} disabled={s !== item?.name && used.has(s)}>{s}</option>)}
+											</select>
+											)
+										: <strong aria-label={`source ${i + 1}`}>{item?.name}</strong>}
+									<span className="lw-stage-condition" aria-label={`${m.condition} ${i + 1}`}>
+										<ExpressionView expression={typeof item?.condition === 'string' ? item.condition : ''} empty={m.theRest} />
+									</span>
+									<span className="lw-row-actions">
+										{writable && (
+											<button type="button" className="lw-icon-button" aria-label={format(m.editCondition, { name: item?.name ?? i + 1 })} title={format(m.editCondition, { name: item?.name ?? i + 1 })}
+												onClick={() => { if (!editing) setEditing(true); setConditionOf(i) }}><Icons.edit /></button>
+										)}
+										{editable && (
+											<>
+												<button type="button" className="lw-icon-button" aria-label={`${m.moveUp} ${i + 1}`} title={m.moveUp} disabled={i === 0} onClick={() => move(i, i - 1)}>↑</button>
+												<button type="button" className="lw-icon-button" aria-label={`${m.moveDown} ${i + 1}`} title={m.moveDown} disabled={i === list.length - 1} onClick={() => move(i, i + 1)}>↓</button>
+												<button type="button" className="lw-icon-button" aria-label={`${m.remove} ${i + 1}`} title={m.remove} onClick={() => setList(list.filter((_x, j) => j !== i))}><Icons.close /></button>
+											</>
+										)}
+									</span>
+								</li>
+							))}
+						</ol>
+						{conditionOf !== undefined && list[conditionOf] && (
+							<ExpressionDialog admin={admin} locale={locale} theme={theme} title={format(m.conditionOf, { name: list[conditionOf]?.name ?? '' })}
+								value={typeof list[conditionOf]?.condition === 'string' ? list[conditionOf].condition : ''} entities={names.entities}
+								onApply={value => at(conditionOf, { condition: value || undefined })} onClose={() => setConditionOf(undefined)} />
+						)}
+						{editable && (
+							<button type="button" disabled={names.sources.every(s => used.has(s))}
+								onClick={() => setList([...list, { name: names.sources.find(s => !used.has(s)) }])}>{m.addSource}</button>
+						)}
 					</fieldset>
 				</>
 			)
+		}
 		}
 	}
 
@@ -363,6 +430,26 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, schema, writabl
 			</nav>}
 			<div className="lw-forms-element">
 				{showVariables && <Variables admin={admin} schema={schema} canAdmin={canAdmin} locale={locale} revision={revision} />}
+				{showAbout && about && (
+					<>
+						<div className="lw-toolbar">
+							<strong>{m.about}</strong>
+							<span className="lw-spacer" />
+							{writable && !editing && <button type="button" className="lw-primary" onClick={() => setEditing(true)}>{m.edit}</button>}
+							{writable && editing && (
+								<>
+									<button type="button" onClick={() => { setEditing(false); setAbout(aboutRead); setError(undefined) }}>{m.cancel}</button>
+									<button type="button" className="lw-primary" disabled={busy} onClick={saveAbout}>{m.save}</button>
+								</>
+							)}
+						</div>
+						<div className="lw-form">
+							<label>{m.schemaName}<input aria-label={m.schemaName} value={about.name} readOnly={!editable} onChange={e => setAbout({ ...about, name: e.target.value })} /></label>
+							<label>{m.schemaDescription}<textarea aria-label={m.schemaDescription} rows={4} value={about.description} readOnly={!editable} onChange={e => setAbout({ ...about, description: e.target.value })} /></label>
+							<label>{m.schemaVersion}<input aria-label={m.schemaVersion} value={about.version} readOnly={!editable} onChange={e => setAbout({ ...about, version: e.target.value })} size={12} /></label>
+						</div>
+					</>
+				)}
 				{showApplication && (
 					<>
 						<div className="lw-toolbar">
@@ -413,7 +500,7 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, schema, writabl
 						</div>
 					</div>
 				)}
-				<div className="lw-element-form">{form()}</div>
+				{!showAbout && !showApplication && !showVariables && <div className="lw-element-form">{form()}</div>}
 			</div>
 		</section>
 	)

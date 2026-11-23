@@ -76,4 +76,13 @@ describe('one change of one element', () => {
 		expect(references).toEqual(['infrastructure/stages/default'])
 		expect(() => applyPatch(SCHEMA, { op: 'remove', at: ['domain', 'entities', 'Nope'] })).toThrow(/not in the schema/)
 	})
+
+	test('what the schema is: its name, description and version, keys of the top', () => {
+		const named = applyPatch(SCHEMA, { op: 'set', at: ['name'], value: 'Shop' }).schema
+		expect(named.name).toBe('Shop')
+		const described = applyPatch(named, { op: 'set', at: ['description'], value: 'The shop', expected: undefined }).schema
+		expect(described.description).toBe('The shop')
+		expect(() => applyPatch(described, { op: 'set', at: ['name'], value: 'Store', expected: 'Other' })).toThrow(/changed since/)
+		expect(applyPatch(described, { op: 'remove', at: ['name'], expected: 'Shop' }).schema.name).toBeUndefined()
+	})
 })

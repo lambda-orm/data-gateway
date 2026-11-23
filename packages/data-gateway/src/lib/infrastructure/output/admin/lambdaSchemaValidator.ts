@@ -1,6 +1,8 @@
 import YAML, { LineCounter } from 'yaml'
 import { Orm } from '@lambdaorm/lib'
-import { SchemaIssue, SchemaValidatorPort } from '../../../application/ports/output/adminPorts'
+import { EXPRESSION_CONTEXTS } from '../../../domain/admin/expressions'
+import { ExpressionLanguagePort, SchemaIssue, SchemaValidatorPort } from '../../../application/ports/output/adminPorts'
+import { ThreeExprLanguage } from './threeExprLanguage'
 
 /** The types λORM knows for a property (typ3s Primitive and those of the dialects) */
 const PROPERTY_TYPES = ['string', 'text', 'integer', 'decimal', 'number', 'boolean', 'date', 'dateTime', 'time', 'uuid', 'any', 'obj', 'list', 'json', 'blob', 'binary']
@@ -11,6 +13,9 @@ const PROPERTY_TYPES = ['string', 'text', 'integer', 'decimal', 'number', 'boole
  * the listeners are left out: they are code of the schema, and validating must not run it.
  */
 export class LambdaSchemaValidator implements SchemaValidatorPort {
+	// eslint-disable-next-line no-useless-constructor
+	constructor (private readonly expressions: ExpressionLanguagePort = new ThreeExprLanguage()) {}
+
 	public async validate (text: string): Promise<SchemaIssue[]> {
 		const lines = new LineCounter()
 		const document = YAML.parseDocument(text, { lineCounter: lines, prettyErrors: false })
@@ -32,6 +37,23 @@ export class LambdaSchemaValidator implements SchemaValidatorPort {
 					const node = document.getIn(['domain', 'entities', i, 'properties', j, 'type'], true) as any
 					issues.push({ severity: 'warning', message: `${entity.name}.${property.name}: "${property.type}" is not a type of λORM (${PROPERTY_TYPES.join(', ')})`, ...at(node?.range?.[0]) })
 				}
+			})
+		})
+		// the condition of a source of a stage: an expression of 3xpr with what the sentence is about
+		const variables = new Set(EXPRESSION_CONTEXTS.stageSource.map(v => v.name))
+		;(Array.isArray(schema.infrastructure?.stages) ? schema.infrastructure.stages : []).forEach((stage: any, i: number) => {
+			(Array.isArray(stage?.sources) ? stage.sources : []).forEach((source: any, j: number) => {
+				if (source?.condition === undefined || source.condition === null) return
+				const node = document.getIn(['infrastructure', 'stages', i, 'sources', j, 'condition'], true) as any
+				const where = `${stage.name}.${source.name}`
+				if (typeof source.condition !== 'string') {
+					issues.push({ severity: 'error', message: `${where}: the condition is an expression, a text`, ...at(node?.range?.[0]) })
+					return
+				}
+				const checked = this.expressions.check(source.condition)
+				if (checked.error) issues.push({ severity: 'error', message: `${where}: the condition ${checked.error}`, ...at(node?.range?.[0]) })
+				const unknown = checked.variables.filter(v => !variables.has(v))
+				if (unknown.length) issues.push({ severity: 'warning', message: `${where}: the condition uses ${unknown.join(', ')}, not a variable of a sentence (${[...variables].join(', ')})`, ...at(node?.range?.[0]) })
 			})
 		})
 		// a name twice in a list (two properties price): λORM takes either, a form would edit only one

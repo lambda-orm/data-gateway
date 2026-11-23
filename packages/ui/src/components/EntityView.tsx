@@ -5,6 +5,7 @@ import { explorerMessagesOf, format } from '../domain/explorerI18n'
 import { Locale } from '../domain/i18n'
 import { measure, failure, QueryResult } from '../domain/results'
 import { DomainDiagram } from './DomainDiagram'
+import { ExpressionView } from './ExpressionView'
 import { ResultViewer } from './ResultViewer'
 
 export interface EntityViewProps {
@@ -19,6 +20,14 @@ export interface EntityViewProps {
 	onOpenEntity: (schema: string, entity: string) => void
 	/** A query tab with this entity */
 	onQuery: (schema: string, entity: string) => void
+	/** The culture of the numbers and dates of its data */
+	culture?: string
+	/** The query of its diagram (the Workspace opens it in a tab) */
+	onQueryText?: (schema: string, query: string) => void
+	/** Its form, to change it (when the credential may write the schema) */
+	onEdit?: (schema: string, entity: string) => void
+	/** the text of the button of onEdit */
+	editLabel?: string
 	/** Rows per page of the data (default 50) */
 	pageSize?: number
 }
@@ -32,7 +41,7 @@ const Check: React.FC<{ on?: boolean }> = ({ on }) => <>{on ? '✓' : ''}</>
  * auto, default, enum, what each foreign key references, expressions), its relations and what references it, its
  * keys, indexes and constraints, its rows (read only, by pages) and its diagram with its neighbours.
  */
-export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: name, domain: loadDomain, theme = 'light', locale, onOpenEntity, onQuery, pageSize = 50 }) => {
+export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: name, domain: loadDomain, theme = 'light', locale, onOpenEntity, onQuery, onQueryText, onEdit, culture, editLabel = 'Edit', pageSize = 50 }) => {
 	const m = explorerMessagesOf(locale)
 	const [domain, setDomain] = useState<DomainInfo>()
 	const [error, setError] = useState<string>()
@@ -52,6 +61,8 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 		return map
 	}, [domain, name])
 	const referencedBy = useMemo(() => domain ? referencesTo(domain, name) : [], [domain, name])
+	// the variables of its expressions: its properties (colored apart)
+	const names = useMemo(() => (entity?.properties ?? []).map(p => p.name), [entity])
 
 	useEffect(() => {
 		if (section !== 'data' || !entity || entity.abstract) return
@@ -84,6 +95,7 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 				{entity.view && <span className="lw-badge">{m.viewEntity}</span>}
 				{entity.extends && <span className="lw-badge">{format(m.extendsEntity, { name: entity.extends })}</span>}
 				<span className="lw-spacer" />
+				{onEdit && <button onClick={() => onEdit(schema, entity.name)}>{editLabel}</button>}
 				{!entity.abstract && <button className="lw-primary" onClick={() => onQuery(schema, entity.name)}>{m.queryIt}</button>}
 			</div>
 			<div className="lw-toolbar" role="tablist" aria-label={entity.name}>
@@ -109,7 +121,7 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 									<td><Check on={p.autoIncrement} /></td>
 									<td><code>{p.default ?? ''}</code></td>
 									<td>{references.has(p.name) && link(references.get(p.name)!.split('.')[0])}{references.has(p.name) && <span className="lw-muted">.{references.get(p.name)!.split('.').slice(1).join('.')}</span>}</td>
-									<td><code>{[p.readExp && `read: ${p.readExp}`, p.writeExp && `write: ${p.writeExp}`].filter(Boolean).join(' · ')}</code></td>
+									<td>{p.readExp && <span className="lw-exp"><span className="lw-muted">read </span><ExpressionView expression={p.readExp} variables={names} /></span>}{p.writeExp && <span className="lw-exp"><span className="lw-muted">write </span><ExpressionView expression={p.writeExp} variables={names} /></span>}</td>
 								</tr>
 							))}
 						</tbody>
@@ -158,7 +170,7 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 					<h4>{m.constraints}</h4>
 					{entity.constraints?.length ? (
 						<table className="lw-table lw-form-table"><thead><tr><th>{m.message}</th><th>{m.condition}</th></tr></thead>
-							<tbody>{entity.constraints.map((c, i) => <tr key={i}><td>{c.message}</td><td><code>{c.condition}</code></td></tr>)}</tbody></table>
+							<tbody>{entity.constraints.map((c, i) => <tr key={i}><td>{c.message}</td><td><ExpressionView expression={c.condition} variables={names} /></td></tr>)}</tbody></table>
 					) : <p className="lw-muted">{m.none}</p>}
 				</div>
 			)}
@@ -171,12 +183,12 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 						<button onClick={() => setPage(page + 1)} disabled={!result?.ok || rows < pageSize}>{m.next} ▶</button>
 						<span className="lw-muted">{m.readOnlyData}</span>
 					</div>
-					{result ? <ResultViewer key={page} result={result} locale={locale} maxRows={pageSize} fileName={`${name}-page-${page}`} initialView="table" /> : <span className="lw-muted">{m.loading}</span>}
+					{result ? <ResultViewer key={page} result={result} locale={locale} theme={theme} culture={culture} maxRows={pageSize} fileName={`${name}-page-${page}`} initialView="table" /> : <span className="lw-muted">{m.loading}</span>}
 				</>
 			)}
 
 			{section === 'diagram' && (
-				<DomainDiagram api={api} schema={schema} focus={entity.name} theme={theme} locale={locale} onOpenEntity={onOpenEntity} height="60vh" exportName={`${entity.name}-diagram`} />
+				<DomainDiagram api={api} schema={schema} focus={entity.name} theme={theme} locale={locale} onOpenEntity={onOpenEntity} onQueryText={onQueryText} height="60vh" exportName={`${entity.name}-diagram`} />
 			)}
 		</div>
 	)

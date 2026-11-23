@@ -9,7 +9,8 @@ import { normalizeSchemaPath, schemaPathIssues, schemaPathsIssues } from '../../
 import { applyPatch, PatchError, referencesOf, SchemaPatch } from '../../domain/admin/schemaPatch'
 import { lineDiff } from '../../domain/admin/lineDiff'
 import { dotEnvNames, editDotEnv, schemaVariables, VARIABLE_NAME } from '../../domain/admin/dotEnv'
-import { CodeGeneratorPort, SchemaIssue, SchemaValidatorPort, VersionConflict, WorkspaceStorePort, YamlPort } from '../ports/output/adminPorts'
+import { EXPRESSION_CONTEXTS, ExpressionVariable } from '../../domain/admin/expressions'
+import { CodeGeneratorPort, ExpressionLanguage, ExpressionLanguagePort, SchemaIssue, SessionStatePort, SchemaValidatorPort, VersionConflict, WorkspaceStorePort, YamlPort } from '../ports/output/adminPorts'
 import { ClockPort, LoggerPort } from '../ports/output/supportPorts'
 
 export const SCHEMA_FILE = 'lambdaORM.yaml'
@@ -35,6 +36,9 @@ export interface WorkspaceSummary extends SchemaState {
 
 /** What a new workspace starts with */
 export type WorkspaceTemplate = 'empty'
+
+/** the state of the UI of a credential: its tabs with their drafts */
+const SESSION_MAX_BYTES = 2 * 1024 * 1024
 
 const EMPTY_SCHEMA = `# A schema of λORM: https://lambda-orm.github.io/wiki/schema/SchemaDefinition/
 domain:
@@ -75,8 +79,54 @@ export class AdminService {
 		private readonly clock: ClockPort,
 		private readonly logger: LoggerPort,
 		/** the code of a domain for a language (build) */
-		private readonly code: CodeGeneratorPort = { files: () => [] }
+		private readonly code: CodeGeneratorPort = { files: () => [] },
+		/** the expressions of a schema (3xpr): the condition of a source of a stage */
+		private readonly expressions?: ExpressionLanguagePort,
+		/** where the UI of each credential was (its tabs, drafts, what is unfolded) */
+		private readonly sessions?: SessionStatePort
 	) {}
+
+	/** The state of the UI of the credential that asks: only its own, whatever its permissions */
+	public async session (principal: Principal): Promise<{ state: unknown, updatedAt: string } | { state: null }> {
+		if (!this.sessions) throw notFound('the state of the UI is not kept (it needs orm.workspacePath)')
+		return (await this.sessions.read(principal.name)) ?? { state: null }
+	}
+
+	public async saveSession (principal: Principal, body: any): Promise<{ updatedAt: string }> {
+		if (!this.sessions) throw notFound('the state of the UI is not kept (it needs orm.workspacePath)')
+		const state = body?.state
+		if (state === null) {
+			await this.sessions.remove(principal.name)
+			return { updatedAt: this.clock.now().toISOString() }
+		}
+		if (!state || typeof state !== 'object' || Array.isArray(state)) throw badRequest('ValidationError', 'state is an object (what the UI keeps), or null to forget it')
+		if (JSON.stringify(state).length > SESSION_MAX_BYTES) throw new GatewayError(413, 'PayloadTooLarge', `the state of the UI is at most ${SESSION_MAX_BYTES} bytes`)
+		const at = this.clock.now().toISOString()
+		await this.sessions.write(principal.name, state, at)
+		return { updatedAt: at }
+	}
+
+	/** The language of the expressions and the variables of each kind of expression (stageSource) */
+	public expressionLanguage (principal: Principal): ExpressionLanguage & { contexts: Record<string, ExpressionVariable[]> } {
+		this.require(principal, 'schemaRead')
+		if (!this.expressions) throw notFound('the expressions are not available')
+		return { ...this.expressions.language(), contexts: EXPRESSION_CONTEXTS }
+	}
+
+	/** Whether an expression is right: it parses, and uses only the variables of its context */
+	public checkExpression (principal: Principal, body: any): { valid: boolean, error?: string, variables: string[], unknown: string[] } {
+		this.require(principal, 'schemaRead')
+		if (!this.expressions) throw notFound('the expressions are not available')
+		if (typeof body?.expression !== 'string') throw badRequest('ValidationError', 'expression is required')
+		const context = body.context ?? 'stageSource'
+		const variables = EXPRESSION_CONTEXTS[context]
+		if (!variables) throw badRequest('ValidationError', `context is one of ${Object.keys(EXPRESSION_CONTEXTS).join(', ')}`)
+		if (!body.expression.trim()) return { valid: true, variables: [], unknown: [] }
+		const checked = this.expressions.check(body.expression)
+		const known = new Set(variables.map(v => v.name))
+		const unknown = checked.variables.filter(v => !known.has(v))
+		return { valid: !checked.error && unknown.length === 0, ...checked, unknown }
+	}
 
 	// ─── permissions ─────────────────────────────────────────────────────────
 
@@ -122,7 +172,7 @@ export class AdminService {
 	}
 
 	/** A new workspace under orm.workspacePath; the monitor starts its schema */
-	public async create (principal: Principal, request: { path?: unknown, template?: unknown, copyOf?: unknown }): Promise<{ path: string, version: string }> {
+	public async create (principal: Principal, request: { path?: unknown, template?: unknown, copyOf?: unknown, name?: unknown, description?: unknown }): Promise<{ path: string, version: string }> {
 		this.require(principal, 'schemaAdmin')
 		if (this.options.root === undefined) throw new GatewayError(409, 'ConflictError', 'new workspaces need orm.workspacePath')
 		if (typeof request.path !== 'string') throw badRequest('ValidationError', 'path is required (the route of the new schema, like iot/v1)')
@@ -139,6 +189,21 @@ export class AdminService {
 			text = source.text
 		} else if (request.template !== undefined && request.template !== 'empty') {
 			throw badRequest('ValidationError', `unknown template "${String(request.template)}" (empty)`)
+		}
+		// what the schema is, for people: on top of a new file, or over those of the copied one
+		const about = Object.fromEntries((['name', 'description'] as const)
+			.filter(k => typeof request[k] === 'string' && (request[k] as string).trim())
+			.map(k => [k, (request[k] as string).trim()]))
+		if (Object.keys(about).length) {
+			const parsed = (this.yaml.parse(text) ?? {}) as Record<string, unknown>
+			if (Object.keys(about).some(k => k in parsed)) {
+				text = this.yaml.merge(text, { ...parsed, ...about })
+			} else {
+				const lines = text.split('\n')
+				let top = 0
+				while (top < lines.length && lines[top].startsWith('#')) top++
+				text = [...lines.slice(0, top), this.yaml.stringify(about).trimEnd(), ...lines.slice(top)].join('\n')
+			}
 		}
 		const dir = this.store.folderOf(this.options.root, path)
 		try {

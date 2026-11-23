@@ -20,7 +20,16 @@ let elk: Promise<ElkApi> | undefined
 
 /** ELK, loaded on first use (the application that never draws a diagram never downloads it) */
 const loadElk = (): Promise<ElkApi> => {
-	if (!elk) elk = import('elkjs/lib/elk.bundled.js').then(m => new (m.default as any)() as ElkApi)
+	if (!elk) {
+		elk = import('elkjs/lib/elk.bundled.js').then(m => new (m.default as any)() as ElkApi).catch(error => {
+			// not loaded: the next diagram tries again; a module that is not there any more is a page older than its server
+			elk = undefined
+			const message = String(error?.message ?? error)
+			throw new Error(/dynamically imported module|Importing a module script failed/i.test(message)
+				? `the page is older than the gateway (it was updated): reload it to draw diagrams — ${message}`
+				: message)
+		})
+	}
 	return elk
 }
 

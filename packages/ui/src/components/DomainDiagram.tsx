@@ -5,6 +5,10 @@ import { QueryApiPort, SchemaInfo } from '../application/ports'
 import { elkLayout, LayoutPort, LayoutResult, Point } from '../infrastructure/elkLayout'
 import { HeadersProvider, RestQueryApi } from '../infrastructure/restQueryApi'
 import { SchemaSelector } from './QueryWorkbench'
+import { Icons, MenuButton, Modal } from './dialogs'
+import { pdfOfJpeg } from '../infrastructure/pdf'
+import { diagramQuery } from '../domain/queryFormat'
+import { DiagramDetail } from '../domain/savedItems'
 
 export interface DomainDiagramProps {
 	/** URL of the data-gateway (its REST transport); or api */
@@ -35,9 +39,18 @@ export interface DomainDiagramProps {
 	onRelationNamesChange?: (show: boolean) => void
 	/** A × on each box (and the Delete key on the chosen one) takes an entity out of the diagram (editable) */
 	onRemoveEntity?: (entity: string) => void
-	/** Names only at the start */
+	/** The query that reads what the diagram shows (a button of its bar): the Workspace opens it in a tab */
+	onQueryText?: (schema: string, query: string) => void
+	/** Several out at once: the selected boxes (Delete, or the button of the bar) */
+	onRemoveEntities?: (entities: string[]) => void
+	/** Names only at the start (detail 'name') */
 	compact?: boolean
 	onCompactChange?: (compact: boolean) => void
+	/** What each box shows: all its properties, the keys (PK and FK), the primary key, or its name */
+	detail?: DiagramDetail
+	onDetailChange?: (detail: DiagramDetail) => void
+	/** A + on each box that has related tables out of the diagram adds them (editable) */
+	onAddEntities?: (entities: string[]) => void
 	/** Buttons of the application in the bar (Save) */
 	toolbar?: React.ReactNode
 	/** File name of the exports, without extension */
@@ -103,10 +116,12 @@ const labelAt = (from: Point, toward: Point): Point => {
 
 const Box: React.FC<{
 	entity: EntityInfo, at: Point, compact: boolean, focused: boolean, foreignKeys?: Set<string>, colors: typeof PALETTES.light
-	onClick: () => void, onDoubleClick: () => void, onPointerDown?: (e: React.PointerEvent) => void
+	onClick: (e: React.MouseEvent) => void, onDoubleClick: () => void, onPointerDown?: (e: React.PointerEvent) => void
 	/** A × in the title that takes the box out of the diagram */
 	onRemove?: () => void, removeLabel?: string
-}> = ({ entity, at, compact, focused, foreignKeys, colors, onClick, onDoubleClick, onPointerDown, onRemove, removeLabel }) => {
+	/** A + in the title that adds its related tables out of the diagram */
+	onAddRelated?: () => void, addRelatedLabel?: string
+}> = ({ entity, at, compact, focused, foreignKeys, colors, onClick, onDoubleClick, onPointerDown, onRemove, removeLabel, onAddRelated, addRelatedLabel }) => {
 	const { width, height } = boxSize(entity, compact)
 	const keys = new Set(entity.primaryKey ?? [])
 	return (
@@ -131,6 +146,14 @@ const Box: React.FC<{
 					</g>
 				)
 			})}
+			{onAddRelated && (
+				<g className="lw-box-remove lw-box-add" role="button" aria-label={`${addRelatedLabel ?? 'add related'} ${entity.name}`} transform={`translate(${width - (onRemove ? 40 : 20)},4)`}
+					onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onAddRelated() }} onDoubleClick={e => e.stopPropagation()}>
+					<title>{addRelatedLabel}</title>
+					<rect width={16} height={16} rx={3} fill={colors.box} stroke={colors.border} />
+					<path d="M8 4v8M4 8h8" stroke={colors.accent} strokeWidth={1.8} />
+				</g>
+			)}
 			{onRemove && (
 				<g className="lw-box-remove" role="button" aria-label={`${removeLabel ?? 'remove'} ${entity.name}`} transform={`translate(${width - 20},4)`}
 					onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onRemove() }} onDoubleClick={e => e.stopPropagation()}>
@@ -217,9 +240,10 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 	const [focus, setFocus] = useState<string>()
 	const [search, setSearch] = useState('')
 	const [depth, setDepth] = useState<Depth>(1)
-	const [compactState, setCompactState] = useState(props.compact ?? false)
-	const compact = props.compact ?? compactState
-	const setCompact = (value: boolean) => { setCompactState(value); props.onCompactChange?.(value) }
+	const [detailState, setDetailState] = useState<DiagramDetail>(props.detail ?? (props.compact ? 'name' : 'all'))
+	const detail: DiagramDetail = props.detail ?? (props.compact !== undefined && !props.onDetailChange ? (props.compact ? 'name' : (detailState === 'name' ? 'all' : detailState)) : detailState)
+	const compact = detail === 'name'
+	const setDetail = (value: DiagramDetail) => { setDetailState(value); props.onDetailChange?.(value); props.onCompactChange?.(value === 'name') }
 	// the places while a box is dragged (the saved ones come back in positions)
 	const [moving, setMoving] = useState<Record<string, { x: number, y: number }>>()
 	const [movingBends, setMovingBends] = useState<Record<string, number>>()
@@ -227,7 +251,7 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 	const [namesState, setNamesState] = useState(props.relationNames ?? false)
 	const relationNames = props.relationNames ?? namesState
 	const setRelationNames = (value: boolean) => { setNamesState(value); props.onRelationNamesChange?.(value) }
-	const boxDrag = useRef<{ name: string, x: number, y: number, from: { x: number, y: number }, all: Record<string, { x: number, y: number }>, moved: boolean }>()
+	const boxDrag = useRef<{ name: string, x: number, y: number, from: { x: number, y: number }, all: Record<string, { x: number, y: number }>, moved: boolean, group: string[], starts: Record<string, { x: number, y: number }> }>()
 	const [laid, setLaid] = useState<LayoutResult>()
 	const [drawing, setDrawing] = useState(false)
 	const [view, setView] = useState<View>({ x: 0, y: 0, k: 1 })
@@ -235,6 +259,11 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 	const svg = useRef<SVGSVGElement>(null)
 	const pendingFit = useRef(false)
 	const drag = useRef<{ x: number, y: number, view: View, moved: boolean }>()
+	// the boxes selected (editable): moved together, removed together
+	const [selected, setSelected] = useState<Set<string>>(new Set())
+	// what dragging the background does: move the drawing, or select the boxes it encloses (Shift: select with any)
+	const [tool, setTool] = useState<'move' | 'select'>('move')
+	const [band, setBand] = useState<{ x0: number, y0: number, x1: number, y1: number, add: boolean }>()
 	const clickTimer = useRef<ReturnType<typeof setTimeout>>()
 
 	useEffect(() => {
@@ -265,7 +294,28 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 	const visible = useMemo(() => !domain ? new Set<string>() : only ? new Set(only) : neighbourhood(domain, edges, focus, depth),
 		// only changes by its content
 		[domain, edges, focus, depth, onlyKey])
-	const shownEntities = useMemo(() => domain?.entities.filter(e => visible.has(e.name)) ?? [], [domain, visible])
+	// what a box shows of its entity: its keys only (PK, and FK), or all its properties
+	const detailed = useCallback((e: EntityInfo): EntityInfo => detail === 'all' || detail === 'name'
+		? e
+		: { ...e, properties: (e.properties ?? []).filter(p => (e.primaryKey ?? []).includes(p.name) || (detail === 'keys' && !!foreignKeys.get(e.name)?.has(p.name))) }, [detail, foreignKeys])
+	const shownEntities = useMemo(() => domain?.entities.filter(e => visible.has(e.name)).map(detailed) ?? [], [domain, visible, detailed])
+	// the related tables of each entity not in the diagram yet, with what relates them (relations, an inheritance)
+	const outside = useMemo(() => {
+		const map = new Map<string, Map<string, string[]>>()
+		const add = (a: string, b: string, how: string) => {
+			if (visible.has(b) || a === b) return
+			const of = map.get(a) ?? map.set(a, new Map()).get(a)!
+			of.set(b, [...new Set([...(of.get(b) ?? []), how])])
+		}
+		for (const e of edges) {
+			const how = e.kind === 'extends' ? 'extends' : e.names.join(', ')
+			add(e.parent, e.child, how)
+			add(e.child, e.parent, how)
+		}
+		return map
+	}, [edges, visible])
+	// the related tables of a box being chosen (its +)
+	const [adding, setAdding] = useState<{ entity: string, chosen: Set<string> }>()
 	const shownEdges = useMemo(() => edges.filter(e => visible.has(e.parent) && visible.has(e.child)), [edges, visible])
 
 	const fit = useCallback((result: LayoutResult | undefined = laid) => {
@@ -285,7 +335,7 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 	}, [laid, focus, domain, depth, compact, only])
 
 	const [base, setBase] = useState<LayoutResult>()
-	const entityMap = useMemo(() => new Map((domain?.entities ?? []).map(e => [e.name, e])), [domain])
+	const entityMap = useMemo(() => new Map((domain?.entities ?? []).map(e => [e.name, detailed(e)])), [domain, detailed])
 	const placed = moving ?? positions
 	const bends = movingBends ?? props.bends
 	// with places by hand (saved or while dragging), the boxes go there and the lines are routed between them
@@ -370,8 +420,14 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 		setSearch('')
 		if (depth === 'all') { setFocus(name); centerOn(name) } else setFocus(name)
 	}
-	const click = (name: string) => {
+	const click = (name: string, e?: React.MouseEvent) => {
 		if (drag.current?.moved) return
+		if (editable && e && (e.shiftKey || e.ctrlKey || e.metaKey)) {
+			// one more, or one less, in the selection
+			setSelected(s => { const n = new Set(s); if (n.has(name)) n.delete(name); else n.add(name); return n })
+			return
+		}
+		if (editable) setSelected(new Set([name]))
 		clearTimeout(clickTimer.current)
 		clickTimer.current = setTimeout(() => choose(name), 220)
 	}
@@ -387,7 +443,9 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 		e.stopPropagation()
 		const all: Record<string, { x: number, y: number }> = {}
 		for (const [n, at] of laid.nodes) all[n] = { x: at.x, y: at.y }
-		boxDrag.current = { name, x: e.clientX, y: e.clientY, from: all[name], all, moved: false }
+		// a selected box moves with the others selected; another one alone
+		const group = selected.has(name) && !(e.shiftKey || e.ctrlKey || e.metaKey) ? [...selected].filter(n => all[n]) : [name]
+		boxDrag.current = { name, x: e.clientX, y: e.clientY, from: all[name], all, moved: false, group, starts: Object.fromEntries(group.map(n => [n, all[n]])) }
 		;(e.currentTarget as Element).setPointerCapture?.(e.pointerId)
 	}
 	const boxMove = (e: React.PointerEvent): boolean => {
@@ -397,7 +455,12 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 		const dy = (e.clientY - d.y) / view.k
 		if (!d.moved && Math.hypot(dx, dy) < 3) return true
 		d.moved = true
-		d.all = { ...d.all, [d.name]: { x: Math.max(0, Math.round(d.from.x + dx)), y: Math.max(0, Math.round(d.from.y + dy)) } }
+		// the group keeps its shape: the move stops where the first of them would leave the drawing
+		const minX = Math.min(...d.group.map(n => d.starts[n].x))
+		const minY = Math.min(...d.group.map(n => d.starts[n].y))
+		const mx = Math.max(-minX, dx)
+		const my = Math.max(-minY, dy)
+		d.all = { ...d.all, ...Object.fromEntries(d.group.map(n => [n, { x: Math.round(d.starts[n].x + mx), y: Math.round(d.starts[n].y + my) }])) }
 		setMoving(d.all)
 		return true
 	}
@@ -451,7 +514,7 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 	const relayout = () => { setMoving(undefined); setMovingBends(undefined); onPositionsChange?.(undefined); props.onBendsChange?.(undefined) }
 	useEffect(() => () => clearTimeout(clickTimer.current), [])
 
-	const exportAs = (kind: 'svg' | 'png') => {
+	const exportAs = (kind: 'svg' | 'png' | 'pdf') => {
 		if (!svg.current || !laid) return
 		const { text, width, height: h } = standaloneSvg(svg.current, laid, colors.canvas)
 		const name = props.exportName ?? `${(schema || 'root').replace(/\//g, '-')}-model`
@@ -467,6 +530,23 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 			if (!context) return
 			context.scale(scale, scale)
 			context.drawImage(image, 0, 0)
+			if (kind === 'pdf') {
+				// a page of the size of the diagram (1 px = 1 pt) with its image, on white (JPEG has no transparency)
+				const flat = document.createElement('canvas')
+				flat.width = canvas.width
+				flat.height = canvas.height
+				const paper = flat.getContext('2d')
+				if (!paper) return
+				paper.fillStyle = colors.canvas
+				paper.fillRect(0, 0, flat.width, flat.height)
+				paper.drawImage(canvas, 0, 0)
+				const jpeg = atob(flat.toDataURL('image/jpeg', 0.92).split(',')[1])
+				const bytes = Uint8Array.from(jpeg, c => c.charCodeAt(0))
+				const blobUrl = URL.createObjectURL(new Blob([pdfOfJpeg(bytes, flat.width, flat.height, width, h)], { type: 'application/pdf' }))
+				download(blobUrl, `${name}.pdf`)
+				setTimeout(() => URL.revokeObjectURL(blobUrl), 1000)
+				return
+			}
 			canvas.toBlob(blob => {
 				if (!blob) return
 				const blobUrl = URL.createObjectURL(blob)
@@ -478,19 +558,78 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 	}
 
 	const pointerDown = (e: React.PointerEvent) => {
+		// select by a rectangle: the select tool, or Shift with any (the middle button always moves the drawing)
+		if (editable && e.button === 0 && (tool === 'select' || e.shiftKey)) {
+			const rect = viewport.current!.getBoundingClientRect()
+			const x = e.clientX - rect.left
+			const y = e.clientY - rect.top
+			setBand({ x0: x, y0: y, x1: x, y1: y, add: e.shiftKey || e.ctrlKey || e.metaKey })
+			;(e.currentTarget as Element).setPointerCapture?.(e.pointerId)
+			return
+		}
 		drag.current = { x: e.clientX, y: e.clientY, view, moved: false }
 	}
 	const pointerMove = (e: React.PointerEvent) => {
 		if (boxMove(e) || lineMove(e)) return
+		if (band) {
+			const rect = viewport.current!.getBoundingClientRect()
+			setBand({ ...band, x1: e.clientX - rect.left, y1: e.clientY - rect.top })
+			return
+		}
 		const start = drag.current
-		if (!start || (e.buttons & 1) === 0) return
+		if (!start || (e.buttons & (1 | 4)) === 0) return
 		const dx = e.clientX - start.x
 		const dy = e.clientY - start.y
 		if (!start.moved && Math.hypot(dx, dy) < 4) return
 		if (!start.moved) { start.moved = true; (e.currentTarget as Element).setPointerCapture?.(e.pointerId) }
 		setView({ ...start.view, x: start.view.x + dx, y: start.view.y + dy })
 	}
-	const pointerUp = () => { boxUp(); lineUp(); setTimeout(() => { drag.current = undefined }, 0) }
+	const bandUp = (): boolean => {
+		if (!band) return false
+		setBand(undefined)
+		if (!laid) return true
+		// the rectangle in the coordinates of the drawing: the boxes it touches
+		const left = (Math.min(band.x0, band.x1) - view.x) / view.k
+		const right = (Math.max(band.x0, band.x1) - view.x) / view.k
+		const top = (Math.min(band.y0, band.y1) - view.y) / view.k
+		const bottom = (Math.max(band.y0, band.y1) - view.y) / view.k
+		const tiny = Math.abs(band.x1 - band.x0) < 3 && Math.abs(band.y1 - band.y0) < 3
+		const inside = tiny ? [] : shownEntities.filter(entity => {
+			const at = laid.nodes.get(entity.name)
+			if (!at) return false
+			const size = boxSize(entity, compact)
+			return at.x < right && at.x + size.width > left && at.y < bottom && at.y + size.height > top
+		}).map(e => e.name)
+		setSelected(s => new Set([...(band.add ? s : []), ...inside]))
+		drag.current = { x: 0, y: 0, view, moved: true }
+		setTimeout(() => { drag.current = undefined }, 0)
+		return true
+	}
+	const pointerUp = () => {
+		if (bandUp()) return
+		const plain = drag.current && !drag.current.moved && !boxDrag.current && !lineDrag.current
+		boxUp(); lineUp()
+		// a click on the background: nothing selected
+		if (plain) setSelected(new Set())
+		setTimeout(() => { drag.current = undefined }, 0)
+	}
+	// the buttons of the zoom: around the middle of the drawing
+	const zoomBy = (factor: number) => {
+		const box = viewport.current
+		if (!box) return
+		const cx = box.clientWidth / 2
+		const cy = box.clientHeight / 2
+		setView(v => { const k = Math.min(3, Math.max(0.05, v.k * factor)); return { k, x: cx - (cx - v.x) * (k / v.k), y: cy - (cy - v.y) * (k / v.k) } })
+	}
+	// the selected ones out of the diagram (at least one box stays)
+	const removable = [...selected].filter(n => visible.has(n))
+	const canRemoveSelected = editable && !!(props.onRemoveEntities || props.onRemoveEntity) && removable.length > 0 && removable.length < shownEntities.length
+	const removeSelected = () => {
+		if (!canRemoveSelected) return
+		if (props.onRemoveEntities) props.onRemoveEntities(removable)
+		else props.onRemoveEntity!(removable[0])
+		setSelected(new Set())
+	}
 
 	const relations = shownEdges.filter(e => e.kind === 'relation').length
 	return (
@@ -509,18 +648,77 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 					<option value="2">{m.depth2}</option>
 					<option value="all">{m.wholeModel}</option>
 				</select>}
-				<label className="lw-check"><input type="checkbox" checked={compact} onChange={e => setCompact(e.target.checked)} /> {m.namesOnly}</label>
+				<label className="lw-check">{m.detail}{' '}
+					<select aria-label={m.detail} value={detail} onChange={e => setDetail(e.target.value as DiagramDetail)}>
+						<option value="all">{m.detailAll}</option>
+						<option value="keys">{m.detailKeys}</option>
+						<option value="pk">{m.detailPk}</option>
+						<option value="name">{m.detailName}</option>
+					</select>
+				</label>
 				<label className="lw-check"><input type="checkbox" checked={relationNames} onChange={e => setRelationNames(e.target.checked)} /> {m.relationNames}</label>
+				<span className="lw-tool-group" role="group" aria-label={m.zoomIn}>
+					{editable && (
+						<>
+							<button className="lw-tool" aria-label={m.toolSelect} title={m.toolSelect} aria-pressed={tool === 'select'} onClick={() => setTool('select')}><Icons.pointer size={18} /></button>
+							<button className="lw-tool" aria-label={m.toolMove} title={m.toolMove} aria-pressed={tool === 'move'} onClick={() => setTool('move')}><Icons.hand size={18} /></button>
+						</>
+					)}
+					<button className="lw-tool" aria-label={m.zoomOut} title={m.zoomOut} onClick={() => zoomBy(1 / 1.25)}><Icons.zoomOut size={18} /></button>
+					<span className="lw-zoom" aria-live="polite">{Math.round(view.k * 100)}%</span>
+					<button className="lw-tool" aria-label={m.zoomIn} title={m.zoomIn} onClick={() => zoomBy(1.25)}><Icons.zoomIn size={18} /></button>
+				</span>
 				<button onClick={() => fit()}>{m.fit}</button>
+				{props.onQueryText && (
+					<button className="lw-tool" aria-label={m.diagramQuery} title={m.diagramQuery} disabled={!domain || shownEntities.length === 0}
+						onClick={() => {
+							// its root: the box selected (one), or the most connected
+							const chosen = [...selected].filter(n => visible.has(n))
+							props.onQueryText!(schema ?? '', diagramQuery(domain!, shownEntities.map(e => e.name), chosen.length === 1 ? chosen[0] : undefined))
+						}}><Icons.query size={18} /></button>
+				)}
+				{canRemoveSelected && <button onClick={removeSelected}><Icons.trash /> {format(m.removeSelected, { n: removable.length })}</button>}
 				{editable && <button onClick={relayout} disabled={!positions && !props.bends}>{m.relayout}</button>}
-				<button onClick={() => exportAs('svg')} disabled={!laid}>SVG</button>
-				<button onClick={() => exportAs('png')} disabled={!laid}>PNG</button>
+				<MenuButton label={m.exportAs} icon={<Icons.download />} disabled={!laid} text items={[
+					{ label: 'PDF', onClick: () => exportAs('pdf') },
+					{ label: 'PNG', onClick: () => exportAs('png') },
+					{ label: 'SVG', onClick: () => exportAs('svg') }
+				]} />
 				<span className="lw-who">{domain && format(m.summary, { entities: shownEntities.length, relations })}</span>
 			</div>
+			{adding && outside.get(adding.entity) && (() => {
+				const options = [...outside.get(adding.entity)!].sort(([a], [b]) => a.localeCompare(b))
+				const all = options.length > 0 && options.every(([name]) => adding.chosen.has(name))
+				const flip = (name: string) => { const chosen = new Set(adding.chosen); if (chosen.has(name)) chosen.delete(name); else chosen.add(name); setAdding({ ...adding, chosen }) }
+				return (
+					<Modal title={format(m.relatedTitle, { name: adding.entity })} onClose={() => setAdding(undefined)} theme={theme}>
+						<div className="lw-related">
+							<label className="lw-related-all"><input type="checkbox" checked={all} onChange={() => setAdding({ ...adding, chosen: all ? new Set() : new Set(options.map(([name]) => name)) })} /> {m.allNone}</label>
+							<ul>
+								{options.map(([name, how]) => (
+									<li key={name}>
+										<label><input type="checkbox" checked={adding.chosen.has(name)} onChange={() => flip(name)} /> <strong>{name}</strong> <span className="lw-type">{how.join(' · ')}</span></label>
+									</li>
+								))}
+							</ul>
+						</div>
+						<div className="lw-form-actions">
+							<button type="button" onClick={() => setAdding(undefined)}>{m.cancelAdd}</button>
+							<button type="button" className="lw-primary" disabled={adding.chosen.size === 0}
+								onClick={() => { props.onAddEntities!([...adding.chosen]); setAdding(undefined) }}>{m.addChosen} ({adding.chosen.size})</button>
+						</div>
+					</Modal>
+				)
+			})()}
 			{error && <div className="lw-notice" role="alert">{error}</div>}
-			<div ref={viewport} className="lw-diagram-view" style={{ height, background: colors.canvas }} tabIndex={props.onRemoveEntity ? 0 : undefined}
-				onKeyDown={props.onRemoveEntity ? e => {
-					if ((e.key === 'Delete' || e.key === 'Backspace') && focus && visible.has(focus) && shownEntities.length > 1) { e.preventDefault(); props.onRemoveEntity!(focus) }
+			<div ref={viewport} className="lw-diagram-view" style={{ height, background: colors.canvas }} tabIndex={editable ? 0 : undefined}
+				data-tool={tool}
+				onKeyDown={editable ? e => {
+					if (e.key === 'Escape') { setSelected(new Set()); return }
+					if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); setSelected(new Set(shownEntities.map(x => x.name))); return }
+					if (e.key !== 'Delete' && e.key !== 'Backspace') return
+					if (canRemoveSelected && removable.length > 1) { e.preventDefault(); removeSelected(); return }
+					if (props.onRemoveEntity && focus && visible.has(focus) && shownEntities.length > 1) { e.preventDefault(); props.onRemoveEntity(focus); setSelected(new Set()) }
 				} : undefined}
 				onPointerDown={pointerDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp}>
 				{(drawing || (!laid && !error)) && <div className="lw-diagram-status">{m.loadingModel}</div>}
@@ -533,15 +731,20 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 						{laid && shownEntities.map(entity => {
 							const at = laid.nodes.get(entity.name)
 							return at && (
-								<Box key={entity.name} entity={entity} at={at} compact={compact} focused={entity.name === focus} foreignKeys={foreignKeys.get(entity.name)}
-									colors={colors} onClick={() => click(entity.name)} onDoubleClick={() => doubleClick(entity)} onPointerDown={editable ? boxDown(entity.name) : undefined}
-									onRemove={props.onRemoveEntity && shownEntities.length > 1 ? () => props.onRemoveEntity!(entity.name) : undefined} removeLabel={m.removeFromDiagram} />
+								<Box key={entity.name} entity={entity} at={at} compact={compact} focused={entity.name === focus || selected.has(entity.name)} foreignKeys={foreignKeys.get(entity.name)}
+									colors={colors} onClick={e => click(entity.name, e)} onDoubleClick={() => doubleClick(entity)} onPointerDown={editable ? boxDown(entity.name) : undefined}
+									onRemove={props.onRemoveEntity && shownEntities.length > 1 ? () => props.onRemoveEntity!(entity.name) : undefined} removeLabel={m.removeFromDiagram}
+									onAddRelated={props.onAddEntities && outside.get(entity.name)?.size ? () => setAdding({ entity: entity.name, chosen: new Set() }) : undefined} addRelatedLabel={m.addRelated} />
 							)
 						})}
 					</g>
+					{band && (
+						<rect className="lw-band" x={Math.min(band.x0, band.x1)} y={Math.min(band.y0, band.y1)} width={Math.abs(band.x1 - band.x0)} height={Math.abs(band.y1 - band.y0)}
+							fill={colors.accent} fillOpacity={0.08} stroke={colors.accent} strokeDasharray="4 3" />
+					)}
 				</svg>
 			</div>
-			<div className="lw-hint">{editable ? m.diagramEditHint : m.diagramHint}</div>
+			<div className="lw-hint">{editable ? `${m.diagramEditHint} · ${m.selectHint}` : m.diagramHint}</div>
 		</div>
 	)
 }

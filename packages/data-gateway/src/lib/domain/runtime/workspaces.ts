@@ -24,6 +24,8 @@ export const changeKindOf = (file: string): WorkspaceChangeKind => {
 export const ignoredWorkspaceFile = (file: string): boolean =>
 	/(^|\/)(node_modules|\.git)(\/|$)/.test(file) ||
 	/(^|\/)orm_state(\/|$)/.test(file) ||
+	// the state of the UI of each credential (SQLite): not a file of a schema
+	/(^|\/)\.data-gateway(\/|$)/.test(file) ||
 	/(~|\.swp|\.swx|\.tmp|\.lock)$/.test(file) ||
 	/(^|\/)\.#/.test(file) ||
 	/(^|\/)4913$/.test(file)

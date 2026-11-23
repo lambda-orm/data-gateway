@@ -27,6 +27,9 @@ export interface SavedQueryContent {
 
 export interface SavedQuery extends SavedBase, SavedQueryContent { kind: 'query' }
 
+export type DiagramDetail = 'all' | 'keys' | 'pk' | 'name'
+export const DIAGRAM_DETAILS: DiagramDetail[] = ['all', 'keys', 'pk', 'name']
+
 export interface SavedDiagram extends SavedBase {
 	kind: 'diagram'
 	entities: string[]
@@ -35,6 +38,8 @@ export interface SavedDiagram extends SavedBase {
 	/** Where each line moved by hand has its vertical stretch (x), by the id of the line */
 	bends?: Record<string, number>
 	compact?: boolean
+	/** What each box shows: all its properties, the keys (PK and FK), the primary key, or its name (compact) */
+	detail?: DiagramDetail
 	/** The names of the relations on their lines */
 	relationNames?: boolean
 }
@@ -133,7 +138,7 @@ export const parseExport = (text: string): SavedItem[] | undefined => {
 			})
 		} else {
 			if (!Array.isArray(raw.entities) || !raw.entities.every(isString)) return undefined
-			items.push({ ...base, kind: 'diagram', entities: raw.entities, positions: raw.positions && typeof raw.positions === 'object' ? raw.positions : undefined, bends: raw.bends && typeof raw.bends === 'object' ? raw.bends : undefined, compact: raw.compact === true, relationNames: raw.relationNames === true })
+			items.push({ ...base, kind: 'diagram', entities: raw.entities, positions: raw.positions && typeof raw.positions === 'object' ? raw.positions : undefined, bends: raw.bends && typeof raw.bends === 'object' ? raw.bends : undefined, compact: raw.compact === true, detail: DIAGRAM_DETAILS.includes(raw.detail) ? raw.detail : undefined, relationNames: raw.relationNames === true })
 		}
 	}
 	// an item whose folder isn't in the file goes to the top of its schema

@@ -63,3 +63,33 @@ export interface YamlPort {
 export interface CodeGeneratorPort {
 	files (language: 'node' | 'client-node', domain: unknown, options: { model: boolean, repositories: boolean }): { file: string, content: string }[]
 }
+
+/** A function or an operator of the language of the expressions (3xpr) */
+export interface ExpressionSign {
+	name: string
+	params: { name: string, type?: string, multiple?: boolean }[]
+	returnType: string
+	description?: string
+}
+
+/** The language of the expressions: to suggest and to explain while one is written */
+export interface ExpressionLanguage {
+	functions: ExpressionSign[]
+	operators: ExpressionSign[]
+	constants: string[]
+}
+
+/** An expression of 3xpr: its language, and whether one is right */
+export interface ExpressionLanguagePort {
+	language (): ExpressionLanguage
+	/** the problem of an expression that doesn't parse, or the variables it uses */
+	check (expression: string): { error?: string, variables: string[] }
+}
+
+/** Where the UI of each credential was: its tabs, their drafts, what is unfolded (kept by the gateway, docs/DATA_GATEWAY.md §11.8) */
+export interface SessionStatePort {
+	read (credential: string): Promise<{ state: unknown, updatedAt: string } | undefined>
+	write (credential: string, state: unknown, at: string): Promise<void>
+	remove (credential: string): Promise<void>
+}
+

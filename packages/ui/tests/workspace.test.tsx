@@ -106,7 +106,14 @@ const DOMAIN: DomainInfo = {
 }
 class DomainApi extends FakeApi { async domain () { return DOMAIN } }
 
-const row = (name: string) => screen.getAllByRole('treeitem').find(r => r.querySelector('.lw-tree-label')?.textContent === name)!
+const findRow = (name: string) => screen.queryAllByRole('treeitem').find(r => r.querySelector('.lw-tree-label')?.textContent === name)
+/** a row of the tree; config, domain, data… are inside the Metadata of the schema: unfolded when the row is not there */
+const row = (name: string) => {
+	const found = findRow(name)
+	if (found || name === 'Metadata' || name === 'Metadatos') return found!
+	for (const meta of screen.queryAllByRole('treeitem').filter(r => ['Metadata', 'Metadatos'].includes(r.querySelector('.lw-tree-label')?.textContent ?? '') && r.getAttribute('aria-expanded') !== 'true')) fireEvent.click(meta)
+	return findRow(name)!
+}
 const action = (rowName: string, label: string) => within(row(rowName)).getByRole('button', { name: label })
 /** The entities of a schema: inside its domain */
 const openEntities = (label: string) => { if (!screen.getAllByRole('treeitem').some(r => r.querySelector('.lw-tree-label')?.textContent === label)) fireEvent.click(row('domain')); fireEvent.click(row(label)) }
@@ -340,5 +347,83 @@ describe('saved diagrams', () => {
 		fireEvent.click(visible().getByRole('button', { name: 'Guardar' }))
 		await waitFor(async () => expect((await store.all()).find(i => i.name === 'Ventas')).toMatchObject({ entities: ['Orders'], bends: undefined }))
 		expect(Object.keys((await store.all()).find(i => i.name === 'Ventas')!.kind === 'diagram' ? ((await store.all()).find(i => i.name === 'Ventas') as any).positions : {})).toEqual(['Orders'])
+
+		// the + of a box lists its related tables out of the diagram, to check which to add
+		fireEvent.click(visible().getByRole('button', { name: 'agregar las tablas relacionadas Orders' }))
+		const related = await screen.findByRole('dialog', { name: 'Tablas relacionadas con Orders que no están en el diagrama' })
+		expect(within(related).getByText(/customer/)).toBeTruthy()
+		const addChosen = within(related).getByRole('button', { name: 'agregar (0)' }) as HTMLButtonElement
+		expect(addChosen.disabled).toBe(true)
+		fireEvent.click(within(related).getByRole('checkbox', { name: /Customers/ }))
+		fireEvent.click(within(related).getByRole('button', { name: 'agregar (1)' }))
+		expect(screen.queryByRole('dialog')).toBeNull()
+		await waitFor(() => expect(container.querySelectorAll('[role=tabpanel]:not([hidden]) [data-entity]')).toHaveLength(2))
+		// all related are in: no more +
+		expect(visible().queryByRole('button', { name: 'agregar las tablas relacionadas Orders' })).toBeNull()
+		// what the boxes show: all, the keys, the primary key, the name
+		const orders = () => container.querySelector('[role=tabpanel]:not([hidden]) [data-entity=Orders]')!.textContent
+		expect(orders()).toContain('customerId')
+		fireEvent.change(visible().getByRole('combobox', { name: 'mostrar' }), { target: { value: 'pk' } })
+		await waitFor(() => expect(orders()).not.toContain('customerId'))
+		expect(orders()).toContain('id')
+		fireEvent.change(visible().getByRole('combobox', { name: 'mostrar' }), { target: { value: 'keys' } })
+		await waitFor(() => expect(orders()).toContain('customerId'))
+		fireEvent.change(visible().getByRole('combobox', { name: 'mostrar' }), { target: { value: 'name' } })
+		await waitFor(() => expect(orders()).not.toContain('customerId'))
+		expect(orders()).not.toContain('integer')
+		fireEvent.click(visible().getByRole('button', { name: 'Guardar' }))
+		await waitFor(async () => expect((await store.all()).find(i => i.name === 'Ventas')).toMatchObject({ entities: ['Orders', 'Customers'], detail: 'name', compact: true }))
+		// export: PDF, PNG or SVG
+		fireEvent.click(visible().getByRole('button', { name: 'exportar' }))
+		expect(visible().getAllByRole('menuitem').map(i => i.textContent?.trim())).toEqual(['PDF', 'PNG', 'SVG'])
+		fireEvent.keyDown(document, { key: 'Escape' })
+
+		// the zoom from the bar, besides the wheel
+		const zoom = () => Number(visible().getByText(/^\d+%$/).textContent!.replace('%', ''))
+		const zoomBefore = zoom()
+		fireEvent.click(visible().getByRole('button', { name: 'acercar' }))
+		expect(zoom()).toBeGreaterThan(zoomBefore)
+		fireEvent.click(visible().getByRole('button', { name: 'alejar' }))
+		expect(zoom()).toBe(zoomBefore)
+		expect(visible().getByRole('button', { name: 'mover' }).getAttribute('aria-pressed')).toBe('true')
+
+		// several boxes selected (Ctrl+A), moved together by dragging one
+		const view = container.querySelector('[role=tabpanel]:not([hidden]) .lw-diagram-view')!
+		fireEvent.keyDown(view, { key: 'a', ctrlKey: true })
+		// not all of them can go: one box stays
+		expect(visible().queryByRole('button', { name: /quitar las seleccionadas/ })).toBeNull()
+		const place = (name: string) => container.querySelector(`[role=tabpanel]:not([hidden]) [data-entity=${name}]`)!.getAttribute('transform')
+		const customersAt = place('Customers')
+		const ordersBox = container.querySelector('[role=tabpanel]:not([hidden]) [data-entity=Orders]')!
+		fireEvent.pointerDown(ordersBox, { clientX: 10, clientY: 10, button: 0, buttons: 1, pointerId: 3 })
+		fireEvent.pointerMove(ordersBox, { clientX: 90, clientY: 50, buttons: 1, pointerId: 3 })
+		fireEvent.pointerUp(ordersBox, { clientX: 90, clientY: 50, pointerId: 3 })
+		await waitFor(() => expect(place('Customers')).not.toBe(customersAt))
+		// Ctrl+click takes one out of the selection; the rest goes with Delete
+		fireEvent.click(container.querySelector('[role=tabpanel]:not([hidden]) [data-entity=Customers]')!, { ctrlKey: true })
+		expect(visible().getByRole('button', { name: 'quitar las seleccionadas (1)' })).toBeTruthy()
+		fireEvent.keyDown(view, { key: 'a', ctrlKey: true })
+		fireEvent.click(container.querySelector('[role=tabpanel]:not([hidden]) [data-entity=Orders]')!, { ctrlKey: true })
+		fireEvent.click(visible().getByRole('button', { name: 'quitar las seleccionadas (1)' }))
+		await waitFor(() => expect(container.querySelectorAll('[role=tabpanel]:not([hidden]) [data-entity]')).toHaveLength(1))
+		expect(container.querySelector('[role=tabpanel]:not([hidden]) [data-entity=Orders]')).toBeTruthy()
+
+		// the query of what the diagram shows, in a new tab
+		fireEvent.click(visible().getByRole('button', { name: 'agregar las tablas relacionadas Orders' }))
+		const again = await screen.findByRole('dialog')
+		fireEvent.click(within(again).getByRole('checkbox', { name: /Customers/ }))
+		fireEvent.click(within(again).getByRole('button', { name: 'agregar (1)' }))
+		await waitFor(() => expect(container.querySelectorAll('[role=tabpanel]:not([hidden]) [data-entity]')).toHaveLength(2))
+		fireEvent.click(visible().getByRole('button', { name: 'consulta del diagrama: sus datos' }))
+		const query = await waitFor(() => { const q = visible().getByLabelText('query', { selector: 'textarea' }) as HTMLTextAreaElement; expect(q.value).not.toBe(''); return q })
+		expect(query.value).toMatch(/^(Orders\n\t\.include\(p => p\.customer\)|Customers\n\t\.include\(p => p\.orders\))$/)
+		// the query written to be read, and copied
+		fireEvent.change(query, { target: { value: 'Orders.filter(p=>p.id>1).map(p=>[p.id,p.customerId])' } })
+		fireEvent.click(visible().getByRole('button', { name: 'formatear la consulta' }))
+		await waitFor(() => expect((visible().getByLabelText('query', { selector: 'textarea' }) as HTMLTextAreaElement).value).toBe('Orders\n\t.filter(p => p.id > 1)\n\t.map(p => [p.id, p.customerId])'))
+		const written: string[] = []
+		Object.assign(navigator, { clipboard: { writeText: async (text: string) => { written.push(text) } } })
+		fireEvent.click(visible().getByRole('button', { name: 'copiar la consulta' }))
+		await waitFor(() => expect(written).toEqual(['Orders\n\t.filter(p => p.id > 1)\n\t.map(p => [p.id, p.customerId])']))
 	}, 30000)
 })

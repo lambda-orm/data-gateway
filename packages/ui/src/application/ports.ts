@@ -86,6 +86,30 @@ export interface SchemaIssue {
  * The administration of the workspaces of a gateway with admin.enabled (docs/DATA_GATEWAY.md §11). A failure throws
  * an Error with status: 412 (another changed it: details has what there is now), 422 (invalid: details.issues).
  */
+/** A function or an operator of the expressions of λORM (3xpr) */
+export interface ExpressionSign {
+	name: string
+	params: { name: string, type?: string, multiple?: boolean }[]
+	returnType: string
+	description?: string
+}
+
+/** The language of the expressions and the variables of each kind of expression (stageSource: a condition of a stage) */
+export interface ExpressionLanguage {
+	functions: ExpressionSign[]
+	operators: ExpressionSign[]
+	constants: string[]
+	contexts: Record<string, { name: string, type: string, description: string }[]>
+}
+
+/** An expression checked: it parses, and uses only the variables of its context */
+export interface ExpressionCheck {
+	valid: boolean
+	error?: string
+	variables: string[]
+	unknown: string[]
+}
+
 export interface AdminApiPort {
 	/** undefined when the gateway has no administration (admin off) */
 	capabilities (): Promise<AdminCapabilities | undefined>
@@ -107,7 +131,11 @@ export interface AdminApiPort {
 	references (schema: string, at: string[]): Promise<{ references: string[] }>
 	writeSchema (schema: string, text: string, version: string): Promise<{ version: string, issues: SchemaIssue[] }>
 	validate (text: string): Promise<{ valid: boolean, issues: SchemaIssue[] }>
-	createWorkspace (path: string, copyOf?: string): Promise<{ path: string, version: string }>
+	/** the language of the expressions (a gateway before 3.3.0 doesn't have it: a plain input then) */
+	expressionLanguage? (): Promise<ExpressionLanguage>
+	checkExpression? (expression: string, context?: string): Promise<ExpressionCheck>
+	/** a new schema; its name and description go on top of its lambdaORM.yaml */
+	createWorkspace (path: string, copyOf?: string, about?: { name?: string, description?: string }): Promise<{ path: string, version: string }>
 	removeWorkspace (path: string): Promise<{ trash: string }>
 	/** what is saved in every workspace; undefined when it didn't change since that version */
 	workbench (version?: string): Promise<{ version: string, items: (SavedItem & { version?: string })[], problems?: WorkbenchProblem[] } | undefined>
@@ -177,3 +205,11 @@ export interface SchemaVariable {
 	/** the lambdaORM.yaml names it */
 	used: boolean
 }
+
+/** Where the workspace of a person was (domain/session.ts): kept by the gateway for its credential, or in the browser */
+export interface SessionStorePort {
+	load (): Promise<unknown>
+	/** keepalive: the page is being left (the request outlives it) */
+	save (session: unknown, options?: { keepalive?: boolean }): Promise<void>
+}
+

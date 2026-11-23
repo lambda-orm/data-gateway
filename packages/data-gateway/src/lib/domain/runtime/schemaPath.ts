@@ -32,7 +32,7 @@ export const schemaPathsIssues = (paths: string[]): string[] => {
 		seen.add(path)
 	}
 	const unique = [...seen]
-	if (unique.includes('') && unique.length > 1) issues.push('a schema at the root must be the only schema (the others would be under its routes)')
+	if (unique.includes('') && unique.length > 1) issues.push('a schema at the root must be the only schema (the others would be under its routes): move it to a folder of the workspace to add others')
 	for (const a of unique) {
 		for (const b of unique) {
 			if (a !== '' && a !== b && b.startsWith(`${a}/`)) issues.push(`schema path "${a}" is a prefix of "${b}"`)

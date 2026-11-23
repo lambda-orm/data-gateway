@@ -7,6 +7,7 @@ import { BearerAuthenticator } from '../../src/lib/infrastructure/output/auth/au
 import { ConsoleLogger } from '../../src/lib/infrastructure/output/logger/loggers'
 import { fakeGateway, FixedClock, GatewayFixture } from '../helpers/fakes'
 import { call } from '../helpers/net'
+import { protocolsFor } from '../../src/lib/domain/auth/protocolCredential'
 
 const credentials = [
 	{ name: 'agent', value: 'agent-token', permissions: ['read' as const] },
@@ -86,6 +87,26 @@ describe('webSocket transport (schema at a route)', () => {
 		}
 	})
 
+	test('a browser: the credential in the subprotocols (it can\'t send headers); lambdaorm answered; none, refused', async () => {
+		const socket = new WebSocket(`${url}/iot/v1`, protocolsFor({ Authorization: 'Bearer agent-token' }))
+		const opened = await new Promise<string>((resolve, reject) => {
+			socket.once('open', () => resolve(socket.protocol))
+			socket.once('unexpected-response', (_req, res) => reject(new Error(`handshake ${res.statusCode}`)))
+			socket.once('error', reject)
+		})
+		expect(opened).toBe('lambdaorm')
+		const reply = await new Promise<any>(resolve => {
+			socket.once('message', data => resolve(JSON.parse(data.toString())))
+			socket.send(JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'general.version' }))
+		})
+		socket.close()
+		expect(reply.result).toEqual({ version: '9.9.9' })
+		// a wrong credential in the subprotocols: 401, as in a header
+		const refused = new WebSocket(`${url}/iot/v1`, protocolsFor({ Authorization: 'Bearer nope' }))
+		const status = await new Promise<number>(resolve => refused.once('unexpected-response', (_req, res) => resolve(res.statusCode ?? 0)))
+		expect(status).toBe(401)
+	})
+
 	test('errors: forbidden write (-32000 with name and status), unknown method, invalid params, parse, invalid request', async () => {
 		const c = await open(`${url}/iot/v1`, bearer('agent-token'))
 		try {
@@ -159,6 +180,8 @@ describe('webSocket transport (schema at a route)', () => {
 		}
 		const base = url.replace('ws://', 'http://')
 		expect((await call(base, '/asyncapi.json')).body).toMatchObject({ asyncapi: '3.0.0', servers: { 'iot/v1': { pathname: '/iot/v1' } } })
+		// read from a page elsewhere (an IDE): any origin
+		expect((await fetch(`${base}/asyncapi.json`, { headers: { Origin: 'http://ide.example' } })).headers.get('access-control-allow-origin')).toBe('*')
 		expect((await call(base, '/status')).body).toMatchObject({ transport: 'webSocket' })
 	})
 })

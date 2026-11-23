@@ -338,7 +338,7 @@ domain:
     - {name: updatedBy, length: 128}
     relations:
     - {name: capability, from: capabilityId, entity: Capabilities, to: code, target: actions}
-    - {name: resultFileCategoryRef, from: resultFileCategory, entity: FileCategories, to: code, target: capabilityActions}
+    - {name: fileCategory, from: resultFileCategory, entity: FileCategories, to: code, target: capabilityActions}
     - {name: deviceModelCapabilityActions, type: manyToOne, from: id, entity: DeviceModelCapabilityActions, to: actionId,
       target: action}
     indexes:
@@ -672,7 +672,7 @@ domain:
     - {name: properties, type: manyToOne, composite: true, from: code, entity: ConnectionTypeProperties, to: connectionTypeId}
     - {name: deviceModelConnectionTypes, type: manyToOne, from: code, entity: DeviceModelConnectionTypes, to: connectionTypeId,
       target: connectionType}
-    - {name: deviceConnections, type: manyToOne, from: code, entity: DeviceConnections, to: channel, target: channelRef, weak: true}
+    - {name: deviceConnections, type: manyToOne, from: code, entity: DeviceConnections, to: channel, target: connectionType, weak: true}
     - {name: integrationConnectionTypes, type: manyToOne, from: code, entity: IntegrationConnectionTypes, to: connectionTypeId,
       target: connectionType, weak: true}
     indexes:
@@ -813,7 +813,7 @@ domain:
     - {name: notification, type: json}
     - {name: position, type: integer, required: true}
     relations:
-    - name: devicePropertyRef
+    - name: deviceModelCapabilityProperty
       from: [deviceModelCapabilityId, name, deviceProperty]
       entity: DeviceModelCapabilityProperties
       to: [deviceModelCapabilityId, name, deviceProperty]
@@ -834,7 +834,7 @@ domain:
     - {name: periodUnit, length: 16, required: true}
     - {name: position, type: integer, required: true}
     relations:
-    - name: devicePropertyRef
+    - name: deviceModelCapabilityProperty
       from: [deviceModelCapabilityId, name, deviceProperty]
       entity: DeviceModelCapabilityProperties
       to: [deviceModelCapabilityId, name, deviceProperty]
@@ -850,7 +850,7 @@ domain:
     - {name: value, type: decimal}
     - {name: color, length: 32}
     relations:
-    - name: devicePropertyRef
+    - name: deviceModelCapabilityProperty
       from: [deviceModelCapabilityId, name, deviceProperty]
       entity: DeviceModelCapabilityProperties
       to: [deviceModelCapabilityId, name, deviceProperty]
@@ -904,7 +904,7 @@ domain:
     - {name: expectedValue, type: json}
     - {name: position, type: integer, required: true}
     relations:
-    - name: codeRef
+    - name: deviceModelLinkRequirement
       from: [deviceModelId, kind, code]
       entity: DeviceModelLinkRequirements
       to: [deviceModelId, kind, code]
@@ -921,7 +921,7 @@ domain:
     - {name: virtualIndex, type: integer, required: true}
     - {name: state, length: 16, required: true}
     relations:
-    - name: codeRef
+    - name: deviceModelLinkRequirement
       from: [deviceModelId, kind, code]
       entity: DeviceModelLinkRequirements
       to: [deviceModelId, kind, code]
@@ -1011,7 +1011,7 @@ domain:
     primaryKey: [code]
     properties:
     - {name: code, length: 64, required: true}
-    - {name: deviceType, length: 64}
+    - {name: deviceTypeCode, length: 64}
     - {name: brand, length: 255}
     - {name: model, length: 255}
     - {name: name, length: 255}
@@ -1056,14 +1056,14 @@ domain:
     - {name: linkRequirements, type: manyToOne, composite: true, from: code, entity: DeviceModelLinkRequirements, to: deviceModelId}
     - {name: prices, type: manyToOne, composite: true, from: code, entity: DeviceModelPrices, to: deviceModelId}
     - {name: virtuals, type: manyToOne, composite: true, from: code, entity: DeviceModelVirtuals, to: deviceModelId}
-    - {name: deviceTypeRef, from: deviceType, entity: DeviceTypes, to: code, target: deviceModels}
+    - {name: deviceType, from: deviceTypeCode, entity: DeviceTypes, to: code, target: deviceModels}
     - {name: undefinedProperties, type: manyToOne, composite: true, from: code, entity: UndefinedProperties, to: deviceModelId}
     - {name: capabilities, type: manyToOne, from: code, entity: DeviceModelCapabilities, to: deviceModelId, target: deviceModel}
     - {name: companyPrices, type: manyToOne, from: code, entity: CompanyPrices, to: deviceModelId, target: deviceModel, weak: true}
     - {name: devices, type: manyToOne, from: code, entity: Devices, to: deviceModelId, target: deviceModel, weak: true}
     indexes:
     - name: idx_device_models_device_type
-      fields: [deviceType]
+      fields: [deviceTypeCode]
     - name: idx_device_models_name_normalized
       fields: [nameNormalized]
   - name: DeviceRecognitionContextModalities
@@ -1138,7 +1138,7 @@ domain:
     - {name: category, from: categoryId, entity: Categories, to: code, target: deviceTypes}
     - {name: caseHandlerDeviceTypes, type: manyToOne, from: code, entity: CaseHandlerDeviceTypes, to: deviceTypeId, target: deviceType}
     - {name: deviceModelVirtuals, type: manyToOne, from: code, entity: DeviceModelVirtuals, to: deviceTypeId, target: deviceType}
-    - {name: deviceModels, type: manyToOne, from: code, entity: DeviceModels, to: deviceType, target: deviceTypeRef}
+    - {name: deviceModels, type: manyToOne, from: code, entity: DeviceModels, to: deviceTypeCode, target: deviceType}
     indexes:
     - name: idx_device_types_category_id
       fields: [categoryId]
@@ -1163,7 +1163,7 @@ domain:
     - {name: updatedAt, type: dateTime}
     - {name: updatedBy, length: 128}
     relations:
-    - {name: capabilityActions, type: manyToOne, from: code, entity: CapabilityActions, to: resultFileCategory, target: resultFileCategoryRef}
+    - {name: capabilityActions, type: manyToOne, from: code, entity: CapabilityActions, to: resultFileCategory, target: fileCategory}
   - name: FilesDetailTypes
     primaryKey: [code]
     properties:
@@ -1236,7 +1236,7 @@ domain:
     - {name: periodUnit, length: 16, required: true}
     - {name: position, type: integer, required: true}
     relations:
-    - name: codeRef
+    - name: locationTemplateProperty
       from: [locationTemplateId, code]
       entity: LocationTemplateProperties
       to: [locationTemplateId, code]
@@ -1251,7 +1251,7 @@ domain:
     - {name: value, type: decimal}
     - {name: color, length: 32}
     relations:
-    - name: codeRef
+    - name: locationTemplateProperty
       from: [locationTemplateId, code]
       entity: LocationTemplateProperties
       to: [locationTemplateId, code]
@@ -1558,7 +1558,7 @@ domain:
     - {name: value, length: 64, required: true}
     - {name: position, type: integer, required: true}
     relations:
-    - name: bandPositionRef
+    - name: propertyThresholdBand
       from: [propertyId, bandPosition]
       entity: PropertyThresholdBands
       to: [propertyId, position]
@@ -2003,7 +2003,7 @@ domain:
     - {name: position, type: integer, required: true}
     relations:
     - {name: notificationLevel, from: notificationLevelId, entity: NotificationLevels, to: code, target: zoneTypePropertyRateThresholds}
-    - name: codeRef
+    - name: zoneTypeProperty
       from: [zoneTypeId, code]
       entity: ZoneTypeProperties
       to: [zoneTypeId, code]
@@ -2018,7 +2018,7 @@ domain:
     - {name: color, length: 32}
     relations:
     - {name: state, from: stateId, entity: ThresholdStates, to: id, target: zoneTypePropertyThresholdBands}
-    - name: codeRef
+    - name: zoneTypeProperty
       from: [zoneTypeId, code]
       entity: ZoneTypeProperties
       to: [zoneTypeId, code]
@@ -2095,8 +2095,8 @@ domain:
     - {name: invitations, type: manyToOne, from: id, entity: Invitations, to: companyId, target: company}
     - {name: locations, type: manyToOne, from: id, entity: Locations, to: companyId, target: company}
     - {name: installations, type: manyToOne, from: id, entity: Installations, to: companyId, target: company, weak: true}
-    - {name: quotes, type: manyToOne, from: id, entity: Quotes, to: companyId, target: companyRef, weak: true}
-    - {name: installationReports, type: manyToOne, from: id, entity: InstallationReports, to: companyId, target: companyRef,
+    - {name: quotes, type: manyToOne, from: id, entity: Quotes, to: companyId, target: company, weak: true}
+    - {name: installationReports, type: manyToOne, from: id, entity: InstallationReports, to: companyId, target: company,
       weak: true}
     indexes:
     - name: idx_companies_country_code
@@ -2499,8 +2499,8 @@ domain:
     - {name: invitations, type: manyToOne, from: id, entity: Invitations, to: customerId, target: customer}
     - {name: locations, type: manyToOne, from: id, entity: Locations, to: customerId, target: customer}
     - {name: installations, type: manyToOne, from: id, entity: Installations, to: customerId, target: customer, weak: true}
-    - {name: quotes, type: manyToOne, from: id, entity: Quotes, to: customerId, target: customerRef, weak: true}
-    - {name: installationReports, type: manyToOne, from: id, entity: InstallationReports, to: customerId, target: customerRef,
+    - {name: quotes, type: manyToOne, from: id, entity: Quotes, to: customerId, target: customer, weak: true}
+    - {name: installationReports, type: manyToOne, from: id, entity: InstallationReports, to: customerId, target: customer,
       weak: true}
     indexes:
     - name: idx_customers_country_code
@@ -2697,7 +2697,7 @@ domain:
     - {name: integrationConnectionTypes, type: manyToOne, from: id, entity: IntegrationConnectionTypes, to: locationId, target: location,
       weak: true}
     - {name: integrationTasks, type: manyToOne, from: id, entity: IntegrationTasks, to: locationId, target: location, weak: true}
-    - {name: integrations, type: manyToOne, from: id, entity: Integrations, to: locationId, target: locationRef, weak: true}
+    - {name: integrations, type: manyToOne, from: id, entity: Integrations, to: locationId, target: location, weak: true}
     - {name: notifications, type: manyToOne, from: id, entity: Notifications, to: locationId, target: location, weak: true}
     - {name: parameterCategories, type: manyToOne, from: id, entity: ParameterCategories, to: locationId, target: location,
       weak: true}
@@ -2720,10 +2720,10 @@ domain:
     - {name: wifiCredentials, type: manyToOne, from: id, entity: WifiCredentials, to: locationId, target: location, weak: true}
     - {name: zoneVertices, type: manyToOne, from: id, entity: ZoneVertices, to: locationId, target: location, weak: true}
     - {name: zones, type: manyToOne, from: id, entity: Zones, to: locationId, target: location, weak: true}
-    - {name: quotes, type: manyToOne, from: id, entity: Quotes, to: locationId, target: locationRef, weak: true}
-    - {name: installationReports, type: manyToOne, from: id, entity: InstallationReports, to: locationId, target: locationRef,
+    - {name: quotes, type: manyToOne, from: id, entity: Quotes, to: locationId, target: location, weak: true}
+    - {name: installationReports, type: manyToOne, from: id, entity: InstallationReports, to: locationId, target: location,
       weak: true}
-    - {name: processes, type: manyToOne, from: id, entity: Processes, to: locationId, target: locationRef, weak: true}
+    - {name: processes, type: manyToOne, from: id, entity: Processes, to: locationId, target: location, weak: true}
     indexes:
     - name: idx_locations_biometrics_in_cloud_granted_by_identity_id
       fields: [biometricsInCloudGrantedByIdentityId]
@@ -3746,7 +3746,7 @@ domain:
     - {name: updatedBy, length: 128}
     - {name: locationId, length: 36, required: true}
     relations:
-    - name: kindRef
+    - name: catalogCopyKind
       from: [locationId, kind]
       entity: CatalogCopyKinds
       to: [locationId, kind]
@@ -3953,7 +3953,7 @@ domain:
       entity: Devices
       to: [locationId, id]
     - {name: location, from: locationId, entity: Locations, to: id, weak: true, target: deviceConnections}
-    - {name: channelRef, from: channel, entity: ConnectionTypes, to: code, weak: true, target: deviceConnections}
+    - {name: connectionType, from: channel, entity: ConnectionTypes, to: code, weak: true, target: deviceConnections}
     indexes:
     - name: idx_device_connections_mac
       fields: [locationId, macAddress]
@@ -3969,7 +3969,7 @@ domain:
     - {name: updatedBy, length: 128}
     - {name: locationId, length: 36, required: true}
     relations:
-    - name: idRef
+    - name: device
       from: [locationId, id]
       entity: Devices
       to: [locationId, id]
@@ -4043,7 +4043,7 @@ domain:
     - {name: propertyId, length: 64, required: true}
     - {name: expectedValue, type: json}
     relations:
-    - name: linkPositionRef
+    - name: deviceLink
       from: [locationId, deviceId, linkKey, linkPosition]
       entity: DeviceLinks
       to: [locationId, deviceId, linkKey, position]
@@ -4921,7 +4921,7 @@ domain:
       from: [locationId, id]
       entity: Integrations
       to: [locationId, category]
-      target: categoryRef
+      target: integrationCategory
     indexes:
     - name: idx_integration_categories_name_normalized
       fields: [nameNormalized]
@@ -4965,7 +4965,7 @@ domain:
     - {name: config, type: json}
     - {name: priority, type: integer}
     - {name: builtIn, type: boolean}
-    - {name: location, type: text}
+    - {name: locationText, type: text}
     - {name: helpUrl, type: text}
     - {name: models, type: json}
     - {name: createdAt, type: dateTime}
@@ -4986,18 +4986,18 @@ domain:
       from: [locationId, code]
       entity: IntegrationTasks
       to: [locationId, integrationCode]
-    - name: categoryRef
+    - name: integrationCategory
       from: [locationId, category]
       entity: IntegrationCategories
       to: [locationId, id]
       target: integrations
-    - {name: locationRef, from: locationId, entity: Locations, to: id, weak: true, target: integrations}
+    - {name: location, from: locationId, entity: Locations, to: id, weak: true, target: integrations}
     - name: providerRecords
       type: manyToOne
       from: [locationId, code]
       entity: ProviderRecords
       to: [locationId, provider]
-      target: providerRef
+      target: integration
     indexes:
     - name: idx_integrations_name_normalized
       fields: [nameNormalized]
@@ -5061,7 +5061,7 @@ domain:
       from: [locationId, id]
       entity: Parameters
       to: [locationId, category]
-      target: categoryRef
+      target: parameterCategory
     indexes:
     - name: idx_parameter_categories_name_normalized
       fields: [nameNormalized]
@@ -5100,7 +5100,7 @@ domain:
       from: [locationId, code]
       entity: ParameterValues
       to: [locationId, parameterCode]
-    - name: categoryRef
+    - name: parameterCategory
       from: [locationId, category]
       entity: ParameterCategories
       to: [locationId, id]
@@ -5171,7 +5171,7 @@ domain:
     - {name: updatedBy, length: 128}
     - {name: locationId, length: 36, required: true}
     relations:
-    - name: providerRef
+    - name: integration
       from: [locationId, provider]
       entity: Integrations
       to: [locationId, code]
@@ -5200,7 +5200,7 @@ domain:
       from: [locationId, code]
       entity: ScheduledTasks
       to: [locationId, category]
-      target: categoryRef
+      target: scheduledTaskCategory
     indexes:
     - name: idx_scheduled_task_categories_name_normalized
       fields: [nameNormalized]
@@ -5246,7 +5246,7 @@ domain:
       from: [locationId, code]
       entity: ScheduledTaskEvents
       to: [locationId, scheduledTaskCode]
-    - name: categoryRef
+    - name: scheduledTaskCategory
       from: [locationId, category]
       entity: ScheduledTaskCategories
       to: [locationId, code]
@@ -5628,9 +5628,9 @@ domain:
     - {name: rejectReason, type: text}
     - {name: cancelledAt, type: dateTime}
     - {name: lastEventAt, type: dateTime}
-    - {name: company, type: json}
-    - {name: customer, type: json}
-    - {name: location, type: json}
+    - {name: companySnapshot, type: json}
+    - {name: customerSnapshot, type: json}
+    - {name: locationSnapshot, type: json}
     - {name: currency, type: json}
     - {name: language, type: json}
     - {name: areas, type: json}
@@ -5645,9 +5645,9 @@ domain:
     - {name: updatedBy, length: 64}
     uniqueKey: [companyId, number, version]
     relations:
-    - {name: companyRef, from: companyId, entity: Companies, to: id, weak: true, target: quotes}
-    - {name: customerRef, from: customerId, entity: Customers, to: id, weak: true, target: quotes}
-    - {name: locationRef, from: locationId, entity: Locations, to: id, weak: true, target: quotes}
+    - {name: company, from: companyId, entity: Companies, to: id, weak: true, target: quotes}
+    - {name: customer, from: customerId, entity: Customers, to: id, weak: true, target: quotes}
+    - {name: location, from: locationId, entity: Locations, to: id, weak: true, target: quotes}
     - {name: installations, type: manyToOne, from: id, entity: Installations, to: quoteId, target: quote, weak: true}
   - name: InstallationReports
     primaryKey: [id]
@@ -5661,9 +5661,9 @@ domain:
     - {name: customerId, length: 36}
     - {name: locationId, length: 36}
     - {name: quoteId, length: 36}
-    - {name: company, type: json}
-    - {name: customer, type: json}
-    - {name: location, type: json}
+    - {name: companySnapshot, type: json}
+    - {name: customerSnapshot, type: json}
+    - {name: locationSnapshot, type: json}
     - {name: contact, type: json}
     - {name: language, type: json}
     - {name: technician, type: json}
@@ -5685,9 +5685,9 @@ domain:
     - {name: updatedAt, type: dateTime}
     uniqueKey: [installationId]
     relations:
-    - {name: companyRef, from: companyId, entity: Companies, to: id, weak: true, target: installationReports}
-    - {name: customerRef, from: customerId, entity: Customers, to: id, weak: true, target: installationReports}
-    - {name: locationRef, from: locationId, entity: Locations, to: id, weak: true, target: installationReports}
+    - {name: company, from: companyId, entity: Companies, to: id, weak: true, target: installationReports}
+    - {name: customer, from: customerId, entity: Customers, to: id, weak: true, target: installationReports}
+    - {name: location, from: locationId, entity: Locations, to: id, weak: true, target: installationReports}
     - {name: installation, from: installationId, entity: Installations, to: id, weak: true}
     - {name: installations, type: manyToOne, from: id, entity: Installations, to: reportId, target: report, weak: true}
   - name: Processes
@@ -5713,7 +5713,7 @@ domain:
     - {name: process, type: json}
     - {name: search, type: text}
     relations:
-    - {name: locationRef, from: locationId, entity: Locations, to: id, weak: true, target: processes}
+    - {name: location, from: locationId, entity: Locations, to: id, weak: true, target: processes}
 infrastructure:
   mappings:
   - name: common
@@ -6132,7 +6132,7 @@ infrastructure:
     - name: DeviceModels
       mapping: cat_device_models
       properties:
-      - {name: deviceType, mapping: device_type}
+      - {name: deviceTypeCode, mapping: device_type}
       - {name: nameNormalized, mapping: name_normalized}
       - {name: modelNumber, mapping: model_number}
       - {name: firmwareVersionKey, mapping: firmware_version_key}
@@ -7667,6 +7667,7 @@ infrastructure:
       - {name: updatedAt, mapping: updated_at, dbType: timestamptz(3)}
       - {name: updatedBy, mapping: updated_by}
       - {name: locationId, mapping: location_id, dbType: uuid}
+      - {name: locationText, mapping: location}
     - name: Notifications
       mapping: loc_notifications
       properties:
@@ -7898,10 +7899,16 @@ infrastructure:
       mapping: quotes
       properties:
       - {name: id, mapping: _id}
+      - {name: companySnapshot, mapping: company}
+      - {name: customerSnapshot, mapping: customer}
+      - {name: locationSnapshot, mapping: location}
     - name: InstallationReports
       mapping: installation_reports
       properties:
       - {name: id, mapping: _id}
+      - {name: companySnapshot, mapping: company}
+      - {name: customerSnapshot, mapping: customer}
+      - {name: locationSnapshot, mapping: location}
   - name: iotLocationDocuments
     entities:
     - name: Processes

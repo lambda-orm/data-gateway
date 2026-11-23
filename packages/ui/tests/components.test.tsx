@@ -108,9 +108,11 @@ describe('ResultViewer', () => {
 		render(<ResultViewer result={measure('execute', rows, 3)} maxRows={2} fileName="products" />)
 		expect(screen.getByText('Showing 2 of 5 rows: the downloads have all of them.')).toBeTruthy()
 		fireEvent.click(screen.getByRole('tab', { name: 'yaml' }))
-		expect(screen.getByText(/- id: 0/).textContent).toContain('name: p4')
+		// in an editor (Monaco; its text area in the tests)
+		expect((screen.getByLabelText('result yaml', { selector: 'textarea' }) as HTMLTextAreaElement).value).toMatch(/- id: 0[\s\S]*name: p4/)
+		expect((screen.getByLabelText('result yaml', { selector: 'textarea' }) as HTMLTextAreaElement).readOnly).toBe(true)
 		fireEvent.click(screen.getByRole('tab', { name: 'json' }))
-		expect(screen.getByText(/"id": 4/)).toBeTruthy()
+		expect((screen.getByLabelText('result json', { selector: 'textarea' }) as HTMLTextAreaElement).value).toContain('"id": 4')
 		const exportAs = (name: string) => {
 			fireEvent.click(button('export ▾'))
 			fireEvent.click(screen.getByRole('menuitem', { name }))

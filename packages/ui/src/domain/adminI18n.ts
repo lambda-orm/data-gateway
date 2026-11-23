@@ -78,6 +78,42 @@ export interface AdminMessages {
 	newValue: string
 	setValue: string
 	variablesNote: string
+	cmd_fetch: string
+	cmd_export: string
+	cmd_exportSave: string
+	cmd_import: string
+	cmd_push: string
+	cmd_pull: string
+	cmd_drop: string
+	cmd_introspect: string
+	cmd_incorporate: string
+	cmd_build: string
+	cmd_version: string
+	about: string
+	schemaName: string
+	schemaDescription: string
+	schemaVersion: string
+	closeTab: string
+	closeOthers: string
+	closeAll: string
+	current: string
+	contextVariables: string
+	insertIt: string
+	expressionKeys: string
+	apply: string
+	editCondition: string
+	conditionOf: string
+	theRest: string
+	metadata: string
+	openSchema: string
+	rootTaken: string
+	stageSourcesNote: string
+	condition: string
+	conditionHint: string
+	addSource: string
+	moveUp: string
+	moveDown: string
+	notAVariable: string
 	build: string
 	buildWrite: string
 	buildZip: string
@@ -195,7 +231,43 @@ ROWS.push(
 	['browserItems', '{n} items are saved in this browser only.', '{n} elementos están guardados solo en este navegador.', '{n} itens estão salvos só neste navegador.', '{n} éléments sont enregistrés seulement dans ce navigateur.', '{n} elementi sono salvati solo in questo browser.', '{n} Elemente sind nur in diesem Browser gespeichert.', '{n} items zijn alleen in deze browser opgeslagen.', '{n} elements estan desats només en aquest navegador.', '{n} elementos están gardados só neste navegador.', '{n} elementu nabigatzaile honetan bakarrik daude gordeta.'],
 	['copyToWorkspace', 'Copy them to the workspace', 'Copiarlos al workspace', 'Copiá-los para o workspace', 'Les copier dans l’espace de travail', 'Copiali nel workspace', 'In den Workspace kopieren', 'Naar de workspace kopiëren', 'Copia’ls al workspace', 'Copialos ao workspace', 'Kopiatu workspace-ra'],
 	['unreadableFiles', 'Files of workbench/ that can’t be read (fix them by hand):', 'Archivos de workbench/ que no se pueden leer (corregilos a mano):', 'Arquivos de workbench/ que não podem ser lidos (corrija à mão):', 'Fichiers de workbench/ illisibles (corrigez-les à la main) :', 'File di workbench/ che non si possono leggere (correggili a mano):', 'Dateien in workbench/, die nicht gelesen werden können (von Hand korrigieren):', 'Bestanden in workbench/ die niet gelezen kunnen worden (handmatig herstellen):', 'Fitxers de workbench/ que no es poden llegir (corregeix-los a mà):', 'Ficheiros de workbench/ que non se poden ler (corríxeos a man):', 'Irakur ezin diren workbench/-eko fitxategiak (zuzendu eskuz):'],
-	['copiedToWorkspace', '{n} items copied to the workspace', '{n} elementos copiados al workspace', '{n} itens copiados para o workspace', '{n} éléments copiés dans l’espace de travail', '{n} elementi copiati nel workspace', '{n} Elemente in den Workspace kopiert', '{n} items naar de workspace gekopieerd', '{n} elements copiats al workspace', '{n} elementos copiados ao workspace', '{n} elementu workspace-ra kopiatuta']
+	['copiedToWorkspace', '{n} items copied to the workspace', '{n} elementos copiados al workspace', '{n} itens copiados para o workspace', '{n} éléments copiés dans l’espace de travail', '{n} elementi copiati nel workspace', '{n} Elemente in den Workspace kopiert', '{n} items naar de workspace gekopieerd', '{n} elements copiats al workspace', '{n} elementos copiados ao workspace', '{n} elementu workspace-ra kopiatuta'],
+	['cmd_fetch', 'compare the model with the databases', 'comparar el modelo con las bases', 'comparar o modelo com os bancos', 'comparer le modèle avec les bases', 'confrontare il modello con i database', 'das Modell mit den Datenbanken vergleichen', 'het model met de databases vergelijken', 'comparar el model amb les bases', 'comparar o modelo coas bases', 'eredua datu-baseekin alderatu'],
+	['cmd_export', 'export the data of the stage (download)', 'exportar los datos del stage (descarga)', 'exportar os dados do stage (download)', 'exporter les données du stage (téléchargement)', 'esportare i dati dello stage (download)', 'die Daten des Stage exportieren (Download)', 'de gegevens van de stage exporteren (download)', 'exportar les dades del stage (descàrrega)', 'exportar os datos do stage (descarga)', 'stage-aren datuak esportatu (deskarga)'],
+	['cmd_exportSave', 'export the data of the stage to data/', 'exportar los datos del stage a data/', 'exportar os dados do stage para data/', 'exporter les données du stage dans data/', 'esportare i dati dello stage in data/', 'die Daten des Stage nach data/ exportieren', 'de gegevens van de stage naar data/ exporteren', 'exportar les dades del stage a data/', 'exportar os datos do stage a data/', 'stage-aren datuak data/-ra esportatu'],
+	['cmd_import', 'import an export file into the stage', 'importar un archivo exportado al stage', 'importar um arquivo exportado no stage', 'importer un fichier d’export dans le stage', 'importare un file esportato nello stage', 'eine Exportdatei in den Stage importieren', 'een exportbestand in de stage importeren', 'importar un fitxer exportat al stage', 'importar un ficheiro exportado ao stage', 'esportazio-fitxategi bat stage-ra inportatu'],
+	['cmd_push', 'apply the model to the databases', 'aplicar el modelo a las bases', 'aplicar o modelo aos bancos', 'appliquer le modèle aux bases', 'applicare il modello ai database', 'das Modell auf die Datenbanken anwenden', 'het model op de databases toepassen', 'aplicar el model a les bases', 'aplicar o modelo ás bases', 'eredua datu-baseei aplikatu'],
+	['cmd_pull', 'bring the databases into the model', 'traer las bases al modelo', 'trazer os bancos para o modelo', 'ramener les bases dans le modèle', 'portare i database nel modello', 'die Datenbanken ins Modell übernehmen', 'de databases in het model overnemen', 'portar les bases al model', 'traer as bases ao modelo', 'datu-baseak eredura ekarri'],
+	['cmd_drop', 'remove the tables of the stage', 'eliminar las tablas del stage', 'remover as tabelas do stage', 'supprimer les tables du stage', 'eliminare le tabelle dello stage', 'die Tabellen des Stage löschen', 'de tabellen van de stage verwijderen', 'eliminar les taules del stage', 'eliminar as táboas do stage', 'stage-aren taulak ezabatu'],
+	['cmd_introspect', 'create an entity from a data file', 'crear una entidad desde un archivo de datos', 'criar uma entidade a partir de um arquivo de dados', 'créer une entité depuis un fichier de données', 'creare un’entità da un file di dati', 'eine Entität aus einer Datendatei erstellen', 'een entiteit uit een gegevensbestand maken', 'crear una entitat des d’un fitxer de dades', 'crear unha entidade desde un ficheiro de datos', 'datu-fitxategi batetik entitate bat sortu'],
+	['cmd_incorporate', 'create an entity from a data file and import its rows', 'crear una entidad desde un archivo de datos e importar sus filas', 'criar uma entidade a partir de um arquivo de dados e importar as linhas', 'créer une entité depuis un fichier de données et importer ses lignes', 'creare un’entità da un file di dati e importarne le righe', 'eine Entität aus einer Datendatei erstellen und ihre Zeilen importieren', 'een entiteit uit een gegevensbestand maken en de rijen importeren', 'crear una entitat des d’un fitxer de dades i importar-ne les files', 'crear unha entidade desde un ficheiro de datos e importar as filas', 'datu-fitxategi batetik entitate bat sortu eta errenkadak inportatu'],
+	['cmd_build', 'generate the model code (src/ or zip)', 'generar el código del modelo (src/ o zip)', 'gerar o código do modelo (src/ ou zip)', 'générer le code du modèle (src/ ou zip)', 'generare il codice del modello (src/ o zip)', 'den Code des Modells erzeugen (src/ oder Zip)', 'de code van het model genereren (src/ of zip)', 'generar el codi del model (src/ o zip)', 'xerar o código do modelo (src/ ou zip)', 'ereduaren kodea sortu (src/ edo zip)'],
+	['cmd_version', 'the versions of λORM in the gateway', 'las versiones de λORM en la gateway', 'as versões do λORM na gateway', 'les versions de λORM dans la gateway', 'le versioni di λORM nel gateway', 'die λORM-Versionen im Gateway', 'de λORM-versies in de gateway', 'les versions de λORM a la gateway', 'as versións de λORM na gateway', 'gateway-ko λORM bertsioak'],
+	['about', 'About', 'Información', 'Informações', 'Informations', 'Informazioni', 'Informationen', 'Informatie', 'Informació', 'Información', 'Informazioa'],
+	['schemaName', 'Name', 'Nombre', 'Nome', 'Nom', 'Nome', 'Name', 'Naam', 'Nom', 'Nome', 'Izena'],
+	['schemaDescription', 'Description', 'Descripción', 'Descrição', 'Description', 'Descrizione', 'Beschreibung', 'Beschrijving', 'Descripció', 'Descrición', 'Deskribapena'],
+	['schemaVersion', 'Version', 'Versión', 'Versão', 'Version', 'Versione', 'Version', 'Versie', 'Versió', 'Versión', 'Bertsioa'],
+	['closeTab', 'Close', 'Cerrar', 'Fechar', 'Fermer', 'Chiudi', 'Schließen', 'Sluiten', 'Tanca', 'Pechar', 'Itxi'],
+	['closeOthers', 'Close others', 'Cerrar los demás', 'Fechar os outros', 'Fermer les autres', 'Chiudi gli altri', 'Andere schließen', 'Andere sluiten', 'Tanca els altres', 'Pechar os demais', 'Besteak itxi'],
+	['closeAll', 'Close all', 'Cerrar todos', 'Fechar todos', 'Tout fermer', 'Chiudi tutti', 'Alle schließen', 'Alles sluiten', 'Tanca-ho tot', 'Pechar todos', 'Denak itxi'],
+	['stageSourcesNote', 'In order: the first source whose condition is true takes the sentence; a last one without condition takes the rest.', 'En orden: el primer source cuya condición es verdadera toma la sentencia; uno último sin condición toma el resto.', 'Em ordem: o primeiro source cuja condição é verdadeira fica com a sentença; um último sem condição fica com o resto.', 'Dans l’ordre : la première source dont la condition est vraie prend la phrase ; une dernière sans condition prend le reste.', 'In ordine: la prima source la cui condizione è vera prende la frase; un’ultima senza condizione prende il resto.', 'Der Reihe nach: die erste Source, deren Bedingung wahr ist, nimmt den Satz; eine letzte ohne Bedingung nimmt den Rest.', 'Op volgorde: de eerste source waarvan de voorwaarde waar is neemt de zin; een laatste zonder voorwaarde neemt de rest.', 'En ordre: el primer source amb la condició certa pren la sentència; un últim sense condició pren la resta.', 'En orde: o primeiro source coa condición certa toma a sentenza; un último sen condición toma o resto.', 'Ordenean: baldintza egiazkoa duen lehen source-ak hartzen du sententzia; baldintzarik gabeko azken batek gainerakoa.'],
+	['condition', 'Condition', 'Condición', 'Condição', 'Condition', 'Condizione', 'Bedingung', 'Voorwaarde', 'Condició', 'Condición', 'Baldintza'],
+	['conditionHint', 'An expression, e.g. entity.in(["Products","Orders"]) && read — empty: the rest', 'Una expresión, p. ej. entity.in(["Products","Orders"]) && read — vacía: el resto', 'Uma expressão, p. ex. entity.in(["Products","Orders"]) && read — vazia: o resto', 'Une expression, p. ex. entity.in(["Products","Orders"]) && read — vide : le reste', 'Un’espressione, es. entity.in(["Products","Orders"]) && read — vuota: il resto', 'Ein Ausdruck, z. B. entity.in(["Products","Orders"]) && read — leer: der Rest', 'Een expressie, bv. entity.in(["Products","Orders"]) && read — leeg: de rest', 'Una expressió, p. ex. entity.in(["Products","Orders"]) && read — buida: la resta', 'Unha expresión, p. ex. entity.in(["Products","Orders"]) && read — baleira: o resto', 'Adierazpen bat, adib. entity.in(["Products","Orders"]) && read — hutsik: gainerakoa'],
+	['addSource', 'Add source', 'Agregar source', 'Adicionar source', 'Ajouter une source', 'Aggiungi source', 'Source hinzufügen', 'Source toevoegen', 'Afegeix source', 'Engadir source', 'Gehitu source'],
+	['moveUp', 'Move up', 'Subir', 'Subir', 'Monter', 'Sposta su', 'Nach oben', 'Omhoog', 'Puja', 'Subir', 'Gora'],
+	['moveDown', 'Move down', 'Bajar', 'Descer', 'Descendre', 'Sposta giù', 'Nach unten', 'Omlaag', 'Baixa', 'Baixar', 'Behera'],
+	['notAVariable', '{name}: not a variable of a sentence ({names})', '{name}: no es una variable de una sentencia ({names})', '{name}: não é uma variável de uma sentença ({names})', '{name} : pas une variable d’une phrase ({names})', '{name}: non è una variabile di una frase ({names})', '{name}: keine Variable eines Satzes ({names})', '{name}: geen variabele van een zin ({names})', '{name}: no és una variable d’una sentència ({names})', '{name}: non é unha variable dunha sentenza ({names})', '{name}: ez da sententzia baten aldagaia ({names})'],
+	['rootTaken', 'The schema at the root (/) is the only one the gateway can serve: move it to a folder of the workspace to add others.', 'El esquema de la raíz (/) es el único que la gateway puede servir: movelo a una carpeta del workspace para agregar otros.', 'O esquema da raiz (/) é o único que a gateway pode servir: mova-o para uma pasta do workspace para adicionar outros.', 'Le schéma à la racine (/) est le seul que la gateway peut servir : déplacez-le dans un dossier du workspace pour en ajouter d’autres.', 'Lo schema alla radice (/) è l’unico che il gateway può servire: spostalo in una cartella del workspace per aggiungerne altri.', 'Das Schema im Stamm (/) ist das einzige, das das Gateway bedienen kann: verschieben Sie es in einen Ordner des Workspace, um weitere hinzuzufügen.', 'Het schema in de root (/) is het enige dat de gateway kan bedienen: verplaats het naar een map van de workspace om er meer toe te voegen.', 'L’esquema de l’arrel (/) és l’únic que la gateway pot servir: mou-lo a una carpeta del workspace per afegir-ne d’altres.', 'O esquema da raíz (/) é o único que a gateway pode servir: móveo a un cartafol do workspace para engadir outros.', 'Erroko (/) eskema da gateway-k zerbitzatu dezakeen bakarra: eraman workspace-ko karpeta batera beste batzuk gehitzeko.'],
+	['metadata', 'Metadata', 'Metadata', 'Metadados', 'Métadonnées', 'Metadati', 'Metadaten', 'Metadata', 'Metadades', 'Metadatos', 'Metadatuak'],
+	['openSchema', 'Open {name}: its commands', 'Abrir {name}: sus comandos', 'Abrir {name}: seus comandos', 'Ouvrir {name} : ses commandes', 'Apri {name}: i suoi comandi', '{name} öffnen: seine Befehle', '{name} openen: de opdrachten', 'Obre {name}: les seves ordres', 'Abrir {name}: os seus comandos', 'Ireki {name}: bere komandoak'],
+	['contextVariables', 'Variables of the sentence', 'Variables de la sentencia', 'Variáveis da sentença', 'Variables de la phrase', 'Variabili della frase', 'Variablen des Satzes', 'Variabelen van de zin', 'Variables de la sentència', 'Variables da sentenza', 'Sententziaren aldagaiak'],
+	['insertIt', 'Insert {name}', 'Insertar {name}', 'Inserir {name}', 'Insérer {name}', 'Inserisci {name}', '{name} einfügen', '{name} invoegen', 'Insereix {name}', 'Inserir {name}', 'Txertatu {name}'],
+	['expressionKeys', 'Ctrl+Space: suggestions (variables, functions; inside quotes the entities and the values)', 'Ctrl+Espacio: sugerencias (variables, funciones; dentro de comillas las entidades y los valores)', 'Ctrl+Espaço: sugestões (variáveis, funções; entre aspas as entidades e os valores)', 'Ctrl+Espace : suggestions (variables, fonctions ; entre guillemets les entités et les valeurs)', 'Ctrl+Spazio: suggerimenti (variabili, funzioni; tra virgolette le entità e i valori)', 'Strg+Leertaste: Vorschläge (Variablen, Funktionen; in Anführungszeichen die Entitäten und Werte)', 'Ctrl+Spatie: suggesties (variabelen, functies; tussen aanhalingstekens de entiteiten en waarden)', 'Ctrl+Espai: suggeriments (variables, funcions; entre cometes les entitats i els valors)', 'Ctrl+Espazo: suxestións (variables, funcións; entre comiñas as entidades e os valores)', 'Ctrl+Zuriunea: iradokizunak (aldagaiak, funtzioak; komatxo artean entitateak eta balioak)'],
+	['apply', 'Apply', 'Aplicar', 'Aplicar', 'Appliquer', 'Applica', 'Übernehmen', 'Toepassen', 'Aplica', 'Aplicar', 'Aplikatu'],
+	['editCondition', 'Edit the condition of {name}', 'Editar la condición de {name}', 'Editar a condição de {name}', 'Modifier la condition de {name}', 'Modifica la condizione di {name}', 'Bedingung von {name} bearbeiten', 'Voorwaarde van {name} bewerken', 'Edita la condició de {name}', 'Editar a condición de {name}', 'Editatu {name}-ren baldintza'],
+	['conditionOf', 'Condition of {name}', 'Condición de {name}', 'Condição de {name}', 'Condition de {name}', 'Condizione di {name}', 'Bedingung von {name}', 'Voorwaarde van {name}', 'Condició de {name}', 'Condición de {name}', '{name}-ren baldintza'],
+	['theRest', 'no condition: the rest', 'sin condición: el resto', 'sem condição: o resto', 'sans condition : le reste', 'senza condizione: il resto', 'ohne Bedingung: der Rest', 'geen voorwaarde: de rest', 'sense condició: la resta', 'sen condición: o resto', 'baldintzarik gabe: gainerakoa'],
+	['current', 'current', 'actual', 'atual', 'actuelle', 'attuale', 'aktuell', 'huidige', 'actual', 'actual', 'unekoa']
 )
 
 const ORDER: Locale[] = ['en', 'es', 'pt', 'fr', 'it', 'de', 'nl', 'ca', 'gl', 'eu']

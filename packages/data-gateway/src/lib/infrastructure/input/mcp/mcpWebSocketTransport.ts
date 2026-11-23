@@ -11,6 +11,7 @@ import { LoggerPort } from '../../../application/ports/output/supportPorts'
 import { Principal } from '../../../domain/auth/principal'
 import { Transport } from '../transport'
 import { createSdkServer } from './sdkMcpServer'
+import { headersFromProtocols } from '../../../domain/auth/protocolCredential'
 const YAML = require('js-yaml')
 
 export interface McpWebSocketTransportOptions {
@@ -147,7 +148,8 @@ export class McpWebSocketTransport implements Transport {
 		const url = new URL(req.url ?? '/', 'http://localhost')
 		const base = this.options.basePath
 		const send = (status: number, body: unknown, type = 'application/json') => {
-			res.writeHead(status, { 'Content-Type': type })
+			// its documents and status are read from any page (an IDE elsewhere), as the http transport answers
+			res.writeHead(status, { 'Content-Type': type, 'Access-Control-Allow-Origin': '*' })
 			res.end(typeof body === 'string' ? body : JSON.stringify(body))
 		}
 		if (req.method === 'GET' && url.pathname === `${base}/status`) return send(200, this.status())
@@ -173,7 +175,7 @@ export class McpWebSocketTransport implements Transport {
 		if (this.wss.clients.size >= this.options.maxConnections) return this.reject(socket, 503, `too many connections (maxConnections ${this.options.maxConnections})`)
 		let principal: Principal | undefined
 		try {
-			const result = await schema.authenticator(TRANSPORT_NAME).authenticate(req.headers)
+			const result = await schema.authenticator(TRANSPORT_NAME).authenticate({ ...headersFromProtocols(req.headers['sec-websocket-protocol']), ...req.headers })
 			if (!result.valid || !result.principal) return this.reject(socket, 401, result.reason ?? 'a valid credential is required')
 			principal = result.principal
 		} catch (error) {

@@ -35,6 +35,8 @@ export interface WorkbenchItem {
 	positions?: Record<string, { x: number, y: number }>
 	bends?: Record<string, number>
 	compact?: boolean
+	/** what each box shows: all its properties, the keys (PK and FK), the primary key, or its name */
+	detail?: 'all' | 'keys' | 'pk' | 'name'
 	relationNames?: boolean
 }
 
@@ -86,7 +88,7 @@ export const workbenchContent = (item: WorkbenchItem): Record<string, unknown> =
 	}
 	if (item.kind === 'diagram') {
 		content.entities = item.entities ?? []
-		for (const key of ['positions', 'bends', 'compact', 'relationNames'] as const) {
+		for (const key of ['positions', 'bends', 'compact', 'detail', 'relationNames'] as const) {
 			if (item[key] !== undefined) content[key] = item[key]
 		}
 	}
@@ -127,7 +129,7 @@ export const workbenchItemOf = (
 		item.options = text(c.options, '{}')
 	} else {
 		item.entities = Array.isArray(c.entities) ? c.entities.filter((e: unknown) => typeof e === 'string') : []
-		for (const key of ['positions', 'bends', 'compact', 'relationNames'] as const) {
+		for (const key of ['positions', 'bends', 'compact', 'detail', 'relationNames'] as const) {
 			if (c[key] !== undefined) (item as any)[key] = c[key]
 		}
 	}

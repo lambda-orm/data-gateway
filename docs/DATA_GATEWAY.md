@@ -762,6 +762,16 @@ datos, y para administrar hay que nombrarlos.
 JSON-RPC 2.0. La conexión se abre contra la ruta del esquema (`ws://host:port{basePath}/iot/v1`) y se autentica en el
 upgrade; en la raíz solo están `general.*` y `gateway.schemas`.
 
+Un navegador no puede mandar cabeceras en un WebSocket: la credencial va entonces en los subprotocolos
+(`Sec-WebSocket-Protocol`), `lambdaorm` y `lambdaorm.headers.<base64url del JSON de las cabeceras>` (por ejemplo
+`{"X-Api-Key":"…"}`); la gateway responde `lambdaorm` y autentica con esas cabeceras como si vinieran en el pedido. Como
+en una cabecera `Authorization`, la credencial viaja en el pedido: fuera de una máquina local, `wss://`. Lo mismo acepta
+el MCP sobre WebSocket (con su subprotocolo `mcp`).
+
+`GET {basePath}/transports` (HTTP, sin credencial) dice los transportes de la gateway: su puerto, su ruta base, cómo se
+llega a un esquema y dónde está su documento (`/openapi.json` del HTTP, `/asyncapi.json` de los WebSocket, que se pueden
+leer desde cualquier origen). Detrás de un proxy sus URLs públicas son otras: el IDE las toma de su connection (§11.9).
+
 ```json
 → { "jsonrpc": "2.0", "id": 1, "method": "query.execute", "params": { "query": "Products.filter(p => p.price > 10)", "data": {} } }
 ← { "jsonrpc": "2.0", "id": 1, "result": [ … ] }
@@ -866,7 +876,7 @@ del modelo. Sirve para probar, para aprender el lenguaje y para validar lo que d
 | Pieza | Qué es | Dónde |
 | --- | --- | --- |
 | **`@lambdaorm/ui`** | librería de componentes **React (web)**, publicada en npm (Changesets, como `base` / `lib` / `client` / `cli`) | `packages/ui` |
-| **app del gateway** | app mínima (Vite) que usa la librería: ingreso de la credencial, selector de esquema y el componente; se compila a estáticos que van en la imagen | `packages/data-gateway/ui-app` |
+| **app del gateway** | la del data-gateway-ide compilada en modo embebido (`build:embedded`): su presentación, su login y el workspace sobre su connection, la actual; se compila a estáticos que van en la imagen | `packages/data-gateway-ide` |
 
 La librería no depende del gateway: cualquier proyecto (por ejemplo un Portal) la instala y monta el componente
 apuntando a un data-gateway. `react` y `react-dom` son `peerDependencies`. `@lambdaorm/lib` y `@lambdaorm/base` no se
@@ -968,7 +978,7 @@ Un workspace se nombra por su ruta en **un** segmento, codificada: `iot%2Fv1` (`
 | --- | --- | --- | --- |
 | `GET` | `/admin` | `{ enabled, can }`: qué puede hacer esta credencial (la UI muestra las acciones con eso) | cualquiera autenticado |
 | `GET` | `/admin/workspaces` | los esquemas con su estado y la versión de su `lambdaORM.yaml` | `schemaRead` |
-| `POST` | `/admin/workspaces` | crea uno bajo `orm.workspacePath`: `{ path, template?: 'empty', copyOf?: <ruta> }` → `201`; `409` si la carpeta existe | `schemaAdmin` |
+| `POST` | `/admin/workspaces` | crea uno bajo `orm.workspacePath`: `{ path, template?: 'empty', copyOf?: <ruta>, name?, description? }` → `201` (`name` y `description` van arriba del `lambdaORM.yaml`); `409` si la carpeta existe; `400` si hay un esquema en la raíz (tiene que ser el único: se mueve a una carpeta para agregar otros) | `schemaAdmin` |
 | `DELETE` | `/admin/workspaces/{ruta}?confirm={ruta}` | lo mueve a `<workspacePath>/.trash/<ruta>-<fecha>` (no borra nada) | `schemaAdmin` |
 | `GET` | `/admin/workspaces/{ruta}/schema` | `{ text, version }` del `lambdaORM.yaml`, `ETag` | `schemaRead` |
 | `PUT` | `/admin/workspaces/{ruta}/schema` | `{ text }` con `If-Match: <version>`: lo valida y lo escribe atómico | `schemaWrite` |
@@ -980,6 +990,10 @@ Un workspace se nombra por su ruta en **un** segmento, codificada: `iot%2Fv1` (`
 | `GET` | `/admin/workspaces/{ruta}/build.zip?language=` | lo mismo como `.zip`, sin escribir nada | `build` (+ `read`) |
 | `GET` | `/admin/workspaces/{ruta}/files?dir=` / `…/files/content?path=` | los archivos de `data/` y de `src/` (recursivo) / el texto de uno; nunca el `.env`, `orm_state/` ni un oculto | `schemaRead` |
 | `POST` | `/admin/validate` | `{ text }` → `{ valid, issues: [{ severity, message, line?, column? }] }` | `schemaRead` |
+| `GET` | `/admin/session` | el estado de la UI de la credencial que pregunta: `{ state, updatedAt }` o `{ state: null }` (§11.8) | autenticado |
+| `PUT` | `/admin/session` | `{ state }` lo guarda (un objeto, hasta 2 MB); `{ state: null }` lo olvida | autenticado |
+| `GET` | `/admin/expressions` | el lenguaje de las expresiones (3xpr): `{ functions, operators, constants, contexts }`; `contexts.stageSource` son las variables de la condición de un source de un stage (`entity`, `action`, `category`, `type`, `read`, `write`, `dml`, `ddl`) | `schemaRead` |
+| `POST` | `/admin/expressions/check` | `{ expression, context? }` → `{ valid, error?, variables, unknown }`: si parsea y si usa solo las variables de su contexto | `schemaRead` |
 | `GET` | `/admin/workbench[?schema={ruta}]` | lo guardado en los workspaces (§11.1), `ETag`; con `If-None-Match` igual, `304` | `read` o `workbenchWrite` |
 | `PUT` | `/admin/workbench` | `{ items }`: guarda, mueve o renombra; cada uno que existía dice su `version` | `workbenchWrite` |
 | `POST` | `/admin/workbench/remove` | `{ ids }`: elimina (una carpeta con lo que tiene) | `workbenchWrite` |
@@ -1128,9 +1142,60 @@ integración de la gateway.
 
 ### 11.7 El explorador como el workspace
 
-En la UI, cada esquema se muestra como es su workspace: **config** (el `lambdaORM.yaml`, en lectura; **Edit** con
-`schemaWrite`, y **Save** / **Cancel**), **domain** (entities, enums), **application**, **infrastructure** (mappings,
+En la UI, cada esquema se muestra como es su workspace: **config** (el `lambdaORM.yaml`, en lectura;
+**Edit** con `schemaWrite`, y **Save** / **Cancel**), **domain** (entities, enums), **application**, **infrastructure** (mappings,
 sources, stages y las variables del `.env`), **data** y **src** → **model** (sus archivos, en lectura) y **projects**
 (las carpetas de primer nivel de `workbench/`, con consultas, scripts y diagramas). Cada elemento se abre en su pestaña,
-en lectura, con **Edit**; seleccionar el esquema abre su pestaña con los comandos en una barra.
+en lectura, con **Edit**; seleccionar el esquema abre su pestaña: arriba los comandos en una barra de íconos (Lucide, del
+color del tema; el nombre del comando y su descripción al pasar el mouse), debajo lo que el esquema es (su `name`,
+`description` y `version`, claves del nivel superior del `lambdaORM.yaml` que λORM no usa salvo `version`) con
+**Edit**; un esquema nuevo puede nacer con su nombre y descripción; `import`, `introspect`, `incorporate` y `build` abren un formulario
+para elegir el archivo, la entidad o el lenguaje. Las pestañas se cierran de a una, todas menos la actual o todas (clic
+derecho en una pestaña, o **⋯** al final de la barra).
+
+En el árbol, cada esquema tiene **Metadata** (config, domain, application, infrastructure, data y src) y **Projects**, y
+un botón para abrir su pestaña con los comandos.
+
+### 11.8 Dónde estaba cada uno
+
+La UI guarda dónde estaba cada persona: sus pestañas (lo que muestra cada una, y el texto de las consultas tal como se
+escribió), la activa, lo desplegado del explorador y si está oculto. La gateway lo guarda por credencial en un SQLite del
+workspace, `<orm.workspacePath>/.data-gateway/state.sqlite` (con `node:sqlite`; el monitor y el descubrimiento lo
+ignoran), con `GET`/`PUT /admin/session`: un refresco, u otro navegador, empieza donde estaba. Sin `admin.enabled` o sin
+`orm.workspacePath` la UI lo guarda en el navegador. Los proyectos siguen siendo archivos de `workbench/`.
+
+La credencial queda en la pestaña (`sessionStorage`: un refresco la mantiene, cerrar la pestaña la olvida), o en el
+navegador con **Recordarme** (`localStorage`); al volver se verifica otra vez (`whoami`) y Logout la borra.
+
+En un stage, cada source se elige de los sources del esquema y lleva su `condition`, una expresión de 3xpr que se
+escribe con sugerencias (las variables de una sentencia, las funciones, y dentro de comillas las entidades o los valores
+de `action`, `category` y `type`) y que la gateway verifica mientras se escribe. El orden importa: el primer source
+cuya condición es verdadera toma la sentencia, y uno último sin condición toma el resto. El validador del esquema marca
+como error una condición que no parsea y como advertencia una variable que no es de una sentencia.
+En lectura, cada condición se ve con los colores de 3xpr; su botón de editar abre un formulario con el editor (colores,
+sugerencias con Ctrl+Espacio, verificación) y, al costado, las variables de una sentencia (`entity`, `action`,
+`category`, `type`, `read`, `write`, `dml`, `ddl`) con su tipo, qué son y sus valores, que se insertan con un clic.
+
+En un diagrama de un proyecto, cada caja muestra todas las propiedades, las claves (PK y FK), solo la PK o solo el
+nombre (`detail`, guardado con el diagrama); el **+** de una caja agrega sus tablas relacionadas que no estén, y
+**exportar** lo da en PDF, PNG o SVG.
+
+### 11.9 El data-gateway-ide
+
+El IDE de la data-gateway es `packages/data-gateway-ide`, con su propia imagen (`flaviorita/data-gateway-ide`, nginx
+con estáticos, puerto 8080). Como un IDE de bases de datos, **no tiene workspaces**: se conecta a data-gateways, y sus
+esquemas, workspaces (`src/`, `data/`, `workbench/`) y proyectos están en cada una. Abre directo en el área de trabajo,
+sin presentación ni login: cada **connection** tiene su URL (protocolo `http`/`https`, host, puerto y ruta base) y su
+credencial (API key, bearer, basic o ninguna), y su página muestra quién es esa credencial y sus roles (cada permiso con
+lo que permite). El árbol empieza por las connections, cada una con sus esquemas; se pueden tener pestañas de varias a
+la vez. Las connections quedan en el navegador (la clave solo si se pide recordarla; si no, en la pestaña).
+
+Desde una connection se abren en pestañas, con su credencial: su **API REST** (Swagger, sus pedidos a la URL de la
+connection), su **WebSocket** (los métodos de su AsyncAPI, un pedido JSON-RPC y lo que vuelve) y su **MCP** (sus tools
+de un esquema, llamadas con sus argumentos). Dónde están los sale de `GET /transports`; detrás de un proxy, la connection
+fija sus URLs públicas.
+
+La misma app compilada en modo embebido es la UI que la gateway sirve en `{basePath}/ui` (§11.7), con su login y su
+connection como *actual*. La gateway responde a cualquier origen (CORS), así que en producción puede no servir la UI
+(`transports.http.ui.enabled: false`) y usarse desde un IDE desplegado en otro lado, o local.
 

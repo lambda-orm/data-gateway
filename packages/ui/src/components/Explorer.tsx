@@ -17,6 +17,9 @@ export interface ExplorerProps {
 	api: QueryApiPort
 	locale?: Locale
 	theme?: 'light' | 'dark'
+	/** What is unfolded, to start with (a restored session); later changes come through onExpandedChange */
+	expanded?: string[]
+	onExpandedChange?: (keys: string[]) => void
 	/** The saved item of the active tab, marked */
 	activeId?: string
 	onOpen: (item: SavedItem) => void
@@ -110,12 +113,12 @@ const Action: React.FC<{ label: string, onClick: () => void, children: React.Rea
  * saved in it (folders, queries, diagrams) with a name and a description. Folders nest; items are dragged into them.
  * The whole workspace is exported to and imported from a JSON file.
  */
-export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, locale, theme, activeId, onOpen, onOpenEntity, onOpenDomain, onNewQuery, onNewDiagram, loadDomain: domainOf, admin }) => {
+export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, locale, theme, activeId, onOpen, onOpenEntity, onOpenDomain, onNewQuery, onNewDiagram, loadDomain: domainOf, admin, expanded: expandedProp, onExpandedChange }) => {
 	const m = explorerMessagesOf(locale)
 	const a = adminMessagesOf(locale)
 	// the lambdaORM.yaml of a schema (to fix one that didn't start, too) and removing it
-	const schemaFileRow = (schema: string) => admin?.can.schemaRead
-		? <Row level={2} label={a.config} icon={<Icons.yaml />} onOpen={() => admin.onOpenSchemaFile(schema)} title={a.schemaFile} />
+	const schemaFileRow = (schema: string, level = 2) => admin?.can.schemaRead
+		? <Row level={level} label={a.config} icon={<Icons.config />} onOpen={() => admin.onOpenSchemaFile(schema)} title={a.schemaFile} />
 		: null
 	// what the workspace has that the domain doesn't say: the lambdaORM.yaml as written, the files of data/ and src/
 	const [docs, setDocs] = useState<Record<string, any>>({})
@@ -155,7 +158,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 	const elementRows = (schema: string, section: 'enums' | 'sources' | 'mappings' | 'stages', names: string[], level: number) => names.length === 0
 		? [<Row key={`${section}-none`} level={level} label={a.empty} icon={null} muted />]
 		: names.map(name => (
-			<Row key={`${section}:${name}`} level={level} label={name} icon={section === 'enums' ? <Icons.yaml /> : <Icons.schema />}
+			<Row key={`${section}:${name}`} level={level} label={name} icon={section === 'enums' ? <Icons.enums /> : section === 'mappings' ? <Icons.mappings /> : section === 'sources' ? <Icons.sources /> : <Icons.stages />}
 				onOpen={admin?.onOpenElement ? () => admin.onOpenElement!(schema, { section, name }) : undefined} />
 		))
 	const fileRows = (schema: string, which: 'data' | 'model', level: number) => {
@@ -175,7 +178,10 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 		? <Action label={`${a.removeSchema} ${schema || '/'}`} onClick={() => admin.onRemoveSchema(schema)}><Icons.trash /></Action>
 		: null
 	const state = useSyncExternalStore(controller.subscribe, controller.getState)
-	const [expanded, setExpanded] = useState<Set<string>>(new Set())
+	const [expanded, setExpanded] = useState<Set<string>>(() => new Set(expandedProp ?? []))
+	// what was unfolded, restored (the state of the session): it replaces what there is
+	useEffect(() => { if (expandedProp) setExpanded(new Set(expandedProp)) }, [expandedProp])
+	useEffect(() => { onExpandedChange?.([...expanded]) }, [expanded])
 	// the text that narrows the entities of each schema
 	const [filters, setFilters] = useState<Record<string, string>>({})
 	const [domains, setDomains] = useState<Record<string, DomainInfo | string>>({})
@@ -190,6 +196,19 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 
 	const toggle = (key: string) => setExpanded(e => { const n = new Set(e); if (n.has(key)) n.delete(key); else n.add(key); return n })
 	const open = (key: string) => setExpanded(e => e.has(key) ? e : new Set(e).add(key))
+
+	// what an unfolded branch shows, read when it was unfolded by a restored session (not by a click)
+	const requested = useRef(new Set<string>())
+	useEffect(() => {
+		for (const s of schemas) {
+			const has = (part: string) => expanded.has(`${part}:${s.path}`)
+			const once = (id: string, load: () => void) => { if (!requested.current.has(id)) { requested.current.add(id); load() } }
+			if (has('d') || has('e') || has('n')) loadDomain(s.path)
+			if (has('i') || has('mappings') || has('sources') || has('stages')) once(`doc:${s.path}`, () => loadDoc(s.path))
+			if (has('da')) once(`data:${s.path}`, () => loadFolder(s.path, 'data'))
+			if (has('mo')) once(`model:${s.path}`, () => loadFolder(s.path, 'model'))
+		}
+	}, [expanded, schemas])
 
 	// a schema reloaded (another since): its domain again, if it was read
 	const seen = useRef<Record<string, string | undefined>>({})
@@ -267,7 +286,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 	const entityRows = (schema: string): React.ReactNode[] => {
 		const domain = domains[schema]
 		if (domain === undefined) return []
-		if (typeof domain === 'string') return [<Row key="e-status" level={4} label={domain} icon={null} muted />]
+		if (typeof domain === 'string') return [<Row key="e-status" level={5} label={domain} icon={null} muted />]
 		const filter = filters[schema] ?? ''
 		const found = filterEntities(domain.entities, filter)
 		const propertyRow = (entity: typeof domain.entities[number], name: string, key: string, level: number) => {
@@ -284,22 +303,22 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 				label={<span className="lw-property"><span>{r.name}</span><span className="lw-type">→ {r.entity} · {cardinalityOf(r)}</span></span>} />
 		}
 		const head = (
-			<div key="e-filter" className="lw-tree-filter" style={{ paddingLeft: 6 + 3 * 14 }}>
+			<div key="e-filter" className="lw-tree-filter" style={{ paddingLeft: 6 + 4 * 14 }}>
 				<input type="search" value={filter} placeholder={m.filterEntities} aria-label={m.filterEntities} spellCheck={false}
 					onChange={e => setFilters(f => ({ ...f, [schema]: e.target.value }))}
 					onKeyDown={e => { if (e.key === 'Escape') setFilters(f => ({ ...f, [schema]: '' })) }} />
 				{filter.trim() !== '' && <span className="lw-type" role="status">{format(m.matchesOf, { n: found.length, total: domain.entities.length })}</span>}
 			</div>
 		)
-		if (found.length === 0) return [head, <Row key="e-none" level={4} label={m.noMatches} icon={null} muted />]
+		if (found.length === 0) return [head, <Row key="e-none" level={5} label={m.noMatches} icon={null} muted />]
 		return [head, ...found.flatMap(({ entity, properties: matchedProperties, relations: matchedRelations }) => {
 			const key = `en:${schema}:${entity.name}`
 			const propertiesKey = `ep:${schema}:${entity.name}`
 			const relationsKey = `er:${schema}:${entity.name}`
 			const relations = entity.relations ?? []
 			const rows: React.ReactNode[] = [
-				<Row key={key} level={4} label={entity.name} icon={<Icons.entity />} title={`${entity.name} — ${m.openEntity}`}
-					expanded={expanded.has(key)} onToggle={() => toggle(key)} onOpen={() => onOpenEntity(schema, entity.name)}
+				<Row key={key} level={5} label={entity.name} icon={<Icons.entity />} title={`${entity.name} — ${m.openEntity}`}
+					expanded={expanded.has(key)} onToggle={() => { if (!expanded.has(key)) onOpenEntity(schema, entity.name); toggle(key) }} onOpen={() => onOpenEntity(schema, entity.name)}
 					actions={<>
 						{canWrite && <Action label={`${a.edit} ${entity.name}`} onClick={() => admin!.onOpenElement!(schema, { section: 'entities', name: entity.name })}><Icons.edit /></Action>}
 						<Action label={m.open} onClick={() => onOpenEntity(schema, entity.name)}><Icons.open /></Action>
@@ -307,16 +326,16 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 			]
 			if (!expanded.has(key)) {
 				// what the filter found in it, without opening it
-				rows.push(...matchedProperties.map(name => propertyRow(entity, name, `${key}.p.${name}`, 5)))
-				rows.push(...matchedRelations.map(name => relationRow(entity, name, `${key}.r.${name}`, 5)))
+				rows.push(...matchedProperties.map(name => propertyRow(entity, name, `${key}.p.${name}`, 6)))
+				rows.push(...matchedRelations.map(name => relationRow(entity, name, `${key}.r.${name}`, 6)))
 				return rows
 			}
-			rows.push(<Row key={propertiesKey} level={5} label={`${m.properties} (${entity.properties?.length ?? 0})`} icon={null}
+			rows.push(<Row key={propertiesKey} level={6} label={`${m.properties} (${entity.properties?.length ?? 0})`} icon={null}
 				expanded={expanded.has(propertiesKey)} onToggle={() => toggle(propertiesKey)} />)
-			if (expanded.has(propertiesKey)) rows.push(...(entity.properties ?? []).map(p => propertyRow(entity, p.name, `${propertiesKey}.${p.name}`, 6)))
-			rows.push(<Row key={relationsKey} level={5} label={`${m.relations} (${relations.length})`} icon={null}
+			if (expanded.has(propertiesKey)) rows.push(...(entity.properties ?? []).map(p => propertyRow(entity, p.name, `${propertiesKey}.${p.name}`, 7)))
+			rows.push(<Row key={relationsKey} level={6} label={`${m.relations} (${relations.length})`} icon={null}
 				expanded={expanded.has(relationsKey)} onToggle={() => toggle(relationsKey)} />)
-			if (expanded.has(relationsKey)) rows.push(...relations.map(r => relationRow(entity, r.name, `${relationsKey}.${r.name}`, 6)))
+			if (expanded.has(relationsKey)) rows.push(...relations.map(r => relationRow(entity, r.name, `${relationsKey}.${r.name}`, 7)))
 			return rows
 		})]
 	}
@@ -328,9 +347,9 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 			<div className="lw-explorer-head">
 				<strong>{a.schemas}</strong>
 				<span className="lw-spacer" />
-				{admin?.can.schemaAdmin && <Action label={a.newSchema} onClick={admin.onNewSchema}><Icons.plus /></Action>}
-				<Action label={m.exportWorkspace} onClick={download}><Icons.download /></Action>
-				<Action label={m.importWorkspace} onClick={() => file.current?.click()}><Icons.upload /></Action>
+				{admin?.can.schemaAdmin && <Action label={a.newSchema} onClick={admin.onNewSchema}><Icons.schemaPlus /></Action>}
+				<Action label={m.exportWorkspace} onClick={download}><Icons.exportFolder /></Action>
+				<Action label={m.importWorkspace} onClick={() => file.current?.click()}><Icons.importFolder /></Action>
 				<input ref={file} type="file" accept="application/json,.json" hidden onChange={chooseFile} aria-label={m.importWorkspace} />
 			</div>
 			{!state.durable && <div className="lw-notice">{m.notDurable}</div>}
@@ -364,49 +383,57 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 								onToggle={() => { if (!expanded.has(key)) admin?.onOpenSchema?.(s.path); toggle(key) }}
 								onOpen={admin?.onOpenSchema ? () => admin.onOpenSchema!(s.path) : undefined}
 								title={s.pending ? `${m.schemaPending}: ${s.pending}` : undefined}
-								actions={removeSchema(s.path)} />
+								actions={<>
+									{admin?.onOpenSchema && <Action label={format(a.openSchema, { name: s.path || '/' })} onClick={() => admin.onOpenSchema!(s.path)}><Icons.open /></Action>}
+									{removeSchema(s.path)}
+								</>} />
 							{expanded.has(key) && (
 								<>
 									{s.pending && <div className="lw-schema-reason lw-schema-pending" role="note" style={{ paddingLeft: 6 + 14 + 22 }}>{m.schemaPending}: {s.pending}</div>}
-									{schemaFileRow(s.path)}
-									<Row level={2} label={a.domain} icon={<Icons.folder />} expanded={expanded.has(k('d'))} onToggle={unfold('d', () => loadDomain(s.path))}
-										onOpen={() => onOpenDomain(s.path)} title={`${m.domainYaml} — ${m.readOnly}`} />
-									{expanded.has(k('d')) && (
+									<Row level={2} label={a.metadata} icon={<Icons.metadata />} expanded={expanded.has(k('md'))} onToggle={unfold('md')} />
+									{expanded.has(k('md')) && (
 										<>
-											<Row level={3} label={m.entities} icon={<Icons.entity />} expanded={expanded.has(k('e'))}
-												onToggle={unfold('e', () => loadDomain(s.path))} actions={newOf(s.path, 'entities')} />
-											{expanded.has(k('e')) && entityRows(s.path)}
-											<Row level={3} label={a.enums} icon={<Icons.yaml />} expanded={expanded.has(k('n'))}
-												onToggle={unfold('n', () => loadDomain(s.path))} actions={newOf(s.path, 'enums')} />
-											{expanded.has(k('n')) && elementRows(s.path, 'enums', enums, 4)}
-										</>
-									)}
-									{admin?.can.schemaRead && admin.onOpenElement && (
-										<Row level={2} label={a.application} icon={<Icons.yaml />} onOpen={() => admin.onOpenElement!(s.path, { section: 'application' })} />
-									)}
-									{admin?.can.schemaRead && admin.loadSchemaDoc && (
-										<>
-											<Row level={2} label={a.infrastructure} icon={<Icons.folder />} expanded={expanded.has(k('i'))} onToggle={unfold('i', () => loadDoc(s.path))} />
-											{expanded.has(k('i')) && (['mappings', 'sources', 'stages'] as const).flatMap(section => [
-												<Row key={section} level={3} label={a[section]} icon={<Icons.folder />} expanded={expanded.has(k(section))}
-													onToggle={unfold(section, () => loadDoc(s.path))} actions={newOf(s.path, section)} />,
-												...(expanded.has(k(section)) ? (doc === undefined ? [<Row key={`${section}-loading`} level={4} label={m.loading} icon={null} muted />] : elementRows(s.path, section, namesIn(doc?.infrastructure?.[section]), 4)) : [])
-											])}
-											{expanded.has(k('i')) && admin.onOpenElement && (
-												<Row level={3} label={a.variables} icon={<Icons.yaml />} onOpen={() => admin.onOpenElement!(s.path, { section: 'variables' })} />
+											{schemaFileRow(s.path, 3)}
+											<Row level={3} label={a.domain} icon={<Icons.domain />} expanded={expanded.has(k('d'))} onToggle={unfold('d', () => loadDomain(s.path))}
+												onOpen={() => onOpenDomain(s.path)} title={`${m.domainYaml} — ${m.readOnly}`} />
+											{expanded.has(k('d')) && (
+												<>
+													<Row level={4} label={m.entities} icon={<Icons.entity />} expanded={expanded.has(k('e'))}
+														onToggle={unfold('e', () => loadDomain(s.path))} actions={newOf(s.path, 'entities')} />
+													{expanded.has(k('e')) && entityRows(s.path)}
+													<Row level={4} label={a.enums} icon={<Icons.enums />} expanded={expanded.has(k('n'))}
+														onToggle={unfold('n', () => loadDomain(s.path))} actions={newOf(s.path, 'enums')} />
+													{expanded.has(k('n')) && elementRows(s.path, 'enums', enums, 5)}
+												</>
+											)}
+											{admin?.can.schemaRead && admin.onOpenElement && (
+												<Row level={3} label={a.application} icon={<Icons.application />} onOpen={() => admin.onOpenElement!(s.path, { section: 'application' })} />
+											)}
+											{admin?.can.schemaRead && admin.loadSchemaDoc && (
+												<>
+													<Row level={3} label={a.infrastructure} icon={<Icons.infrastructure />} expanded={expanded.has(k('i'))} onToggle={unfold('i', () => loadDoc(s.path))} />
+													{expanded.has(k('i')) && (['mappings', 'sources', 'stages'] as const).flatMap(section => [
+														<Row key={section} level={4} label={a[section]} icon={section === 'mappings' ? <Icons.mappings /> : section === 'sources' ? <Icons.sources /> : <Icons.stages />} expanded={expanded.has(k(section))}
+															onToggle={unfold(section, () => loadDoc(s.path))} actions={newOf(s.path, section)} />,
+														...(expanded.has(k(section)) ? (doc === undefined ? [<Row key={`${section}-loading`} level={5} label={m.loading} icon={null} muted />] : elementRows(s.path, section, namesIn(doc?.infrastructure?.[section]), 5)) : [])
+													])}
+													{expanded.has(k('i')) && admin.onOpenElement && (
+														<Row level={4} label={a.variables} icon={<Icons.variables />} onOpen={() => admin.onOpenElement!(s.path, { section: 'variables' })} />
+													)}
+												</>
+											)}
+											{admin?.can.schemaRead && admin.loadFiles && (
+												<>
+													<Row level={3} label={a.data} icon={<Icons.data />} expanded={expanded.has(k('da'))} onToggle={unfold('da', () => loadFolder(s.path, 'data'))} />
+													{expanded.has(k('da')) && fileRows(s.path, 'data', 4)}
+													<Row level={3} label={a.src} icon={<Icons.src />} expanded={expanded.has(k('sr'))} onToggle={unfold('sr')} />
+													{expanded.has(k('sr')) && <Row level={4} label={a.model} icon={<Icons.model />} expanded={expanded.has(k('mo'))} onToggle={unfold('mo', () => loadFolder(s.path, 'model'))} />}
+													{expanded.has(k('sr')) && expanded.has(k('mo')) && fileRows(s.path, 'model', 5)}
+												</>
 											)}
 										</>
 									)}
-									{admin?.can.schemaRead && admin.loadFiles && (
-										<>
-											<Row level={2} label={a.data} icon={<Icons.folder />} expanded={expanded.has(k('da'))} onToggle={unfold('da', () => loadFolder(s.path, 'data'))} />
-											{expanded.has(k('da')) && fileRows(s.path, 'data', 3)}
-											<Row level={2} label={a.src} icon={<Icons.folder />} expanded={expanded.has(k('sr'))} onToggle={unfold('sr')} />
-											{expanded.has(k('sr')) && <Row level={3} label={a.model} icon={<Icons.folder />} expanded={expanded.has(k('mo'))} onToggle={unfold('mo', () => loadFolder(s.path, 'model'))} />}
-											{expanded.has(k('sr')) && expanded.has(k('mo')) && fileRows(s.path, 'model', 4)}
-										</>
-									)}
-									<Row level={2} label={a.projects} icon={<Icons.folder />} expanded={expanded.has(k('p'))} onToggle={unfold('p')}
+									<Row level={2} label={a.projects} icon={<Icons.projects />} expanded={expanded.has(k('p'))} onToggle={unfold('p')}
 										dropTarget={{ onDrop: id => move(id, undefined) }} actions={creators(s.path, undefined, true)} />
 									{projects}
 									{expanded.has(k('p')) && state.loaded && projects.length === 0 && <Row level={3} label={m.nothingSaved} icon={null} muted />}
