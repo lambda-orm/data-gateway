@@ -10,12 +10,18 @@ import { RunningGateway } from '../../src/lib/infrastructure/build/dataGatewayBu
 import { Supervisor } from '../../src/lib/application/runtime/supervisor'
 import { YamlFileConfigSource } from '../../src/lib/infrastructure/output/config/yamlFileConfigSource'
 import { ConsoleLogger } from '../../src/lib/infrastructure/output/logger/loggers'
-import { call, freePort } from '../helpers/net'
+import { call, freePort, login } from '../helpers/net'
 
 const NORTHWIND = fs.readFileSync(path.join(__dirname, '../fixtures/northwind/lambdaORM.yaml'), 'utf8')
-const ADMIN = { 'X-Api-Key': 'admin-key' }
-const READER = { 'X-Api-Key': 'reader-key' }
-const ANALYST = { 'X-Api-Key': 'analyst-key' }
+const ADMIN_KEY = { 'X-Api-Key': 'admin-key' }
+/** a session of management logged in with ADMIN_KEY (management takes no credential directly) */
+const ADMIN: Record<string, string> = {}
+const READER_KEY = { 'X-Api-Key': 'reader-key' }
+/** a session of management logged in with READER_KEY (management takes no credential directly) */
+const READER: Record<string, string> = {}
+const ANALYST_KEY = { 'X-Api-Key': 'analyst-key' }
+/** a session of management logged in with ANALYST_KEY (management takes no credential directly) */
+const ANALYST: Record<string, string> = {}
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 const until = async <T>(read: () => Promise<T>, done: (value: T) => boolean, timeoutMs = 20000): Promise<T> => {
@@ -42,7 +48,7 @@ authentication:
   adapter: local
   type: apikey
   keys:
-    - { name: admin, value: admin-key, permissions: [ read, schemaRead, schemaWrite, schemaAdmin, workbenchWrite, build ] }
+    - { name: admin, value: admin-key, permissions: [ read, schemaRead, schemaWrite, schemaAdmin, workbenchWrite, build, sessionAdmin ] }
     - { name: analyst, value: analyst-key, permissions: [ read, workbenchWrite ] }
     - { name: reader, value: reader-key, permissions: [ read ] }
 transports:
@@ -69,6 +75,9 @@ describe('admin over REST (inline)', () => {
 		fs.writeFileSync(file, configOf(root, port))
 		gateway = await startGateway({ source: new YamlFileConfigSource(file, {}), bootLogger: new ConsoleLogger('error') })
 		base = `http://127.0.0.1:${port}`
+		Object.assign(ADMIN, await login(base, ADMIN_KEY))
+		Object.assign(READER, await login(base, READER_KEY))
+		Object.assign(ANALYST, await login(base, ANALYST_KEY))
 	}, 60000)
 	afterAll(() => gateway?.stop())
 
@@ -80,8 +89,8 @@ describe('admin over REST (inline)', () => {
 		const both = await startGateway({ source: new YamlFileConfigSource(file, {}), bootLogger: new ConsoleLogger('error') })
 		try {
 			const data = `http://127.0.0.1:${httpPort}`
-			expect((await call(data, '/admin', { headers: ADMIN })).status).toBe(404)
-			expect((await call(data, '/iot/v1/whoami', { headers: ADMIN })).status).toBe(200)
+			expect((await call(data, '/admin', { headers: ADMIN_KEY })).status).toBe(404)
+			expect((await call(data, '/iot/v1/whoami', { headers: ADMIN_KEY })).status).toBe(200)
 			expect((await call(`http://127.0.0.1:${port}`, '/admin', { headers: ADMIN })).status).toBe(200)
 			// management serves the data routes too (the IDE talks to one port), and tells the data transports
 			expect((await call(`http://127.0.0.1:${port}`, '/iot/v1/whoami', { headers: ADMIN })).body).toMatchObject({ name: 'admin' })
@@ -89,6 +98,43 @@ describe('admin over REST (inline)', () => {
 		} finally {
 			await both.stop()
 		}
+	})
+
+	test('sessions: management takes no credential directly; a session is listed and revoked; http still takes the key', async () => {
+		// the credential straight to management: refused, with how to get a session
+		const direct = await call(base, '/admin', { headers: ADMIN_KEY })
+		expect(direct.status).toBe(401)
+		expect(direct.body).toMatchObject({ error: 'SessionRequiredError', message: expect.stringMatching(/POST \/sessions/) })
+		expect((await call(base, '/sessions', { method: 'POST', body: {}, headers: { 'X-Api-Key': 'wrong' } })).status).toBe(401)
+		// the public routes need none
+		expect((await call(base, '/health')).status).toBe(200)
+		expect((await call(base, '/schemas')).status).toBe(200)
+		// a login: its id, its token, who it is and when it ends
+		const created = await call(base, '/sessions', { method: 'POST', body: { client: { app: 'data-gateway-ide', version: '1.0.0', kind: 'web' } }, headers: { ...READER_KEY, 'User-Agent': 'jest' } })
+		expect(created.status).toBe(201)
+		expect(created.body).toMatchObject({ id: expect.stringMatching(/^s_/), token: expect.any(String), credential: 'reader', permissions: ['read'], idleTimeoutMs: 1800000 })
+		const mine = { 'X-Data-Gateway-Session': created.body.token }
+		expect((await call(base, '/sessions/current', { headers: mine })).body).toMatchObject({ id: created.body.id, current: true, connected: false, client: { app: 'data-gateway-ide', kind: 'web', userAgent: 'jest' } })
+		expect((await call(base, '/iot/v1/whoami', { headers: mine })).body).toMatchObject({ name: 'reader' })
+		// its own sessions (the one of beforeAll too); all of them only with sessionAdmin
+		const own = (await call(base, '/sessions', { headers: mine })).body
+		expect(own.map((s: any) => s.credential)).toEqual(['reader', 'reader'])
+		expect(JSON.stringify(own)).not.toContain(created.body.token)
+		expect((await call(base, '/sessions?all=true', { headers: mine })).status).toBe(403)
+		const all = (await call(base, '/sessions?all=true', { headers: ADMIN })).body
+		expect(new Set(all.map((s: any) => s.credential))).toEqual(new Set(['admin', 'analyst', 'reader']))
+		// another credential's: only with sessionAdmin
+		const adminSession = all.find((s: any) => s.credential === 'admin')
+		expect((await call(base, `/sessions/${adminSession.id}`, { method: 'DELETE', headers: mine })).status).toBe(403)
+		// the administrator revokes it: its next request says who
+		expect((await call(base, `/sessions/${created.body.id}`, { method: 'DELETE', headers: ADMIN })).status).toBe(204)
+		const revoked = await call(base, '/iot/v1/whoami', { headers: mine })
+		expect(revoked.status).toBe(401)
+		expect(revoked.body).toMatchObject({ error: 'SessionRevokedError', message: expect.stringMatching(/by "admin"/) })
+		// a logout ends its own
+		const other = await login(base, ANALYST_KEY)
+		expect((await call(base, '/sessions/current', { method: 'DELETE', headers: other })).status).toBe(204)
+		expect((await call(base, '/admin', { headers: other })).body).toMatchObject({ error: 'SessionRevokedError' })
 	})
 
 	test('what each credential may do; without the permission, 403', async () => {
@@ -114,7 +160,7 @@ describe('admin over REST (inline)', () => {
 		// someone saving over the version read before: 412 with what there is now
 		const stale = await call(base, schemaUrl, { method: 'PUT', body: { text: NORTHWIND }, headers: { ...ADMIN, 'If-Match': read.body.version } })
 		expect(stale).toMatchObject({ status: 412, body: { error: 'PreconditionFailedError', details: { version: written.body.version, text: changed } } })
-		expect((await call(base, schemaUrl, { method: 'PUT', body: { text: NORTHWIND }, headers: { 'X-Api-Key': 'analyst-key', 'If-Match': written.body.version } })).status).toBe(403)
+		expect((await call(base, schemaUrl, { method: 'PUT', body: { text: NORTHWIND }, headers: { ...ANALYST, 'If-Match': written.body.version } })).status).toBe(403)
 	})
 
 	test('one element changed (a form): its comments and the rest of the file stay; a conflict only on the same element', async () => {
@@ -165,7 +211,7 @@ describe('admin over REST (inline)', () => {
 		expect(set.body.variables[0]).toEqual({ name: 'SHOP_CNX', defined: true, usedBy: ['main'], used: true })
 		expect(JSON.stringify(set.body)).not.toContain('secret')
 		expect(fs.readFileSync(path.join(root, 'iot/v1/.env'), 'utf8')).toBe('# by hand\nTZ=UTC\nSHOP_CNX=\'{"host":"127.0.0.1","password":"secret"}\'\n')
-		expect((await call(base, url, { method: 'PUT', body: { remove: ['TZ'] }, headers: { 'X-Api-Key': 'analyst-key' } })).status).toBe(403)
+		expect((await call(base, url, { method: 'PUT', body: { remove: ['TZ'] }, headers: ANALYST })).status).toBe(403)
 		expect((await call(base, url, { method: 'PUT', body: { set: { 'bad name': 'x' } }, headers: ADMIN })).status).toBe(400)
 		await call(base, url, { method: 'PUT', body: { remove: ['TZ'] }, headers: ADMIN })
 		expect(fs.readFileSync(path.join(root, 'iot/v1/.env'), 'utf8')).toBe('# by hand\nSHOP_CNX=\'{"host":"127.0.0.1","password":"secret"}\'\n')
@@ -356,6 +402,9 @@ describe('admin with the supervisor: what is written here is served', () => {
 		supervisor = await startSupervisor({ source: new YamlFileConfigSource(file, process.env), bootLogger: new ConsoleLogger('error') })
 		base = `http://127.0.0.1:${port}`
 		await until(() => call(base, '/schemas').then(r => r.body).catch(() => []), (s: any[]) => Array.isArray(s) && s[0]?.status === 'ready')
+		Object.assign(ADMIN, await login(base, ADMIN_KEY))
+		Object.assign(READER, await login(base, READER_KEY))
+		Object.assign(ANALYST, await login(base, ANALYST_KEY))
 	}, 60000)
 	afterAll(() => supervisor?.stop(), 30000)
 

@@ -43,7 +43,7 @@ describe('admin configuration', () => {
 		expect(read(base).config?.admin).toEqual({ enabled: false, allowAnonymous: false, maxFileBytes: 2 * 1024 ** 2, commandTimeoutMs: 600000 })
 		const management = (raw: any) => ({ ...raw, transports: { ...raw.transports, management: { port: 8081 } } })
 		expect(read(management(base)).config?.admin.enabled).toBe(true)
-		expect(read(management(base)).config?.transports.management).toEqual({ port: 8081, host: '0.0.0.0', basePath: '' })
+		expect(read(management(base)).config?.transports.management).toMatchObject({ port: 8081, host: '0.0.0.0', basePath: '' })
 		expect(read(management(base)).warnings).toContainEqual(expect.stringMatching(/nobody can administer/))
 		// 3.x: admin.enabled and transports.http.ui are warned about and ignored
 		const old = read({ ...base, admin: { enabled: true }, transports: { http: { port: 8080, ui: { enabled: true } } } })

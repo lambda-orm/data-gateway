@@ -1,6 +1,6 @@
 # Sesiones de `management`
 
-> **Estado (2026-11-23): plan, no implementado.** Sigue a [`DATA_GATEWAY.md`](DATA_GATEWAY.md) §12 (el transporte
+> **Estado (2026-11-23): fase 1 hecha** (rama `feature/management-sessions`); faltan las fases 2 a 5. Sigue a [`DATA_GATEWAY.md`](DATA_GATEWAY.md) §12 (el transporte
 > `management`), que lo resume en §12.1. Aplica igual al IDE web (la imagen) y al de escritorio
 > ([`DATA_GATEWAY_IDE_DESKTOP_PLAN.md`](DATA_GATEWAY_IDE_DESKTOP_PLAN.md)). Las decisiones de §9 están cerradas (el
 > usuario, 2026-11-23).
@@ -180,7 +180,7 @@ transports:
 
 | Fase | Qué | Hecho cuando |
 | --- | --- | --- |
-| 1 | **Gateway:** la tabla `sessions` (puerto `SessionStorePort`, adaptador SQLite y en memoria), las rutas de §3, el middleware que exige la sesión en `management`, `sessionAdmin`, la configuración de §5, la auditoría | unitarios (vencimientos, límite, permisos) e integración (login, pedidos con token, `401` de cada tipo, revocar, clave directa rechazada) |
+| 1 ✅ | **Gateway:** la tabla `sessions` (puerto `SessionStorePort`, adaptador SQLite y en memoria), las rutas de §3, el middleware que exige la sesión en `management`, `sessionAdmin`, la configuración de §5, la auditoría | unitarios (vencimientos, límite, permisos) e integración (login, pedidos con token, `401` de cada tipo, revocar, clave directa rechazada) |
 | 2 | **Gateway:** `/events` (presencia, `session.*`, `schema.statusChanged`, `workspace.changed`), presencia y revocación entre réplicas | integración con dos gateways sobre el mismo volumen: revocar en una cierra el socket de la otra |
 | 3 | **IDE:** login, token por pestaña, re-login, motivos; eventos en lugar del polling; Mis sesiones / Sesiones activas | pruebas de la UI; en Ilusor, dos navegadores con la misma clave se ven y se cortan |
 | 4 | **Proxy del IDE:** `X-Forwarded-For` (y el subprotocolo de la sesión, que ya pasa) | `server.test.mjs` |

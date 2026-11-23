@@ -12,6 +12,13 @@ import { WebSocketTransport } from '../input/websocket/webSocketTransport'
 import { Transport } from '../input/transport'
 import { TransportInfo } from '../input/http/httpTransport'
 import { TransportsConfig } from '../../domain/config/dataGatewayConfig'
+import { AuditPort, ClockPort } from '../../application/ports/output/supportPorts'
+import { SessionService } from '../../application/session/sessionService'
+import { MemorySessionStore, NodeSessionSecrets, SqliteSessionStore } from '../output/session/sessionStores'
+import { ClientAddress } from '../input/http/clientAddress'
+import { SystemClock } from '../output/clock/systemClock'
+import { StdoutAuditAdapter } from '../output/audit/stdoutAuditAdapter'
+import path from 'path'
 
 /** The transports of the configuration as GET /transports tells them */
 export const transportsOf = (t: TransportsConfig): TransportInfo[] => [
@@ -54,6 +61,31 @@ export interface TransportDeps {
 	logger: LoggerPort
 	/** transports.management: the administration of the workspaces (REST, on the management transport) */
 	admin?: { service: AdminService, commands: CommandService }
+	clock?: ClockPort
+	/** the audit of the logins and revocations of management; else stdout, when audit.enabled */
+	audit?: AuditPort
+}
+
+/** The sessions of management: in the SQLite of the volume (shared by the replicas) or, without one, in memory */
+export const buildSessions = ({ config, logger, metrics, clock, audit }: TransportDeps): SessionService => {
+	const management = config.transports.management!
+	const { sessions } = management
+	const file = config.orm.workspacePath && sessions.store === 'auto'
+		? path.join(path.resolve(config.orm.workspacePath), '.data-gateway', 'state.sqlite')
+		: undefined
+	if (!file) logger.warn('[data-gateway] management: the sessions are kept in memory (no orm.workspacePath, or sessions.store: memory): another replica doesn\'t see them, and a restart forgets them')
+	const service = new SessionService(
+		{ idleTimeoutMs: sessions.idleTimeoutMs, maxLifetimeMs: sessions.maxLifetimeMs, maxPerCredential: sessions.maxPerCredential },
+		file ? new SqliteSessionStore(file) : new MemorySessionStore(),
+		new NodeSessionSecrets(),
+		clock ?? new SystemClock(),
+		logger,
+		audit ?? (config.audit.enabled ? new StdoutAuditAdapter() : undefined))
+	metrics.gauge('data_gateway_management_sessions', 'Sessions of management that can be used now, and those with the IDE connected', ['state'], () => {
+		const { active, connected } = service.count()
+		return [{ labels: { state: 'active' }, value: active }, { labels: { state: 'connected' }, value: connected }]
+	})
+	return service
 }
 
 type TransportFactory = (deps: TransportDeps) => Transport
@@ -78,8 +110,10 @@ export class TransportRegistry {
 		})
 		// the API of the data-gateway-ide: the routes of http for every schema and the administration (no rate limit, no
 		// Swagger: a person in an IDE, not clients)
-		this.register('management', ({ config, directory, metrics, logger, admin }) => {
+		this.register('management', (deps) => {
+			const { config, directory, metrics, logger, admin } = deps
 			const management = config.transports.management!
+			const authenticator = new AuthenticatorRegistry().build(management.authentication ?? config.authentication)
 			return new HttpTransport({
 				name: 'management',
 				port: management.port,
@@ -93,7 +127,8 @@ export class TransportRegistry {
 				directory,
 				metrics,
 				logger,
-				admin: admin ? { ...admin, authenticator: new AuthenticatorRegistry().build(management.authentication ?? config.authentication) } : undefined
+				admin: admin ? { ...admin, authenticator } : undefined,
+				sessions: { service: buildSessions(deps), authenticator, address: new ClientAddress(management.trustedProxies) }
 			})
 		})
 		this.register('mcpHttp', ({ config, directory, metrics, logger }) => {

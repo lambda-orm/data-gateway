@@ -332,6 +332,10 @@ transports:
 | `transports.http.swagger.enabled` | `true` | `/doc`, `/api-docs` (y `/` con esquema en la raíz) |
 | `transports.http.ui` | — | **quitado en 4.0.0**: la UI es el data-gateway-ide (§11.9); si aparece, se avisa y se ignora |
 | `transports.management.port` | **ninguno** | sin puerto no hay administración ni API para el IDE (§12); en producción, normalmente sin puerto |
+| `transports.management.sessions.idleTimeout` / `maxLifetime` | `30m` / `12h` | cuándo vence una sesión: sin pedidos, y desde el login (§12.1) |
+| `transports.management.sessions.maxPerCredential` | `0` | sesiones a la vez por credencial; `0` = sin límite; al superarlo, el login cierra la más vieja |
+| `transports.management.sessions.store` | `auto` | `auto`: `<orm.workspacePath>/.data-gateway/state.sqlite` (compartido por las réplicas); `memory`: solo esta réplica |
+| `transports.management.trustedProxies` | `[]` | IPs o redes (CIDR) de las que se lee `X-Forwarded-For` (el backend del IDE) |
 | `transports.<ws>.asyncapi.enabled` | `true` | `GET /asyncapi` y `/asyncapi.json` en `webSocket` y `mcpWebSocket` |
 
 ### 2.7 Migración desde el service 2.x
@@ -748,6 +752,7 @@ en el edge, antes de enviar nada al esquema. Cada tipo es un `AuthenticatorPort`
 | `workbenchWrite` | administración: guardar consultas, scripts y diagramas en los workspaces, sin tocar el esquema |
 | `ddl` | administración: cambiar la estructura de las bases de un stage (`push`, `drop`, §11.3) |
 | `build` | administración: generar el código del dominio en `src/` del workspace (§11.5) |
+| `sessionAdmin` | administración: listar todas las sesiones de `management` y revocar las de otras credenciales (§12.1); sin él, una credencial ve y cierra solo las suyas |
 
 Los de administración **nunca se dan por defecto**: una credencial sin lista de permisos tiene los cinco de los
 datos, y para administrar hay que nombrarlos.
@@ -1253,7 +1258,9 @@ transports:
 
 ### 12.1 Sesiones (plan)
 
-> **Plan, no implementado:** [`DATA_GATEWAY_SESSIONS_PLAN.md`](DATA_GATEWAY_SESSIONS_PLAN.md).
+> **En curso:** [`DATA_GATEWAY_SESSIONS_PLAN.md`](DATA_GATEWAY_SESSIONS_PLAN.md). Hecha la fase 1 (las sesiones en la
+> gateway: login, `/sessions`, `sessionAdmin`, la configuración y la auditoría); faltan el WebSocket de eventos (fase 2)
+> y el IDE (fase 3).
 
 `management` pasa a trabajar con **sesiones**: el IDE hace login (`POST /sessions`) con la credencial y recibe un
 token; todo pedido lleva el token, no la clave (una clave directa se rechaza). La gateway guarda las sesiones en

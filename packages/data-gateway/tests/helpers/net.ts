@@ -24,3 +24,10 @@ export const call = async (base: string, path: string, init: { method?: string, 
 	try { body = text ? JSON.parse(text) : undefined } catch { /* text */ }
 	return { status: response.status, body, headers: response.headers }
 }
+
+/** A session of management, logged in with a credential: the header every later request carries */
+export const login = async (base: string, credential: Record<string, string>): Promise<Record<string, string>> => {
+	const answer = await call(base, '/sessions', { method: 'POST', body: {}, headers: credential })
+	if (answer.status !== 201) throw new Error(`login failed: ${answer.status} ${JSON.stringify(answer.body)}`)
+	return { 'X-Data-Gateway-Session': answer.body.token }
+}

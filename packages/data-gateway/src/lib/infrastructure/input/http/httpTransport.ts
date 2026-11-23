@@ -17,6 +17,7 @@ import { withSecurity } from './openApi'
 import { adminRouter } from './adminRoutes'
 import { AdminService } from '../../../application/admin/adminService'
 import { CommandService } from '../../../application/admin/commandService'
+import { SessionDeps, sessionAuthentication, sessionRouter } from './sessionRoutes'
 const YAML = require('js-yaml')
 
 export interface HttpTransportOptions {
@@ -49,6 +50,11 @@ export interface HttpTransportDeps {
 	logger: LoggerPort
 	/** management: the administration of the workspaces at {basePath}/admin, with this authentication */
 	admin?: { service: AdminService, commands?: CommandService, authenticator: AuthenticatorPort }
+	/**
+	 * management: every request needs a session (docs/DATA_GATEWAY_SESSIONS_PLAN.md), given at {basePath}/sessions
+	 * with the credential; a credential sent directly is refused
+	 */
+	sessions?: SessionDeps
 }
 
 /** Paths that never need a credential: Kubernetes probes and Prometheus. */
@@ -148,6 +154,7 @@ export class HttpTransport implements Transport {
 		app.get(`${base}/schemas`, this.handle(async () => this.deps.directory.states()))
 		// its transports (no credential: as /schemas, what a client needs to find them)
 		if (this.options.transports) app.get(`${base}/transports`, this.handle(async () => this.options.transports))
+		if (this.deps.sessions) app.use(`${base}/sessions`, sessionRouter(this.deps.sessions))
 		if (this.deps.admin) app.use(`${base}/admin`, adminRouter(this.deps.admin.service, this.authenticate(this.deps.admin.authenticator), this.deps.admin.commands, this.deps.directory))
 		// the schemas: the router of the moment (a schema added or removed replaces it)
 		app.use((req, res, next) => this.schemaRouter(req, res, next))
@@ -243,7 +250,9 @@ export class HttpTransport implements Transport {
 		next()
 	}
 
-	private authenticate (authenticator: AuthenticatorPort) {
+	private authenticate (authenticator: AuthenticatorPort): express.RequestHandler {
+		// management: the session, whatever the schema's authentication says (the login used management's)
+		if (this.deps.sessions) return sessionAuthentication(this.deps.sessions, OPEN_PATHS)
 		return async (req: express.Request, res: express.Response, next: express.NextFunction) => {
 		if (OPEN_PATHS.includes(req.path)) return next()
 		try {

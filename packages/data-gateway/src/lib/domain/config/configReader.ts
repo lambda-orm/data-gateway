@@ -1,8 +1,9 @@
 import { ALL_PERMISSIONS, isPermission, KNOWN_PERMISSIONS, Permission } from '../auth/permission'
 import {
 	AuthenticationConfig, AuthenticationType, ConfigReading, CredentialConfig, DataGatewayConfig, LoggerConfig, McpConfig,
-	OrmConfig, RuntimeConfig, RuntimeMode, SchemaConfig, TransportConfig, TransportName, TransportsConfig, WatchConfig
+	OrmConfig, RuntimeConfig, RuntimeMode, SchemaConfig, SessionsConfig, TransportConfig, TransportName, TransportsConfig, WatchConfig
 } from './dataGatewayConfig'
+import { parseDuration } from './durations'
 import { normalizeSchemaPath, schemaPathIssues } from '../runtime/schemaPath'
 import { parseSize } from './sizes'
 
@@ -321,7 +322,11 @@ export class ConfigReader {
 				}
 				if (section.ui !== undefined) this.warnings.push(`${key}.ui was removed in 4.0.0 (the gateway serves no UI): ignored; the UI is the data-gateway-ide, through transports.management`)
 			} else if (name === 'management') {
-				transports.management = base
+				transports.management = {
+					...base,
+					sessions: this.sessions(section.sessions, `${key}.sessions`),
+					trustedProxies: this.addresses(section.trustedProxies, `${key}.trustedProxies`)
+				}
 			} else if (name === 'mcpHttp') {
 				transports.mcpHttp = {
 					...base,
@@ -347,6 +352,51 @@ export class ConfigReader {
 			this.issues.push('no transport exposed: configure transports.<name>.port')
 		}
 		return transports
+	}
+
+	private sessions (raw: unknown, key: string): SessionsConfig {
+		const r = isObject(raw) ? raw : {}
+		if (raw !== undefined && !isObject(raw)) this.issues.push(`${key} must be an object`)
+		const store = this.str(r.store, 'auto')
+		if (store !== 'auto' && store !== 'memory') this.issues.push(`${key}.store "${store}" is not auto or memory`)
+		const sessions: SessionsConfig = {
+			idleTimeoutMs: this.duration(r.idleTimeout, 30 * 60000, `${key}.idleTimeout`),
+			maxLifetimeMs: this.duration(r.maxLifetime, 12 * 3600000, `${key}.maxLifetime`),
+			maxPerCredential: this.int(r.maxPerCredential, 0, `${key}.maxPerCredential`, 0),
+			store: store === 'memory' ? 'memory' : 'auto'
+		}
+		if (sessions.idleTimeoutMs > sessions.maxLifetimeMs) this.warnings.push(`${key}.idleTimeout is longer than maxLifetime: a session ends at maxLifetime`)
+		return sessions
+	}
+
+	/** '30m', '12h', a number of ms; at least a second */
+	private duration (value: unknown, defaultValue: number, key: string): number {
+		if (value === undefined || value === null || value === '') return defaultValue
+		const ms = parseDuration(value as string | number)
+		if (ms === undefined || ms < 1000) {
+			this.issues.push(`${key} "${value}" is not a duration of at least 1s (30s, 30m, 12h, 7d)`)
+			return defaultValue
+		}
+		return ms
+	}
+
+	/** IPv4 / IPv6 addresses or networks in CIDR (10.0.0.0/8, ::1) */
+	private addresses (raw: unknown, key: string): string[] {
+		if (raw === undefined || raw === null) return []
+		const list = Array.isArray(raw) ? raw : [raw]
+		const valid: string[] = []
+		for (const entry of list.map(String)) {
+			const match = /^([0-9a-fA-F:.]+)(?:\/(\d{1,3}))?$/.exec(entry.trim())
+			const ipv4 = match && /^\d{1,3}(\.\d{1,3}){3}$/.test(match[1])
+			const ipv6 = match && !ipv4 && match[1].includes(':')
+			const prefix = match?.[2] !== undefined ? Number(match[2]) : undefined
+			if (!match || (!ipv4 && !ipv6) || (prefix !== undefined && prefix > (ipv4 ? 32 : 128))) {
+				this.issues.push(`${key}: "${entry}" is not an IP address or a CIDR network (10.0.0.0/8, ::1)`)
+				continue
+			}
+			valid.push(entry.trim())
+		}
+		return valid
 	}
 
 	private basePath (raw: unknown, key: string): string {

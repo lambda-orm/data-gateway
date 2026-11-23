@@ -18,9 +18,21 @@ All notable changes to this project will be documented in this file.
   the data-gateway-ide, its own image (`flaviorita/data-gateway-ide`), whose backend reaches `management`.
 - **No CORS on any transport** (`http`, `mcpHttp`, `management`, the `/asyncapi.json` of the WebSocket transports): a
   web app that called the gateway from the browser calls it from its backend.
+- **`management` works with sessions** (`docs/DATA_GATEWAY_SESSIONS_PLAN.md`): `POST /sessions` with the credential
+  (as every transport takes it) answers a token, and every other request carries it in `X-Data-Gateway-Session`. A
+  credential sent directly is refused (`401 SessionRequiredError`); `/health`, `/ping`, `/metrics`, `/schemas` and
+  `/transports` need none. The data transports don't change: they take the credential on every request.
 
 **Features:**
 
+- **The sessions of `management`:** `GET`/`DELETE /sessions/current` (the logout), `GET /sessions` (one's own; all with
+  `?all=true` and the new `sessionAdmin` permission), `DELETE /sessions/{id}` and `DELETE /sessions?credential=`
+  (`&except=current`: close the others). A session ends after `sessions.idleTimeout` (30 min) without requests or
+  `sessions.maxLifetime` (12 h); `401 SessionExpiredError` / `SessionRevokedError` say why. Kept in
+  `<orm.workspacePath>/.data-gateway/state.sqlite`, shared by the replicas, with the hash of the token only.
+  `sessions.maxPerCredential` limits them; `trustedProxies` takes the address of the browser from `X-Forwarded-For` of
+  the IDE. Every login, logout, expiry and revocation leaves an audit line; `data_gateway_management_sessions` counts
+  them.
 - `GET {basePath}/transports`: the transports of the gateway (port, base path, how a schema is reached, its document),
   and `GET {basePath}/openapi.json`.
 - A WebSocket from a browser authenticates with the credential in its subprotocols (`lambdaorm`,

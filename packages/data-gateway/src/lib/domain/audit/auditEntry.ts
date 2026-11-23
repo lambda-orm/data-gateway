@@ -17,3 +17,20 @@ export interface AuditEntry {
 	result: 'ok' | 'error'
 	error?: string
 }
+
+/** A login, logout, expiry or revocation of a session of management (docs/DATA_GATEWAY_SESSIONS_PLAN.md §7) */
+export interface SessionAuditEntry {
+	type: 'audit'
+	time: string
+	transport: 'management'
+	credential: string
+	operation: 'login' | 'logout' | 'sessionExpired' | 'sessionRevoked' | 'loginRejected'
+	/** the id of the session (never its token) */
+	session?: string
+	ip?: string
+	/** who revoked it: a credential, or "limit" (maxPerCredential) */
+	by?: string
+	/** why a login was rejected, or a session expired (idle, lifetime) */
+	reason?: string
+	result: 'ok' | 'error'
+}

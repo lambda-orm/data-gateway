@@ -9,13 +9,17 @@ import { startGateway } from '../../src/lib/infrastructure/build/main'
 import { RunningGateway } from '../../src/lib/infrastructure/build/dataGatewayBuilder'
 import { YamlFileConfigSource } from '../../src/lib/infrastructure/output/config/yamlFileConfigSource'
 import { ConsoleLogger } from '../../src/lib/infrastructure/output/logger/loggers'
-import { call, freePort } from '../helpers/net'
+import { call, freePort, login } from '../helpers/net'
 import { startSupervisor } from '../../src/lib/infrastructure/build/main'
 import { Supervisor } from '../../src/lib/application/runtime/supervisor'
 import { Client } from 'pg'
 
-const ADMIN = { 'X-Api-Key': 'admin-key' }
-const READER = { 'X-Api-Key': 'reader-key' }
+const ADMIN_KEY = { 'X-Api-Key': 'admin-key' }
+/** a session of management logged in with ADMIN_KEY (management takes no credential directly) */
+const ADMIN: Record<string, string> = {}
+const READER_KEY = { 'X-Api-Key': 'reader-key' }
+/** a session of management logged in with READER_KEY (management takes no credential directly) */
+const READER: Record<string, string> = {}
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
@@ -87,6 +91,8 @@ transports:
 `)
 		gateway = await startGateway({ source: new YamlFileConfigSource(file, {}), bootLogger: new ConsoleLogger('error') })
 		base = `http://127.0.0.1:${port}`
+		Object.assign(ADMIN, await login(base, ADMIN_KEY))
+		Object.assign(READER, await login(base, READER_KEY))
 	}, 60000)
 	afterAll(() => gateway?.stop())
 
@@ -228,6 +234,7 @@ transports:
 			if (Array.isArray(states) && states[0]?.status === 'ready') break
 			await sleep(100)
 		}
+		Object.assign(ADMIN, await login(base, ADMIN_KEY))
 	}, 60000)
 	afterAll(() => supervisor?.stop(), 30000)
 

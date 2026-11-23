@@ -1,5 +1,5 @@
 import { QueryOptions } from '@lambdaorm/base'
-import { AuditEntry } from '../../../domain/audit/auditEntry'
+import { AuditEntry, SessionAuditEntry } from '../../../domain/audit/auditEntry'
 import { AuthenticationResult } from '../../../domain/auth/principal'
 
 export interface QueueExecuteArgs {
@@ -86,7 +86,7 @@ export interface MetricsPort {
 
 /** Where the audit entries go (stdout, a file, a topic, …). */
 export interface AuditPort {
-	write (entry: AuditEntry): void
+	write (entry: AuditEntry | SessionAuditEntry): void
 }
 
 export interface ClockPort {

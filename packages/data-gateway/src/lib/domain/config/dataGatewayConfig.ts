@@ -150,7 +150,23 @@ export interface TransportsConfig {
 	 * The API of the data-gateway-ide (the routes of http for every schema, plus the administration at /admin), on its
 	 * own port so a deployment can leave it out (docs/DATA_GATEWAY.md §12)
 	 */
-	management?: TransportConfig
+	management?: ManagementTransportConfig
+}
+
+/** The sessions of management (docs/DATA_GATEWAY_SESSIONS_PLAN.md §5) */
+export interface SessionsConfig {
+	idleTimeoutMs: number
+	maxLifetimeMs: number
+	/** 0 = no limit */
+	maxPerCredential: number
+	/** auto: the SQLite of <orm.workspacePath>/.data-gateway (memory without it); memory: this replica only */
+	store: 'auto' | 'memory'
+}
+
+export interface ManagementTransportConfig extends TransportConfig {
+	sessions: SessionsConfig
+	/** addresses or CIDR networks whose X-Forwarded-For is read (the backend of the IDE) */
+	trustedProxies: string[]
 }
 
 export interface McpConfig {
