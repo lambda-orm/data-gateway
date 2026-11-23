@@ -37,6 +37,8 @@ export class SqliteSessionStore implements SessionStorePort {
 				revoked_by TEXT
 			)`)
 			this.db.exec('CREATE INDEX IF NOT EXISTS sessions_credential ON sessions (credential)')
+			// the WebSocket of events of each session, by replica: a session is connected if a replica saw it lately
+			this.db.exec('CREATE TABLE IF NOT EXISTS session_connections (session_id TEXT NOT NULL, replica TEXT NOT NULL, seen_at TEXT NOT NULL, PRIMARY KEY (session_id, replica))')
 		}
 		return this.db
 	}
@@ -72,8 +74,32 @@ export class SqliteSessionStore implements SessionStorePort {
 		this.open().prepare('UPDATE sessions SET revoked_at = ?, revoked_by = ? WHERE id = ? AND revoked_at IS NULL').run(at, by, id)
 	}
 
+	public setActivity (id: string, activity: { schema?: string, tab?: string }): void {
+		this.open().prepare('UPDATE sessions SET activity = ? WHERE id = ?').run(JSON.stringify(activity), id)
+	}
+
+	public markConnected (replica: string, ids: string[], at: string): void {
+		const db = this.open()
+		db.exec('BEGIN IMMEDIATE')
+		try {
+			db.prepare('DELETE FROM session_connections WHERE replica = ?').run(replica)
+			const insert = db.prepare('INSERT INTO session_connections (session_id, replica, seen_at) VALUES (?, ?, ?)')
+			for (const id of ids) insert.run(id, replica, at)
+			db.exec('COMMIT')
+		} catch (error) {
+			db.exec('ROLLBACK')
+			throw error
+		}
+	}
+
+	public connectedSince (since: string): Set<string> {
+		const rows = this.open().prepare('SELECT DISTINCT session_id FROM session_connections WHERE seen_at >= ?').all(since) as { session_id: string }[]
+		return new Set(rows.map(r => r.session_id))
+	}
+
 	public purge (endedBefore: string): number {
 		const result = this.open().prepare('DELETE FROM sessions WHERE revoked_at < ? OR expires_at < ?').run(endedBefore, endedBefore)
+		this.open().prepare('DELETE FROM session_connections WHERE seen_at < ?').run(endedBefore)
 		return Number(result.changes)
 	}
 
@@ -105,6 +131,7 @@ export class SqliteSessionStore implements SessionStorePort {
 /** The sessions in memory: one replica only (without orm.workspacePath, or sessions.store: memory); lost on a restart */
 export class MemorySessionStore implements SessionStorePort {
 	private readonly sessions = new Map<string, { session: Session, tokenHash: string }>()
+	private readonly connections = new Map<string, { ids: string[], at: string }>()
 
 	public create (session: Session, tokenHash: string): void {
 		this.sessions.set(session.id, { session: { ...session }, tokenHash })
@@ -138,6 +165,19 @@ export class MemorySessionStore implements SessionStorePort {
 		if (!entry || entry.session.revokedAt) return
 		entry.session.revokedAt = at
 		entry.session.revokedBy = by
+	}
+
+	public setActivity (id: string, activity: { schema?: string, tab?: string }): void {
+		const entry = this.sessions.get(id)
+		if (entry) entry.session.activity = { ...activity }
+	}
+
+	public markConnected (replica: string, ids: string[], at: string): void {
+		this.connections.set(replica, { ids: [...ids], at })
+	}
+
+	public connectedSince (since: string): Set<string> {
+		return new Set([...this.connections.values()].filter(c => c.at >= since).flatMap(c => c.ids))
 	}
 
 	public purge (endedBefore: string): number {

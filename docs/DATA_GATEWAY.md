@@ -1258,9 +1258,9 @@ transports:
 
 ### 12.1 Sesiones (plan)
 
-> **En curso:** [`DATA_GATEWAY_SESSIONS_PLAN.md`](DATA_GATEWAY_SESSIONS_PLAN.md). Hecha la fase 1 (las sesiones en la
-> gateway: login, `/sessions`, `sessionAdmin`, la configuración y la auditoría); faltan el WebSocket de eventos (fase 2)
-> y el IDE (fase 3).
+> **En curso:** [`DATA_GATEWAY_SESSIONS_PLAN.md`](DATA_GATEWAY_SESSIONS_PLAN.md). Hechas las fases 1 y 2 en la gateway
+> (login, `/sessions`, `sessionAdmin`, la configuración, la auditoría y el WebSocket de eventos `/events` con la
+> presencia entre réplicas); faltan el IDE (fase 3) y su proxy (fase 4).
 
 `management` pasa a trabajar con **sesiones**: el IDE hace login (`POST /sessions`) con la credencial y recibe un
 token; todo pedido lleva el token, no la clave (una clave directa se rechaza). La gateway guarda las sesiones en

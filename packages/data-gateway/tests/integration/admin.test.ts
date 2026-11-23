@@ -11,6 +11,7 @@ import { Supervisor } from '../../src/lib/application/runtime/supervisor'
 import { YamlFileConfigSource } from '../../src/lib/infrastructure/output/config/yamlFileConfigSource'
 import { ConsoleLogger } from '../../src/lib/infrastructure/output/logger/loggers'
 import { call, freePort, login } from '../helpers/net'
+import WebSocket from 'ws'
 
 const NORTHWIND = fs.readFileSync(path.join(__dirname, '../fixtures/northwind/lambdaORM.yaml'), 'utf8')
 const ADMIN_KEY = { 'X-Api-Key': 'admin-key' }
@@ -411,9 +412,17 @@ describe('admin with the supervisor: what is written here is served', () => {
 	const state = async (p: string) => ((await call(base, '/schemas')).body as any[]).find(s => s.path === p)
 
 	test('a workspace created starts; its schema written is reloaded; removed, it goes', async () => {
+		// the IDE learns it by the WebSocket of events of management, without asking again
+		const messages: any[] = []
+		const events = new WebSocket(`${base.replace('http', 'ws')}/events`, { headers: ADMIN })
+		events.on('message', data => messages.push(JSON.parse(String(data))))
+		await new Promise((resolve, reject) => { events.once('open', resolve); events.once('error', reject) })
 		const copy = await call(base, '/admin/workspaces', { body: { path: 'sales/v1', copyOf: 'iot/v1' }, headers: ADMIN })
 		expect(copy.status).toBe(201)
 		await until(() => state('sales/v1'), s => s?.status === 'ready')
+		await until(async () => messages, m => m.some(x => x.method === 'schema.statusChanged' && x.params.path === 'sales/v1' && x.params.status === 'ready'))
+		expect(messages).toContainEqual({ jsonrpc: '2.0', method: 'workspace.changed', params: expect.objectContaining({ path: 'sales/v1', kind: 'added' }) })
+		events.close()
 		expect((await call(base, '/sales/v1/entities', { headers: READER })).body.map((e: any) => e.name)).toContain('Categories')
 		const read = await call(base, '/admin/workspaces/sales%2Fv1/schema', { headers: ADMIN })
 		await call(base, '/admin/workspaces/sales%2Fv1/schema', { method: 'PUT', body: { text: read.body.text.replace(/name: Categories$/m, 'name: Kinds') }, headers: { ...ADMIN, 'If-Match': read.body.version } })

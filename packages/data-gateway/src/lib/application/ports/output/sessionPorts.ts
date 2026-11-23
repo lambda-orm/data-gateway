@@ -14,6 +14,12 @@ export interface SessionStorePort {
 	/** the last request of a session (written at most once a minute, by the caller) */
 	touch (id: string, at: string, ip?: string): void
 	revoke (id: string, by: string, at: string): void
+	/** what the IDE says it is looking at (session.activity) */
+	setActivity (id: string, activity: { schema?: string, tab?: string }): void
+	/** the sessions with a WebSocket of events open in this replica now (replaces what this replica said before) */
+	markConnected (replica: string, ids: string[], at: string): void
+	/** the sessions some replica saw connected since then */
+	connectedSince (since: string): Set<string>
 	/** sessions that ended (revoked, or expired before `endedBefore`) more than a day ago are removed */
 	purge (endedBefore: string): number
 	close? (): void

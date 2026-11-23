@@ -14,6 +14,8 @@ export interface SessionDeps {
 	/** the authentication of management (its own, or the global one): what a login checks */
 	authenticator: AuthenticatorPort
 	address: ClientAddress
+	/** the timers of the WebSocket of events (tests make them short) */
+	events?: { pingMs?: number, presenceMs?: number, checkMs?: number }
 }
 
 const ipOf = (req: express.Request, address: ClientAddress) => address.of(req.socket.remoteAddress, req.headers['x-forwarded-for'])

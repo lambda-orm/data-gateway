@@ -124,6 +124,29 @@ describe('sessions', () => {
 		expect(service.count()).toEqual({ active: 3, connected: 0 })
 	})
 
+	test('presence: connected while a replica said so lately; activity listed; ended sessions found by check', () => {
+		const { service, clock } = setup()
+		const a = service.login(modeler, undefined, undefined)
+		const b = service.login(modeler, undefined, undefined)
+		const me = service.authenticate(a.token, undefined)
+		service.presence([a.session.id])
+		service.activity(a.session.id, { schema: 'shop', tab: 'query:1', ignored: 'x' } as any)
+		expect(service.list(me, false).map(s => [s.id === a.session.id, s.connected, s.activity])).toEqual([
+			[true, true, { schema: 'shop', tab: 'query:1' }], [false, false, undefined]
+		])
+		expect(service.count()).toEqual({ active: 2, connected: 1 })
+		// not said again for 45 s: no longer connected
+		clock.advance(46000)
+		expect(service.count().connected).toBe(0)
+		// check: of some sessions, the ones that ended and why; the revoked one is announced to the sockets
+		const announced: string[] = []
+		service.ended.subscribe(({ id }) => announced.push(id))
+		service.revoke(me, b.session.id)
+		expect(announced).toEqual([b.session.id])
+		expect(service.check([a.session.id, b.session.id]).map(e => [e.id, e.error.name])).toEqual([[b.session.id, 'SessionRevokedError']])
+		expect(service.expiringInMs(a.session)).toBe(12 * 60 * MIN - 2 * MIN - 46000)
+	})
+
 	test('on SQLite: shared by two services on the same file (two replicas); only the hash of the token is kept', () => {
 		const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sessions-'))
 		const file = path.join(dir, '.data-gateway', 'state.sqlite')

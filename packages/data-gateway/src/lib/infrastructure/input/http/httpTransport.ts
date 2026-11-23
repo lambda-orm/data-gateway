@@ -18,6 +18,8 @@ import { adminRouter } from './adminRoutes'
 import { AdminService } from '../../../application/admin/adminService'
 import { CommandService } from '../../../application/admin/commandService'
 import { SessionDeps, sessionAuthentication, sessionRouter } from './sessionRoutes'
+import { ManagementEvents } from './managementEvents'
+import { parseSize } from '../../../domain/config/sizes'
 const YAML = require('js-yaml')
 
 export interface HttpTransportOptions {
@@ -78,6 +80,8 @@ export class HttpTransport implements Transport {
 	private schemaRouter: express.Router = express.Router()
 	private routes: { method: string, path: string }[] = []
 	private swaggerDocument: any
+	/** management: its WebSocket of events ({basePath}/events) */
+	private events?: ManagementEvents
 
 	constructor (private readonly options: HttpTransportOptions, private readonly deps: HttpTransportDeps) {
 		this.name = options.name ?? TRANSPORT_NAME
@@ -101,6 +105,12 @@ export class HttpTransport implements Transport {
 			})
 			this.server = server
 		})
+		if (this.deps.sessions) {
+			this.events = new ManagementEvents(
+				{ basePath: this.options.basePath, maxPayload: parseSize(this.options.requestBodySize) ?? 1024 * 1024, ...this.deps.sessions.events },
+				this.deps.sessions.service, this.deps.sessions.address, this.deps.directory, this.deps.logger)
+			this.events.attach(this.server!)
+		}
 		const address = this.address
 		const schemas = this.served.map(s => `/${s.path}`).join(', ')
 		this.deps.logger.info(`[data-gateway] ${this.name} listening on ${address?.host}:${address?.port}${this.options.basePath || '/'} (schemas ${schemas})`)
@@ -115,6 +125,8 @@ export class HttpTransport implements Transport {
 	}
 
 	public async stop (): Promise<void> {
+		await this.events?.close()
+		this.events = undefined
 		const server = this.server
 		this.server = undefined
 		if (!server) return

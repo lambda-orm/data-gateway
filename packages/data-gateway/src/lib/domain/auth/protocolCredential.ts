@@ -30,3 +30,15 @@ export const headersFromProtocols = (header: string | string[] | undefined): Rec
 
 /** The subprotocol the gateway answers: lambdaorm when it was offered (else none) */
 export const chooseProtocol = (offered: Set<string>): string | false => offered.has(PROTOCOL) ? PROTOCOL : false
+
+const SESSION_PREFIX = `${PROTOCOL}.session.`
+
+/** The subprotocols of a WebSocket to the events of management: the token of its session (docs/DATA_GATEWAY_SESSIONS_PLAN.md §4) */
+export const sessionProtocolsFor = (token: string): string[] => [PROTOCOL, SESSION_PREFIX + token]
+
+/** The token of a session carried by the subprotocols of a request, if any */
+export const sessionFromProtocols = (header: string | string[] | undefined): string | undefined => {
+	const offered = (Array.isArray(header) ? header.join(',') : header ?? '').split(',').map(p => p.trim())
+	const carried = offered.find(p => p.startsWith(SESSION_PREFIX))
+	return carried ? carried.slice(SESSION_PREFIX.length) || undefined : undefined
+}

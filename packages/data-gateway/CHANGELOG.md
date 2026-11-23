@@ -33,6 +33,12 @@ All notable changes to this project will be documented in this file.
   `sessions.maxPerCredential` limits them; `trustedProxies` takes the address of the browser from `X-Forwarded-For` of
   the IDE. Every login, logout, expiry and revocation leaves an audit line; `data_gateway_management_sessions` counts
   them.
+- **The WebSocket of events of `management`**, `{basePath}/events`: the session in the upgrade
+  (`X-Data-Gateway-Session`, or the subprotocol `lambdaorm.session.<token>` from a browser). It pushes
+  `session.revoked` (then closes with `4401`), `session.expiring` (2 minutes before the end of its lifetime),
+  `schema.statusChanged` and `workspace.changed`, and takes `session.activity` (`{ schema, tab }`) from the IDE. A
+  session with its socket open is `connected` in the lists, also for the other replicas on the same volume; revoking it
+  in any replica closes its socket (within 5 s; at once in the same replica).
 - `GET {basePath}/transports`: the transports of the gateway (port, base path, how a schema is reached, its document),
   and `GET {basePath}/openapi.json`.
 - A WebSocket from a browser authenticates with the credential in its subprotocols (`lambdaorm`,

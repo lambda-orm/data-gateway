@@ -4,11 +4,16 @@ import { endOf, listed, ListedSession, Session, SessionClient, SessionEnd, Sessi
 import { Principal, principal as principalOf } from '../../domain/auth/principal'
 import { forbidden, GatewayError, notFound } from '../../domain/errors/gatewayError'
 import { SessionAuditEntry } from '../../domain/audit/auditEntry'
+import { Listeners } from '../runtime/listeners'
 
 /** lastSeenAt is written at most this often per session, not on every request */
 const TOUCH_EVERY_MS = 60000
 /** an ended session stays this long (listed as such to nobody, kept for its 401 with the reason), then it is removed */
 const KEEP_ENDED_MS = 24 * 3600000
+/** a session is connected if some replica saw its WebSocket of events this recently (they say it every 15 s) */
+const CONNECTED_WITHIN_MS = 45000
+/** session.expiring: this long before the end of its lifetime */
+export const EXPIRING_NOTICE_MS = 2 * 60000
 
 export interface Login {
 	session: Session
@@ -52,10 +57,16 @@ export class SessionService {
 		private readonly secrets: SessionSecretsPort,
 		private readonly clock: ClockPort,
 		private readonly logger: LoggerPort,
-		private readonly audit?: AuditPort,
-		/** whether a session has its WebSocket of events open (phase 2); none yet */
-		private readonly connected: (id: string) => boolean = () => false
-	) {}
+		private readonly audit?: AuditPort
+	) {
+		this.replica = secrets.id()
+	}
+
+	/** this replica, in the presence it tells (session_connections) */
+	private readonly replica: string
+
+	/** a session that can't be used any more, ended in this replica (logout, revoked, limit): its WebSocket closes now */
+	public readonly ended = new Listeners<{ id: string, error: GatewayError }>()
 
 	public get idleTimeoutMs (): number { return this.settings.idleTimeoutMs }
 
@@ -71,6 +82,7 @@ export class SessionService {
 			for (const old of live.slice(0, Math.max(0, live.length - this.settings.maxPerCredential + 1))) {
 				this.store.revoke(old.id, 'limit', at)
 				this.write({ credential: old.credential, operation: 'sessionRevoked', session: old.id, by: 'limit', result: 'ok' })
+				this.ended.emit({ id: old.id, error: sessionError({ reason: 'revoked', by: 'limit', at }) })
 			}
 		}
 		const token = this.secrets.token()
@@ -101,17 +113,8 @@ export class SessionService {
 		const session = this.store.byTokenHash(this.secrets.hash(token))
 		if (!session) throw sessionRequired()
 		const now = this.clock.now()
-		const end = endOf(session, now, this.settings)
-		if (end) {
-			if (end.reason !== 'revoked' && !session.revokedAt) {
-				// it ended now: once, its audit line, and it is kept as revoked by its expiry so it isn't counted again
-				this.store.revoke(session.id, `expired:${end.reason}`, end.at)
-				this.write({ credential: session.credential, operation: 'sessionExpired', session: session.id, reason: end.reason, ip, result: 'ok' })
-			}
-			throw sessionError(end.reason === 'revoked' && session.revokedBy?.startsWith('expired:')
-				? { reason: session.revokedBy.slice('expired:'.length) as 'idle' | 'lifetime', at: session.revokedAt! }
-				: end)
-		}
+		const error = this.settle(session, now, ip)
+		if (error) throw error
 		if (now.getTime() - Date.parse(session.lastSeenAt) >= TOUCH_EVERY_MS || (ip && ip !== session.ip)) {
 			const at = now.toISOString()
 			this.store.touch(session.id, at, ip)
@@ -121,23 +124,73 @@ export class SessionService {
 		return { principal: principalOf(session.credential, session.permissions), session }
 	}
 
+	/** Why a session can't be used now (and, the first time it is seen expired, its audit line), or undefined */
+	private settle (session: Session, now: Date, ip?: string): GatewayError | undefined {
+		const end = endOf(session, now, this.settings)
+		if (!end) return undefined
+		if (end.reason !== 'revoked' && !session.revokedAt) {
+			// it ended now: once, its audit line, and it is kept as revoked by its expiry so it isn't counted again
+			this.store.revoke(session.id, `expired:${end.reason}`, end.at)
+			this.write({ credential: session.credential, operation: 'sessionExpired', session: session.id, reason: end.reason, ip, result: 'ok' })
+		}
+		return sessionError(end.reason === 'revoked' && session.revokedBy?.startsWith('expired:')
+			? { reason: session.revokedBy.slice('expired:'.length) as 'idle' | 'lifetime', at: session.revokedAt! }
+			: end)
+	}
+
+	/** Of the sessions of the sockets of this replica, the ones that ended (in any replica) and why: they are closed */
+	public check (ids: string[]): { id: string, error: GatewayError }[] {
+		const now = this.clock.now()
+		const ended: { id: string, error: GatewayError }[] = []
+		for (const id of ids) {
+			const session = this.store.byId(id)
+			const error = session ? this.settle(session, now) : sessionRequired()
+			if (error) ended.push({ id, error })
+		}
+		return ended
+	}
+
+	/** How long until session.expiring (its lifetime ends in EXPIRING_NOTICE_MS); 0 if it is already due */
+	public expiringInMs (session: Session): number {
+		return Math.max(0, Date.parse(session.expiresAt) - EXPIRING_NOTICE_MS - this.clock.now().getTime())
+	}
+
+	/** The sessions with a WebSocket of events open in this replica, said to the others (every 15 s, and on a change) */
+	public presence (ids: string[]): void {
+		this.store.markConnected(this.replica, ids, this.clock.now().toISOString())
+	}
+
+	/** What the IDE is looking at (session.activity); orientative, not audit */
+	public activity (id: string, activity: { schema?: string, tab?: string }): void {
+		const text = (value: unknown) => typeof value === 'string' && value ? value.slice(0, 200) : undefined
+		const clean = { schema: text(activity?.schema), tab: text(activity?.tab) }
+		this.store.setActivity(id, Object.fromEntries(Object.entries(clean).filter(([, v]) => v !== undefined)))
+	}
+
+	private connectedIds (): Set<string> {
+		return this.store.connectedSince(new Date(this.clock.now().getTime() - CONNECTED_WITHIN_MS).toISOString())
+	}
+
 	public current (auth: Authenticated): ListedSession {
-		return listed(auth.session, auth.session.id, this.connected(auth.session.id))
+		return listed(this.store.byId(auth.session.id) ?? auth.session, auth.session.id, this.connectedIds().has(auth.session.id))
 	}
 
 	public logout (auth: Authenticated): void {
-		this.store.revoke(auth.session.id, auth.session.credential, this.clock.now().toISOString())
+		const at = this.clock.now().toISOString()
+		this.store.revoke(auth.session.id, auth.session.credential, at)
 		this.write({ credential: auth.session.credential, operation: 'logout', session: auth.session.id, result: 'ok' })
+		this.ended.emit({ id: auth.session.id, error: sessionError({ reason: 'revoked', by: auth.session.credential, at }) })
 	}
 
 	/** One's own sessions; with all, every credential's (sessionAdmin). Only the ones that can still be used. */
 	public list (auth: Authenticated, all: boolean): ListedSession[] {
 		if (all) this.require(auth, 'sessionAdmin')
 		const now = this.clock.now()
+		const connected = this.connectedIds()
 		return this.store.active(all ? undefined : auth.session.credential)
 			.filter(s => !endOf(s, now, this.settings))
 			.sort((a, b) => a.credential.localeCompare(b.credential) || b.lastSeenAt.localeCompare(a.lastSeenAt))
-			.map(s => listed(s, auth.session.id, this.connected(s.id)))
+			.map(s => listed(s, auth.session.id, connected.has(s.id)))
 	}
 
 	/** Revokes a session: one's own credential's, or any with sessionAdmin */
@@ -163,11 +216,14 @@ export class SessionService {
 	public count (): { active: number, connected: number } {
 		const now = this.clock.now()
 		const live = this.store.active().filter(s => !endOf(s, now, this.settings))
-		return { active: live.length, connected: live.filter(s => this.connected(s.id)).length }
+		const connected = this.connectedIds()
+		return { active: live.length, connected: live.filter(s => connected.has(s.id)).length }
 	}
 
 	private end (session: Session, by: string): void {
-		this.store.revoke(session.id, by, this.clock.now().toISOString())
+		const at = this.clock.now().toISOString()
+		this.store.revoke(session.id, by, at)
+		this.ended.emit({ id: session.id, error: sessionError({ reason: 'revoked', by, at }) })
 		this.write({ credential: session.credential, operation: 'sessionRevoked', session: session.id, by, result: 'ok' })
 		this.logger.info(`[data-gateway] management: session ${session.id} of "${session.credential}" revoked by "${by}"`)
 	}
