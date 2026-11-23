@@ -6,7 +6,8 @@ import { app, dialog, shell } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 
-const PAGE = 'https://lambda-orm.github.io/wiki/ide/'
+// the page of the downloads of the IDE, where the macOS and .deb builds take a new version from
+const PAGE = 'https://lambda-orm.github.io/wiki/ide/Download/'
 const RELEASES = 'https://api.github.com/repos/lambda-orm/data-gateway/releases?per_page=30'
 const EVERY_MS = 6 * 3600000
 
