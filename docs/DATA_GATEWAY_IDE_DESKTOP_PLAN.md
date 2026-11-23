@@ -2,8 +2,9 @@
 
 > **Estado (2026-11-23): plan, no implementado.** Sigue a [`DATA_GATEWAY.md`](DATA_GATEWAY.md) §11.9 (el IDE y su
 > backend) y §12 (el transporte `management`). Las decisiones de §8 están cerradas (el usuario, 2026-11-23).
-> **Avance (2026-11-23, rama `feature/ide-desktop`):** fases 1 a 3 hechas, y de la 4 el workflow, `release.yml` y
-> `DEPLOY.md`; falta la pestaña IDE de la wiki. La fase 5 (firma), pendiente.
+> **Avance (2026-11-23, rama `feature/ide-desktop`):** fases 1 a 4 hechas (la pestaña IDE en la rama
+> `feature/data-gateway-4.0.0` de la wiki). Falta, al publicar: el primer release, y después de publicar la wiki, los
+> enlaces de los README a `/ide/` (§5.6). La fase 5 (firma), pendiente.
 
 ## 1. Objetivo
 
@@ -412,7 +413,7 @@ Los puntos 1, 4, 5 y 6 son Markdown: se ven aunque la API de GitHub no responda 
 | 1 ✅ | `server.mjs` con token, origen de la app y verificación de `Host`; `viaProxy` con la base configurable | pruebas nuevas en verde; la imagen web sin cambios (sus pruebas y `ci-local.sh check`) |
 | 2 ✅ | `packages/ide-desktop`: `app://`, el proxy local, la ventana, el menú, una sola instancia | `pnpm --filter …ide-desktop dev` abre el IDE; connections que persisten entre arranques; REST, WebSocket y MCP a una gateway local |
 | 3 ✅ | electron-builder para los tres SO; prueba de humo; `electron-updater` en Windows y AppImage, el aviso en macOS y `.deb` | los ejecutables de Linux construidos y probados en local; los de Windows y macOS, en CI; la prueba del actualizador en verde |
-| 4 | `ide-desktop.yml`, `release.yml` sin releases de Changesets y `DEPLOY.md` (§4.5); en la wiki, la pestaña IDE: `/ide/` con sus versiones y la guía mudada con sus redirecciones (cuatro idiomas); después, los enlaces de los README (§5.6) | un release de prueba (prerelease `ide-v1.1.0-rc.1`) que la página lista; `mkdocs build --strict` sin advertencias; la URL vieja de la guía redirige |
+| 4 ✅ | `ide-desktop.yml`, `release.yml` sin releases de Changesets y `DEPLOY.md` (§4.5); en la wiki, la pestaña IDE: `/ide/` con sus versiones y la guía mudada con sus redirecciones (cuatro idiomas); después, los enlaces de los README (§5.6) | un release de prueba (prerelease `ide-v1.1.0-rc.1`) que la página lista; `mkdocs build --strict` sin advertencias; la URL vieja de la guía redirige |
 | 5 | firma y notarización; `electron-updater` también en macOS; `safeStorage` | los ejecutables firmados se abren sin avisos y macOS se actualiza solo |
 
 Cada fase en su rama `feature/` con commits Conventional Commits y `#96` (u otro ticket que indique el usuario). Antes

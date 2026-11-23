@@ -14,7 +14,7 @@ export interface SchemaState { path: string, status: string, reason?: string }
 
 /** The documentation of the data-gateway in the wiki, in the language of the page (or the nearest one it has) */
 const WIKI_LANGUAGES: Record<string, string> = { en: '', es: 'es/', pt: 'pt/', de: 'de/', ca: 'es/', gl: 'es/', eu: 'es/' }
-export const wikiUrl = (locale: string) => `https://lambda-orm.github.io/wiki/${WIKI_LANGUAGES[locale] ?? ''}data-gateway/`
+export const wikiUrl = (locale: string) => `https://lambda-orm.github.io/wiki/${WIKI_LANGUAGES[locale] ?? ''}ide/`
 /** a link that opens in another tab of the browser (the session of this one stays) */
 export const OUT = { target: '_blank', rel: 'noopener noreferrer' } as const
 
