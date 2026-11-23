@@ -1,0 +1,183 @@
+# Handoff: seguir trabajando en el repositorio de la Data Gateway
+
+Contexto para quien continúe este trabajo, sea una persona o una sesión de Claude. Estado al **2026-11-23**, el día en
+que la Data Gateway se separó de [lambda-orm/core](https://github.com/lambda-orm/core).
+
+## 1. Estado de las ramas (nada está pusheado)
+
+| Repositorio | Rama | Commits | Qué tiene |
+| --- | --- | --- | --- |
+| `~/personal/lambdaorm/data-gateway` (público) | `feature/monorepo`, desde `develop` | `bcb2122` trae los paquetes con su historia; `12d52dd` arma el monorepo y los workflows; `5db26f6` agrega el `env.d.ts` del IDE; y este documento | Todo lo de la Data Gateway |
+| `~/personal/lambdaorm/core` (privado) | `feature/ui-workspace-tree` | `50d4164` (sobre `9edff0f`) | El IDE, sus conexiones y sus herramientas, todavía dentro de core |
+| `~/personal/lambdaorm/core` | `feature/split-data-gateway`, sobre la anterior | `900eb20` | Saca de core los paquetes, docs y workflows que se mudaron |
+| `~/ilusor/dev` | `feat/data-gateway` | 45 commits sin upstream, el último `ed3e5ee0` | El modelo de Ilusor con las relaciones renombradas |
+
+Verificado en checkouts limpios:
+
+- **Este repo**, con `scripts/ci-local.sh check`:
+  - unitarios: gateway 140, ui 97, client-node 55;
+  - integración de la gateway: 86 pasan y 8 se saltean;
+  - suite de conformidad (`scripts/ci-local.sh clients`): 140 de 140.
+- **Core** (`scripts/ci-local.sh check` de core): pasa.
+
+Orden sugerido para subir, siempre con el OK del usuario:
+
+1. En core, PR de `feature/ui-workspace-tree` y después de `feature/split-data-gateway`, ambos a `develop`. También se
+   puede abrir uno solo de `feature/split-data-gateway`, que contiene los dos.
+2. Acá, PR de `feature/monorepo` a `develop`.
+
+## 2. Qué hay en este repositorio
+
+Lo que dicen [`CLAUDE.md`](../CLAUDE.md), [`README.md`](../README.md) y [`DEPLOY.md`](../DEPLOY.md), en resumen:
+
+| Paquete | Nombre | Se publica como |
+| --- | --- | --- |
+| `packages/data-gateway` | `@lambdaorm/data-gateway` 3.2.0, con *Unreleased* en su CHANGELOG | la imagen `flaviorita/data-gateway` (workflow `data-gateway-image.yml`) |
+| `packages/ide` | `@lambdaorm/data-gateway-ide` 1.0.0, sin publicar | la imagen `flaviorita/data-gateway-ide` (`ide-image.yml`) |
+| `packages/ui` | `@lambdaorm/ui` 0.5.0, con el changeset pendiente `.changeset/ui-workspace-tree.md` (minor) | npm (`release.yml`, Changesets) |
+| `packages/client-node` | `@lambdaorm/data-gateway-client` 0.1.1, nunca publicado | npm (`release.yml`): la primera publicación necesita un token Automation |
+| `packages/conformance` | — | no se publica: los clientes la pasan |
+
+- **Dependencias de core:** `@lambdaorm/base`, `lib` y `client` vienen **de npm**. Si la gateway necesita un cambio de
+  λORM, primero se libera desde core y después se sube la versión acá.
+- **El changeset pendiente de core:** `schema-name-description.md` (base minor: `Schema.name` y `description`). La
+  gateway no lo necesita para compilar, porque escribe esos campos en el YAML.
+- **Actions:** a diferencia de core, donde están pausadas, acá funcionan porque el repo es público.
+- **Secrets que hay que crear en GitHub:**
+  - `NPM_TOKEN`
+  - `CHANGESET_TOKEN`
+  - `DOCKERHUB_TOKEN`
+
+## 3. Comandos
+
+```bash
+pnpm install
+pnpm build                     # ui → tsc -b (data-gateway, client-node) → ide
+pnpm lint && pnpm test
+pnpm --filter @lambdaorm/data-gateway run test:integration
+pnpm --filter @lambdaorm/data-gateway-ide run typecheck
+scripts/ci-local.sh check      # todo lo anterior, en un checkout limpio de HEAD: antes de cada push
+scripts/ci-local.sh clients    # la suite de conformidad (Docker, puertos 19080-19083 y 19432)
+```
+
+Si `pnpm` no está en el PATH, se usa `corepack pnpm`. `ci-local.sh` ya lo resuelve por su cuenta.
+
+## 4. El entorno local con Ilusor
+
+Ilusor usa la gateway de este repo, construida a mano. Su compose está en `~/ilusor/dev/cloud`.
+
+- **Contenedor `cloud-data-gateway`**
+  - Corre la imagen `ilusor/data-gateway:3.2.0-tree`.
+  - Se llega por el proxy `cloud-admin-gateway` en `http://localhost:8097/data-gateway`, con la UI embebida en
+    `/data-gateway/ui/`.
+  - Su configuración es `~/ilusor/dev/cloud/data-gateway/data-gateway.config.yaml`, con `path: ilusor` y
+    `admin: { enabled: true }`.
+  - Su workspace está en `~/ilusor/dev/cloud/data-gateway/workspace/ilusor/`.
+- **Para reconstruirla:**
+
+  ```bash
+  cd packages/data-gateway
+  npx grunt dist            # incluye el IDE en modo embebido (../ide, build:embedded)
+  docker build -q --build-arg CLI_VERSION=1.6.18 -t ilusor/data-gateway:3.2.0-tree .
+  cd ~/ilusor/dev/cloud && docker compose up -d data-gateway
+  ```
+
+- **IDE de prueba:** contenedor `dgw-ide-test` con la imagen `flaviorita/data-gateway-ide:local`, en
+  `http://localhost:18098`. Para reconstruirlo:
+
+  ```bash
+  cd packages/ide && npm run build
+  docker build -t flaviorita/data-gateway-ide:local .
+  docker rm -f dgw-ide-test
+  docker run -d --name dgw-ide-test -p 127.0.0.1:18098:8080 flaviorita/data-gateway-ide:local
+  ```
+
+  En el IDE, la conexión a Ilusor es `http://localhost:8097/data-gateway` con la clave del modeler. Ilusor solo expone
+  REST, así que los botones de WebSocket y MCP aparecen deshabilitados. Para probarlos se levanta una gateway temporal
+  con esos transportes; los puertos 19291, 19293 y 19294 ya se usaron para eso.
+- **Las claves:** están en `~/ilusor/dev/cloud/.env`, en `DATA_GATEWAY_MODELER_KEY`, `DATA_GATEWAY_READER_KEY` y
+  `DATA_GATEWAY_OPERATOR_KEY`. **Nunca se imprimen.** A un script se le pasan por una variable de entorno, por ejemplo
+  `KEY=$(grep '^DATA_GATEWAY_MODELER_KEY=' ~/ilusor/dev/cloud/.env | cut -d= -f2-)`.
+- **Pruebas en Chrome headless:** se manejan por CDP con scripts propios de cada sesión, que no se guardan en el repo.
+- **La sesión del usuario:** la gateway la guarda por credencial (`GET/PUT /admin/session`, en
+  `.data-gateway/state.sqlite` del workspace). Una prueba headless con la clave del modeler pisa la sesión del
+  usuario, así que hay que seguir estos pasos:
+  1. Antes, guardar una copia con un nombre de archivo nuevo.
+  2. Al terminar, matar Chrome y esperar unos 5 segundos.
+  3. Restaurar la copia y volver a verificarla.
+  4. Nunca mandar `{state:null}`.
+
+## 5. Reglas de trabajo con el usuario
+
+- Responderle en **español**.
+- Push, PR, publicaciones en npm o Docker Hub y cualquier publicación en un sitio externo necesitan su **OK
+  explícito** cada vez.
+- Antes de un push o un PR, verificar en un checkout limpio (`scripts/ci-local.sh check`).
+- Commits: Conventional Commits con `#96` en el cuerpo (u otro ticket que indique el usuario) y Git Flow.
+- Nunca `pkill -f`, porque mata el propio shell: los procesos se detienen por PID.
+- No imprimir secretos ni valores de variables de entorno; solo comprobar si están definidas.
+- El email del usuario es privado.
+- La documentación de usuario está en el repo de la wiki, `~/personal/lambdaorm/wiki`, publicada en
+  `https://lambda-orm.github.io/wiki/`, con la página de la gateway en `/es/data-gateway/`.
+
+## 6. Pendientes
+
+1. **Licencia:** el LICENSE del repo es Apache-2.0, pero los `package.json` dicen MIT. `scripts/dist.mjs` copia el
+   LICENSE del repo dentro de cada paquete publicado, así que conviene unificarlas antes de publicar. Lo decide el
+   usuario.
+2. **Secrets de GitHub y push**, como dice la §1.
+3. **Releases**, cada uno con su OK:
+   - gateway **3.3.0**: su *Unreleased* ya describe el IDE embebido, `/transports`, `/openapi.json`, la credencial
+     por subprotocolo, la sesión en SQLite, las expresiones y los temas;
+   - IDE **1.0.0**, la primera imagen;
+   - `@lambdaorm/ui`, la minor del changeset pendiente;
+   - la primera publicación de `@lambdaorm/data-gateway-client`.
+4. **Bug de `yamlMerge`:** al renombrar, el administrador de schemas reescribe líneas que no cambiaron. En Ilusor, un
+   cambio de 113 líneas salió como un diff de 557.
+5. **Ilusor:**
+   - llevar a `ci/deploy/` del repo de Ilusor la configuración local: `path: ilusor`, `admin`, la clave del modeler, y
+     el `.data-gateway/` ignorado;
+   - la rama `feat/data-gateway` sigue sin pushear; lo decide el usuario.
+6. **Anteriores:**
+   - las fases siguientes del plan de clientes ([`DATA_GATEWAY_CLIENTS_PLAN.md`](DATA_GATEWAY_CLIENTS_PLAN.md):
+     Python, Go, Rust, CLI);
+   - los mensajes de 3xpr para paréntesis sin cerrar;
+   - L44 (el dialecto SQLjs), que es de core: `docs/LAMBDAORM_PENDING.md` de core.
+
+## 7. Dónde está el diseño
+
+[`DATA_GATEWAY.md`](DATA_GATEWAY.md) es el documento de diseño; está en español:
+
+| Sección | Tema |
+| --- | --- |
+| §2 | Configuración |
+| §5 | MCP |
+| §6 | Autenticación |
+| §7 | WebSocket: la credencial por subprotocolo y `/transports` |
+| §10 | La UI de consultas |
+| §11 | La administración de workspaces |
+| §11.7 | El explorador |
+| §11.8 | La sesión |
+| §11.9 | El IDE y sus modos (embebido e independiente) |
+
+Los demás planes:
+
+- [`DATA_GATEWAY_PLAN.md`](DATA_GATEWAY_PLAN.md): el rediseño de la gateway;
+- [`DATA_GATEWAY_ADMIN_PLAN.md`](DATA_GATEWAY_ADMIN_PLAN.md): la administración;
+- [`DATA_GATEWAY_CLIENTS_PLAN.md`](DATA_GATEWAY_CLIENTS_PLAN.md): los clientes.
+
+Puntos para tener en cuenta:
+
+- **El IDE:** `packages/ide/src/main.tsx` elige el modo:
+  - `ide.tsx` es el IDE independiente: guarda las conexiones en localStorage y los secretos en sessionStorage;
+  - `embedded.tsx` es la UI de la gateway, con login, y muestra la conexión como *current*;
+  - `tools.tsx` tiene las pestañas de Swagger, WebSocket y MCP de una conexión.
+- **La UI (`packages/ui`):**
+  - `Workspace.tsx` maneja varias conexiones (`connections`, `WorkspaceConnection`);
+  - el explorador, los formularios del schema, los diagramas y las sugerencias de λORM están en `lambdaCompletion.ts`
+    y en las expresiones de 3xpr.
+- **La gateway:**
+  - `protocolCredential.ts`: la credencial por `Sec-WebSocket-Protocol`;
+  - `registries.ts`, `transportsOf`: alimenta `GET /transports`;
+  - `sqliteSessionState.ts`: la sesión;
+  - `domain/admin/expressions.ts`: los contextos de las condiciones de los stages.
