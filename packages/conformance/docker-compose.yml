@@ -21,6 +21,8 @@ services:
   data-gateway:
     profiles: [ image ]
     image: ${DATA_GATEWAY_IMAGE:-flaviorita/data-gateway:3.2.0}
+    # the owner of ./workspace (conformance.sh sets it): the gateway writes the state of the stage there
+    user: "${CONFORMANCE_UID:-1000}:${CONFORMANCE_GID:-1000}"
     depends_on:
       postgres: { condition: service_healthy }
     environment:

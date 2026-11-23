@@ -24,6 +24,10 @@ wait_ready () {
 	return 1
 }
 
+# the gateway of the image runs as the user that owns the workspace (its stage state, orm_state, is written by the push
+# of data and then by the gateway): the uid of a CI runner (1001) is not the one of the image (1000)
+export CONFORMANCE_UID="${CONFORMANCE_UID:-$(id -u)}" CONFORMANCE_GID="${CONFORMANCE_GID:-$(id -g)}"
+
 case "${1:-}" in
 up)
 	case "${2:-}" in
@@ -38,7 +42,7 @@ up)
 data)
 	wait_ready
 	# the tables: the CLI of the image, against the published Postgres
-	docker run --rm --network host --user "$(id -u):$(id -g)" -v "$PWD/workspace:/workspace" \
+	docker run --rm --network host --user "$CONFORMANCE_UID:$CONFORMANCE_GID" -v "$PWD/workspace:/workspace" \
 		-e NORTHWIND_DB='{"host":"127.0.0.1","port":19432,"user":"northwind","password":"northwind","database":"northwind"}' \
 		"$IMAGE" lambdaorm push -w /workspace/northwind -s default > /dev/null
 	status=$(curl -s -o "${TMPDIR:-/tmp}/conformance-import.json" -w '%{http_code}' -X POST "$HTTP/northwind/stages/default/import" \
