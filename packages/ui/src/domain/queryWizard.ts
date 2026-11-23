@@ -2,9 +2,9 @@ import { DomainInfo, EntityInfo, RelationInfo } from './diagram'
 
 /**
  * The query wizard: an entity to start from, the tables added through its relations, the fields chosen of each, a
- * general filter, the order and the page; and the query of λORM that reads them. A relation to one (oneToMany,
- * oneToOne in λORM) becomes columns of the same row (customerName: p.customer.name); a relation to many (manyToOne)
- * becomes a list per row, through include. An empty filter, order or page is not applied.
+ * general filter, the order and the page; and the query of λORM that reads them. Every relation (to one or to many) is
+ * an include of its own, with the fields chosen of its table in its map (and its own includes); the map of the root has
+ * only its fields. An empty filter, order or page is not applied.
  */
 export interface WizardTable {
 	entity: string
@@ -14,7 +14,7 @@ export interface WizardTable {
 }
 
 export interface WizardSort {
-	/** a column of the result (an alias of the map), or a field of the entity when nothing is chosen */
+	/** a field of the root (in its map), or of the entity when nothing is chosen */
 	column: string
 	desc: boolean
 }
@@ -23,7 +23,7 @@ export interface WizardState {
 	/** the entity the query starts from */
 	root: string
 	tables: WizardTable[]
-	/** the fields chosen of each table (none: every field of the root; of a relation to many, all of it) */
+	/** the fields chosen of each table (none: every field of that table) */
 	fields: Record<string, string[]>
 	/** the body of the filter, on the variable p of the root: p.price > 10 && p.category.name == name */
 	filter: string
@@ -46,31 +46,21 @@ const relationOf = (domain: DomainInfo, table: WizardTable): RelationInfo | unde
 	entityOf(domain, table.from)?.relations?.find(r => r.name === table.relation)
 
 /**
- * How a table could join the wizard: the first table of the wizard with a relation to it. A relation to many only
- * from the root or from another table reached by a relation to many (an include of its own); a relation to one from any.
+ * How a table could join the wizard: through a relation to it of the table whose + was used, else of the first table
+ * of the wizard that has one (each relation is an include of its own: to one or to many, from any table).
  */
 export const joinOf = (domain: DomainInfo, state: WizardState, entity: string, prefer?: string): WizardTable | undefined => {
 	if (entity === state.root || state.tables.some(t => t.entity === entity)) return undefined
-	// the table whose + was used first, then the others in their order
 	const all = [state.root, ...state.tables.map(t => t.entity)]
 	const present = prefer && all.includes(prefer) ? [prefer, ...all.filter(e => e !== prefer)] : all
-	const manyScope = (name: string): boolean => {
-		if (name === state.root) return true
-		const table = state.tables.find(t => t.entity === name)
-		const relation = table && relationOf(domain, table)
-		return !!relation && toMany(relation)
-	}
 	for (const from of present) {
-		for (const relation of entityOf(domain, from)?.relations ?? []) {
-			if (relation.entity !== entity) continue
-			if (toMany(relation) && !manyScope(from)) continue
-			return { entity, from, relation: relation.name }
-		}
+		const relation = entityOf(domain, from)?.relations?.find(r => r.entity === entity)
+		if (relation) return { entity, from, relation: relation.name }
 	}
 	return undefined
 }
 
-/** A table and every table reached from it, taken out of the wizard (and their fields and order) */
+/** A table and every table reached from it, taken out of the wizard (and their fields) */
 export const withoutTable = (state: WizardState, entity: string): WizardState => {
 	if (entity === state.root) return state
 	const gone = new Set<string>([entity])
@@ -80,76 +70,39 @@ export const withoutTable = (state: WizardState, entity: string): WizardState =>
 		for (const t of state.tables) if (gone.has(t.from) && !gone.has(t.entity)) { gone.add(t.entity); grew = true }
 	}
 	const fields = Object.fromEntries(Object.entries(state.fields).filter(([name]) => !gone.has(name)))
-	const next = { ...state, tables: state.tables.filter(t => !gone.has(t.entity)), fields }
-	const columns = new Set(columnsOf(next).map(c => c.alias))
-	return { ...next, sort: next.sort.filter(s => columns.has(s.column)) }
+	// the order is by fields of the root: it stays
+	return { ...state, tables: state.tables.filter(t => !gone.has(t.entity)), fields }
 }
 
-const capital = (text: string) => text.charAt(0).toUpperCase() + text.slice(1)
-
-/** A column of the result: its alias and the path from the variable of its scope */
+/** A column of the result: a field of the root, in its map */
 export interface WizardColumn { alias: string, path: string, entity: string, field: string }
 
-/**
- * The columns of a scope (the root, or a table of a relation to many): its own fields and those of the tables reached
- * from it by relations to one, flattened (customer.name → customerName).
- */
-const scopeColumns = (domain: DomainInfo, state: WizardState, scope: string): WizardColumn[] => {
-	const columns: WizardColumn[] = []
-	const walk = (entity: string, path: string[]) => {
-		for (const field of state.fields[entity] ?? []) {
-			columns.push({ alias: path.length ? path.map((p, i) => i ? capital(p) : p).join('') + capital(field) : field, path: [...path, field].join('.'), entity, field })
-		}
-		for (const child of childrenOf(state, entity)) {
-			const relation = relationOf(domain, child)
-			if (relation && !toMany(relation)) walk(child.entity, [...path, child.relation])
-		}
-	}
-	walk(scope, [])
-	return columns
-}
-
-/** The columns of the result: the ones the order can use (with no field chosen, the fields of the root) */
+/** The columns of the result: the fields chosen of the root (none chosen: all of them); the ones the order can use */
 export const columnsOf = (state: WizardState, domain?: DomainInfo): WizardColumn[] => {
-	if (!domain) {
-		// without the domain (taking a table out): the fields chosen of the root and of every table, as aliases
-		return Object.entries(state.fields).flatMap(([entity, fields]) => fields.map(field => ({ alias: field, path: field, entity, field })))
-	}
-	const columns = scopeColumns(domain, state, state.root)
-	if (columns.length) return columns
-	return (entityOf(domain, state.root)?.properties ?? []).map(p => ({ alias: p.name, path: p.name, entity: state.root, field: p.name }))
+	const chosen = state.fields[state.root] ?? []
+	const names = chosen.length || !domain ? chosen : (entityOf(domain, state.root)?.properties ?? []).map(p => p.name)
+	return names.map(field => ({ alias: field, path: field, entity: state.root, field }))
 }
 
 const VARIABLES = ['p', 'q', 'r', 's', 't', 'u', 'v', 'w']
 
-/** The map of a scope: ({ alias: v.path, … }), or nothing when no field is chosen */
-const mapOf = (columns: WizardColumn[], v: string): string | undefined =>
-	columns.length ? `({ ${columns.map(c => `${c.alias}: ${v}.${c.path}`).join(', ')} })` : undefined
+/** The map of a table: ({ field: v.field, … }), or nothing when no field is chosen */
+const mapOf = (fields: string[], v: string): string | undefined =>
+	fields.length ? `({ ${fields.map(f => `${f}: ${v}.${f}`).join(', ')} })` : undefined
 
-/** The includes of a scope: its tables reached by relations to many (from it or from its tables of relations to one) */
-const includesOf = (domain: DomainInfo, state: WizardState, scope: string, depth: number): string[] => {
-	const v = VARIABLES[depth] ?? `x${depth}`
-	const includes: string[] = []
-	const walk = (entity: string, path: string[]) => {
-		for (const child of childrenOf(state, entity)) {
-			const relation = relationOf(domain, child)
-			if (!relation) continue
-			if (toMany(relation)) {
-				const inner = VARIABLES[depth + 1] ?? `x${depth + 1}`
-				const nested = includesOf(domain, state, child.entity, depth + 1)
-				const map = mapOf(scopeColumns(domain, state, child.entity), inner)
-				let text = `${v}.${[...path, child.relation].join('.')}`
-				if (nested.length) text += `.include(${inner} => ${nested.length > 1 ? `[${nested.join(', ')}]` : nested[0]})`
-				if (map) text += `.map(${inner} => ${map})`
-				includes.push(text)
-			} else {
-				walk(child.entity, [...path, child.relation])
-			}
-		}
-	}
-	walk(scope, [])
-	return includes
-}
+const variableOf = (depth: number) => VARIABLES[depth] ?? `x${depth}`
+
+/** The includes of a table: one for each relation of the wizard from it, with its map and its own includes */
+const includesOf = (domain: DomainInfo, state: WizardState, entity: string, depth: number): string[] =>
+	childrenOf(state, entity).filter(child => relationOf(domain, child)).map(child => {
+		const inner = variableOf(depth + 1)
+		const nested = includesOf(domain, state, child.entity, depth + 1)
+		const map = mapOf(state.fields[child.entity] ?? [], inner)
+		let text = `${variableOf(depth)}.${child.relation}`
+		if (nested.length) text += `.include(${inner} => ${nested.length > 1 ? `[${nested.join(', ')}]` : nested[0]})`
+		if (map) text += `.map(${inner} => ${map})`
+		return text
+	})
 
 /** A whole number greater than 0 */
 const count = (text: string): number | undefined => /^[1-9]\d*$/.test(text.trim()) ? Number(text.trim()) : undefined
@@ -161,8 +114,7 @@ export const queryOf = (state: WizardState, domain: DomainInfo): string => {
 	if (filter) lines.push(`.filter(p => ${filter})`)
 	const includes = includesOf(domain, state, state.root, 0)
 	if (includes.length) lines.push(`.include(p => ${includes.length > 1 ? `[${includes.join(', ')}]` : includes[0]})`)
-	const columns = scopeColumns(domain, state, state.root)
-	const map = mapOf(columns, 'p')
+	const map = mapOf(state.fields[state.root] ?? [], 'p')
 	if (map) lines.push(`.map(p => ${map})`)
 	const valid = new Set(columnsOf(state, domain).map(c => c.alias))
 	const sort = state.sort.filter(s => valid.has(s.column))

@@ -43,19 +43,20 @@ describe('the query wizard', () => {
 		].join('\n'))
 	})
 
-	test('a relation to one: its fields as columns of the row, also two relations away', () => {
+	test('a relation to one: an include of its own with its fields, also two relations away; the map of the root, its fields', () => {
 		let state = add(emptyWizard('Orders.details'), 'Products')
 		state = add(state, 'Categories')
-		state = { ...state, fields: { 'Orders.details': ['quantity'], Products: ['name'], Categories: ['name'] }, sort: [{ column: 'productCategoryName', desc: false }] }
-		expect(columnsOf(state, domain).map(c => c.alias)).toEqual(['quantity', 'productName', 'productCategoryName'])
+		state = { ...state, fields: { 'Orders.details': ['quantity'], Products: ['name'], Categories: ['name'] }, sort: [{ column: 'quantity', desc: false }] }
+		expect(columnsOf(state, domain).map(c => c.alias)).toEqual(['quantity'])
 		expect(queryOf(state, domain)).toBe([
 			'Orders.details',
-			'\t.map(p => ({ quantity: p.quantity, productName: p.product.name, productCategoryName: p.product.category.name }))',
-			'\t.sort(p => p.productCategoryName)'
+			'\t.include(p => p.product.include(q => q.category.map(r => ({ name: r.name }))).map(q => ({ name: q.name })))',
+			'\t.map(p => ({ quantity: p.quantity }))',
+			'\t.sort(p => p.quantity)'
 		].join('\n'))
 	})
 
-	test('a relation to many: an include of its own, with its fields and its relations to one', () => {
+	test('relations to one and to many: an include each, in one list', () => {
 		let state = add(emptyWizard('Orders'), 'Customers')
 		state = add(state, 'Orders.details')
 		state = add(state, 'Products')
@@ -63,22 +64,27 @@ describe('the query wizard', () => {
 		expect(state.tables.map(t => `${t.from}.${t.relation}`)).toEqual(['Orders.customer', 'Orders.details', 'Orders.details.product'])
 		expect(queryOf(state, domain)).toBe([
 			'Orders',
-			'\t.include(p => p.details.map(q => ({ quantity: q.quantity, productName: q.product.name })))',
-			'\t.map(p => ({ id: p.id, customerName: p.customer.name }))'
+			'\t.include(p => [p.customer.map(q => ({ name: q.name })), p.details.include(q => q.product.map(r => ({ name: r.name }))).map(q => ({ quantity: q.quantity }))])',
+			'\t.map(p => ({ id: p.id }))'
 		].join('\n'))
 	})
 
-	test('a relation to many only from the root or from another one: not through a relation to one', () => {
-		const state = add(emptyWizard('Orders.details'), 'Products')
-		// Products.details is to many, but Products is reached by a relation to one: it would be no include of its own
-		expect(joinOf(domain, { ...state, root: 'Orders.details' }, 'Orders')).toBeUndefined()
-		expect(joinOf(domain, state, 'Products')).toBeUndefined()
+	test('a table joins by a relation of any table of the wizard (to one or to many); without one, it can\'t', () => {
+		// Categories has no relations: nothing joins it
+		expect(joinOf(domain, emptyWizard('Categories'), 'Products')).toBeUndefined()
+		let state = add(emptyWizard('Customers'), 'Orders')
+		state = add(state, 'Orders.details')
+		state = add(state, 'Products')
+		state = add(state, 'Categories')
+		expect(state.tables.map(t => `${t.from}.${t.relation}`)).toEqual(['Customers.orders', 'Orders.details', 'Orders.details.product', 'Products.category'])
+		expect(queryOf({ ...state, fields: { Categories: ['name'] } }, domain)).toBe(
+			'Customers\n\t.include(p => p.orders.include(q => q.details.include(r => r.product.include(s => s.category.map(t => ({ name: t.name }))))))')
 	})
 
-	test('a table taken out takes those reached from it, their fields and their order', () => {
+	test('a table taken out takes those reached from it and their fields; the order of the root stays', () => {
 		let state = add(emptyWizard('Orders.details'), 'Products')
 		state = add(state, 'Categories')
-		state = { ...state, fields: { 'Orders.details': ['quantity'], Products: ['name'], Categories: ['name'] }, sort: [{ column: 'quantity', desc: false }, { column: 'productName', desc: true }] }
+		state = { ...state, fields: { 'Orders.details': ['quantity'], Products: ['name'], Categories: ['name'] }, sort: [{ column: 'quantity', desc: false }] }
 		const out = withoutTable(state, 'Products')
 		expect(out.tables).toEqual([])
 		expect(out.fields).toEqual({ 'Orders.details': ['quantity'] })

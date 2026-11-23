@@ -33,7 +33,7 @@ const rowLayout: LayoutPort = async ({ nodes, edges }) => {
 }
 
 describe('QueryWizard', () => {
-	test('fields, a table of a relation to one, a filter, an order and a page: the query, accepted', async () => {
+	test('fields, a table of a relation (an include), a filter, an order and a page: the query, accepted', async () => {
 		const accepted: { state: WizardState, query: string }[] = []
 		render(<QueryWizard api={new DomainApi()} schema="northwind/v1" domain={DOMAIN} initial={undefined} layout={rowLayout}
 			onClose={() => undefined} onAccept={(state, query) => accepted.push({ state, query })} />)
@@ -52,14 +52,15 @@ describe('QueryWizard', () => {
 		fireEvent.click(await screen.findByRole('checkbox', { name: 'Customers.name' }))
 		fireEvent.change(screen.getByRole('textbox', { name: 'filter' }), { target: { value: 'p.orderDate > from' } })
 		fireEvent.click(screen.getByRole('button', { name: '+ add an order' }))
-		fireEvent.change(screen.getByLabelText('order 1'), { target: { value: 'customerName' } })
+		fireEvent.change(screen.getByLabelText('order 1'), { target: { value: 'orderDate' } })
 		fireEvent.change(screen.getByLabelText('order 1 · descending'), { target: { value: 'desc' } })
 		fireEvent.change(screen.getByLabelText('rows per page'), { target: { value: '20' } })
 		const query = [
 			'Orders',
 			'\t.filter(p => p.orderDate > from)',
-			'\t.map(p => ({ id: p.id, orderDate: p.orderDate, customerName: p.customer.name }))',
-			'\t.sort(p => desc(p.customerName))',
+			'\t.include(p => p.customer.map(q => ({ name: q.name })))',
+			'\t.map(p => ({ id: p.id, orderDate: p.orderDate }))',
+			'\t.sort(p => desc(p.orderDate))',
 			'\t.page(1, 20)'
 		].join('\n')
 		expect((screen.getByRole('textbox', { name: 'the query' }) as HTMLTextAreaElement).value).toBe(query)
