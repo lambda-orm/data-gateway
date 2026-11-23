@@ -19,7 +19,7 @@ describe('config reader', () => {
 			rateLimit: { windowMs: 30000, max: 30 },
 			scripts: { enabled: false, maxLength: 20000, timeoutMs: 30000, maxIterations: 100000 },
 			mcp: { name: 'data-gateway', tools: { include: [], exclude: [] }, pageSize: 50, maxRows: 500 },
-			transports: { http: { port: 8080, host: '0.0.0.0', basePath: '', swagger: { enabled: true }, ui: { enabled: false } } }
+			transports: { http: { port: 8080, host: '0.0.0.0', basePath: '', swagger: { enabled: true } } }
 		})
 	})
 

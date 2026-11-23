@@ -7,7 +7,7 @@
  * - queue: executeQueued (plus write when the query writes)
  * - stageImport: import data into a stage
  *
- * The administration of the workspaces (admin.enabled, docs/DATA_GATEWAY_ADMIN_PLAN.md): never given by default, only
+ * The administration of the workspaces (transports.management, docs/DATA_GATEWAY_ADMIN_PLAN.md): never given by default, only
  * when a credential lists them:
  * - schemaRead: the lambdaORM.yaml of each workspace (without secrets) and its validation
  * - schemaWrite: change the lambdaORM.yaml

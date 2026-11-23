@@ -120,8 +120,6 @@ export interface TransportConfig {
 
 export interface HttpTransportConfig extends TransportConfig {
 	swagger: { enabled: boolean }
-	/** The query UI at /ui (off by default: exposing a tool to write and run queries is a decision) */
-	ui: { enabled: boolean }
 }
 
 export interface McpHttpTransportConfig extends TransportConfig {
@@ -148,6 +146,11 @@ export interface TransportsConfig {
 	mcpHttp?: McpHttpTransportConfig
 	mcpWebSocket?: McpWebSocketTransportConfig
 	webSocket?: WebSocketTransportConfig
+	/**
+	 * The API of the data-gateway-ide (the routes of http for every schema, plus the administration at /admin), on its
+	 * own port so a deployment can leave it out (docs/DATA_GATEWAY.md §12)
+	 */
+	management?: TransportConfig
 }
 
 export interface McpConfig {
@@ -167,6 +170,7 @@ export type TransportName = keyof TransportsConfig
  * remove schemas, what is saved in them. Off by default; on, it is still only for credentials with its permissions.
  */
 export interface AdminConfig {
+	/** transports.management is exposed (since 4.0.0 there is no admin.enabled: the transport decides) */
 	enabled: boolean
 	/** with authentication none, anyone may administer (local development only) */
 	allowAnonymous: boolean

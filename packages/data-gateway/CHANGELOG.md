@@ -4,16 +4,25 @@ All notable changes to this project will be documented in this file.
 
 ## Versions
 
-### Unreleased
+### Unreleased (4.0.0)
+
+**Breaking changes** (`DATA_GATEWAY.md` §12):
+
+- **The `management` transport:** the API of the data-gateway-ide on its own port (`transports.management.port`): the
+  routes of `http` for every schema (whatever `orm.schemas[].transports` says) and the administration at `/admin`, with
+  the same credentials and permissions. Without its port there is no administration and no IDE: a production gateway
+  whose schemas come in the volumes leaves it out. The `admin_*` tools of MCP are there when it is exposed.
+- **`/admin` is no longer on `http`**, and `admin.enabled` is gone (warned about and ignored): the administration is on
+  when `management` has a port. `admin.allowAnonymous`, `maxFileBytes` and `commandTimeoutMs` stay.
+- **The gateway serves no UI:** `{basePath}/ui` and `transports.http.ui` (warned about and ignored) are gone. The UI is
+  the data-gateway-ide, its own image (`flaviorita/data-gateway-ide`), whose backend reaches `management`.
+- **No CORS on any transport** (`http`, `mcpHttp`, `management`, the `/asyncapi.json` of the WebSocket transports): a
+  web app that called the gateway from the browser calls it from its backend.
 
 **Features:**
 
-- The UI at `/ui` is the data-gateway-ide (`packages/ide`) built in embedded mode: its home and login
-  as before, the workspace on its connection shown as the current one, and the page of that connection (where it is, how
-  it authenticates, its roles) instead of the account. The IDE itself has its own image, `flaviorita/data-gateway-ide`,
-  that connects to data-gateways (`DATA_GATEWAY.md` §11.9): in production the gateway may serve no UI.
 - `GET {basePath}/transports`: the transports of the gateway (port, base path, how a schema is reached, its document),
-  and `GET {basePath}/openapi.json`; the `/asyncapi.json` of the WebSocket transports answers any origin.
+  and `GET {basePath}/openapi.json`.
 - A WebSocket from a browser authenticates with the credential in its subprotocols (`lambdaorm`,
   `lambdaorm.headers.<base64url>`): a browser can't send headers in a WebSocket. Also the MCP over WebSocket.
 - `GET /admin/workspaces/{path}/files` and `…/files/content`: the files of `data/` and `src/` of a workspace, listed and
@@ -24,15 +33,15 @@ All notable changes to this project will be documented in this file.
 - `GET`/`PUT /admin/session`: where the UI of each credential was (its tabs and their drafts, what is unfolded), in
   `<orm.workspacePath>/.data-gateway/state.sqlite` (`node:sqlite`), so that a reload or another browser starts there.
   The UI keeps its credential across a reload (in the tab, or in the browser with "remember me").
-- The UI at `/ui`: the account at the right of the header (its icon and name), with Account (the user, how it
+- The UI: the account at the right of the header (its icon and name), with Account (the user, how it
   authenticates, each permission with what it allows) and Preferences (the language and the theme with their previews),
   both opened as tabs, and Logout. The suggestions of the queries and scripts show the type of each property and the
   functions of each type; the json and yaml views of a result are Monaco editors.
-- The UI at `/ui`: the themes of Ilusor (Light, Dark, Dracula, Night, Nord, Solarized, Monokai, High Contrast) and a
+- The UI: the themes of Ilusor (Light, Dark, Dracula, Night, Nord, Solarized, Monokai, High Contrast) and a
   regional format for the numbers and dates of the results; the query of a diagram in a new tab; copy and format a query.
 - `POST /admin/workspaces` takes a `name` and a `description`, written on top of the new `lambdaORM.yaml`.
 - A `set` of a section or key the `lambdaORM.yaml` doesn't have yet (`application`, `name`, `description`) creates it.
-- The UI at `/ui` (`@lambdaorm/ui`): the explorer as the workspace is (`DATA_GATEWAY.md` §11.7); the name, description
+- The UI (`@lambdaorm/ui`): the explorer as the workspace is (`DATA_GATEWAY.md` §11.7); the name, description
   and version of a schema, in its tab and when it is created; the commands as a toolbar of icons, with a form for those that need a file; closing tabs
   one by one, all but one or all; the sources of a stage chosen with their condition, an expression with suggestions
   checked while it is written: shown in the colors of 3xpr and written in a form with its suggestions and the variables

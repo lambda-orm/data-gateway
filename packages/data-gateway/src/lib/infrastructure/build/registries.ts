@@ -52,7 +52,7 @@ export interface TransportDeps {
 	directory: SchemaDirectoryPort
 	metrics: MetricsPort
 	logger: LoggerPort
-	/** admin.enabled: the administration of the workspaces (REST, on the http transport) */
+	/** transports.management: the administration of the workspaces (REST, on the management transport) */
 	admin?: { service: AdminService, commands: CommandService }
 }
 
@@ -63,22 +63,37 @@ export class TransportRegistry {
 	private readonly factories = new Map<string, TransportFactory>()
 
 	constructor () {
-		this.register('http', ({ config, directory, metrics, logger, admin }) => {
+		this.register('http', ({ config, directory, metrics, logger }) => {
 			const http = config.transports.http!
 			return new HttpTransport({
+				name: 'http',
 				port: http.port,
 				host: http.host,
 				basePath: http.basePath,
 				requestBodySize: config.server.requestBodySize,
 				rateLimit: config.rateLimit,
 				swaggerEnabled: http.swagger.enabled,
-				uiEnabled: http.ui.enabled,
+				transports: transportsOf(config.transports)
+			}, { directory, metrics, logger })
+		})
+		// the API of the data-gateway-ide: the routes of http for every schema and the administration (no rate limit, no
+		// Swagger: a person in an IDE, not clients)
+		this.register('management', ({ config, directory, metrics, logger, admin }) => {
+			const management = config.transports.management!
+			return new HttpTransport({
+				name: 'management',
+				port: management.port,
+				host: management.host,
+				basePath: management.basePath,
+				requestBodySize: config.server.requestBodySize,
+				rateLimit: { windowMs: config.rateLimit.windowMs, max: 0 },
+				swaggerEnabled: false,
 				transports: transportsOf(config.transports)
 			}, {
 				directory,
 				metrics,
 				logger,
-				admin: admin ? { ...admin, authenticator: new AuthenticatorRegistry().build(http.authentication ?? config.authentication) } : undefined
+				admin: admin ? { ...admin, authenticator: new AuthenticatorRegistry().build(management.authentication ?? config.authentication) } : undefined
 			})
 		})
 		this.register('mcpHttp', ({ config, directory, metrics, logger }) => {

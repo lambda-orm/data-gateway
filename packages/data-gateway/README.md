@@ -21,8 +21,9 @@ publishes it, and then:
 - **applications in any language** query and write it over **REST** (OpenAPI 3) or **WebSocket**, with lambda
   queries — no backend to write, no SQL over the wire;
 - **AI agents** explore the domain and query it through **MCP**, with the permissions you give them, never more;
-- **people** browse the schemas, read each entity as a form, run queries with autocompletion and draw diagrams in a
-  **web UI**.
+- **people** browse the schemas, read each entity as a form, run queries with autocompletion and draw diagrams in the
+  **[data-gateway-ide](https://hub.docker.com/r/flaviorita/data-gateway-ide)**, which reaches the gateway through its
+  `management` port (left out in production when the schemas come in the volumes).
 
 **Who can do what** is decided in one place: each credential has permissions (`read`, `write`, `script`, `queue`,
 `stageImport`), the same on every transport, and every change is audited.
@@ -68,7 +69,7 @@ The `reader` credential can't write:
 { "error": "ForbiddenError", "message": "the credential \"reader\" does not have the \"stageImport\" permission" }
 ```
 
-Then open **http://localhost:8080/ui**, or connect an AI agent:
+Then open the IDE (its own image, next to the gateway: see [The IDE](#the-ide)), or connect an AI agent:
 
 ```sh
 claude mcp add --transport http northwind http://localhost:8081/mcp --header "X-Api-Key: reader-demo-key"
@@ -141,11 +142,12 @@ scripts:
 transports:                            # a transport is on only when it has a port
   http:
     port: 8080
-    ui: { enabled: true }              # the web UI at /ui
   mcpHttp:
     port: 8081
   webSocket:
     port: 8083
+  management:                          # the API of the IDE and the administration; no port, no IDE
+    port: $MANAGEMENT_PORT
 ```
 
 Every key: [Configuration](https://lambda-orm.github.io/wiki/data-gateway/Configuration/).
@@ -170,10 +172,32 @@ and logs: [Operations](https://lambda-orm.github.io/wiki/data-gateway/Operations
 
 | Transport | What it serves | Docs |
 | --- | --- | --- |
-| `http` | the REST API, the OpenAPI document (`/doc`, `/api-docs`) and the web UI (`/ui`) | [REST API](https://lambda-orm.github.io/wiki/data-gateway/Rest/), [UI](https://lambda-orm.github.io/wiki/data-gateway/Ui/) |
+| `http` | the REST API and the OpenAPI document (`/doc`, `/api-docs`) | [REST API](https://lambda-orm.github.io/wiki/data-gateway/Rest/) |
 | `mcpHttp` | MCP Streamable HTTP (`/mcp`) for AI agents | [MCP](https://lambda-orm.github.io/wiki/data-gateway/Mcp/) |
 | `mcpWebSocket` | MCP over WebSocket | [MCP](https://lambda-orm.github.io/wiki/data-gateway/Mcp/) |
 | `webSocket` | the same API as JSON-RPC over one connection, with notifications | [WebSocket API](https://lambda-orm.github.io/wiki/data-gateway/WebSocket/) |
+| `management` | the routes of `http` for every schema and the administration (`/admin`), for the IDE; keep it on an internal network | [UI](https://lambda-orm.github.io/wiki/data-gateway/Ui/) |
+
+No transport answers CORS: a web app calls the gateway from its backend.
+
+## The IDE
+
+The UI is [`flaviorita/data-gateway-ide`](https://hub.docker.com/r/flaviorita/data-gateway-ide): the browser talks to
+its backend, which reaches the `management` port of each gateway (and, for its REST, WebSocket and MCP tabs, the data
+transports). `DATA_GATEWAY_IDE_TARGETS` lists the origins it may reach (`*`: any, for a local IDE).
+
+```yaml
+services:
+  data-gateway:
+    image: flaviorita/data-gateway
+    environment: { MANAGEMENT_PORT: 9090 }   # no ports: published only to the IDE
+  ide:
+    image: flaviorita/data-gateway-ide
+    environment: { DATA_GATEWAY_IDE_TARGETS: "http://data-gateway:9090,http://data-gateway:8080" }
+    ports: [ "127.0.0.1:8090:8080" ]
+```
+
+Open http://localhost:8090 and add a connection to `http://data-gateway:9090` with a credential.
 
 ## Development
 

@@ -10,8 +10,6 @@ on:
     branches: [main]
     paths:
       - packages/data-gateway/**
-      - packages/ide/**
-      - packages/ui/**
       - .github/workflows/data-gateway-image.yml
   workflow_dispatch:
     inputs:
@@ -56,7 +54,7 @@ jobs:
       - name: Build
         if: steps.version.outputs.exists == 'false'
         run: pnpm run build
-      # lint, build (with the UI: the IDE in embedded mode), test, and dist/
+      # lint, build, test, and dist/
       - name: Dist
         if: steps.version.outputs.exists == 'false'
         working-directory: packages/data-gateway

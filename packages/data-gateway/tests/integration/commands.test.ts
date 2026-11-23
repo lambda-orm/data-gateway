@@ -73,7 +73,6 @@ infrastructure:
 		const file = path.join(root, 'data-gateway.config.yaml')
 		fs.writeFileSync(file, `
 orm: { workspacePath: ${root} }
-admin: { enabled: true }
 logger: { level: error }
 audit: { enabled: false }
 rateLimit: { max: 0 }
@@ -84,7 +83,7 @@ authentication:
     - { name: admin, value: admin-key, permissions: [ read, write, stageImport, ddl, schemaRead, schemaWrite, workbenchWrite ] }
     - { name: reader, value: reader-key, permissions: [ read ] }
 transports:
-  http: { port: ${port}, host: 127.0.0.1 }
+  management: { port: ${port}, host: 127.0.0.1 }
 `)
 		gateway = await startGateway({ source: new YamlFileConfigSource(file, {}), bootLogger: new ConsoleLogger('error') })
 		base = `http://127.0.0.1:${port}`
@@ -210,7 +209,6 @@ infrastructure:
 		const file = path.join(root, 'data-gateway.config.yaml')
 		fs.writeFileSync(file, `
 orm: { workspacePath: ${root}, watch: { intervalMs: 500, debounceMs: 100 } }
-admin: { enabled: true }
 logger: { level: error }
 audit: { enabled: false }
 rateLimit: { max: 0 }
@@ -221,7 +219,7 @@ authentication:
   keys:
     - { name: admin, value: admin-key, permissions: [ read, write, stageImport, ddl, schemaRead, schemaWrite ] }
 transports:
-  http: { port: ${port}, host: 127.0.0.1 }
+  management: { port: ${port}, host: 127.0.0.1 }
 `)
 		supervisor = await startSupervisor({ source: new YamlFileConfigSource(file, process.env), bootLogger: new ConsoleLogger('error') })
 		base = `http://127.0.0.1:${port}`

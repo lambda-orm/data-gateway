@@ -38,10 +38,18 @@ describe('workbench as files', () => {
 
 describe('admin configuration', () => {
 	const base = { orm: { workspacePath: '/w' }, transports: { http: { port: 8080 } } }
-	test('off by default; on with authentication none it warns; admin permissions are never given by default', () => {
+	test('on with transports.management; with authentication none it warns; admin permissions are never given by default', () => {
 		const read = (raw: unknown) => new ConfigReader().read(raw)
 		expect(read(base).config?.admin).toEqual({ enabled: false, allowAnonymous: false, maxFileBytes: 2 * 1024 ** 2, commandTimeoutMs: 600000 })
-		expect(read({ ...base, admin: { enabled: true } }).warnings).toContainEqual(expect.stringMatching(/nobody can administer/))
+		const management = (raw: any) => ({ ...raw, transports: { ...raw.transports, management: { port: 8081 } } })
+		expect(read(management(base)).config?.admin.enabled).toBe(true)
+		expect(read(management(base)).config?.transports.management).toEqual({ port: 8081, host: '0.0.0.0', basePath: '' })
+		expect(read(management(base)).warnings).toContainEqual(expect.stringMatching(/nobody can administer/))
+		// 3.x: admin.enabled and transports.http.ui are warned about and ignored
+		const old = read({ ...base, admin: { enabled: true }, transports: { http: { port: 8080, ui: { enabled: true } } } })
+		expect(old.config?.admin.enabled).toBe(false)
+		expect(old.warnings).toContainEqual(expect.stringMatching(/admin.enabled was removed in 4.0.0/))
+		expect(old.warnings).toContainEqual(expect.stringMatching(/transports.http.ui was removed in 4.0.0/))
 		const keys = read({ ...base, authentication: { adapter: 'local', type: 'apikey', keys: [{ name: 'a', value: 'k' }, { name: 'b', value: 'j', permissions: ['schemaWrite'] }] } })
 		expect(keys.config?.authentication.credentials.map(c => c.permissions)).toEqual([['read', 'write', 'script', 'queue', 'stageImport'], ['schemaWrite']])
 	})

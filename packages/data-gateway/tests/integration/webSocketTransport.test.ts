@@ -180,8 +180,8 @@ describe('webSocket transport (schema at a route)', () => {
 		}
 		const base = url.replace('ws://', 'http://')
 		expect((await call(base, '/asyncapi.json')).body).toMatchObject({ asyncapi: '3.0.0', servers: { 'iot/v1': { pathname: '/iot/v1' } } })
-		// read from a page elsewhere (an IDE): any origin
-		expect((await fetch(`${base}/asyncapi.json`, { headers: { Origin: 'http://ide.example' } })).headers.get('access-control-allow-origin')).toBe('*')
+		// no CORS (4.0.0): an IDE reads it through its backend
+		expect((await fetch(`${base}/asyncapi.json`, { headers: { Origin: 'http://ide.example' } })).headers.get('access-control-allow-origin')).toBeNull()
 		expect((await call(base, '/status')).body).toMatchObject({ transport: 'webSocket' })
 	})
 })

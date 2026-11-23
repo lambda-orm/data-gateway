@@ -1,5 +1,4 @@
 import express from 'express'
-import cors from 'cors'
 import http from 'http'
 import path from 'path'
 import fs from 'fs'
@@ -21,16 +20,14 @@ import { CommandService } from '../../../application/admin/commandService'
 const YAML = require('js-yaml')
 
 export interface HttpTransportOptions {
+	/** http (the clients) or management (the data-gateway-ide: every schema, and the administration at /admin) */
+	name?: HttpTransportName
 	port: number
 	host: string
 	basePath: string
 	requestBodySize: string
 	rateLimit: { windowMs: number, max: number }
 	swaggerEnabled: boolean
-	/** Serve the UI (packages/ide, embedded mode) at {basePath}/ui */
-	uiEnabled?: boolean
-	/** Folder of the built UI (default: ui next to this file) */
-	uiDir?: string
 	/** The transports of this gateway, told at GET {basePath}/transports (an IDE finds there its WebSocket and MCP) */
 	transports?: TransportInfo[]
 }
@@ -50,23 +47,25 @@ export interface HttpTransportDeps {
 	directory: SchemaDirectoryPort
 	metrics: MetricsPort
 	logger: LoggerPort
-	/** admin.enabled: the administration of the workspaces at {basePath}/admin, with this authentication */
+	/** management: the administration of the workspaces at {basePath}/admin, with this authentication */
 	admin?: { service: AdminService, commands?: CommandService, authenticator: AuthenticatorPort }
 }
 
 /** Paths that never need a credential: Kubernetes probes and Prometheus. */
 const OPEN_PATHS = ['/ping', '/health', '/metrics']
 export const TRANSPORT_NAME = 'http'
+export type HttpTransportName = 'http' | 'management'
 
 type Handler = (req: express.Request, ctx: RequestContext) => Promise<unknown>
 
 /**
  * The REST API (the endpoints of the former service) on its own port, for every schema exposed on it: under
  * {basePath}/{schema} (or at {basePath} for the only schema at the root). {basePath}/schemas lists them; /health is
- * aggregated when there are several.
+ * aggregated when there are several. As management, the same routes plus the administration at {basePath}/admin, for
+ * the data-gateway-ide. No CORS: a browser reaches it through a backend of its own origin (docs/DATA_GATEWAY.md §12).
  */
 export class HttpTransport implements Transport {
-	public readonly name = TRANSPORT_NAME
+	public readonly name: HttpTransportName
 	public readonly app: express.Express
 	private server: http.Server | undefined
 	/** The routes of the schemas, rebuilt when one is added or removed (orm.watch) */
@@ -75,6 +74,7 @@ export class HttpTransport implements Transport {
 	private swaggerDocument: any
 
 	constructor (private readonly options: HttpTransportOptions, private readonly deps: HttpTransportDeps) {
+		this.name = options.name ?? TRANSPORT_NAME
 		this.app = this.createApp()
 		this.mountSchemas()
 		deps.directory.onSchemasChange(() => this.mountSchemas())
@@ -97,11 +97,11 @@ export class HttpTransport implements Transport {
 		})
 		const address = this.address
 		const schemas = this.served.map(s => `/${s.path}`).join(', ')
-		this.deps.logger.info(`[data-gateway] http listening on ${address?.host}:${address?.port}${this.options.basePath || '/'} (schemas ${schemas})`)
+		this.deps.logger.info(`[data-gateway] ${this.name} listening on ${address?.host}:${address?.port}${this.options.basePath || '/'} (schemas ${schemas})`)
 	}
 
 	private get served (): ServedSchema[] {
-		return this.deps.directory.schemas().filter(s => s.exposedOn(TRANSPORT_NAME))
+		return this.deps.directory.schemas().filter(s => s.exposedOn(this.name))
 	}
 
 	private schemaBase (schema: ServedSchema): string {
@@ -132,7 +132,6 @@ export class HttpTransport implements Transport {
 			}))
 			next()
 		})
-		app.use(cors())
 		app.use(express.json({ limit: this.options.requestBodySize }))
 		app.use(express.urlencoded({ extended: true, limit: this.options.requestBodySize }))
 		if (this.options.rateLimit.max > 0) {
@@ -141,7 +140,6 @@ export class HttpTransport implements Transport {
 		app.use(this.beautify)
 		// the documentation is public (it holds no data): its "Authorize" button takes the credential
 		if (this.options.swaggerEnabled) this.swagger(app)
-		if (this.options.uiEnabled) this.ui(app)
 		const base = this.options.basePath
 		app.get(`${base}/metrics`, async (_req, res) => {
 			const { contentType, body } = await this.deps.metrics.render()
@@ -190,7 +188,7 @@ export class HttpTransport implements Transport {
 				const { contentType, body } = await this.deps.metrics.render({ schema: schema.path || '/' })
 				res.status(200).type(contentType).send(body)
 			})
-			router.use(this.authenticate(schema.authenticator(TRANSPORT_NAME)))
+			router.use(this.authenticate(schema.authenticator(this.name)))
 			// who the credential is and what this schema offers: the UI enables its actions with it
 			router.get('/whoami', this.handle(async (_req, ctx) => ({
 				name: ctx.principal.name,
@@ -200,7 +198,7 @@ export class HttpTransport implements Transport {
 			})))
 			router.get('/typings', async (req, res) => {
 				try {
-					const ctx: RequestContext = { principal: res.locals.principal as Principal, transport: TRANSPORT_NAME }
+					const ctx: RequestContext = { principal: res.locals.principal as Principal, transport: this.name }
 					res.status(200).type('text/plain; charset=utf-8').send(await schema.gateway.typings(ctx))
 				} catch (error: any) {
 					const httpError = toHttpError(error)
@@ -265,7 +263,7 @@ export class HttpTransport implements Transport {
 	private handle (handler: Handler) {
 		return async (req: express.Request, res: express.Response) => {
 			try {
-				const ctx: RequestContext = { principal: res.locals.principal as Principal, transport: TRANSPORT_NAME }
+				const ctx: RequestContext = { principal: res.locals.principal as Principal, transport: this.name }
 				const payload = await handler(req, ctx)
 				if (payload === undefined) {
 					res.status(204).end()
@@ -330,31 +328,6 @@ export class HttpTransport implements Transport {
 		router.post('/stages/:stage/import', this.handle((req, ctx) => gw.stageImport(ctx, String(req.params.stage), req.body)))
 	}
 
-	/**
-	 * The query UI: static files with long cache for the hashed assets, and headers that keep it from loading anything
-	 * from elsewhere or being framed (docs/DATA_GATEWAY.md §10.4). It calls the REST API of the same origin.
-	 */
-	private ui (app: express.Express): void {
-		const dir = this.options.uiDir ?? path.join(__dirname, 'ui')
-		if (!fs.existsSync(path.join(dir, 'index.html'))) {
-			this.deps.logger.warn(`transports.http.ui.enabled but the UI is not built (${dir}): /ui not served`)
-			return
-		}
-		const base = `${this.options.basePath}/ui`
-		app.use(base, (_req, res, next) => {
-			res.setHeader('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self'; form-action 'none'")
-			res.setHeader('X-Frame-Options', 'DENY')
-			res.setHeader('Referrer-Policy', 'no-referrer')
-			res.setHeader('X-Content-Type-Options', 'nosniff')
-			next()
-		}, express.static(dir, {
-			index: 'index.html',
-			setHeaders: (res, file) => {
-				res.setHeader('Cache-Control', file.includes(`${path.sep}assets${path.sep}`) ? 'public, max-age=31536000, immutable' : 'no-cache')
-			}
-		}))
-	}
-
 	private swagger (app: express.Express): void {
 		const file = path.join(__dirname, 'swagger.yaml')
 		if (!fs.existsSync(file)) {
@@ -367,7 +340,7 @@ export class HttpTransport implements Transport {
 		document.servers = this.servers()
 		this.swaggerDocument = document
 		// Authorize offers how the credential of these schemas is sent (an API key in its header, a token, basic)
-		const schemes = this.served.map(schema => schema.authenticator(TRANSPORT_NAME).scheme?.()).filter((s): s is CredentialScheme => s !== undefined)
+		const schemes = this.served.map(schema => schema.authenticator(this.name).scheme?.()).filter((s): s is CredentialScheme => s !== undefined)
 		const secured = withSecurity(document, schemes)
 		document.components = secured.components
 		document.security = secured.security

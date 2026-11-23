@@ -94,7 +94,7 @@ export const resolveConfiguredSchemas = (config: DataGatewayConfig, logger?: Log
 	return schemas.map(descriptor => ({ descriptor, settings: effectiveSettings(config, descriptor) }))
 }
 
-/** admin.enabled: the administration of the workspaces of the schemas the directory serves */
+/** transports.management: the administration of the workspaces of the schemas the directory serves */
 export const buildAdmin = (config: DataGatewayConfig, directory: SchemaDirectoryPort, logger: LoggerPort, clock: ClockPort, reloads = false): { service: AdminService, commands: CommandService } | undefined => {
 	if (!config.admin.enabled) return undefined
 	const anonymousAdmin = config.admin.allowAnonymous && config.authentication.adapter === 'none'

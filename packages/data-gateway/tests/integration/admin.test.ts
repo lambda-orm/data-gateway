@@ -34,7 +34,6 @@ orm:
   workspacePath: ${root}
   watch: { intervalMs: 500, debounceMs: 100 }
 ${extra}
-admin: { enabled: true }
 logger: { level: error }
 audit: { enabled: false }
 rateLimit: { max: 0 }
@@ -47,7 +46,7 @@ authentication:
     - { name: analyst, value: analyst-key, permissions: [ read, workbenchWrite ] }
     - { name: reader, value: reader-key, permissions: [ read ] }
 transports:
-  http: { port: ${port}, host: 127.0.0.1 }
+  management: { port: ${port}, host: 127.0.0.1 }
 `
 
 const workspaceRoot = () => {
@@ -72,6 +71,25 @@ describe('admin over REST (inline)', () => {
 		base = `http://127.0.0.1:${port}`
 	}, 60000)
 	afterAll(() => gateway?.stop())
+
+	test('4.0.0: the administration is on management only; http serves the data without /admin', async () => {
+		const httpPort = await freePort()
+		const file = path.join(root, 'with-http.config.yaml')
+		const port = await freePort()
+		fs.writeFileSync(file, configOf(root, port).replace('transports:\n', `transports:\n  http: { port: ${httpPort}, host: 127.0.0.1 }\n`))
+		const both = await startGateway({ source: new YamlFileConfigSource(file, {}), bootLogger: new ConsoleLogger('error') })
+		try {
+			const data = `http://127.0.0.1:${httpPort}`
+			expect((await call(data, '/admin', { headers: ADMIN })).status).toBe(404)
+			expect((await call(data, '/iot/v1/whoami', { headers: ADMIN })).status).toBe(200)
+			expect((await call(`http://127.0.0.1:${port}`, '/admin', { headers: ADMIN })).status).toBe(200)
+			// management serves the data routes too (the IDE talks to one port), and tells the data transports
+			expect((await call(`http://127.0.0.1:${port}`, '/iot/v1/whoami', { headers: ADMIN })).body).toMatchObject({ name: 'admin' })
+			expect((await call(`http://127.0.0.1:${port}`, '/transports')).body).toEqual([{ name: 'http', port: httpPort, basePath: '', docs: '/openapi.json' }])
+		} finally {
+			await both.stop()
+		}
+	})
 
 	test('what each credential may do; without the permission, 403', async () => {
 		expect((await call(base, '/admin', { headers: ADMIN })).body.can).toEqual({ schemaRead: true, schemaWrite: true, schemaAdmin: true, workbenchRead: true, workbenchWrite: true, build: true })

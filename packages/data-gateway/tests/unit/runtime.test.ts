@@ -78,6 +78,16 @@ describe('schemas and their settings', () => {
 		expect(effectiveAuthentication(c, iot2, 'http')).toMatchObject({ type: 'apikey' })
 	})
 
+	test('management (the IDE) serves every schema, whatever its transports say', () => {
+		const m = config({
+			orm: { workspacePath: '/w', schemas: [{ path: 'iot/v1', transports: ['mcpHttp'] }] },
+			transports: { http: { port: 1 }, mcpHttp: { port: 2 }, management: { port: 3 } }
+		})
+		const [iot1, iot2] = resolveSchemas(m, discovered).schemas
+		expect(effectiveSettings(m, iot1).transports).toEqual(['mcpHttp', 'management'])
+		expect(effectiveSettings(m, iot2).transports).toEqual(['http', 'mcpHttp', 'management'])
+	})
+
 	test('env of a schema: base variables, .env, then schemas[].env; nothing else of the gateway', () => {
 		const [iot1] = resolveSchemas(c, discovered).schemas
 		const gateway = { PATH: '/bin', TZ: 'UTC', NODE_OPTIONS: '-x', IOT_V2_DB: 'secret', DATA_GATEWAY_TOKEN: 'secret', KAFKA: 'k' }

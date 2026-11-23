@@ -149,7 +149,7 @@ export class McpWebSocketTransport implements Transport {
 		const base = this.options.basePath
 		const send = (status: number, body: unknown, type = 'application/json') => {
 			// its documents and status are read from any page (an IDE elsewhere), as the http transport answers
-			res.writeHead(status, { 'Content-Type': type, 'Access-Control-Allow-Origin': '*' })
+			res.writeHead(status, { 'Content-Type': type })
 			res.end(typeof body === 'string' ? body : JSON.stringify(body))
 		}
 		if (req.method === 'GET' && url.pathname === `${base}/status`) return send(200, this.status())

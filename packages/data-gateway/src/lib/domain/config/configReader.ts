@@ -8,7 +8,7 @@ import { parseSize } from './sizes'
 
 /** Transports of the design that this version does not serve yet (docs/DATA_GATEWAY_PLAN.md). */
 const LATER_TRANSPORTS: string[] = []
-const TRANSPORTS = ['http', 'mcpHttp', 'mcpWebSocket', 'webSocket']
+const TRANSPORTS = ['http', 'mcpHttp', 'mcpWebSocket', 'webSocket', 'management']
 const KNOWN_SECTIONS = ['orm', 'admin', 'server', 'logger', 'metrics', 'audit', 'authentication', 'rateLimit', 'scripts', 'mcp', 'runtime', 'transports']
 const SCHEMA_KEYS = ['path', 'workspace', 'transports', 'authentication', 'env', 'scripts', 'mcp', 'server', 'runtime']
 /** The tools of docs/DATA_GATEWAY.md §5.1: mcp.tools.include / exclude must name them */
@@ -47,7 +47,7 @@ export class ConfigReader {
 		const config: DataGatewayConfig = {
 			orm: this.orm(raw.orm),
 			admin: {
-				enabled: this.bool(raw.admin?.enabled, false, 'admin.enabled'),
+				enabled: false,
 				allowAnonymous: this.bool(raw.admin?.allowAnonymous, false, 'admin.allowAnonymous'),
 				maxFileBytes: this.size(raw.admin?.maxFileBytes, 2 * 1024 ** 2, 'admin.maxFileBytes'),
 				commandTimeoutMs: this.int(raw.admin?.commandTimeoutMs, 600000, 'admin.commandTimeoutMs', 1000)
@@ -84,9 +84,14 @@ export class ConfigReader {
 				if (!TRANSPORTS.includes(transport)) this.issues.push(`orm.schemas "${schema.path}": unknown transport "${transport}"`)
 			}
 		}
-		if (config.admin.enabled && !config.orm.workspacePath) this.notes.push('admin.enabled without orm.workspacePath: the workspaces can be edited, but none can be created')
+		// since 4.0.0 the administration is on when its transport is exposed
+		config.admin.enabled = config.transports.management !== undefined
+		if (raw.admin?.enabled !== undefined) {
+			this.warnings.push('admin.enabled was removed in 4.0.0: ignored; the administration is on when transports.management has a port')
+		}
+		if (config.admin.enabled && !config.orm.workspacePath) this.notes.push('transports.management without orm.workspacePath: the workspaces can be edited, but none can be created')
 		if (config.admin.enabled && config.authentication.adapter === 'none' && !config.admin.allowAnonymous) {
-			this.warnings.push('admin.enabled with authentication none: nobody can administer (admin.allowAnonymous: true, only for local development)')
+			this.warnings.push('transports.management with authentication none: nobody can administer (admin.allowAnonymous: true, only for local development)')
 		}
 		const reading: ConfigReading = { issues: this.issues, warnings: this.warnings, notes: this.notes }
 		if (this.issues.length === 0) reading.config = config
@@ -312,9 +317,11 @@ export class ConfigReader {
 			if (name === 'http') {
 				transports.http = {
 					...base,
-					swagger: { enabled: this.bool(section.swagger?.enabled, true, `${key}.swagger.enabled`) },
-					ui: { enabled: this.bool(section.ui?.enabled, false, `${key}.ui.enabled`) }
+					swagger: { enabled: this.bool(section.swagger?.enabled, true, `${key}.swagger.enabled`) }
 				}
+				if (section.ui !== undefined) this.warnings.push(`${key}.ui was removed in 4.0.0 (the gateway serves no UI): ignored; the UI is the data-gateway-ide, through transports.management`)
+			} else if (name === 'management') {
+				transports.management = base
 			} else if (name === 'mcpHttp') {
 				transports.mcpHttp = {
 					...base,

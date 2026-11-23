@@ -1,5 +1,4 @@
 import express from 'express'
-import cors from 'cors'
 import http from 'http'
 import { randomUUID } from 'crypto'
 import { AddressInfo } from 'net'
@@ -127,7 +126,6 @@ export class McpHttpTransport implements Transport {
 			}))
 			next()
 		})
-		app.use(cors({ exposedHeaders: ['mcp-session-id'] }))
 		if (this.options.rateLimit.max > 0) {
 			app.use(rateLimit({ windowMs: this.options.rateLimit.windowMs, max: this.options.rateLimit.max, standardHeaders: true, legacyHeaders: false }))
 		}

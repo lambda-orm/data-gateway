@@ -21,7 +21,6 @@ const start = async (admin: boolean): Promise<{ gateway: RunningGateway, url: st
 	const file = path.join(root, 'data-gateway.config.yaml')
 	fs.writeFileSync(file, `
 orm: { workspacePath: ${root} }
-admin: { enabled: ${admin} }
 logger: { level: error }
 audit: { enabled: false }
 rateLimit: { max: 0 }
@@ -33,6 +32,7 @@ authentication:
     - { name: reader, value: reader-key, permissions: [ read ] }
 transports:
   mcpHttp: { port: ${port}, host: 127.0.0.1, legacySse: false }
+${admin ? `  management: { port: ${await freePort()}, host: 127.0.0.1 }` : ''}
 `)
 	const gateway = await startGateway({ source: new YamlFileConfigSource(file, {}), bootLogger: new ConsoleLogger('error') })
 	return { gateway, url: `http://127.0.0.1:${port}/shop/mcp` }

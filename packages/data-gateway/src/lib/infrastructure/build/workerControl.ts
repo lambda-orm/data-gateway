@@ -36,7 +36,7 @@ export interface SchemaWorkerData {
 	version: string
 	socketDir: string
 	metricsEnabled: boolean
-	/** admin.enabled: the read-only administration tools in its MCP server */
+	/** transports.management: the read-only administration tools in its MCP server */
 	admin?: boolean
 }
 

@@ -62,7 +62,8 @@ export const effectiveSettings = (config: DataGatewayConfig, schema: SchemaDescr
 	const o = schema.overrides
 	const exposed = Object.keys(config.transports) as TransportName[]
 	return {
-		transports: o.transports ? exposed.filter(t => o.transports!.includes(t)) : exposed,
+		// management (the IDE) serves every schema, whatever its transports say
+		transports: o.transports ? exposed.filter(t => t === 'management' || o.transports!.includes(t)) : exposed,
 		scripts: { ...config.scripts, ...o.scripts },
 		mcp: { maxRows: o.mcp?.maxRows ?? config.mcp.maxRows, tools: o.mcp?.tools ?? config.mcp.tools },
 		server: {

@@ -32,7 +32,7 @@ export interface SchemaCompositionInput {
 	version: string
 	/** Open a connection of each source at start: a database down leaves the schema in error */
 	checkConnections: boolean
-	/** admin.enabled: the read-only tools of the administration in its MCP server */
+	/** transports.management: the read-only tools of the administration in its MCP server */
 	admin?: boolean
 }
 

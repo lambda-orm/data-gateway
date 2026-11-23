@@ -18,7 +18,7 @@ const credentials = [
 const agent = { Authorization: 'Bearer agent-token' }
 const backend = { Authorization: 'Bearer backend-token' }
 
-const start = async (fixture: GatewayFixture, options: Partial<{ basePath: string, rateLimit: { windowMs: number, max: number }, metrics: boolean, requestBodySize: string, uiDir: string, authenticator: AuthenticatorPort, transports: TransportInfo[] }> = {}) => {
+const start = async (fixture: GatewayFixture, options: Partial<{ basePath: string, rateLimit: { windowMs: number, max: number }, metrics: boolean, requestBodySize: string, authenticator: AuthenticatorPort, transports: TransportInfo[] }> = {}) => {
 	const transport = new HttpTransport({
 		port: 0,
 		host: '127.0.0.1',
@@ -26,8 +26,6 @@ const start = async (fixture: GatewayFixture, options: Partial<{ basePath: strin
 		requestBodySize: options.requestBodySize ?? '1mb',
 		rateLimit: options.rateLimit ?? { windowMs: 1000, max: 0 },
 		swaggerEnabled: true,
-		uiEnabled: options.uiDir !== undefined,
-		uiDir: options.uiDir,
 		transports: options.transports
 	}, {
 		directory: new InlineSchemaDirectory([{
@@ -123,29 +121,17 @@ describe('http transport', () => {
 })
 
 describe('http transport options', () => {
-	test('the UI: off by default; on, static files with security headers and long cache for assets', async () => {
-		const off = await start(fakeGateway())
+	test('4.0.0: no UI and no CORS (a browser of another origin reaches it through a backend)', async () => {
+		const { transport, base } = await start(fakeGateway())
 		try {
-			expect((await fetch(`${off.base}/ui/`)).status).toBe(401)
+			expect((await fetch(`${base}/ui/`)).status).toBe(401)
+			const res = await fetch(`${base}/ping`, { headers: { Origin: 'http://ide.example' } })
+			expect(res.status).toBe(200)
+			expect(res.headers.get('access-control-allow-origin')).toBeNull()
+			const preflight = await fetch(`${base}/execute`, { method: 'OPTIONS', headers: { Origin: 'http://ide.example', 'Access-Control-Request-Method': 'POST' } })
+			expect(preflight.headers.get('access-control-allow-origin')).toBeNull()
 		} finally {
-			await off.transport.stop()
-		}
-		const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ui-'))
-		fs.mkdirSync(path.join(dir, 'assets'))
-		fs.writeFileSync(path.join(dir, 'index.html'), '<html>workbench</html>')
-		fs.writeFileSync(path.join(dir, 'assets', 'app-1234.js'), 'console.log(1)')
-		const on = await start(fakeGateway(), { uiDir: dir })
-		try {
-			const page = await fetch(`${on.base}/ui/`)
-			expect(page.status).toBe(200)
-			expect(await page.text()).toBe('<html>workbench</html>')
-			expect(page.headers.get('content-security-policy')).toMatch(/default-src 'self'/)
-			expect(page.headers.get('x-frame-options')).toBe('DENY')
-			expect(page.headers.get('referrer-policy')).toBe('no-referrer')
-			expect(page.headers.get('cache-control')).toBe('no-cache')
-			expect((await fetch(`${on.base}/ui/assets/app-1234.js`)).headers.get('cache-control')).toMatch(/immutable/)
-		} finally {
-			await on.transport.stop()
+			await transport.stop()
 		}
 	})
 
