@@ -1,0 +1,122 @@
+[
+	{
+		"name": "execute: filter with a variable, map, sort and page",
+		"operation": "execute",
+		"args": {
+			"query": "Products.filter(p => p.price > minPrice).map(p => ({ name: p.name, price: p.price })).sort(p => desc(p.price)).page(1, 3)",
+			"data": { "minPrice": 50 }
+		},
+		"expect": {
+			"result": [
+				{ "name": "Côte de Blaye", "price": 263.5 },
+				{ "name": "Thüringer Rostbratwurst", "price": 123.79 },
+				{ "name": "Mishi Kobe Niku", "price": 97 }
+			]
+		}
+	},
+	{
+		"name": "execute: a text variable",
+		"operation": "execute",
+		"args": {
+			"query": "Customers.filter(p => p.country == country).map(p => p.name).sort(p => p.name).page(1, 3)",
+			"data": { "country": "Argentina" }
+		},
+		"expect": {
+			"result": [ { "name": "Cactus Comidas para llevar" }, { "name": "Océano Atlántico Ltda." }, { "name": "Rancho grande" } ]
+		}
+	},
+	{
+		"name": "execute: include of relations, nested",
+		"operation": "execute",
+		"args": {
+			"query": "Orders.filter(p => p.id == id).include(p => [p.details.include(p => p.product.map(p => p.name)), p.customer.map(p => p.name)])",
+			"data": { "id": 1 }
+		},
+		"expect": {
+			"result": [
+				{
+					"id": 1,
+					"customerId": "VINET",
+					"orderDate": "1996-07-03T22:00:00.000Z",
+					"details": [
+						{ "orderId": 1, "productId": 11, "unitPrice": 14, "quantity": 12, "product": { "name": "Queso Cabrales" } },
+						{ "orderId": 1, "productId": 42, "unitPrice": 9.8, "quantity": 10, "product": { "name": "Singaporean Hokkien Fried Mee" } },
+						{ "orderId": 1, "productId": 72, "unitPrice": 34.8, "quantity": 5, "product": { "name": "Mozzarella di Giovanni" } }
+					],
+					"customer": { "name": "Vins et alcools Chevalier" }
+				}
+			]
+		}
+	},
+	{
+		"name": "execute: aggregates by a field of a relation",
+		"operation": "execute",
+		"args": { "query": "Products.map(p => ({ category: p.category.name, count: count(p.id) })).sort(p => p.category)" },
+		"expect": {
+			"result": [
+				{ "category": "Beverages", "count": 12 },
+				{ "category": "Condiments", "count": 12 },
+				{ "category": "Confections", "count": 13 },
+				{ "category": "Dairy Products", "count": 10 },
+				{ "category": "Grains/Cereals", "count": 7 },
+				{ "category": "Meat/Poultry", "count": 6 },
+				{ "category": "Produce", "count": 5 },
+				{ "category": "Seafood", "count": 12 }
+			]
+		}
+	},
+	{
+		"name": "execute: an aggregate over a list of a relation",
+		"operation": "execute",
+		"args": { "query": "Orders.filter(p => p.id == id).map(p => ({ id: p.id, total: sum(p.details.unitPrice * p.details.quantity) }))", "data": { "id": 1 } },
+		"expect": { "result": [ { "id": 1, "total": 440 } ] }
+	},
+	{
+		"name": "execute: nothing found is an empty list",
+		"operation": "execute",
+		"args": { "query": "Categories.filter(p => p.id == id).map(p => p.name)", "data": { "id": 999999 } },
+		"expect": { "result": [] }
+	},
+	{
+		"name": "execute: more rows than mcp.maxRows (50): all of them; on MCP, the error truncated",
+		"operation": "execute",
+		"args": { "query": "Products.map(p => p.name)" },
+		"expect": { "length": 77 },
+		"mcp": { "error": { "code": "truncated" } }
+	},
+	{
+		"name": "plan: the sentence for the engine, without running it",
+		"operation": "plan",
+		"args": { "query": "Categories.filter(p => p.id == id).map(p => p.name)" },
+		"expect": {
+			"result": {
+				"entity": "Categories",
+				"dialect": "PostgreSQL",
+				"source": "Northwind",
+				"sentence": "SELECT c.CategoryName AS \"name\" FROM Categories c  WHERE c.CategoryID = $1 "
+			}
+		}
+	},
+	{
+		"name": "model and parameters of a query",
+		"steps": [
+			{ "operation": "model", "args": { "query": "Categories.filter(p => p.id == id).map(p => p.name)" }, "expect": { "result": [ { "name": "name", "type": "string" } ] } },
+			{ "operation": "parameters", "args": { "query": "Categories.filter(p => p.id == id).map(p => p.name)" }, "expect": { "result": [ { "name": "id", "type": "integer" } ] } }
+		]
+	},
+	{
+		"name": "metadata and constraints of a query",
+		"steps": [
+			{
+				"operation": "metadata",
+				"args": { "query": "Categories.filter(p => p.id == id).map(p => p.name)" },
+				"expect": { "match": { "entity": "Categories", "columns": [ { "name": "name", "type": "string" } ], "parameters": [ { "name": "id", "type": "integer" } ] } }
+			},
+			{
+				"operation": "constraints",
+				"args": { "query": "Categories.insert()" },
+				"expect": { "result": { "entity": "Categories", "constraints": [ { "message": "Cannot be null property name in entity Categories", "condition": "isNotNull(name)" } ] } }
+			}
+		]
+	}
+]

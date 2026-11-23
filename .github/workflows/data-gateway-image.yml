@@ -1,0 +1,170 @@
+name: Data gateway image
+# Publishes the λORM data-gateway Docker image (flaviorita/data-gateway) when a new version of packages/data-gateway
+# reaches main: version = packages/data-gateway/package.json. Versions before 3.0.0 are skipped: they were published
+# as flaviorita/lambdaorm-svc (packages/service), see docs/DATA_GATEWAY_PLAN.md. A version already on Docker Hub is
+# skipped, so merges that don't bump the data-gateway version publish nothing. Before pushing, the image runs the
+# ilusor-cloud lab's service tests.
+# Secret: DOCKERHUB_TOKEN (Docker Hub access token, Read & Write, of the user in IMAGE).
+on:
+  push:
+    branches: [main]
+    paths:
+      - packages/data-gateway/**
+      - .github/workflows/data-gateway-image.yml
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Publish even if the version is already on Docker Hub
+        type: boolean
+        default: false
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+permissions:
+  contents: write # the data-gateway-v<version> tag
+env:
+  IMAGE: flaviorita/data-gateway
+jobs:
+  image:
+    name: Build, test and push
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:17-alpine
+        env:
+          POSTGRES_DB: ilusor
+          POSTGRES_USER: admin
+          POSTGRES_PASSWORD: admin
+        ports:
+          - 55432:5432
+        options: >-
+          --health-cmd "pg_isready -U admin -d ilusor"
+          --health-interval 2s
+          --health-retries 30
+    steps:
+      - uses: actions/checkout@v7
+      - name: Version
+        id: version
+        run: |
+          V=$(node -p "require('./packages/data-gateway/package.json').version")
+          CLI=$(node -p "require('./packages/cli/package.json').version")
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "cli=$CLI" >> "$GITHUB_OUTPUT"
+          # a prerelease (3.0.0-rc.1) is published without moving latest: nobody gets it without asking for it
+          case "$V" in *-*) echo "latest=false" >> "$GITHUB_OUTPUT" ;; *) echo "latest=true" >> "$GITHUB_OUTPUT" ;; esac
+          if [ "${V%%.*}" -lt 3 ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::$V < 3.0.0: published as flaviorita/lambdaorm-svc, nothing to publish as $IMAGE"
+          elif docker manifest inspect "$IMAGE:$V" > /dev/null 2>&1 && [ "${{ inputs.force }}" != "true" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::$IMAGE:$V is already on Docker Hub, nothing to publish"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: pnpm/action-setup@v6
+        if: steps.version.outputs.exists == 'false'
+      - uses: actions/setup-node@v6
+        if: steps.version.outputs.exists == 'false'
+        with:
+          node-version: 24.16.0
+          cache: pnpm
+      - name: Install dependencies
+        if: steps.version.outputs.exists == 'false'
+        run: pnpm install --frozen-lockfile
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Build
+        if: steps.version.outputs.exists == 'false'
+        run: pnpm run build
+      # The image installs @lambdaorm/base, lib and cli from npm: on the same push to main the Release workflow may
+      # still be publishing them.
+      - name: Wait for the npm packages
+        if: steps.version.outputs.exists == 'false'
+        run: |
+          for pkg in base lib cli; do
+            v=$(node -p "require('./packages/$pkg/package.json').version")
+            for i in $(seq 1 40); do
+              npm view "@lambdaorm/$pkg@$v" version > /dev/null 2>&1 && echo "@lambdaorm/$pkg@$v on npm" && continue 2
+              sleep 15
+            done
+            echo "::error::@lambdaorm/$pkg@$v is not on npm"; exit 1
+          done
+      - name: Dist
+        if: steps.version.outputs.exists == 'false'
+        working-directory: packages/data-gateway
+        run: npx grunt dist && cp CHANGELOG.md dist/
+      - name: Docker build
+        if: steps.version.outputs.exists == 'false'
+        working-directory: packages/data-gateway
+        run: >-
+          docker build --build-arg CLI_VERSION=${{ steps.version.outputs.cli }}
+          -t $IMAGE:${{ steps.version.outputs.version }}
+          ${{ steps.version.outputs.latest == 'true' && format('-t {0}:latest', env.IMAGE) || '' }} .
+      - name: Lab database
+        if: steps.version.outputs.exists == 'false'
+        run: |
+          psql -h 127.0.0.1 -p 55432 -U admin -d ilusor -v ON_ERROR_STOP=1 -f packages/lib/src/dev/labs/ilusor-cloud/db/01-schemas.sql
+          cd packages/lib && npm run lab:ilusor:setup
+        env:
+          PGPASSWORD: admin
+      - name: Test the image (lab service tests)
+        if: steps.version.outputs.exists == 'false'
+        working-directory: packages/lib
+        run: |
+          LAB=$(realpath src/dev/labs/ilusor-cloud)
+          docker run -d --name svc --network host --env-file $LAB/.env -e WORKSPACE=/workspace -e PORT=18292 -e MCP_PORT=18293 \
+            -e RATE_LIMIT_MAX=0 -e SCRIPT_ENABLED=true -e SERVICE_TOKEN=lab-token -v $LAB:/workspace \
+            -v $LAB/data-gateway.config.yaml:/config/data-gateway.config.yaml:ro \
+            $IMAGE:${{ steps.version.outputs.version }}
+          up=0
+          for i in $(seq 1 90); do curl -sf http://127.0.0.1:18292/ping > /dev/null && up=1 && break; sleep 1; done
+          if [ "$up" != 1 ]; then echo "::error::the image did not start"; docker logs svc; exit 1; fi
+          docker exec svc sh -c 'node --version && lambdaorm --version'
+          ORM_SVC=1 ORM_URL=http://127.0.0.1:18292 ORM_SVC_TOKEN=lab-token \
+            npx jest -c src/dev/labs/ilusor-cloud/jest.config.json --verbose src/dev/labs/ilusor-cloud/tests/service.spec.ts
+      - name: Test the image (MCP)
+        if: steps.version.outputs.exists == 'false'
+        run: |
+          # Streamable HTTP, stateless: initialize and a tool call, each in its own POST
+          mcp() { curl -sf -X POST http://127.0.0.1:18293/mcp -H 'Authorization: Bearer lab-token' \
+            -H 'content-type: application/json' -H 'accept: application/json, text/event-stream' -d "$1"; }
+          mcp '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1"}}}' | grep -q '"serverInfo"'
+          tools=$(mcp '{"jsonrpc":"2.0","id":2,"method":"tools/list"}')
+          echo "$tools" | grep -q '"orm_execute"' || { echo "::error::tools/list without orm_execute"; echo "$tools"; exit 1; }
+          curl -sf http://127.0.0.1:18292/schemas | grep -q '"status":"ready"' || { echo "::error::the schema is not ready"; exit 1; }
+      - name: Image log
+        if: always() && steps.version.outputs.exists == 'false'
+        run: docker logs svc 2>&1 || true
+      - uses: docker/login-action@v3
+        if: steps.version.outputs.exists == 'false'
+        with:
+          username: flaviorita
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Push
+        if: steps.version.outputs.exists == 'false'
+        run: |
+          # Docker Hub sometimes drops an upload ("blob upload unknown"): each tag gets 3 tries, 15 s and 30 s apart
+          push() {
+            for attempt in 1 2 3; do
+              docker push "$1" && return 0
+              [ "$attempt" = 3 ] && break
+              echo "::warning::docker push $1 failed (attempt $attempt of 3), retrying in $((attempt * 15)) s"
+              sleep $((attempt * 15))
+            done
+            echo "::error::docker push $1 failed 3 times"
+            return 1
+          }
+          push $IMAGE:${{ steps.version.outputs.version }}
+          if [ "${{ steps.version.outputs.latest }}" = "true" ]; then
+            push $IMAGE:latest
+            echo "::notice::published $IMAGE:${{ steps.version.outputs.version }} and latest"
+          else
+            echo "::notice::published $IMAGE:${{ steps.version.outputs.version }} (prerelease: latest not moved)"
+          fi
+      - name: Tag data-gateway-v${{ steps.version.outputs.version }}
+        if: steps.version.outputs.exists == 'false'
+        run: |
+          T=data-gateway-v${{ steps.version.outputs.version }}
+          if git ls-remote --exit-code --tags origin "refs/tags/$T" > /dev/null; then echo "$T already exists"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$T" -m "data-gateway ${{ steps.version.outputs.version }}"
+          git push origin "$T"

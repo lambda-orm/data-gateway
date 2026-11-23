@@ -1,0 +1,90 @@
+{
+  "name": "@lambdaorm/data-gateway",
+  "version": "3.2.0",
+  "description": "Gateway that exposes the functionality of the λORM library",
+  "license": "MIT",
+  "engines": {
+    "node": ">=20"
+  },
+  "main": "./build/lib/index.js",
+  "types": "./build/lib/index.d.ts",
+  "private": true,
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lambda-orm/core.git",
+    "directory": "packages/data-gateway"
+  },
+  "standard-version": {
+    "header": "# Changelog\n\nAll notable changes to this project will be documented in this file.\n\n## Versions\n"
+  },
+  "keywords": [
+    "orm",
+    "lambdaorm",
+    "data-gateway",
+    "gateway"
+  ],
+  "author": "Flavio Lionel Rita <flaviolrita@proton.me>",
+  "bugs": {
+    "url": "https://github.com/lambda-orm/lambdaorm/issues"
+  },
+  "homepage": "https://github.com/lambda-orm/core/tree/main/packages/data-gateway#readme",
+  "dependencies": {
+    "3xpr": "^5.3.1",
+    "@lambdaorm/base": "workspace:*",
+    "@lambdaorm/lib": "workspace:*",
+    "@modelcontextprotocol/sdk": "1.32.2",
+    "body-parser": "^1.20.2",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.5",
+    "express": "^5.1.0",
+    "express-rate-limit": "^7.0.2",
+    "h3lp": "^5.0.0",
+    "js-yaml": "^4.1.0",
+    "kafkajs": "^2.2.4",
+    "mongodb": "4.17.2",
+    "morgan": "^1.10.0",
+    "mysql2": "^3.14.1",
+    "ono": "^7.1.3",
+    "oracledb": "^6.8.0",
+    "pg": "^8.16.0",
+    "prom-client": "^15.1.3",
+    "sql.js": "^1.9.0",
+    "swagger-jsdoc": "^6.2.8",
+    "swagger-ui-express": "^5.0.1",
+    "tedious": "^18.2.0",
+    "uuid": "^9.0.1",
+    "winston": "^3.11.0",
+    "ws": "8.18.3",
+    "yaml": "2.8.2"
+  },
+  "devDependencies": {
+    "@anthropic-ai/sdk": "1.4.0",
+    "@lambdaorm/client": "workspace:*",
+    "@lambdaorm/data-gateway-ide": "workspace:*",
+    "@types/body-parser": "^1.19.5",
+    "@types/cookie-parser": "^1.4.4",
+    "@types/cors": "^2.8.14",
+    "@types/express": "^5.0.2",
+    "@types/jest": "^29.5.14",
+    "@types/js-yaml": "^4.0.5",
+    "@types/node": "^22.15.26",
+    "@types/swagger-jsdoc": "^6.0.4",
+    "@types/swagger-ui-express": "^4.1.8",
+    "@types/uuid": "^9.0.4",
+    "@types/ws": "8.18.1",
+    "@typescript-eslint/eslint-plugin": "^8.33.1",
+    "@typescript-eslint/parser": "^8.33.1",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.4",
+    "typescript": "^5.8.3"
+  },
+  "scripts": {
+    "lint": "npx grunt lint",
+    "build": "npx grunt build",
+    "test": "npx grunt test",
+    "doc": "npx grunt doc",
+    "dist": "npx grunt dist",
+    "release": "npx grunt release",
+    "test:integration": "npx tsc -b ../base ../lib ../client && npx jest --config ./jest-integration-config.json --runInBand --detectOpenHandles"
+  }
+}
