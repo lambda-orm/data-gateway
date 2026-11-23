@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { ArrowDownToLine, ArrowUpToLine, Boxes, Braces, ChartNetwork, ChevronRight, Code, Database, DatabasePlus, Download, Ellipsis, Eraser, FileCode, FileCog, FilePlus, FileSpreadsheet, FileText, Folder, FolderCode, FolderDown, FolderInput, FolderKanban, FolderOutput, FolderPlus, GitCompareArrows, HardDriveDownload, HardDriveUpload, Info, KeyRound, Layers, ListTree, Merge, PanelLeft, Pencil, Plug, Plus, Route, ScanSearch, Server, Settings2, SquareArrowOutUpRight, SquareTerminal, Table2, Trash2, Upload, Workflow, X, Cable, Copy, Hand, Library, MousePointer2, Network, TriangleAlert, WandSparkles, ZoomIn, ZoomOut, type LucideIcon } from 'lucide-react'
+import { ArrowDownToLine, ArrowUpToLine, Boxes, Braces, ChartNetwork, ChevronRight, Code, Database, DatabasePlus, Download, Ellipsis, Eraser, FileCode, FileCog, FilePlus, FileSpreadsheet, FileText, Folder, FolderCode, FolderDown, FolderInput, FolderKanban, FolderOutput, FolderPlus, GitCompareArrows, HardDriveDownload, HardDriveUpload, Info, KeyRound, Layers, ListTree, Merge, PanelLeft, Pencil, Plug, Plus, Route, ScanSearch, Server, Settings2, SquareArrowOutUpRight, SquareTerminal, Table2, Trash2, Upload, Workflow, X, Cable, Copy, Hand, Library, MousePointer2, Network, TriangleAlert, WandSparkles, ListIndentIncrease, ZoomIn, ZoomOut, type LucideIcon } from 'lucide-react'
 import { createPortal } from 'react-dom'
 
 /** A modal: the page behind can't be used; Escape or Cancel closes it. On the body: no panel clips it or covers it */
@@ -7,7 +7,14 @@ export const Modal: React.FC<{ title: string, onClose: () => void, children: Rea
 	const box = useRef<HTMLDivElement>(null)
 	useEffect(() => {
 		const previous = document.activeElement as HTMLElement | null
-		const escape = (e: KeyboardEvent) => { if (e.key === 'Escape') { e.stopPropagation(); onClose() } }
+		// only the one on top (a dialog opened from another one: the wizard and its tables to add)
+		const escape = (e: KeyboardEvent) => {
+			if (e.key !== 'Escape') return
+			const open = document.querySelectorAll('.lw-modal')
+			if (open[open.length - 1] !== box.current) return
+			e.stopPropagation()
+			onClose()
+		}
 		document.addEventListener('keydown', escape, true)
 		box.current?.querySelector<HTMLElement>('input, textarea, select, button')?.focus()
 		return () => { document.removeEventListener('keydown', escape, true); previous?.focus?.() }
@@ -154,7 +161,9 @@ export const Icons = {
 	pointer: icon(MousePointer2),
 	hand: icon(Hand),
 	copy: icon(Copy),
-	format: icon(WandSparkles),
+	format: icon(ListIndentIncrease),
+	// the query wizard (its magic wand); formatting a query is an indent
+	wizard: icon(WandSparkles),
 	connection: icon(Cable),
 	connections: icon(Network),
 	warning: icon(TriangleAlert)

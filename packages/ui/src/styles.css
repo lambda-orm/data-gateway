@@ -346,3 +346,22 @@
 .lw-options-line > button { height: 30px; box-sizing: border-box; }
 .lw-options-line .lw-queue input { height: 30px; box-sizing: border-box; width: 140px; }
 .lw-modal:has(.lw-options) { width: min(640px, calc(100vw - 32px)); max-height: 85vh; overflow: auto; }
+
+/* the query wizard: the tables as a diagram on the left, the filter, order, page and the query on the right */
+.lw-modal:has(.lw-wizard) { width: min(1280px, calc(100vw - 32px)); height: min(820px, calc(100vh - 48px)); max-width: calc(100vw - 16px); max-height: calc(100vh - 16px); resize: both; overflow: auto; display: flex; flex-direction: column; }
+.lw-modal-back:has(.lw-wizard) { padding-top: 24px; }
+.lw-wizard { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 14px; flex: 1 1 auto; min-height: 0; }
+.lw-wizard-diagram { display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0; }
+.lw-wizard-diagram > :not(.lw-hint) { flex: 1 1 auto; min-height: 280px; }
+.lw-wizard-side { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: auto; padding-right: 2px; }
+.lw-wizard-field { display: flex; flex-direction: column; gap: 4px; }
+.lw-wizard-field > span:first-child { color: var(--lw-muted); font-size: 12px; text-transform: uppercase; letter-spacing: .04em; }
+.lw-wizard-field select, .lw-wizard-field input { min-width: 0; }
+.lw-wizard-field > button { align-self: flex-start; }
+.lw-wizard-filter { border: 1px solid var(--lw-border); border-radius: 4px; overflow: hidden; }
+.lw-wizard-filter > code { display: block; padding: 2px 6px; font-size: 12px; color: var(--lw-muted); background: var(--lw-panel); border-bottom: 1px solid var(--lw-border); }
+.lw-wizard-query { margin: 0; tab-size: 2; padding: 8px; border: 1px solid var(--lw-border); border-radius: 4px; font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; max-height: 180px; overflow: auto; }
+.lw-wizard .lw-option-pair { display: flex; gap: 6px; align-items: center; }
+.lw-wizard .lw-option-pair > select, .lw-wizard .lw-option-pair > input { flex: 1 1 0; }
+.lw-field-row { cursor: pointer; }
+@media (max-width: 760px) { .lw-wizard { grid-template-columns: minmax(0, 1fr); } }

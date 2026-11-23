@@ -20,6 +20,9 @@ import { SchemaEditor } from './SchemaEditor'
 import { CommandsPanel } from './CommandsPanel'
 import { FormFocus, SchemaForms } from './SchemaForms'
 import { FileView } from './FileView'
+import { QueryWizard } from './QueryWizard'
+import { WizardState } from '../domain/queryWizard'
+import { wizardMessagesOf } from '../domain/wizardI18n'
 import { fromYaml } from '../domain/results'
 import { RestAdminApi } from '../infrastructure/restAdminApi'
 import { GatewayWorkspaceStore } from '../infrastructure/gatewayWorkspaceStore'
@@ -128,6 +131,10 @@ interface Tab {
 	page?: string
 	/** The connection it belongs to (by default the first) */
 	connection?: string
+	/** A query written by the wizard: the wizard as it was left, to open it again on the query */
+	wizard?: WizardState
+	/** The query rewritten in place (by the wizard): its editor starts again with the new text */
+	rev?: number
 }
 
 const SAME = (a: SavedQueryContent, b: SavedQueryContent) => a.mode === b.mode && a.query === b.query && a.script === b.script && a.data === b.data && a.options === b.options
@@ -406,6 +413,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 	const [rootFolded, setRootFolded] = useState(false)
 	const [saving, setSaving] = useState<{ tab: Tab, as: boolean }>()
 	const [creatingDiagram, setCreatingDiagram] = useState<{ conn: string, schema: string, parentId?: string }>()
+	const [wizarding, setWizarding] = useState<{ tab: Tab, schema: string, domain: DomainInfo }>()
 	const [choosingEntities, setChoosingEntities] = useState<Tab>()
 	const [notice, setNotice] = useState<string>()
 	const [newSchema, setNewSchema] = useState<string>()
@@ -514,7 +522,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 		const content = contents.current.get(tab.id)
 		if (!content) return false
 		if (saved?.kind !== 'query') return !!(content.query.trim() || content.script.trim())
-		return !SAME(content, contentOf(saved))
+		return !SAME(content, contentOf(saved)) || JSON.stringify(tab.wizard ?? null) !== JSON.stringify(saved.wizard ?? null)
 	}
 
 	const add = (tab: Omit<Tab, 'id'>) => {
@@ -564,7 +572,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 	const same = (conn: string, t: Tab) => connOf(t) === conn
 	const openSaved = (conn: string, item: SavedItem) => {
 		if (item.kind === 'folder' || reuse(t => same(conn, t) && t.savedId === item.id)) return
-		if (item.kind === 'query') add({ kind: 'query', title: item.name, schema: item.schema, savedId: item.id, initial: contentOf(item), connection: conn })
+		if (item.kind === 'query') add({ kind: 'query', title: item.name, schema: item.schema, savedId: item.id, initial: contentOf(item), wizard: item.wizard, connection: conn })
 		else add({ kind: 'diagram', title: item.name, schema: item.schema, savedId: item.id, draft: draftOf(item), connection: conn })
 	}
 	const newQuery = (conn: string, schema: string, parentId?: string, initial?: Partial<SavedQueryContent>, title?: string) =>
@@ -637,12 +645,33 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 		if (!content || content.schema === undefined) return
 		if (saved?.kind === 'query' && !as && saved.schema === content.schema) {
 			try {
-				await controller.update(saved.id, { mode: content.mode, query: content.query, script: content.script, data: content.data, options: content.options })
+				await controller.update(saved.id, { mode: content.mode, query: content.query, script: content.script, data: content.data, options: content.options, wizard: tab.wizard })
 				setTick(t => t + 1)
 			} catch (e) { setNotice(problemText(e, x)) }
 			return
 		}
 		setSaving({ tab, as })
+	}
+
+	// the query wizard: on a query it wrote, it opens as it was left and rewrites that query; else a new tab
+	const wz = wizardMessagesOf(workbench.locale)
+	const openWizard = async (tab: Tab) => {
+		const schema = contents.current.get(tab.id)?.schema ?? tab.schema
+		const r = rt(connOf(tab))
+		if (schema === undefined || !r) return
+		try { setWizarding({ tab, schema, domain: await r.domainOf(schema) }) } catch (e) { setNotice(problemText(e, x)) }
+	}
+	const acceptWizard = (state: WizardState, query: string) => {
+		if (!wizarding) return
+		const { tab, schema } = wizarding
+		setWizarding(undefined)
+		if (tab.wizard) {
+			const content = contents.current.get(tab.id)
+			const initial = content ? { mode: content.mode, query: content.query, script: content.script, data: content.data, options: content.options } : tab.initial
+			setTabs(t => t.map(other => other.id === tab.id ? { ...other, schema, wizard: state, rev: (other.rev ?? 0) + 1, initial: { ...initial, mode: 'query', query } } : other))
+			return
+		}
+		add({ kind: 'query', title: state.root, schema, initial: { mode: 'query', query }, wizard: state, connection: connOf(tab) })
 	}
 
 	const onContent = useCallback((id: number, content: SavedQueryContent & { schema?: string }) => {
@@ -818,9 +847,10 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 									</div>
 								)}
 								{r && tab.kind === 'query' && (
-									<QueryPanel tab={tab} workbench={{ ...workbench, baseUrl: undefined, headers: undefined, api: r.api, schemasRevision: r.revision, loadDomain: r.domainOf }} onContent={onContent}
+									<QueryPanel key={tab.rev ?? 0} tab={tab} workbench={{ ...workbench, baseUrl: undefined, headers: undefined, api: r.api, schemasRevision: r.revision, loadDomain: r.domainOf }} onContent={onContent}
 										toolbar={(
 											<span className="lw-save">
+												<button onClick={() => openWizard(tab)} disabled={contents.current.get(tab.id)?.schema === undefined} title={wz.title}><Icons.wizard /> {wz.wizard}</button>
 												<button onClick={() => save(tab)} disabled={contents.current.get(tab.id)?.schema === undefined} title="Ctrl+S">{x.save}</button>
 												<button onClick={() => save(tab, true)} disabled={contents.current.get(tab.id)?.schema === undefined}>{x.saveAs}</button>
 												{saved && !dirty(tab) && <span className="lw-muted">{x.saved}</span>}
@@ -843,10 +873,16 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 						if (!content || content.schema === undefined) return
 						try {
 							const query = await savingRt.controller.createQuery({ schema: content.schema, ...v },
-								{ mode: content.mode, query: content.query, script: content.script, data: content.data, options: content.options })
+								{ mode: content.mode, query: content.query, script: content.script, data: content.data, options: content.options, ...(saving.tab.wizard ? { wizard: saving.tab.wizard } : {}) })
 							setTabs(t => t.map(tab => tab.id === saving.tab.id ? { ...tab, savedId: query.id, schema: query.schema, parentId: query.parentId } : tab))
 						} catch (e) { return problemText(e, x) }
 					}} />
+			)}
+			{wizarding && rt(connOf(wizarding.tab)) && (
+				<QueryWizard api={rt(connOf(wizarding.tab))!.api} schema={wizarding.schema} domain={wizarding.domain} initial={wizarding.tab.wizard} theme={theme} locale={workbench.locale}
+					current={wizarding.tab.wizard ? contents.current.get(wizarding.tab.id)?.query : undefined}
+					start={/^\s*([\w.]+)/.exec(contents.current.get(wizarding.tab.id)?.query ?? '')?.[1]?.replace(/\.(filter|map|include|sort|page|first|having|groupBy|distinct)$/, '')}
+					onClose={() => setWizarding(undefined)} onAccept={acceptWizard} />
 			)}
 			{creatingDiagram && creatingRt && (
 				<DiagramDialog title={x.newDiagram} submit={x.create} texts={texts} theme={theme} domain={pickerDomain(creatingDiagram.conn, creatingDiagram.schema)}

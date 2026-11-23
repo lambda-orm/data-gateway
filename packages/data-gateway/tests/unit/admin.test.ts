@@ -1,5 +1,5 @@
 // What is saved in a workspace as files (docs/DATA_GATEWAY_ADMIN_PLAN.md §3.5), and the admin section of the config.
-import { workbenchFileName, workbenchItemOf, workbenchKindOf, workbenchNameIssue, workbenchPlaces, WorkbenchItem } from '../../src/lib/domain/admin/workbench'
+import { workbenchContent, workbenchFileName, workbenchItemOf, workbenchKindOf, workbenchNameIssue, workbenchPlaces, WorkbenchItem } from '../../src/lib/domain/admin/workbench'
 import { ConfigReader } from '../../src/lib/domain/config/configReader'
 
 const item = (id: string, kind: WorkbenchItem['kind'], name: string, parentId?: string, extra: Partial<WorkbenchItem> = {}): WorkbenchItem => ({ id, kind, schema: 's', name, parentId, ...extra })
@@ -33,6 +33,17 @@ describe('workbench as files', () => {
 	test('a file written by hand: its place is its id, data as YAML becomes JSON text', () => {
 		const read = workbenchItemOf('s', 'workbench/a.query.yaml', { query: 'A', data: { n: 1 } }, undefined, 'v', 'then')
 		expect(read).toMatchObject({ id: 'file:workbench/a.query.yaml', kind: 'query', mode: 'query', query: 'A', data: '{"n":1}', options: '{}', createdAt: 'then' })
+	})
+
+	test('the wizard that wrote a query is kept as it comes, in its file and back', () => {
+		const wizard = { root: 'Orders', tables: [], fields: { Orders: ['id'] }, filter: '', sort: [], page: { number: '', size: '10' } }
+		const item: WorkbenchItem = { id: 'q1', kind: 'query', schema: 's', name: 'q', mode: 'query', query: 'Orders', wizard }
+		const content = workbenchContent(item)
+		expect(content.wizard).toEqual(wizard)
+		expect(workbenchItemOf('s', 'workbench/q.query.yaml', content, undefined, 'v', 'then')?.wizard).toEqual(wizard)
+		// a query without it, or with something that is not an object, has none
+		expect(workbenchContent({ ...item, wizard: undefined })).not.toHaveProperty('wizard')
+		expect(workbenchItemOf('s', 'workbench/q.query.yaml', { query: 'A', wizard: 'x' }, undefined, 'v', 'then')).not.toHaveProperty('wizard')
 	})
 })
 

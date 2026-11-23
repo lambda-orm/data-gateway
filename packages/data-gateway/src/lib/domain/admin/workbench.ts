@@ -30,6 +30,8 @@ export interface WorkbenchItem {
 	script?: string
 	data?: string
 	options?: string
+	/** the state of the query wizard of the IDE that wrote the query (kept as it comes) */
+	wizard?: Record<string, unknown>
 	/** diagram */
 	entities?: string[]
 	positions?: Record<string, { x: number, y: number }>
@@ -85,6 +87,7 @@ export const workbenchContent = (item: WorkbenchItem): Record<string, unknown> =
 		content.script = item.script ?? ''
 		content.data = item.data ?? '{}'
 		content.options = item.options ?? '{}'
+		if (item.wizard) content.wizard = item.wizard
 	}
 	if (item.kind === 'diagram') {
 		content.entities = item.entities ?? []
@@ -127,6 +130,7 @@ export const workbenchItemOf = (
 		item.script = text(c.script, '')
 		item.data = text(c.data, '{}')
 		item.options = text(c.options, '{}')
+		if (c.wizard && typeof c.wizard === 'object' && !Array.isArray(c.wizard)) item.wizard = c.wizard
 	} else {
 		item.entities = Array.isArray(c.entities) ? c.entities.filter((e: unknown) => typeof e === 'string') : []
 		for (const key of ['positions', 'bends', 'compact', 'detail', 'relationNames'] as const) {

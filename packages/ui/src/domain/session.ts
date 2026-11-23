@@ -13,6 +13,8 @@ export interface SessionTab {
 	initial?: Record<string, unknown>
 	entity?: string
 	draft?: unknown
+	/** a query written by the query wizard: the wizard as it was left */
+	wizard?: unknown
 	focus?: unknown
 	file?: string
 	page?: string

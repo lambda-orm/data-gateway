@@ -1,0 +1,156 @@
+import React, { useCallback, useMemo, useState } from 'react'
+import { QueryApiPort } from '../application/ports'
+import { DomainInfo } from '../domain/diagram'
+import { functionsOf, lambdaCompletions } from '../domain/lambdaCompletion'
+import { QUERYABLE_DECLARATIONS } from '../infrastructure/monaco/queryableDeclarations.generated'
+import { columnsOf, emptyWizard, joinOf, queryOf, WizardState, withoutTable } from '../domain/queryWizard'
+import { wizardMessagesOf } from '../domain/wizardI18n'
+import { format, Locale } from '../domain/i18n'
+import { CodeEditor } from './CodeEditor'
+import { DomainDiagram } from './DomainDiagram'
+import { Modal } from './dialogs'
+import type { LayoutPort } from '../infrastructure/elkLayout'
+
+const LAMBDA_FUNCTIONS = functionsOf(QUERYABLE_DECLARATIONS)
+
+export interface QueryWizardProps {
+	api: QueryApiPort
+	schema: string
+	domain: DomainInfo
+	/** the wizard as it was left (a query written by it); without it, a new one */
+	initial?: WizardState
+	/** the entity to start from when there is no wizard yet (the one the query of the tab reads) */
+	start?: string
+	/** the query of the tab as it is now: edited by hand since the wizard wrote it, updating it replaces it */
+	current?: string
+	theme?: 'light' | 'dark'
+	locale?: string
+	onClose: () => void
+	onAccept: (state: WizardState, query: string) => void
+	/** where the boxes go (ELK by default) */
+	layout?: LayoutPort
+}
+
+/**
+ * The query wizard: the tables as in a diagram, each field with a check; the + of a table adds its related ones, the ×
+ * takes one out (not the one it starts from). A filter on the entity it starts from (with its suggestions), the order
+ * by the columns of the result and the page; what is left empty is not applied. The query is shown as it is written.
+ */
+export const QueryWizard: React.FC<QueryWizardProps> = ({ api, schema, domain, initial, start, current, theme = 'light', locale, onClose, onAccept, layout }) => {
+	const m = wizardMessagesOf(locale)
+	const names = useMemo(() => domain.entities.map(e => e.name).sort((a, b) => a.localeCompare(b)), [domain])
+	const [state, setState] = useState<WizardState>(() => initial ?? emptyWizard(start && names.includes(start) ? start : names[0] ?? ''))
+	const [notice, setNotice] = useState<string>()
+	const query = useMemo(() => state.root ? queryOf(state, domain) : '', [state, domain])
+	const columns = useMemo(() => columnsOf(state, domain), [state, domain])
+	const edited = !!initial && current !== undefined && current.trim() !== queryOf(initial, domain).trim()
+
+	/** the order only by columns the result still has */
+	const tidy = (next: WizardState): WizardState => {
+		const valid = new Set(columnsOf(next, domain).map(c => c.alias))
+		return { ...next, sort: next.sort.filter(s => valid.has(s.column)) }
+	}
+	const toggle = (entity: string, field: string) => setState(s => {
+		const chosen = s.fields[entity] ?? []
+		const order = domain.entities.find(e => e.name === entity)?.properties?.map(p => p.name) ?? []
+		const next = chosen.includes(field) ? chosen.filter(f => f !== field) : order.filter(f => f === field || chosen.includes(f))
+		const fields = { ...s.fields, [entity]: next }
+		if (!next.length) delete fields[entity]
+		return tidy({ ...s, fields })
+	})
+	const addEntities = (entities: string[], from?: string) => {
+		let next = state
+		const refused: string[] = []
+		for (const entity of entities) {
+			const join = joinOf(domain, next, entity, from)
+			if (join) next = { ...next, tables: [...next.tables, join] }
+			else if (entity !== next.root && !next.tables.some(t => t.entity === entity)) refused.push(entity)
+		}
+		setState(next)
+		setNotice(refused.length ? format(m.cantJoin, { entity: refused.join(', ') }) : undefined)
+	}
+	const remove = (entity: string) => setState(s => {
+		const next = withoutTable(s, entity)
+		const positions = next.positions && Object.fromEntries(Object.entries(next.positions).filter(([name]) => name === next.root || next.tables.some(t => t.entity === name)))
+		return { ...next, positions }
+	})
+
+	// the filter is the body of a lambda on the root: its suggestions as if it were written in the query
+	const suggest = useCallback((text: string, line: number, column: number) => {
+		const lines = text.split('\n')
+		const before = [...lines.slice(0, line - 1), (lines[line - 1] ?? '').slice(0, column - 1)].join('\n')
+		return lambdaCompletions(`${state.root}.filter(p => ${before}`, domain, LAMBDA_FUNCTIONS)
+	}, [state.root, domain])
+
+	const entities = [state.root, ...state.tables.map(t => t.entity)]
+	const setSort = (index: number, patch: Partial<WizardState['sort'][number]>) =>
+		setState(s => ({ ...s, sort: s.sort.map((item, i) => i === index ? { ...item, ...patch } : item) }))
+	const unsorted = columns.filter(c => !state.sort.some(s => s.column === c.alias))
+
+	return (
+		<Modal title={m.title} onClose={onClose} theme={theme}>
+			<div className="lw-wizard">
+				<div className="lw-wizard-diagram">
+					<div className="lw-hint">{m.tablesHint}</div>
+					{state.root && (
+						<DomainDiagram key={state.root} api={api} schema={schema} theme={theme} locale={locale as Locale | undefined} entities={entities} keep={state.root}
+							positions={state.positions} onPositionsChange={positions => setState(s => ({ ...s, positions }))}
+							fieldSelection={{ chosen: state.fields, onToggle: toggle }} onAddEntities={addEntities} onRemoveEntity={remove} detail="all" height="100%" layout={layout} />
+					)}
+					{notice && <div className="lw-hint lw-error-text" role="status">{notice}</div>}
+				</div>
+				<div className="lw-wizard-side">
+					<label className="lw-wizard-field">
+						<span>{m.startFrom}</span>
+						<select aria-label={m.startFrom} value={state.root} onChange={e => { setState(emptyWizard(e.target.value)); setNotice(undefined) }}>
+							{names.map(name => <option key={name} value={name}>{name}</option>)}
+						</select>
+					</label>
+					<div className="lw-wizard-field">
+						<span>{m.filter}</span>
+						<div className="lw-wizard-filter">
+							<code aria-hidden="true">{state.root}.filter(p =&gt;</code>
+							<CodeEditor ariaLabel={m.filter} language="typescript" theme={theme} value={state.filter} lambda compact completion={suggest} triggerCharacters={['.']}
+								onChange={filter => setState(s => ({ ...s, filter }))} height={64} />
+						</div>
+						<div className="lw-hint">{format(m.filterHint, { entity: state.root })}</div>
+					</div>
+					<div className="lw-wizard-field">
+						<span>{m.sort}</span>
+						{state.sort.map((item, index) => (
+							<div key={index} className="lw-option-pair">
+								<select aria-label={`${m.sort} ${index + 1}`} value={item.column} onChange={e => setSort(index, { column: e.target.value })}>
+									{columns.filter(c => c.alias === item.column || !state.sort.some(s => s.column === c.alias)).map(c => <option key={c.alias} value={c.alias}>{c.alias}</option>)}
+								</select>
+								<select aria-label={`${m.sort} ${index + 1} · ${m.descending}`} value={item.desc ? 'desc' : 'asc'} onChange={e => setSort(index, { desc: e.target.value === 'desc' })}>
+									<option value="asc">{m.ascending}</option>
+									<option value="desc">{m.descending}</option>
+								</select>
+								<button type="button" className="lw-icon" aria-label={m.removeSort} title={m.removeSort} onClick={() => setState(s => ({ ...s, sort: s.sort.filter((_, i) => i !== index) }))}>×</button>
+							</div>
+						))}
+						<button type="button" disabled={!unsorted.length} onClick={() => setState(s => ({ ...s, sort: [...s.sort, { column: unsorted[0].alias, desc: false }] }))}>+ {m.addSort}</button>
+						<div className="lw-hint">{m.sortHint}</div>
+					</div>
+					<div className="lw-wizard-field">
+						<span>{m.page}</span>
+						<div className="lw-option-pair">
+							<input aria-label={m.pageNumber} placeholder={m.pageNumber} inputMode="numeric" value={state.page.number} onChange={e => setState(s => ({ ...s, page: { ...s.page, number: e.target.value } }))} />
+							<input aria-label={m.pageSize} placeholder={m.pageSize} inputMode="numeric" value={state.page.size} onChange={e => setState(s => ({ ...s, page: { ...s.page, size: e.target.value } }))} />
+						</div>
+						<div className="lw-hint">{m.pageHint}</div>
+					</div>
+					<div className="lw-wizard-field">
+						<span>{m.query}</span>
+						<pre className="lw-wizard-query" aria-label={m.query}>{query}</pre>
+					</div>
+					{edited && <div className="lw-hint lw-warning-text" role="alert">{m.edited}</div>}
+					<div className="lw-form-actions">
+						<button type="button" onClick={onClose}>{m.cancel}</button>
+						<button type="button" className="lw-primary" disabled={!state.root} onClick={() => onAccept(state, query)}>{initial ? m.update : m.create}</button>
+					</div>
+				</div>
+			</div>
+		</Modal>
+	)
+}
