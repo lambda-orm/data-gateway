@@ -31,6 +31,8 @@ jobs:
         run: pnpm run build
       - name: Lint
         run: pnpm run lint
+      - name: Typecheck (IDE)
+        run: pnpm --filter @lambdaorm/data-gateway-ide run typecheck
       - name: Unit test
         run: pnpm run test
       # data-gateway: real sockets and @lambdaorm/lib, no database

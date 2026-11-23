@@ -42,6 +42,7 @@ confidential/
 
 # declarations generated next to the sources (tsc output belongs in build/); the hand-written ones are kept
 packages/*/src/**/*.d.ts
+!packages/ide/src/env.d.ts
 packages/ide/dist
 packages/ide/dist-embedded
 

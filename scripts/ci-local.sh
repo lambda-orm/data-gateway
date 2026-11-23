@@ -39,6 +39,7 @@ check () {
 	step 'Install';  pnpm install --frozen-lockfile
 	step 'Build';    pnpm build
 	step 'Lint';     pnpm lint
+	step 'Typecheck (IDE)'; pnpm --filter @lambdaorm/data-gateway-ide run typecheck
 	step 'Test';     pnpm test
 	step 'Integration test (data-gateway)'; pnpm --filter @lambdaorm/data-gateway run test:integration
 	step 'Links to the wiki'; node scripts/check-wiki-links.mjs
