@@ -395,6 +395,9 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 	const [tabs, setTabs] = useState<Tab[]>(() => connections.length ? [{ id: 1, kind: 'query', title: `${m.tabNamed} 1` }] : [])
 	const [active, setActive] = useState(1)
 	const [next, setNext] = useState(2)
+	// the next id also in a ref: two tabs opened in the same tick (before a render) never share an id
+	const nextId = useRef(next)
+	if (next > nextId.current) nextId.current = next
 	// the width of the explorer, remembered in this browser (a convenience: without storage it starts at 280)
 	const [width, setWidthState] = useState(() => storedWidth() ?? 280)
 	const setWidth = (value: number) => { const w = clampWidth(value); setWidthState(w); rememberWidth(w) }
@@ -516,7 +519,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 
 	const add = (tab: Omit<Tab, 'id'>) => {
 		if (tabs.length >= maxTabs) { setNotice(m.tabLimit.replace('{n}', String(maxTabs))); return }
-		const id = next
+		const id = nextId.current
+		nextId.current = id + 1
 		setTabs(t => [...t, { ...tab, id }])
 		setActive(id)
 		setNext(id + 1)

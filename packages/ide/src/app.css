@@ -180,3 +180,12 @@ div.dg-error { border: 1px solid var(--bad); border-radius: 6px; padding: 6px 10
 .dg-app .lw-tabbar .lw-icon-button:hover, .dg-app .lw-tabbar .lw-tab-add:hover { background: var(--panel); }
 /* the content of a tab fills its height: a workbench or a diagram doesn't stop where its content does */
 .dg-page > .lw-space > .lw-space-main > .lw-tabs > [role="tabpanel"] > .lw-workbench { min-height: 100%; box-sizing: border-box; }
+/* the controls of the workspace keep the size of the library (the general padding of the app is for its own pages) */
+.dg-app .lw-space button { padding: 4px 10px; border-radius: 6px; }
+.dg-app .lw-space select, .dg-app .lw-space input:not([type="checkbox"]):not([type="radio"]) { padding: 4px 8px; border-radius: 6px; }
+.dg-app .lw-space .lw-header .lw-tool, .dg-app .lw-space button.lw-icon { padding: 0; }
+.dg-app .lw-space .dg-pane button { padding: 5px 12px; }
+/* a diagram fills its tab: the canvas takes the height its bar and hint leave */
+.dg-page .lw-tabs > [role="tabpanel"] > .lw-diagram-tab { height: 100%; display: flex; flex-direction: column; }
+.dg-page .lw-diagram-tab > .lw-diagram { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.dg-page .lw-diagram-tab .lw-diagram-view { flex: 1 1 auto; min-height: 320px; height: auto !important; }

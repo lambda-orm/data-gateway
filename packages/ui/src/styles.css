@@ -285,3 +285,31 @@
 .lw-connection-icon { display: inline-flex; color: var(--lw-accent); }
 .lw-connection-icon.lw-problem { color: var(--lw-warning); }
 
+
+/* toolbars: one height for every control of a bar, its groups apart, the tablists of a view as tabs */
+.lw-header, .lw-toolbar, .lw-actions { row-gap: 6px; }
+.lw-header > button, .lw-header > .lw-field select, .lw-header select, .lw-header .lw-save > button, .lw-header .lw-modes > button, .lw-header .lw-menu > button, .lw-header button.lw-icon,
+.lw-toolbar > button:not([role="tab"]), .lw-toolbar select, .lw-toolbar .lw-menu > button, .lw-actions > button {
+  height: 30px; box-sizing: border-box; display: inline-flex; align-items: center; justify-content: center; gap: 4px; line-height: 1; }
+.lw-header .lw-tool, .lw-header button.lw-icon, .lw-toolbar button.lw-icon { width: 30px; min-width: 30px; height: 30px; padding: 0; }
+.lw-header .lw-check, .lw-header .lw-field { height: 30px; }
+/* a choice of one (query or script): a segmented control */
+.lw-modes { gap: 0; }
+.lw-modes > button { border-radius: 0; margin-left: -1px; }
+.lw-modes > button:first-child { border-radius: 6px 0 0 6px; margin-left: 0; }
+.lw-modes > button:last-child { border-radius: 0 6px 6px 0; }
+.lw-workbench .lw-modes > button.lw-active { position: relative; z-index: 1; background: var(--lw-accent); border-color: var(--lw-accent); color: #fff; }
+/* the groups of a bar: a line apart */
+.lw-header > .lw-save, .lw-header > .lw-modes { padding-right: 10px; margin-right: 2px; border-right: 1px solid var(--lw-border); }
+.lw-header .lw-tool-group { padding-left: 10px; margin-left: 2px; }
+/* the tablists of a view (the sections of an entity, the views of a result): a line under the chosen one */
+.lw-toolbar[role="tablist"] { gap: 0; border-bottom: 1px solid var(--lw-border); }
+.lw-workbench .lw-toolbar[role="tablist"] > button[role="tab"], .lw-toolbar[role="tablist"] > button[role="tab"] {
+  height: auto; background: none; border: 0; border-bottom: 2px solid transparent; border-radius: 0; padding: 6px 12px; margin-bottom: -1px; color: var(--lw-muted); }
+.lw-toolbar[role="tablist"] > button[role="tab"]:hover { color: var(--lw-fg); }
+.lw-workbench .lw-toolbar[role="tablist"] > button[role="tab"].lw-active, .lw-toolbar[role="tablist"] > button[role="tab"].lw-active {
+  color: var(--lw-fg); border-bottom-color: var(--lw-accent); font-weight: 600; }
+/* the bar of a diagram: a strip over its canvas */
+.lw-diagram > .lw-header { padding: 6px 8px; background: var(--lw-panel); border: 1px solid var(--lw-border); border-radius: 6px; }
+.lw-diagram > .lw-header .lw-who { font-size: 12px; }
+.lw-header > .lw-save:last-child, .lw-header > .lw-modes:last-child { padding-right: 0; margin-right: 0; border-right: 0; }
