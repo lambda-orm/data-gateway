@@ -122,7 +122,8 @@ export class ManagementClient {
 				body: JSON.stringify({ client: { app: 'data-gateway-ide', version: __APP_VERSION__, kind: 'web' } })
 			})
 		} catch (e) {
-			this.set({ who: undefined, problem: this.texts.unreachable })
+			// the backend of the IDE itself doesn't answer
+			this.set({ who: undefined, problem: `${this.texts.unreachable} (${(e as Error)?.message ?? e})` })
 			throw e
 		}
 		if (!response.ok) {
@@ -209,7 +210,8 @@ export class ManagementClient {
 	private problemOf (error: { status?: number, error?: string, message: string }): string {
 		if (error.error === 'ForbiddenTargetError') return error.message
 		if (error.status === 401 || error.status === 403) return this.texts.invalid
-		if (error.status === 502 || error.status === 504) return this.texts.unreachable
+		// the backend of the IDE couldn't reach it: its reason too (ENOTFOUND: a name it can't resolve; ECONNREFUSED: nothing listens)
+		if (error.status === 502 || error.status === 504) return `${this.texts.unreachable} ${error.message}`
 		return error.message
 	}
 

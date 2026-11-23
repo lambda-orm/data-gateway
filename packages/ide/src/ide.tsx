@@ -48,7 +48,7 @@ const apiOf = (c: Pick<IdeConnection, 'protocol' | 'address'>) => viaProxy(urlOf
 const fixedOf = (c: IdeConnection) => ({ rest: c.restUrl, webSocket: c.webSocketUrl, mcp: c.mcpUrl })
 /** What failed, said to the person: a target the IDE may not reach, a credential refused, a gateway not reached */
 const problemOf = (e: any, t: { invalid: string, unreachable: string }): string =>
-	forbiddenTarget(e) ? e.message : e?.status === 401 || e?.status === 403 ? t.invalid : unreachable(e) ? t.unreachable : (e?.message ?? String(e))
+	forbiddenTarget(e) ? e.message : e?.status === 401 || e?.status === 403 ? t.invalid : unreachable(e) ? `${t.unreachable} ${e?.message ?? ''}`.trim() : (e?.message ?? String(e))
 
 /** The form of a connection: where it is, how it authenticates; test it, save it, remove it; then who it is */
 const ConnectionEditor: React.FC<{
