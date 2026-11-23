@@ -8,6 +8,7 @@ que la Data Gateway se separó de [lambda-orm/core](https://github.com/lambda-or
 | Repositorio | Rama | Commits | Qué tiene |
 | --- | --- | --- | --- |
 | `~/personal/lambdaorm/data-gateway` (público) | `feature/monorepo`, desde `develop` | `bcb2122` trae los paquetes con su historia; `12d52dd` arma el monorepo y los workflows; `5db26f6` agrega el `env.d.ts` del IDE; `073ef1d` es este documento; `389fe02` trae el lab ilusor-cloud con su historia; `96b006e` lo convierte en `packages/lab-ilusor` | Todo lo de la Data Gateway |
+| `~/personal/lambdaorm/data-gateway` | `feature/management-sessions`, desde `feature/management` | las sesiones de `management` (fases 1 a 5 de `DATA_GATEWAY_SESSIONS_PLAN.md`) y la depuración en VS Code (`.vscode/launch.json`) | Lo último: es la rama a seguir |
 | `~/personal/lambdaorm/data-gateway` | `feature/management`, desde `feature/monorepo` | desde `a1f2c0d` (el diseño, §12) | La gateway 4.0.0 con `management`, sin `/ui` ni CORS, y el IDE con su backend proxy |
 | `~/personal/lambdaorm/core` (privado) | `feature/ui-workspace-tree` | `50d4164` (sobre `9edff0f`) | El IDE, sus conexiones y sus herramientas, todavía dentro de core |
 | `~/personal/lambdaorm/core` | `feature/split-data-gateway`, sobre la anterior | `900eb20` y `3f9695e` | Saca de core los paquetes, docs y workflows que se mudaron, y el lab ilusor-cloud. El test `crossSourceFilter` de lib conserva una copia del modelo del lab en `tests/fixtures/ilusor-cloud` |
@@ -83,7 +84,8 @@ Ilusor usa la gateway de este repo, construida a mano. Su compose está en `~/il
   - en `http://localhost:18098`, en las redes `admin` (para llegar a la gateway) e `ilusor-cloud-ide-local` (para
     publicarse);
   - `DATA_GATEWAY_IDE_TARGETS=http://data-gateway:9292,http://data-gateway:9291`;
-  - la conexión a Ilusor es `http://data-gateway:9292` con la clave del modeler. Su pestaña REST usa el `http`
+  - la conexión a Ilusor es `http://data-gateway:9292` con la clave del modeler (que tiene `sessionAdmin`); el IDE
+    hace login y trabaja con una sesión (`management` no acepta la clave directa). `trustedProxies` es la red `admin`. Su pestaña REST usa el `http`
     (`data-gateway:9291/data-gateway`, de `/transports`); WebSocket y MCP aparecen deshabilitados porque Ilusor no los
     expone.
 - **Para reconstruirlos:**
@@ -98,6 +100,9 @@ Ilusor usa la gateway de este repo, construida a mano. Su compose está en `~/il
 - **Las claves:** están en `~/ilusor/dev/cloud/.env`, en `DATA_GATEWAY_MODELER_KEY`, `DATA_GATEWAY_READER_KEY` y
   `DATA_GATEWAY_OPERATOR_KEY`. **Nunca se imprimen.** A un script se le pasan por una variable de entorno, por ejemplo
   `KEY=$(grep '^DATA_GATEWAY_MODELER_KEY=' ~/ilusor/dev/cloud/.env | cut -d= -f2-)`.
+- **Depurar en VS Code:** "IDE: all" de `.vscode/launch.json` levanta una gateway desde el código
+  (`packages/data-gateway/dev`, management en `127.0.0.1:19199`, clave `dev-modeler-key`), el backend del IDE (8080) y
+  el IDE con vite (5173) en Chrome.
 - **Pruebas en Chrome headless:** se manejan por CDP con scripts propios de cada sesión, que no se guardan en el repo.
 - **La sesión del usuario:** la gateway la guarda por credencial (`GET/PUT /admin/session`, en
   `.data-gateway/state.sqlite` del workspace). Una prueba headless con la clave del modeler pisa la sesión del
