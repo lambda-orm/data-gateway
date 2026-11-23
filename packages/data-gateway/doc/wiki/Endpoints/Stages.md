@@ -1,6 +1,6 @@
 # Stage endpoints
 
-![stage-methods](https://raw.githubusercontent.com/lambda-orm/core/HEAD/packages/data-gateway/images/stage-methods.png)
+![stage-methods](https://raw.githubusercontent.com/lambda-orm/data-gateway/HEAD/packages/data-gateway/images/stage-methods.png)
 
 ## Exists
 

@@ -11,7 +11,7 @@ module.exports = function (grunt) {
 			test: { cmd: 'npx jest --config ./jest-config.json' },
 			tsc: { cmd: 'npx tsc ' },
 			// the UI is the data-gateway-ide in embedded mode (login, the current connection)
-			ui: { cmd: 'npm run --silent build:embedded --prefix ../data-gateway-ide -- --logLevel warn' },
+			ui: { cmd: 'npm run --silent build:embedded --prefix ../ide -- --logLevel warn' },
 			doc: { cmd: 'npx typedoc --plugin typedoc-plugin-markdown --out doc/source src/lib/index.ts' },
 			getOriginalBranch: {
 				cmd: 'git branch | sed -n -e \'s/^\\* \\(.*\\)/\\1/p\'',
@@ -47,8 +47,8 @@ module.exports = function (grunt) {
 			swagger: { expand: true, cwd: 'src/lib/infrastructure/input/http/', src: 'swagger.yaml', dest: 'build/lib/infrastructure/input/http/' },
 			asyncapi: { expand: true, cwd: 'src/lib/infrastructure/input/mcp/', src: 'asyncapi.yaml', dest: 'build/lib/infrastructure/input/mcp/' },
 			asyncapiWs: { expand: true, cwd: 'src/lib/infrastructure/input/websocket/', src: 'asyncapi.yaml', dest: 'build/lib/infrastructure/input/websocket/' },
-			// the UI (packages/data-gateway-ide, embedded mode), served at /ui when transports.http.ui.enabled
-			ui: { expand: true, cwd: '../data-gateway-ide/dist-embedded/', src: '**', dest: 'build/lib/infrastructure/input/http/ui/' },
+			// the UI (packages/ide, embedded mode), served at /ui when transports.http.ui.enabled
+			ui: { expand: true, cwd: '../ide/dist-embedded/', src: '**', dest: 'build/lib/infrastructure/input/http/ui/' },
 			// plain JavaScript (tsc doesn't copy it): the entry of every worker thread and process
 			bootstrap: { expand: true, cwd: 'src/lib/infrastructure/build/', src: 'workerBootstrap.js', dest: 'build/lib/infrastructure/build/' },
 			readme: { expand: true, src: './README.md', dest: 'dist/' },

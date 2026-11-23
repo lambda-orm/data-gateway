@@ -5,12 +5,14 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs'
 import { dirname, join } from 'path'
 import { fileURLToPath } from 'url'
+import { createRequire } from 'module'
 
 const here = dirname(fileURLToPath(import.meta.url))
-const source = join(here, '../../base/build/lib/repository/domain/queryable.d.ts')
+// the version of @lambdaorm/base in the devDependencies, from npm
+const source = join(dirname(createRequire(import.meta.url).resolve('@lambdaorm/base')), 'repository/domain/queryable.d.ts')
 const target = join(here, '../src/infrastructure/monaco/queryableDeclarations.generated.ts')
 if (!existsSync(source)) {
-	console.warn(`${source} not found (build @lambdaorm/base first): keeping the committed declarations`)
+	console.warn(`${source} not found (install the dependencies first): keeping the committed declarations`)
 	process.exit(0)
 }
 const text = readFileSync(source, 'utf8')

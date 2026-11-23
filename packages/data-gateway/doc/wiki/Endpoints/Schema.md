@@ -1,6 +1,6 @@
 # Schema endpoints
 
-![schema-methods](https://raw.githubusercontent.com/lambda-orm/core/HEAD/packages/data-gateway/images/schema-methods.png)
+![schema-methods](https://raw.githubusercontent.com/lambda-orm/data-gateway/HEAD/packages/data-gateway/images/schema-methods.png)
 
 ## Version
 

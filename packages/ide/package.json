@@ -7,10 +7,10 @@
   "author": "Flavio Lionel Rita",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lambda-orm/core.git",
-    "directory": "packages/data-gateway-ide"
+    "url": "git+https://github.com/lambda-orm/data-gateway.git",
+    "directory": "packages/ide"
   },
-  "homepage": "https://github.com/lambda-orm/core/tree/main/packages/data-gateway-ide#readme",
+  "homepage": "https://github.com/lambda-orm/data-gateway/tree/main/packages/ide#readme",
   "type": "module",
   "scripts": {
     "lint": "eslint -c ../../eslint.config.js \"src/**/*.{ts,tsx}\"",
@@ -32,5 +32,8 @@
     "react-dom": "18.3.1",
     "swagger-ui-react": "5.34.1",
     "vite": "6.3.5"
+  },
+  "bugs": {
+    "url": "https://github.com/lambda-orm/data-gateway/issues"
   }
 }

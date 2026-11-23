@@ -1,0 +1,7 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/data-gateway" },
+    { "path": "./packages/client-node" }
+  ]
+}

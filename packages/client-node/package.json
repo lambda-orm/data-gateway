@@ -15,10 +15,9 @@
 			"types": "./build/lib/index.d.ts"
 		}
 	},
-	"private": true,
-	"homepage": "https://lambda-orm.github.io/wiki/data-gateway/",
+	"homepage": "https://github.com/lambda-orm/data-gateway/tree/main/packages/client-node#readme",
 	"bugs": {
-		"url": "https://github.com/lambda-orm/lambdaorm/issues"
+		"url": "https://github.com/lambda-orm/data-gateway/issues"
 	},
 	"scripts": {
 		"lint": "npx eslint -c ../../eslint.config.js \"src/**/*.ts\"",
@@ -28,7 +27,7 @@
 		"dist": "node ../../scripts/dist.mjs"
 	},
 	"dependencies": {
-		"@lambdaorm/base": "workspace:*",
+		"@lambdaorm/base": "^3.6.0",
 		"3xpr": "^5.3.1"
 	},
 	"devDependencies": {
@@ -50,5 +49,10 @@
 		"json-rpc",
 		"mcp",
 		"model context protocol"
-	]
+	],
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/lambda-orm/data-gateway.git",
+		"directory": "packages/client-node"
+	}
 }

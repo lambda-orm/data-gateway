@@ -8,7 +8,7 @@ All notable changes to this project will be documented in this file.
 
 **Features:**
 
-- The UI at `/ui` is the data-gateway-ide (`packages/data-gateway-ide`) built in embedded mode: its home and login
+- The UI at `/ui` is the data-gateway-ide (`packages/ide`) built in embedded mode: its home and login
   as before, the workspace on its connection shown as the current one, and the page of that connection (where it is, how
   it authenticates, its roles) instead of the account. The IDE itself has its own image, `flaviorita/data-gateway-ide`,
   that connects to data-gateways (`DATA_GATEWAY.md` §11.9): in production the gateway may serve no UI.

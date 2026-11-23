@@ -6,7 +6,7 @@ import path from 'path'
  * imports (the types they bring are any) and without `export`.
  */
 export const globalQueryableDeclarations = (): string => {
-	const file = path.join(__dirname, '../../../base/build/lib/repository/domain/queryable.d.ts')
+	const file = path.join(path.dirname(require.resolve('@lambdaorm/base')), 'repository/domain/queryable.d.ts')
 	const text = fs.readFileSync(file, 'utf8')
 	const imported = [...text.matchAll(/^import \{([^}]+)\} from .*$/gm)].flatMap(m => m[1].split(',').map(s => s.trim()).filter(Boolean))
 	return imported.map(name => `type ${name} = any`).join('\n') + '\n' +

@@ -26,7 +26,7 @@ clientes).
 
 | Tema | Decisión |
 | --- | --- |
-| Repo | **todo en este monorepo** (decisión del usuario, 2026-11-20), como paquetes: `packages/data-gateway-client-node`, `packages/data-gateway-client-go`, `packages/data-gateway-client-rust`, `packages/data-gateway-cli` y `packages/data-gateway-conformance` (la suite común, §7). Lo de Go se publica además en espejos públicos de solo lectura (§1.1) |
+| Repo | **todo en este monorepo** (decisión del usuario, 2026-11-20), como paquetes: `packages/client-node`, `packages/data-gateway-client-go`, `packages/data-gateway-client-rust`, `packages/data-gateway-cli` y `packages/conformance` (la suite común, §7). Lo de Go se publica además en espejos públicos de solo lectura (§1.1) |
 | Nombres de paquete | según el ecosistema: npm `@lambdaorm/data-gateway-client`, Go `github.com/lambda-orm/data-gateway-client-go` (paquete `gateway`), crates.io `lambdaorm-data-gateway-client` (crate `lambdaorm_gateway`), binario `dgw` |
 | Transporte | el **esquema de la URL** de la cadena de conexión (§2); nunca una opción aparte |
 | Credenciales | aparte de la URL (opciones o variables de entorno), para que no queden en logs ni en el historial |
@@ -40,11 +40,11 @@ clientes).
 
 | Proyecto | Se desarrolla en | Se publica en | ¿Necesita algo público además? |
 | --- | --- | --- | --- |
-| Node | `packages/data-gateway-client-node` (workspace de pnpm, Changesets) | npm | no: npm publica el `dist/`, como `@lambdaorm/lib` |
+| Node | `packages/client-node` (workspace de pnpm, Changesets) | npm | no: npm publica el `dist/`, como `@lambdaorm/lib` |
 | Rust | `packages/data-gateway-client-rust` (`cargo`) | crates.io (`cargo publish` sube el código del crate) | no |
 | Go | `packages/data-gateway-client-go` | **espejo público** `lambda-orm/data-gateway-client-go` | **sí**: Go no tiene registro; `go get` baja el código del repo de la ruta del módulo, y un repo privado no se puede bajar |
 | CLI | `packages/data-gateway-cli` | binarios en las releases del espejo público `lambda-orm/data-gateway-cli`, tap de Homebrew, `go install` | **sí**, por lo mismo (y las releases de un repo privado no se pueden bajar) |
-| Conformidad | `packages/data-gateway-conformance` | — (la usan los paquetes de acá) | no |
+| Conformidad | `packages/conformance` | — (la usan los paquetes de acá) | no |
 
 - **Espejos de Go:** repos públicos que solo reciben lo que publica `scripts/ci-local.sh`: el contenido de
   `packages/data-gateway-client-go` (o `-cli`) en la raíz (`git subtree split`), su commit y su tag `v<versión>`.
@@ -132,8 +132,8 @@ Un tipo de error común: `GatewayError { code, name, status, dbCode, message, tr
 el mismo por los cinco transportes y en los cuatro clientes; la tabla de códigos (`invalid`, `unauthorized`,
 `forbidden`, `not_found`, `unique`, `foreign_key`, `conflict`, `timeout`, `too_large`, `rate_limited`,
 `unavailable`, `internal`, `truncated`, `unsupported`, `transport`) y dónde trae cada transporte el status, el nombre
-y el código de la base están en el [README de la suite](../packages/data-gateway-conformance/README.md#errors), y su
-implementación de referencia en `packages/data-gateway-conformance/runner/errors.mjs`.
+y el código de la base están en el [README de la suite](../packages/conformance/README.md#errors), y su
+implementación de referencia en `packages/conformance/runner/errors.mjs`.
 
 - **REST:** el status HTTP y el cuerpo `{ error, code, message }` (L30).
 - **WebSocket:** `error.data` con `name`, `status` y `code`.
@@ -158,7 +158,7 @@ del MCP hace lo mismo que por REST.
 - La sesión: Streamable HTTP sin estado (cada `POST` vale solo); HTTP+SSE viejo mantiene el `GET /sse` abierto y
   reintenta si se cae.
 
-## 7. Suite de conformidad (`packages/data-gateway-conformance`)
+## 7. Suite de conformidad (`packages/conformance`)
 
 Un paquete con:
 
@@ -182,7 +182,7 @@ mismo por cualquier vía.
 
 ## 8. Cada proyecto
 
-### Node — `packages/data-gateway-client-node` → `@lambdaorm/data-gateway-client`
+### Node — `packages/client-node` → `@lambdaorm/data-gateway-client`
 
 - TypeScript, ESM + CJS, Node ≥ 20; `fetch` nativo en lugar de axios; WebSocket de Node 22 o `ws`.
 - Parte del código de `packages/client` (API y adaptador WebSocket) y le suma los transportes MCP.
@@ -220,8 +220,8 @@ mismo por cualquier vía.
 
 | Fase | Contenido | Se publica |
 | --- | --- | --- |
-| 0 | Este plan; `packages/data-gateway-conformance` con el compose, 27 casos y el runner de referencia (135 en verde: 27 × 5 transportes); `ci-local.sh clients`; los arreglos que la suite encontró en lib y en la gateway | lib 3.7.1, gateway 3.1.0 |
-| 1 | Node: `packages/data-gateway-client-node`, los cinco transportes con `fetch` y el `WebSocket` de Node (sin axios), la cadena de conexión, los errores, la suite en verde con su API pública (135/135); documentación en la wiki al publicarlo | `@lambdaorm/data-gateway-client` 0.1.0 |
+| 0 | Este plan; `packages/conformance` con el compose, 27 casos y el runner de referencia (135 en verde: 27 × 5 transportes); `ci-local.sh clients`; los arreglos que la suite encontró en lib y en la gateway | lib 3.7.1, gateway 3.1.0 |
+| 1 | Node: `packages/client-node`, los cinco transportes con `fetch` y el `WebSocket` de Node (sin axios), la cadena de conexión, los errores, la suite en verde con su API pública (135/135); documentación en la wiki al publicarlo | `@lambdaorm/data-gateway-client` 0.1.0 |
 | 2 | Migrar `@lambdaorm/cli` al cliente nuevo; `@lambdaorm/client` 1.0.0 como alias deprecado | `@lambdaorm/cli`, `@lambdaorm/client` |
 | 3 | Go: los cinco transportes, la suite en verde; `release-go` y el espejo público | `v0.1.0` |
 | 4 | CLI `dgw`; `release-cli` y su espejo | `v0.1.0` (binarios, Homebrew) |

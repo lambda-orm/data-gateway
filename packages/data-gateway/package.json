@@ -11,7 +11,7 @@
   "private": true,
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/lambda-orm/core.git",
+    "url": "git+https://github.com/lambda-orm/data-gateway.git",
     "directory": "packages/data-gateway"
   },
   "standard-version": {
@@ -25,13 +25,13 @@
   ],
   "author": "Flavio Lionel Rita <flaviolrita@proton.me>",
   "bugs": {
-    "url": "https://github.com/lambda-orm/lambdaorm/issues"
+    "url": "https://github.com/lambda-orm/data-gateway/issues"
   },
-  "homepage": "https://github.com/lambda-orm/core/tree/main/packages/data-gateway#readme",
+  "homepage": "https://github.com/lambda-orm/data-gateway/tree/main/packages/data-gateway#readme",
   "dependencies": {
     "3xpr": "^5.3.1",
-    "@lambdaorm/base": "workspace:*",
-    "@lambdaorm/lib": "workspace:*",
+    "@lambdaorm/base": "^3.6.0",
+    "@lambdaorm/lib": "^3.8.1",
     "@modelcontextprotocol/sdk": "1.32.2",
     "body-parser": "^1.20.2",
     "cookie-parser": "^1.4.7",
@@ -59,7 +59,7 @@
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "1.4.0",
-    "@lambdaorm/client": "workspace:*",
+    "@lambdaorm/client": "^0.10.7",
     "@lambdaorm/data-gateway-ide": "workspace:*",
     "@types/body-parser": "^1.19.5",
     "@types/cookie-parser": "^1.4.4",
@@ -85,6 +85,6 @@
     "doc": "npx grunt doc",
     "dist": "npx grunt dist",
     "release": "npx grunt release",
-    "test:integration": "npx tsc -b ../base ../lib ../client && npx jest --config ./jest-integration-config.json --runInBand --detectOpenHandles"
+    "test:integration": "npx jest --config ./jest-integration-config.json --runInBand --detectOpenHandles"
   }
 }

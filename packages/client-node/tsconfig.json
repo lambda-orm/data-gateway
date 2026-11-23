@@ -20,15 +20,8 @@
     "rootDir": "./src",
     "outDir": "./build",
     "baseUrl": "./src",
-    "tsBuildInfoFile": "./build/.tsbuildinfo",
-    "paths": {
-      "@lambdaorm/base": ["../../packages/base/build/lib"],
-      "@lambdaorm/base/*": ["../../packages/base/build/lib/*"]
-    }
+    "tsBuildInfoFile": "./build/.tsbuildinfo"
   },
-  "references": [
-    { "path": "../../packages/base" }
-  ],
   "include": [
     "src/**/*.ts",
     "src/**/*.d.ts"

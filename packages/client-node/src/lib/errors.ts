@@ -1,6 +1,6 @@
 /**
  * The code of an error, the same on every transport and in every client of the Data Gateway (the table of the
- * conformance suite: packages/data-gateway-conformance/README.md, "Errors").
+ * conformance suite: packages/conformance/README.md, "Errors").
  */
 export type GatewayErrorCode =
 	| 'invalid' | 'unauthorized' | 'forbidden' | 'not_found' | 'unique' | 'foreign_key' | 'conflict' | 'timeout'

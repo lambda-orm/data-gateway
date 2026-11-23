@@ -1,0 +1,97 @@
+name: IDE image
+# Publishes flaviorita/data-gateway-ide when a new version of packages/ide reaches main: the version is the one of
+# packages/ide/package.json (bumped with its CHANGELOG entry on a release/ide-<version> branch). A version already on
+# Docker Hub is skipped; a prerelease doesn't move latest. Before pushing, the image must answer /health and serve the
+# IDE. Multi-architecture (amd64, arm64): it is static files on nginx.
+# Secret: DOCKERHUB_TOKEN (a Docker Hub access token, Read & Write, of the user in IMAGE).
+on:
+  push:
+    branches: [main]
+    paths:
+      - packages/ide/**
+      - packages/ui/**
+      - .github/workflows/ide-image.yml
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Publish even if the version is already on Docker Hub
+        type: boolean
+        default: false
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+permissions:
+  contents: write # the ide-v<version> tag
+env:
+  IMAGE: flaviorita/data-gateway-ide
+jobs:
+  image:
+    name: Build, test and push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Version
+        id: version
+        run: |
+          V=$(node -p "require('./packages/ide/package.json').version")
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          case "$V" in *-*) echo "latest=false" >> "$GITHUB_OUTPUT" ;; *) echo "latest=true" >> "$GITHUB_OUTPUT" ;; esac
+          if docker manifest inspect "$IMAGE:$V" > /dev/null 2>&1 && [ "${{ inputs.force }}" != "true" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::$IMAGE:$V is already on Docker Hub, nothing to publish"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: pnpm/action-setup@v6
+        if: steps.version.outputs.exists == 'false'
+      - uses: actions/setup-node@v6
+        if: steps.version.outputs.exists == 'false'
+        with:
+          node-version: 24.16.0
+          cache: pnpm
+      - name: Install dependencies
+        if: steps.version.outputs.exists == 'false'
+        run: pnpm install --frozen-lockfile
+      # the UI library first: the IDE takes it from the workspace
+      - name: Build
+        if: steps.version.outputs.exists == 'false'
+        run: |
+          pnpm --filter @lambdaorm/ui run build
+          pnpm --filter @lambdaorm/data-gateway-ide run dist
+      - name: Test the image
+        if: steps.version.outputs.exists == 'false'
+        working-directory: packages/ide
+        run: |
+          docker build -t ide-test .
+          docker run -d --name ide -p 127.0.0.1:18080:8080 ide-test
+          up=0
+          for i in $(seq 1 30); do curl -sf http://127.0.0.1:18080/health > /dev/null && up=1 && break; sleep 1; done
+          [ "$up" = 1 ] || { echo "::error::the image did not answer /health"; docker logs ide; exit 1; }
+          curl -sf http://127.0.0.1:18080/ | grep -q '<div id="root">' || { echo "::error::the IDE page is not served"; exit 1; }
+          docker rm -f ide
+      - uses: docker/setup-qemu-action@v3
+        if: steps.version.outputs.exists == 'false'
+      - uses: docker/setup-buildx-action@v3
+        if: steps.version.outputs.exists == 'false'
+      - uses: docker/login-action@v3
+        if: steps.version.outputs.exists == 'false'
+        with:
+          username: flaviorita
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Push
+        if: steps.version.outputs.exists == 'false'
+        uses: docker/build-push-action@v6
+        with:
+          context: packages/ide
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.IMAGE }}:${{ steps.version.outputs.version }}
+            ${{ steps.version.outputs.latest == 'true' && format('{0}:latest', env.IMAGE) || '' }}
+      - name: Tag ide-v${{ steps.version.outputs.version }}
+        if: steps.version.outputs.exists == 'false'
+        run: |
+          T=ide-v${{ steps.version.outputs.version }}
+          if git ls-remote --exit-code --tags origin "refs/tags/$T" > /dev/null; then echo "$T already exists"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$T" -m "data-gateway-ide ${{ steps.version.outputs.version }}"
+          git push origin "$T"

@@ -1,6 +1,6 @@
 # Queries Endpoints
 
-![query-methods](https://raw.githubusercontent.com/lambda-orm/core/HEAD/packages/data-gateway/images/query-methods.png)
+![query-methods](https://raw.githubusercontent.com/lambda-orm/data-gateway/HEAD/packages/data-gateway/images/query-methods.png)
 
 ## Metadata
 

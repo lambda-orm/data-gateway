@@ -27,7 +27,7 @@ export interface HttpTransportOptions {
 	requestBodySize: string
 	rateLimit: { windowMs: number, max: number }
 	swaggerEnabled: boolean
-	/** Serve the UI (packages/data-gateway-ide, embedded mode) at {basePath}/ui */
+	/** Serve the UI (packages/ide, embedded mode) at {basePath}/ui */
 	uiEnabled?: boolean
 	/** Folder of the built UI (default: ui next to this file) */
 	uiDir?: string

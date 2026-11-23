@@ -1,0 +1,83 @@
+name: CI
+# Every push to develop or main and every pull request: build, lint and test the packages, the integration tests of
+# the gateway, the links to the wiki, the conformance suite against the gateway from source, and the commits of a pull
+# request (commitlint.config.js). The same as scripts/ci-local.sh check and clients.
+on:
+  push:
+    branches: [develop, main]
+  pull_request:
+    branches: [develop, main]
+  workflow_dispatch:
+concurrency:
+  # a newer push to the same branch or pull request cancels the run in progress
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  test:
+    name: Build, lint and test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.16.0
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        run: pnpm run build
+      - name: Lint
+        run: pnpm run lint
+      - name: Unit test
+        run: pnpm run test
+      # data-gateway: real sockets and @lambdaorm/lib, no database
+      - name: Integration test (data-gateway)
+        run: pnpm --filter @lambdaorm/data-gateway run test:integration
+      - name: Links to the wiki
+        run: node scripts/check-wiki-links.mjs
+
+  conformance:
+    name: Conformance suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.16.0
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: The suite against the gateway from source
+        run: scripts/ci-local.sh clients
+
+  commits:
+    name: Commit messages
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.16.0
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      # the commits of the pull request, not the merges; the history brought from lambda-orm/core (committed before
+      # 2026-11-23, when the repository was split) predates these rules
+      - name: commitlint
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          failed=0
+          for sha in $(git rev-list --no-merges --since=2026-11-23T00:00:00Z "$BASE..$HEAD"); do
+            git log -1 --format=%B "$sha" | pnpm exec commitlint --verbose || failed=1
+          done
+          exit $failed

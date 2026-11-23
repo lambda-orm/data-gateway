@@ -1,0 +1,49 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+.grunt
+
+/build
+/dist
+/dist-obf
+volume
+
+# Dependency directories
+node_modules
+
+# Confidentional data
+confidential/
+
+# TypeScript v1 declaration files
+/typings/
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# Optional REPL history
+.node_repl_history
+
+# Output of 'npm pack'
+*.tgz
+*.zip
+*.rar
+
+# Yarn Integrity file
+.yarn-integrity
+
+# declarations generated next to the sources (tsc output belongs in build/); the hand-written ones are kept
+packages/*/src/**/*.d.ts
+packages/ide/dist
+packages/ide/dist-embedded
+
+# the state the gateway keeps in a workspace (sessions)
+.data-gateway/

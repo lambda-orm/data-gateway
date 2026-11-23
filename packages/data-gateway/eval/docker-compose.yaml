@@ -9,7 +9,8 @@ services:
       - MYSQL_PASSWORD=test
       - MYSQL_ROOT_PASSWORD=root
     volumes:
-      - ../../lib/src/dev/northwind/db/northwind-mysql.sql:/docker-entrypoint-initdb.d/northwind.sql:ro
+      # northwind of lambda-orm/core, checked out next to this repository (../core)
+      - ../../../../core/packages/lib/src/dev/northwind/db/northwind-mysql.sql:/docker-entrypoint-initdb.d/northwind.sql:ro
     ports:
       - 127.0.0.1:53316:3306
     healthcheck:

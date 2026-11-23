@@ -18,14 +18,13 @@
 	"sideEffects": [
 		"*.css"
 	],
-	"private": true,
-	"homepage": "https://github.com/lambda-orm/core/tree/main/packages/ui#readme",
+	"homepage": "https://github.com/lambda-orm/data-gateway/tree/main/packages/ui#readme",
 	"bugs": {
-		"url": "https://github.com/lambda-orm/lambdaorm/issues"
+		"url": "https://github.com/lambda-orm/data-gateway/issues"
 	},
 	"repository": {
 		"type": "git",
-		"url": "git+https://github.com/lambda-orm/core.git",
+		"url": "git+https://github.com/lambda-orm/data-gateway.git",
 		"directory": "packages/ui"
 	},
 	"scripts": {
@@ -65,6 +64,7 @@
 		"react-dom": "18.3.1",
 		"typescript": "5.8.3",
 		"vite": "6.3.5",
-		"vitest": "3.1.4"
+		"vitest": "3.1.4",
+		"@lambdaorm/base": "^3.6.0"
 	}
 }

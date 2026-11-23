@@ -1,9 +1,9 @@
-// The conformance suite (packages/data-gateway-conformance) with this client: every case on the five transports, through
+// The conformance suite (packages/conformance) with this client: every case on the five transports, through
 // the public API of the client. `npm run conformance` with the environment of the suite up.
 import { connect, DataGatewayClient, GatewayError } from '../src/lib'
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore the runner of the suite is plain JavaScript
-import { CONNECTIONS, CREDENTIALS, check, expectationOf, loadCases, resolve, stepsOf } from '../../data-gateway-conformance/runner/index.mjs'
+import { CONNECTIONS, CREDENTIALS, check, expectationOf, loadCases, resolve, stepsOf } from '../../conformance/runner/index.mjs'
 
 type Args = Record<string, any>
 /** each operation of the cases as the public API of the client does it */

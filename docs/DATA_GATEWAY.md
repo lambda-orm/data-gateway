@@ -876,7 +876,7 @@ del modelo. Sirve para probar, para aprender el lenguaje y para validar lo que d
 | Pieza | Qué es | Dónde |
 | --- | --- | --- |
 | **`@lambdaorm/ui`** | librería de componentes **React (web)**, publicada en npm (Changesets, como `base` / `lib` / `client` / `cli`) | `packages/ui` |
-| **app del gateway** | la del data-gateway-ide compilada en modo embebido (`build:embedded`): su presentación, su login y el workspace sobre su connection, la actual; se compila a estáticos que van en la imagen | `packages/data-gateway-ide` |
+| **app del gateway** | la del data-gateway-ide compilada en modo embebido (`build:embedded`): su presentación, su login y el workspace sobre su connection, la actual; se compila a estáticos que van en la imagen | `packages/ide` |
 
 La librería no depende del gateway: cualquier proyecto (por ejemplo un Portal) la instala y monta el componente
 apuntando a un data-gateway. `react` y `react-dom` son `peerDependencies`. `@lambdaorm/lib` y `@lambdaorm/base` no se
@@ -1182,7 +1182,7 @@ nombre (`detail`, guardado con el diagrama); el **+** de una caja agrega sus tab
 
 ### 11.9 El data-gateway-ide
 
-El IDE de la data-gateway es `packages/data-gateway-ide`, con su propia imagen (`flaviorita/data-gateway-ide`, nginx
+El IDE de la data-gateway es `packages/ide`, con su propia imagen (`flaviorita/data-gateway-ide`, nginx
 con estáticos, puerto 8080). Como un IDE de bases de datos, **no tiene workspaces**: se conecta a data-gateways, y sus
 esquemas, workspaces (`src/`, `data/`, `workbench/`) y proyectos están en cada una. Abre directo en el área de trabajo,
 sin presentación ni login: cada **connection** tiene su URL (protocolo `http`/`https`, host, puerto y ruta base) y su

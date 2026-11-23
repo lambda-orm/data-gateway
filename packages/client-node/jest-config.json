@@ -12,9 +12,5 @@
 		"js",
 		"json",
 		"node"
-	],
-	"moduleNameMapper": {
-		"^@lambdaorm/base$": "<rootDir>/../../packages/base/build/lib",
-		"^@lambdaorm/base/(.*)$": "<rootDir>/../../packages/base/build/lib/$1"
-	}
+	]
 }
