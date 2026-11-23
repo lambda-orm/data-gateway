@@ -1251,6 +1251,22 @@ transports:
 - **Red:** `management` escribe el esquema, sus variables (`.env`) y ejecuta DDL: se publica solo en la red del IDE (en
   un compose, sin `ports:`; en Kubernetes, un `Service` interno sin ingress).
 
+### 12.1 Sesiones (plan)
+
+> **Plan, no implementado:** [`DATA_GATEWAY_SESSIONS_PLAN.md`](DATA_GATEWAY_SESSIONS_PLAN.md).
+
+`management` pasa a trabajar con **sesiones**: el IDE hace login (`POST /sessions`) con la credencial y recibe un
+token; todo pedido lleva el token, no la clave (una clave directa se rechaza). La gateway guarda las sesiones en
+`state.sqlite` y un WebSocket de eventos (`/events`) da la presencia y las notificaciones. Con eso:
+
+- se sabe **quién está conectado** (credencial, IP real detrás del IDE web, cliente, qué está mirando);
+- se **listan las sesiones**: las propias, y con el permiso nuevo `sessionAdmin`, todas;
+- se **revoca** una sesión, o todas las de una credencial: su WebSocket se cierra al instante y su próximo pedido
+  responde `401`;
+- una sesión vence a los 30 minutos sin pedidos o a las 12 horas (configurable).
+
+Los transportes de datos no cambian: siguen autenticando cada pedido con la clave.
+
 **Migración desde 3.x:**
 
 | 3.x | 4.0.0 |

@@ -50,6 +50,10 @@ connection; con un túnel, sus URLs se fijan en la connection ("Otras URLs de su
 
 La guía de la wiki (`Deploying it`, que se muda a `/ide/Guide/` en §5.6) explica estas combinaciones.
 
+Con las sesiones de `management` ([`DATA_GATEWAY_SESSIONS_PLAN.md`](DATA_GATEWAY_SESSIONS_PLAN.md)), el escritorio se
+identifica en el login como `kind: desktop`, y su token de sesión queda en la memoria de la app, como en una pestaña
+del IDE web.
+
 ## 2. Lo que ya hay y se reutiliza
 
 | Pieza | Dónde | Qué aporta al escritorio |

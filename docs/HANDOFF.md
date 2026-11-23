@@ -179,7 +179,9 @@ Los demás planes:
 
 - [`DATA_GATEWAY_PLAN.md`](DATA_GATEWAY_PLAN.md): el rediseño de la gateway;
 - [`DATA_GATEWAY_ADMIN_PLAN.md`](DATA_GATEWAY_ADMIN_PLAN.md): la administración;
-- [`DATA_GATEWAY_CLIENTS_PLAN.md`](DATA_GATEWAY_CLIENTS_PLAN.md): los clientes.
+- [`DATA_GATEWAY_CLIENTS_PLAN.md`](DATA_GATEWAY_CLIENTS_PLAN.md): los clientes;
+- [`DATA_GATEWAY_IDE_DESKTOP_PLAN.md`](DATA_GATEWAY_IDE_DESKTOP_PLAN.md): el IDE de escritorio (Electron) y su pestaña en la wiki;
+- [`DATA_GATEWAY_SESSIONS_PLAN.md`](DATA_GATEWAY_SESSIONS_PLAN.md): las sesiones de `management`.
 
 Puntos para tener en cuenta:
 
