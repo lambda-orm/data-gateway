@@ -7,9 +7,9 @@ que la Data Gateway se separó de [lambda-orm/core](https://github.com/lambda-or
 
 | Repositorio | Rama | Commits | Qué tiene |
 | --- | --- | --- | --- |
-| `~/personal/lambdaorm/data-gateway` (público) | `feature/monorepo`, desde `develop` | `bcb2122` trae los paquetes con su historia; `12d52dd` arma el monorepo y los workflows; `5db26f6` agrega el `env.d.ts` del IDE; y este documento | Todo lo de la Data Gateway |
+| `~/personal/lambdaorm/data-gateway` (público) | `feature/monorepo`, desde `develop` | `bcb2122` trae los paquetes con su historia; `12d52dd` arma el monorepo y los workflows; `5db26f6` agrega el `env.d.ts` del IDE; `073ef1d` es este documento; `389fe02` trae el lab ilusor-cloud con su historia; `96b006e` lo convierte en `packages/lab-ilusor` | Todo lo de la Data Gateway |
 | `~/personal/lambdaorm/core` (privado) | `feature/ui-workspace-tree` | `50d4164` (sobre `9edff0f`) | El IDE, sus conexiones y sus herramientas, todavía dentro de core |
-| `~/personal/lambdaorm/core` | `feature/split-data-gateway`, sobre la anterior | `900eb20` | Saca de core los paquetes, docs y workflows que se mudaron |
+| `~/personal/lambdaorm/core` | `feature/split-data-gateway`, sobre la anterior | `900eb20` y `3f9695e` | Saca de core los paquetes, docs y workflows que se mudaron, y el lab ilusor-cloud. El test `crossSourceFilter` de lib conserva una copia del modelo del lab en `tests/fixtures/ilusor-cloud` |
 | `~/ilusor/dev` | `feat/data-gateway` | 45 commits sin upstream, el último `ed3e5ee0` | El modelo de Ilusor con las relaciones renombradas |
 
 Verificado en checkouts limpios:
