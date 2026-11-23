@@ -1,0 +1,32 @@
+{
+  "name": "@lambdaorm/data-gateway-ide-desktop",
+  "version": "0.0.0",
+  "private": true,
+  "description": "λORM data-gateway IDE as a desktop app (Electron): the IDE of packages/ide with its proxy inside, for Linux, Windows and macOS. Its version is the IDE's (electron-builder.config.cjs).",
+  "license": "MIT",
+  "author": "Flavio Lionel Rita",
+  "homepage": "https://lambda-orm.github.io/wiki/ide/",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/lambda-orm/data-gateway.git",
+    "directory": "packages/ide-desktop"
+  },
+  "type": "module",
+  "main": "src/main.mjs",
+  "scripts": {
+    "start": "electron .",
+    "dev": "pnpm --filter @lambdaorm/ui run build && pnpm --filter @lambdaorm/data-gateway-ide run build && electron .",
+    "smoke": "electron . --smoke-test",
+    "test": "node --test tests/*.test.mjs",
+    "pack": "electron-builder --config electron-builder.config.cjs --dir --publish never",
+    "executables": "electron-builder --config electron-builder.config.cjs --publish never"
+  },
+  "dependencies": {
+    "electron-updater": "6.8.12"
+  },
+  "devDependencies": {
+    "@lambdaorm/data-gateway-ide": "workspace:*",
+    "electron": "45.2.3",
+    "electron-builder": "26.18.0"
+  }
+}

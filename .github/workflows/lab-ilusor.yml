@@ -1,0 +1,40 @@
+name: Lab ilusor-cloud
+# The ilusor-cloud lab (packages/lab-ilusor): λORM, from npm, the way Ilusor's Cloud uses it, on a real Postgres and
+# FerretDB (its docker-compose.yaml). Its service specs need a gateway and run by hand (see its README). It runs when
+# the lab or the dependencies change on develop or main, and by hand.
+on:
+  push:
+    branches: [develop, main]
+    paths: [packages/lab-ilusor/**, pnpm-lock.yaml, .github/workflows/lab-ilusor.yml]
+  workflow_dispatch:
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  lab:
+    name: Lab
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: packages/lab-ilusor
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.16.0
+          cache: pnpm
+      - name: Install dependencies
+        working-directory: .
+        run: pnpm install --frozen-lockfile
+      - name: Databases
+        run: npm run up
+      - name: Tables (push, stage ddl)
+        run: npm run setup
+      - name: Lab
+        run: npm run lab -- --verbose
+      - name: Stop
+        if: always()
+        run: npm run down

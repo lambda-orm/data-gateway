@@ -1,0 +1,56 @@
+name: Release
+# npm: @lambdaorm/ui and @lambdaorm/data-gateway-client (packages/ui, packages/client-node) through Changesets. On a
+# push to main with pending changesets it opens (or updates) the "chore: version packages" pull request; when that is
+# merged, it publishes from each package's dist/ the versions that aren't on npm (scripts/publish.mjs) and merges main
+# back into develop. The gateway and the IDE are images (data-gateway-image.yml, ide-image.yml), not npm packages.
+# Secrets: NPM_TOKEN (an npm token that publishes the @lambdaorm scope), CHANGESET_TOKEN (a GitHub token that opens
+# pull requests and pushes to develop: the GITHUB_TOKEN can't trigger the CI of the pull request it opens).
+on:
+  push:
+    branches: [main]
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+permissions:
+  contents: write
+  pull-requests: write
+jobs:
+  release:
+    name: Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.CHANGESET_TOKEN }}
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.16.0
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Create Release PR or Publish
+        uses: changesets/action@v1
+        with:
+          publish: pnpm run release
+          # no GitHub releases for the npm packages: the latest release of this repository is always the desktop IDE's
+          # (its updater and the IDE page of the wiki read it; docs/DATA_GATEWAY_IDE_DESKTOP_PLAN.md §4.5)
+          createGithubReleases: false
+          title: "chore: version packages"
+          commit: "chore: version packages"
+        env:
+          GITHUB_TOKEN: ${{ secrets.CHANGESET_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          # the repo's .npmrc reads ${NPM_TOKEN}; without it npm sends the literal "${NPM_TOKEN}" and publish gets 404
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      # The "chore: version packages" pull request bumps versions on main; nothing else brings them to develop, so the
+      # next develop → main would conflict. Only after that merge, not on every push to main.
+      - name: Sync version bump back into develop
+        if: "contains(github.event.head_commit.message, 'chore: version packages')"
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git fetch origin
+          git checkout -B develop origin/develop
+          git merge origin/main --no-edit -m "chore: sync version bump from main into develop"
+          git push origin develop

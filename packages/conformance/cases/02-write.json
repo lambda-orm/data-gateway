@@ -1,0 +1,63 @@
+[
+	{
+		"name": "insert, update and delete: the inserted row, then the affected rows",
+		"credential": "backend",
+		"steps": [
+			{
+				"operation": "execute",
+				"args": { "query": "Categories.insert()", "data": { "name": "conformance $transport" } },
+				"expect": { "match": { "data": { "name": "conformance $transport" } } }
+			},
+			{
+				"operation": "execute",
+				"args": { "query": "Categories.update(p => ({ name: newName })).filter(p => p.name == name)", "data": { "name": "conformance $transport", "newName": "conformance $transport updated" } },
+				"expect": { "result": 1 }
+			},
+			{
+				"operation": "execute",
+				"args": { "query": "Categories.filter(p => p.name == name).map(p => p.name)", "data": { "name": "conformance $transport updated" } },
+				"expect": { "result": [ { "name": "conformance $transport updated" } ] }
+			},
+			{
+				"operation": "execute",
+				"args": { "query": "Categories.delete().filter(p => p.name == name)", "data": { "name": "conformance $transport updated" } },
+				"expect": { "result": 1 }
+			},
+			{
+				"operation": "execute",
+				"args": { "query": "Categories.filter(p => p.name == name).map(p => p.name)", "data": { "name": "conformance $transport updated" } },
+				"expect": { "result": [] }
+			}
+		]
+	},
+	{
+		"name": "update of nothing: 0 affected rows",
+		"credential": "backend",
+		"operation": "execute",
+		"args": { "query": "Categories.update(p => ({ name: name })).filter(p => p.id == id)", "data": { "id": 999999, "name": "nobody" } },
+		"expect": { "result": 0 }
+	},
+	{
+		"name": "executeScript: the value of its last expression",
+		"credential": "backend",
+		"operation": "executeScript",
+		"args": { "script": "orm.execute(\"Categories.filter(p => p.id == id).map(p => p.name)\", { id: id })", "data": { "id": 1 } },
+		"expect": { "result": [ { "name": "Beverages" } ] }
+	},
+	{
+		"name": "executeScript: an error rolls back everything the script wrote",
+		"credential": "backend",
+		"steps": [
+			{
+				"operation": "executeScript",
+				"args": { "script": "orm.execute(\"Categories.insert()\", { name: name }); throw { status: 422, message: \"rolled back\" }", "data": { "name": "conformance script $transport" } },
+				"expect": { "error": { "code": "invalid" } }
+			},
+			{
+				"operation": "execute",
+				"args": { "query": "Categories.filter(p => p.name == name).map(p => p.id)", "data": { "name": "conformance script $transport" } },
+				"expect": { "result": [] }
+			}
+		]
+	}
+]

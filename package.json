@@ -1,0 +1,50 @@
+{
+	"name": "lambdaorm-data-gateway",
+	"version": "1.0.0",
+	"description": "The λORM Data Gateway: the gateway, its clients, its UI and its IDE",
+	"author": "Flavio Lionel Rita <flaviolrita@proton.me>",
+	"license": "Apache-2.0",
+	"private": true,
+	"packageManager": "pnpm@10.11.1",
+	"homepage": "https://github.com/lambda-orm/data-gateway#readme",
+	"bugs": {
+		"url": "https://github.com/lambda-orm/data-gateway/issues"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/lambda-orm/data-gateway.git"
+	},
+	"scripts": {
+		"build": "pnpm --filter @lambdaorm/ui run build && tsc -b && pnpm --filter @lambdaorm/data-gateway-ide run build",
+		"build:data-gateway": "pnpm --filter @lambdaorm/data-gateway build",
+		"build:client-node": "pnpm --filter @lambdaorm/data-gateway-client build",
+		"build:ui": "pnpm --filter @lambdaorm/ui build",
+		"build:ide": "pnpm --filter @lambdaorm/data-gateway-ide build",
+		"test": "pnpm -r test",
+		"lint": "pnpm -r lint",
+		"dist": "pnpm -r --if-present run dist",
+		"release": "node scripts/publish.mjs"
+	},
+	"devDependencies": {
+		"@changesets/cli": "^2.29.5",
+		"@commitlint/cli": "^19.8.1",
+		"@commitlint/config-conventional": "^19.8.1",
+		"@eslint/js": "^8.57.0",
+		"@types/jest": "^29.5.14",
+		"@types/node": "^22.15.26",
+		"@typescript-eslint/eslint-plugin": "^8.33.1",
+		"@typescript-eslint/parser": "^8.33.1",
+		"eslint": "^8.57.0",
+		"globals": "^17.1.0",
+		"grunt": "^1.6.1",
+		"grunt-cli": "^1.5.0",
+		"grunt-contrib-clean": "^2.0.1",
+		"grunt-contrib-copy": "^1.0.0",
+		"grunt-exec": "^3.0.0",
+		"jest": "^29.7.0",
+		"ts-jest": "^29.1.4",
+		"ts-node": "^10.9.2",
+		"tsx": "^4.21.0",
+		"typescript": "^5.8.3"
+	}
+}

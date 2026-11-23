@@ -1,0 +1,26 @@
+# data-gateway for the MCP evaluation set (eval/README.md)
+orm:
+  workspacePath: ${EVAL_WORKSPACE}
+  schemas:
+    # the schema at the root of the workspace receives only the variables given here (docs/DATA_GATEWAY.md §2.3)
+    - path: ''
+      env: { EVAL_DB_CONNECTION: $EVAL_DB_CONNECTION }
+logger: { level: warn }
+audit: { enabled: false }
+rateLimit: { max: 0 }
+scripts: { enabled: true }
+authentication:
+  adapter: local
+  type: apikey
+  keys:
+    - { name: reader, value: eval-reader, permissions: [ read ] }
+    - { name: writer, value: eval-writer, permissions: [ read, write ] }
+    - { name: runner, value: eval-runner }
+transports:
+  http:
+    port: ${EVAL_HTTP_PORT}
+    host: 127.0.0.1
+  mcpHttp:
+    port: ${EVAL_MCP_PORT}
+    host: 127.0.0.1
+    legacySse: false
