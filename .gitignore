@@ -51,3 +51,5 @@ packages/ide/dist
 # the workspace of the gateway for development (.vscode, packages/data-gateway/dev)
 packages/data-gateway/dev/workspace
 .vscode/.chrome-ide
+# the executables of the desktop IDE (electron-builder)
+packages/ide-desktop/release

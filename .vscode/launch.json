@@ -2,6 +2,7 @@
 	// Debugging on Linux (also macOS): the gateway from its sources, the backend of the IDE, and the IDE in Chrome.
 	// "IDE: all" starts the three: the IDE opens on http://localhost:5173 (vite, hot reload). In it, a connection to
 	// http://127.0.0.1:19199 (the management of the dev gateway) with the API key dev-modeler-key.
+	// "IDE desktop: all": the gateway and the desktop IDE (Electron), its main process and its window.
 	"version": "0.2.0",
 	"configurations": [
 		{
@@ -47,6 +48,27 @@
 			"skipFiles": ["<node_internals>/**"]
 		},
 		{
+			// the desktop IDE (Electron) from its sources: its main process here, its window with "ide-desktop: window"
+			"name": "ide-desktop: main",
+			"type": "node",
+			"request": "launch",
+			"cwd": "${workspaceFolder}/packages/ide-desktop",
+			"runtimeExecutable": "${workspaceFolder}/packages/ide-desktop/node_modules/.bin/electron",
+			"args": [".", "--remote-debugging-port=9223"],
+			"preLaunchTask": "ide: build",
+			"outputCapture": "std",
+			"skipFiles": ["<node_internals>/**"]
+		},
+		{
+			// the page of the desktop IDE (app://ide), once its main process runs
+			"name": "ide-desktop: window",
+			"type": "chrome",
+			"request": "attach",
+			"port": 9223,
+			"webRoot": "${workspaceFolder}/packages/ide",
+			"timeout": 30000
+		},
+		{
 			"name": "data-gateway: test (current file)",
 			"type": "node",
 			"request": "launch",
@@ -58,6 +80,11 @@
 		}
 	],
 	"compounds": [
+		{
+			"name": "IDE desktop: all (gateway + Electron)",
+			"configurations": ["data-gateway (dev)", "ide-desktop: main", "ide-desktop: window"],
+			"stopAll": true
+		},
 		{
 			"name": "IDE: all (gateway + backend + Chrome)",
 			"configurations": ["data-gateway (dev)", "ide: backend", "ide: Chrome (vite)"],

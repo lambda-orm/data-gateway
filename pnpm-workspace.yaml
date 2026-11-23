@@ -1,2 +1,9 @@
 packages:
   - "packages/*"
+
+# Electron downloads its binary in its install script (packages/ide-desktop)
+onlyBuiltDependencies:
+  - electron
+ignoredBuiltDependencies:
+  # Squirrel.Windows: not used (the installer is NSIS)
+  - electron-winstaller

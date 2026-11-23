@@ -33,6 +33,9 @@ jobs:
         uses: changesets/action@v1
         with:
           publish: pnpm run release
+          # no GitHub releases for the npm packages: the latest release of this repository is always the desktop IDE's
+          # (its updater and the IDE page of the wiki read it; docs/DATA_GATEWAY_IDE_DESKTOP_PLAN.md §4.5)
+          createGithubReleases: false
           title: "chore: version packages"
           commit: "chore: version packages"
         env:

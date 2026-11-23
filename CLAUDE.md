@@ -15,6 +15,7 @@ released from core first, then its version is bumped here.
 | --- | --- | --- | --- |
 | `data-gateway` | `@lambdaorm/data-gateway` | **no** (image `flaviorita/data-gateway`) | The gateway. Builds with Grunt (`Gruntfile.js`); serves no UI: its `management` port (optional) is the API of the IDE and the administration. No CORS. Depends on `@lambdaorm/base`, `lib`, `client` (npm). |
 | `ide` | `@lambdaorm/data-gateway-ide` | **no** (image `flaviorita/data-gateway-ide`) | Vite app (connections in the browser, no login) and its backend `server/server.mjs` (Node, no dependencies), which serves it and proxies to the gateways' `management` (`/gw/{base64url}/…`, `DATA_GATEWAY_IDE_TARGETS`). Depends on `ui`. |
+| `ide-desktop` | `@lambdaorm/data-gateway-ide-desktop` | **no** (GitHub releases `ide-v<version>`) | The IDE as a desktop app (Electron): `packages/ide/dist` and its `server.mjs` inside, served at `app://ide`, the proxy on 127.0.0.1 with a token per run. electron-builder (`electron-builder.config.cjs`), built by `ide-desktop.yml`. |
 | `ui` | `@lambdaorm/ui` | yes | React components (Vite library mode, Vitest). Reads `@lambdaorm/base`'s `queryable.d.ts` from node_modules at build time. |
 | `client-node` | `@lambdaorm/data-gateway-client` | yes | Node client over REST, WebSocket, MCP. Depends on `@lambdaorm/base` (npm). |
 | `conformance` | — | no | The conformance suite (cases, compose, reference runner) the clients pass. |

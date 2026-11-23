@@ -2,6 +2,11 @@
 
 ### 1.0.0 (unreleased)
 
+**The desktop app** (`packages/ide-desktop`, Electron): the IDE for Linux (AppImage, deb), Windows (installer) and
+macOS (dmg, zip), x64 and arm64, from the releases `ide-v<version>` of this repository. The app is served at
+`app://ide` and its proxy listens on `127.0.0.1` for its page only (a token per run). Windows and the AppImage update
+themselves; macOS and the deb tell that a new version is out. Not signed yet.
+
 The UI of the data-gateway becomes the data-gateway-ide, its own image (`flaviorita/data-gateway-ide`): no home, no
 login. It connects to data-gateways (4.0.0 or later), each with the URL of its `management` port and its credential
 (API key, bearer, basic or none); their schemas, workspaces and projects stay in them, as a database IDE connects to

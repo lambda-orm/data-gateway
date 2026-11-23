@@ -2,6 +2,8 @@
 
 > **Estado (2026-11-23): plan, no implementado.** Sigue a [`DATA_GATEWAY.md`](DATA_GATEWAY.md) §11.9 (el IDE y su
 > backend) y §12 (el transporte `management`). Las decisiones de §8 están cerradas (el usuario, 2026-11-23).
+> **Avance (2026-11-23, rama `feature/ide-desktop`):** fases 1 a 3 hechas, y de la 4 el workflow, `release.yml` y
+> `DEPLOY.md`; falta la pestaña IDE de la wiki. La fase 5 (firma), pendiente.
 
 ## 1. Objetivo
 
@@ -152,13 +154,14 @@ Los formatos son los de D3 (reducido): sin `.rpm`, `.tar.gz` ni el `.zip` portab
 sin cambiar nada más que `electron-builder.yml` y la página `/ide/` ya los reconoce (§5.4).
 
 **Nombres de los artefactos**, fijos porque la página `/ide/` de la wiki los clasifica por nombre (§5.4):
+`data-gateway-ide-<versión>-<linux|win|mac>-<arquitectura>.<ext>`. La arquitectura es la que electron-builder usa en
+cada formato (cambiarla rompería los `latest*.yml` del actualizador), y la página la normaliza:
 
-```text
-data-gateway-ide-<versión>-<linux|win|mac>-<x64|arm64>.<ext>
-  data-gateway-ide-1.1.0-mac-arm64.dmg
-  data-gateway-ide-1.1.0-win-x64.exe
-  data-gateway-ide-1.1.0-linux-x64.AppImage
-```
+| SO | Archivos (versión 1.1.0) |
+| --- | --- |
+| Linux | `…-linux-x86_64.AppImage`, `…-linux-arm64.AppImage`, `…-linux-amd64.deb`, `…-linux-arm64.deb` |
+| Windows | `…-win.exe` (las dos arquitecturas en un instalador: el que usa el actualizador), `…-win-x64.exe`, `…-win-arm64.exe` |
+| macOS | `…-mac-x64.dmg` / `.zip`, `…-mac-arm64.dmg` / `.zip` |
 
 ### 4.2 CI
 
@@ -168,15 +171,18 @@ Workflow `ide-desktop.yml`, con la misma regla que `ide-image.yml`: corre cuando
 El repositorio es público: los runners que aloja GitHub son gratis y sin límite de minutos, en los tres SO y también
 en arm64 nativo. Cada ejecutable se construye (y se prueba) en su propio SO y arquitectura, sin compilar en cruzado:
 
-| Job | Runner | Produce |
+Un job por SO construye las **dos** arquitecturas: separadas, cada una escribiría su `latest.yml` / `latest-mac.yml`
+con un solo archivo y el último pisaría al otro. Cada arquitectura se prueba en un runner nativo:
+
+| Job | Runner | Hace |
 | --- | --- | --- |
-| `linux-x64` | `ubuntu-latest` | AppImage y deb (x64) |
-| `linux-arm64` | `ubuntu-24.04-arm` | AppImage y deb (arm64) |
-| `windows-x64` | `windows-latest` | exe (x64) |
-| `windows-arm64` | `windows-11-arm` | exe (arm64) |
-| `mac-arm64` | `macos-latest` (Apple Silicon) | dmg y zip (arm64) |
-| `mac-x64` | `macos-13` (Intel) | dmg y zip (x64) |
-| `release` | `ubuntu-latest`, después de los seis | crea en este repositorio el release del tag `ide-v<versión>` como borrador, sube los artefactos y sus `latest*.yml`, y lo publica con `make_latest: true` (§4.5) |
+| `build (linux)` | `ubuntu-latest` | AppImage y deb, x64 y arm64; prueba de humo x64 |
+| `build (win)` | `windows-latest` | los instaladores NSIS, x64 y arm64; prueba de humo x64 |
+| `build (mac)` | `macos-latest` (Apple Silicon) | dmg y zip, x64 y arm64; prueba de humo arm64 |
+| `smoke (linux arm64)` | `ubuntu-24.04-arm` | la prueba de humo del AppImage arm64 |
+| `smoke (windows arm64)` | `windows-11-arm` | instala el arm64 en silencio y su prueba de humo |
+| `smoke (macOS x64)` | `macos-13` (Intel) | la prueba de humo del zip x64 |
+| `release` | `ubuntu-latest`, después de todos | crea en este repositorio el release `ide-v<versión>` como borrador con todos los archivos, y lo publica como *latest* (§4.5) |
 
 - macOS solo se construye en un Mac; Windows se podría construir en Linux con wine, pero en su runner se prueba de verdad.
 - El plan gratuito permite unos 20 jobs a la vez (5 de macOS): alcanza.
@@ -403,9 +409,9 @@ Los puntos 1, 4, 5 y 6 son Markdown: se ven aunque la API de GitHub no responda 
 | Fase | Qué | Hecho cuando |
 | --- | --- | --- |
 | 0 | cerrar las decisiones de §8 | hecho (2026-11-23) |
-| 1 | `server.mjs` con token, origen de la app y verificación de `Host`; `viaProxy` con la base configurable | pruebas nuevas en verde; la imagen web sin cambios (sus pruebas y `ci-local.sh check`) |
-| 2 | `packages/ide-desktop`: `app://`, el proxy local, la ventana, el menú, una sola instancia | `pnpm --filter …ide-desktop dev` abre el IDE; connections que persisten entre arranques; REST, WebSocket y MCP a una gateway local |
-| 3 | electron-builder para los tres SO; prueba de humo; `electron-updater` en Windows y AppImage, el aviso en macOS y `.deb` | los ejecutables de Linux construidos y probados en local; los de Windows y macOS, en CI; la prueba del actualizador en verde |
+| 1 ✅ | `server.mjs` con token, origen de la app y verificación de `Host`; `viaProxy` con la base configurable | pruebas nuevas en verde; la imagen web sin cambios (sus pruebas y `ci-local.sh check`) |
+| 2 ✅ | `packages/ide-desktop`: `app://`, el proxy local, la ventana, el menú, una sola instancia | `pnpm --filter …ide-desktop dev` abre el IDE; connections que persisten entre arranques; REST, WebSocket y MCP a una gateway local |
+| 3 ✅ | electron-builder para los tres SO; prueba de humo; `electron-updater` en Windows y AppImage, el aviso en macOS y `.deb` | los ejecutables de Linux construidos y probados en local; los de Windows y macOS, en CI; la prueba del actualizador en verde |
 | 4 | `ide-desktop.yml`, `release.yml` sin releases de Changesets y `DEPLOY.md` (§4.5); en la wiki, la pestaña IDE: `/ide/` con sus versiones y la guía mudada con sus redirecciones (cuatro idiomas); después, los enlaces de los README (§5.6) | un release de prueba (prerelease `ide-v1.1.0-rc.1`) que la página lista; `mkdocs build --strict` sin advertencias; la URL vieja de la guía redirige |
 | 5 | firma y notarización; `electron-updater` también en macOS; `safeStorage` | los ejecutables firmados se abren sin avisos y macOS se actualiza solo |
 

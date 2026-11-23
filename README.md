@@ -7,6 +7,7 @@ workspaces of its schemas, and the tools to work with it.
 | --- | --- | --- |
 | [`packages/data-gateway`](packages/data-gateway/README.md) | image [`flaviorita/data-gateway`](https://hub.docker.com/r/flaviorita/data-gateway) | The gateway: the schemas of its workspace over REST, WebSocket, MCP (HTTP and WebSocket) and Kafka, and their administration on an optional `management` port (the API of the IDE) |
 | [`packages/ide`](packages/ide/README.md) | image [`flaviorita/data-gateway-ide`](https://hub.docker.com/r/flaviorita/data-gateway-ide) | The IDE: connects to several gateways (each with the URL of its `management` and its credential), like a database IDE; its backend is its proxy to them |
+| [`packages/ide-desktop`](packages/ide-desktop/README.md) | GitHub releases `ide-v<version>` | The IDE as a desktop app (Electron) for Linux, Windows and macOS |
 | [`packages/ui`](packages/ui/README.md) | npm [`@lambdaorm/ui`](https://www.npmjs.com/package/@lambdaorm/ui) | React components: the workspace, the query editor with λORM's suggestions, the diagrams |
 | [`packages/client-node`](packages/client-node/README.md) | npm [`@lambdaorm/data-gateway-client`](https://www.npmjs.com/package/@lambdaorm/data-gateway-client) | The Node client: the same queries over REST, WebSocket or MCP, chosen by the connection string |
 | [`packages/conformance`](packages/conformance/README.md) | — | The conformance suite every client passes, on the five transports |
