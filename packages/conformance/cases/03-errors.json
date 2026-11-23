@@ -1,0 +1,48 @@
+[
+	{
+		"name": "error invalid: an entity that does not exist",
+		"operation": "execute",
+		"args": { "query": "Nope.map(p => p.name)" },
+		"expect": { "error": { "code": "invalid", "name": "SchemaError" } }
+	},
+	{
+		"name": "error invalid: a property that does not exist",
+		"operation": "execute",
+		"args": { "query": "Categories.filter(p => p.nope == 1)" },
+		"expect": { "error": { "code": "invalid", "name": "SchemaError" } }
+	},
+	{
+		"name": "error invalid: a required property without value",
+		"credential": "backend",
+		"operation": "execute",
+		"args": { "query": "Categories.insert()", "data": {} },
+		"expect": { "error": { "code": "invalid", "name": "ValidationError" } }
+	},
+	{
+		"name": "error forbidden: a write with a read credential",
+		"operation": "execute",
+		"args": { "query": "Categories.insert()", "data": { "name": "conformance forbidden" } },
+		"expect": { "error": { "code": "forbidden", "name": "ForbiddenError" } }
+	},
+	{
+		"name": "error unique: a value that already exists",
+		"credential": "backend",
+		"operation": "execute",
+		"args": { "query": "Categories.insert()", "data": { "name": "Beverages" } },
+		"expect": { "error": { "code": "unique" } }
+	},
+	{
+		"name": "error foreign_key: a row others refer to",
+		"credential": "backend",
+		"operation": "execute",
+		"args": { "query": "Categories.delete().filter(p => p.id == 1)" },
+		"expect": { "error": { "code": "foreign_key" } }
+	},
+	{
+		"name": "error not_found: the status a script throws",
+		"credential": "backend",
+		"operation": "executeScript",
+		"args": { "script": "throw { status: 404, message: \"no such order\" }" },
+		"expect": { "error": { "code": "not_found" } }
+	}
+]

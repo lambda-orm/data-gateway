@@ -1,0 +1,182 @@
+name: IDE desktop
+# The desktop IDE (packages/ide-desktop, Electron; docs/DATA_GATEWAY_IDE_DESKTOP_PLAN.md §4): Linux (AppImage, deb),
+# Windows (NSIS installer) and macOS (dmg, zip), each in x64 and arm64. A job per OS builds both architectures (so the
+# latest*.yml of the updater list both) and smoke-tests the one of its runner; three more jobs smoke-test the others
+# on native runners. On main, a version of packages/ide/package.json without its release yet is published as the
+# GitHub release ide-v<version> of this repository, marked latest (the only releases marked so: §4.5); a prerelease
+# (1.2.0-rc.1) is published as such, not latest. Pull requests build and test, and publish nothing.
+on:
+  push:
+    branches: [main]
+    paths:
+      - packages/ide/**
+      - packages/ide-desktop/**
+      - packages/ui/**
+      - .github/workflows/ide-desktop.yml
+  pull_request:
+    paths:
+      - packages/ide/**
+      - packages/ide-desktop/**
+      - packages/ui/**
+      - .github/workflows/ide-desktop.yml
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Build and publish even if the release ide-v<version> already exists (its files are replaced)
+        type: boolean
+        default: false
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+permissions:
+  contents: write # the release ide-v<version>
+jobs:
+  version:
+    name: Version
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+      publish: ${{ steps.version.outputs.publish }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Version and whether to publish it
+        id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V=$(node -p "require('./packages/ide/package.json').version")
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          case "$V" in *-*) echo "prerelease=true" >> "$GITHUB_OUTPUT" ;; *) echo "prerelease=false" >> "$GITHUB_OUTPUT" ;; esac
+          publish=false
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            if gh release view "ide-v$V" > /dev/null 2>&1 && [ "${{ inputs.force }}" != "true" ]; then
+              echo "::notice::the release ide-v$V already exists: build and test only"
+            else
+              publish=true
+            fi
+          fi
+          echo "publish=$publish" >> "$GITHUB_OUTPUT"
+
+  build:
+    name: Build (${{ matrix.os }})
+    needs: version
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { os: linux, runner: ubuntu-latest, targets: --linux AppImage deb --x64 --arm64 }
+          - { os: win, runner: windows-latest, targets: --win nsis --x64 --arm64 }
+          - { os: mac, runner: macos-latest, targets: --mac dmg zip --x64 --arm64 }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.16.0
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build the IDE and test
+        shell: bash
+        run: |
+          pnpm --filter @lambdaorm/ui run build
+          pnpm --filter @lambdaorm/data-gateway-ide run dist
+          pnpm --filter @lambdaorm/data-gateway-ide-desktop run test
+      - name: Executables
+        shell: bash
+        working-directory: packages/ide-desktop
+        run: npx electron-builder --config electron-builder.config.cjs ${{ matrix.targets }} --publish never
+      # the executable of the runner's own architecture, unpacked: it starts, serves its page and its proxy answers
+      - name: Smoke test
+        shell: bash
+        working-directory: packages/ide-desktop/release
+        run: |
+          case "${{ matrix.os }}" in
+            linux) xvfb-run -a ./linux-unpacked/data-gateway-ide --smoke-test --no-sandbox ;;
+            win) "./win-unpacked/Data Gateway IDE.exe" --smoke-test ;;
+            mac) "./mac-arm64/Data Gateway IDE.app/Contents/MacOS/Data Gateway IDE" --smoke-test ;;
+          esac
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ide-desktop-${{ matrix.os }}
+          if-no-files-found: error
+          path: |
+            packages/ide-desktop/release/*.AppImage
+            packages/ide-desktop/release/*.deb
+            packages/ide-desktop/release/*.exe
+            packages/ide-desktop/release/*.dmg
+            packages/ide-desktop/release/*.zip
+            packages/ide-desktop/release/*.blockmap
+            packages/ide-desktop/release/latest*.yml
+
+  # the other architecture of each OS, on its own runner, from the executables built above
+  smoke:
+    name: Smoke test (${{ matrix.name }})
+    needs: build
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { name: linux arm64, os: linux, runner: ubuntu-24.04-arm }
+          - { name: windows arm64, os: win, runner: windows-11-arm }
+          - { name: macOS x64, os: mac, runner: macos-13 }
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: ide-desktop-${{ matrix.os }}
+          path: release
+      - name: Smoke test
+        shell: bash
+        working-directory: release
+        run: |
+          case "${{ matrix.os }}" in
+            linux)
+              app=$(ls *-linux-arm64.AppImage)
+              chmod +x "$app"
+              # no FUSE on the runner: the AppImage runs extracted
+              APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run -a "./$app" --smoke-test --no-sandbox ;;
+            win)
+              installer=$(ls *-win-arm64.exe 2>/dev/null || ls *.exe | head -1)
+              "./$installer" /S
+              sleep 20
+              "$LOCALAPPDATA/Programs/Data Gateway IDE/Data Gateway IDE.exe" --smoke-test ;;
+            mac)
+              unzip -q "$(ls *-mac-x64.zip)" -d x64
+              "./x64/Data Gateway IDE.app/Contents/MacOS/Data Gateway IDE" --smoke-test ;;
+          esac
+
+  release:
+    name: Release ide-v${{ needs.version.outputs.version }}
+    needs: [version, build, smoke]
+    if: needs.version.outputs.publish == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: ide-desktop-*
+          path: release
+          merge-multiple: true
+      - name: Publish the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          V: ${{ needs.version.outputs.version }}
+          PRERELEASE: ${{ needs.version.outputs.prerelease }}
+        run: |
+          T="ide-v$V"
+          # its notes: the entry of this version in the CHANGELOG of the IDE
+          awk -v v="$V" '$0 ~ "^### " v "( |$)" {on=1; next} on && /^### / {exit} on {print}' packages/ide/CHANGELOG.md > notes.md
+          [ -s notes.md ] || echo "Data Gateway IDE $V." > notes.md
+          printf '\n---\nDownloads for Linux, Windows and macOS: https://lambda-orm.github.io/wiki/ide/\n' >> notes.md
+          if gh release view "$T" > /dev/null 2>&1; then
+            gh release upload "$T" release/* --clobber
+          else
+            # created as a draft with every file, then published: the updater never sees it half uploaded
+            gh release create "$T" release/* --draft --target "$GITHUB_SHA" --title "Data Gateway IDE $V" --notes-file notes.md
+          fi
+          if [ "$PRERELEASE" = "true" ]; then
+            gh release edit "$T" --draft=false --prerelease --latest=false
+          else
+            gh release edit "$T" --draft=false --latest
+          fi

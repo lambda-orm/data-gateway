@@ -1,0 +1,24 @@
+{
+	"rootDir": ".",
+	"testMatch": [
+		"<rootDir>/tests/**/*.spec.ts"
+	],
+	"testTimeout": 30000,
+	"maxWorkers": 1,
+	"transform": {
+		"^.+\\.ts$": [
+			"ts-jest",
+			{
+				"tsconfig": "<rootDir>/tsconfig.json",
+				"diagnostics": false
+			}
+		]
+	},
+	"moduleFileExtensions": [
+		"ts",
+		"js",
+		"json",
+		"node"
+	],
+	"globalSetup": "<rootDir>/globalSetup.ts"
+}

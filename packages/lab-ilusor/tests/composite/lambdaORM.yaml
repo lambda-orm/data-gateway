@@ -1,0 +1,51 @@
+# Relations of several fields (docs/LAMBDAORM_PENDING.md L34), as Ilusor's iot_location: every row keyed by its
+# location, every foreign key (locationId, x). A device's id (its hardware address) and an area's code repeat between
+# locations. Own model and tables (schema lab_composite, created by push in composite.spec.ts).
+domain:
+  entities:
+    - name: CmpAreas
+      primaryKey: [locationId, code]
+      properties:
+        - { name: locationId, length: 36, required: true }
+        - { name: code, length: 64, required: true }
+        - { name: name, required: true }
+    - name: CmpDevices
+      primaryKey: [locationId, id]
+      properties:
+        - { name: locationId, length: 36, required: true }
+        - { name: id, length: 64, required: true }
+        - { name: name, required: true }
+        - { name: areaId, length: 64 }
+      relations:
+        - { name: area, from: [locationId, areaId], entity: CmpAreas, to: [locationId, code], target: devices }
+        - { name: links, type: manyToOne, composite: true, from: [locationId, id], entity: CmpDeviceLinks, to: [locationId, deviceId] }
+    - name: CmpDeviceLinks
+      primaryKey: [locationId, deviceId, position]
+      properties:
+        - { name: locationId, length: 36, required: true }
+        - { name: deviceId, length: 64, required: true }
+        - { name: position, type: integer, required: true }
+        - { name: linkKey, length: 32, required: true }
+      relations:
+        - { name: device, from: [locationId, deviceId], entity: CmpDevices, to: [locationId, id] }
+infrastructure:
+  mappings:
+    - name: composite
+      entities:
+        - { name: CmpAreas, mapping: cmp_areas, properties: [{ name: locationId, mapping: location_id }] }
+        - name: CmpDevices
+          mapping: cmp_devices
+          properties:
+            - { name: locationId, mapping: location_id }
+            - { name: areaId, mapping: area_id }
+        - name: CmpDeviceLinks
+          mapping: cmp_device_links
+          properties:
+            - { name: locationId, mapping: location_id }
+            - { name: deviceId, mapping: device_id }
+            - { name: linkKey, mapping: link_key }
+  sources:
+    - { name: composite, dialect: PostgreSQL, mapping: composite, connection: "${ORM_COMPOSITE_CNX}" }
+  stages:
+    - name: default
+      sources: [{ name: composite }]

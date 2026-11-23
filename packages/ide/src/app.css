@@ -1,0 +1,154 @@
+html, body { margin: 0; font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+.dg-app { --bg: #fff; --fg: #1d1f23; --muted: #6b7280; --border: #d6d9de; --accent: #2563eb; --panel: #f6f7f9; --ok: #067647; --bad: #b42318; --warn: #b54708;
+  min-height: 100vh; background: var(--bg); color: var(--fg); }
+.dg-app.dark { --bg: #16181d; --fg: #e6e8eb; --muted: #9aa1ab; --border: #2e323a; --accent: #6ea0ff; --panel: #1e2128; --ok: #6fdc8c; --bad: #ff8a80; --warn: #f5b971; }
+.dg-app button, .dg-app select, .dg-app input { font: inherit; color: inherit; background: var(--panel); border: 1px solid var(--border); border-radius: 6px; padding: 5px 12px; }
+.dg-app button { cursor: pointer; }
+.dg-app button:disabled { opacity: .5; cursor: progress; }
+.dg-app .dg-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.dg-big { padding: 8px 20px !important; font-size: 15px !important; }
+.dg-header { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
+.dg-brand { font-weight: 700; font-size: 17px; color: var(--fg); text-decoration: none; }
+.dg-version { color: var(--muted); font-size: 12px; border: 1px solid var(--border); border-radius: 10px; padding: 0 8px; }
+.dg-spacer { flex: 1; }
+.dg-who { color: var(--muted); }
+.dg-link { color: var(--accent); text-decoration: none; }
+.dg-muted { color: var(--muted); }
+.dg-home { max-width: 980px; margin: 0 auto; padding: 32px 16px 48px; }
+.dg-hero h1 { font-size: 34px; margin: 0 0 8px; }
+.dg-lead { font-size: 18px; color: var(--fg); }
+.dg-hero p { max-width: 760px; }
+.dg-hero code, .dg-schemas code { background: var(--panel); border-radius: 4px; padding: 1px 5px; font-size: 13px; }
+.dg-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 12px; margin: 32px 0; }
+.dg-card { border: 1px solid var(--border); border-radius: 8px; padding: 12px 16px; background: var(--panel); }
+.dg-card h3 { margin: 4px 0 6px; font-size: 15px; }
+.dg-card p { margin: 0; color: var(--muted); }
+.dg-card a { color: var(--accent); }
+.dg-schemas table { border-collapse: collapse; width: 100%; max-width: 640px; }
+.dg-schemas th, .dg-schemas td { text-align: left; padding: 6px 10px; border-bottom: 1px solid var(--border); }
+.dg-status { font-weight: 600; }
+.dg-ready { color: var(--ok); } .dg-error { color: var(--bad); } .dg-starting, .dg-restarting { color: var(--warn); }
+.dg-login { display: flex; justify-content: center; padding: 48px 16px; }
+.dg-form { display: flex; flex-direction: column; gap: 12px; width: 100%; max-width: 380px; }
+.dg-form h1 { margin: 0; }
+.dg-form label { display: flex; flex-direction: column; gap: 4px; color: var(--muted); }
+.dg-form label input, .dg-form label select { color: var(--fg); }
+div.dg-error { border: 1px solid var(--bad); border-radius: 6px; padding: 6px 10px; }
+.dg-pref { padding: 4px 8px !important; font-size: 13px; }
+.dg-secret { display: flex; gap: 6px; }
+.dg-secret input { flex: 1; min-width: 0; }
+.dg-secret button { white-space: nowrap; }
+.dg-stale { position: sticky; top: 0; z-index: 50; display: flex; gap: 12px; align-items: center; justify-content: center; padding: 8px 16px; background: #fef3c7; color: #78350f; border-bottom: 1px solid #f59e0b; }
+.dark .dg-stale { background: #422006; color: #fde68a; border-bottom-color: #b45309; }
+.dg-check { display: flex; align-items: center; gap: 8px; flex-direction: row !important; font-weight: normal; }
+/* the account at the right of the header: its menu (account, preferences, logout) and its windows */
+.dg-account { position: relative; display: inline-flex; }
+.dg-app .dg-account-button { display: inline-flex; align-items: center; gap: 6px; border-radius: 18px; padding: 4px 10px 4px 6px; }
+.dg-account-name { font-size: 13px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dg-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 60; min-width: 190px; display: flex; flex-direction: column; padding: 4px 0; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, .18); }
+.dg-app .dg-menu button { display: flex; align-items: center; gap: 8px; border: 0; border-radius: 0; background: none; text-align: left; padding: 7px 14px; }
+.dg-app .dg-menu button:hover, .dg-app .dg-menu button:focus-visible { background: var(--panel); }
+.dg-dialog-back { position: fixed; inset: 0; z-index: 70; background: rgba(0, 0, 0, .35); display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; }
+.dg-dialog { width: min(460px, calc(100vw - 32px)); background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; box-shadow: 0 12px 40px rgba(0, 0, 0, .3); }
+.dg-dialog h2 { margin: 0 0 14px; font-size: 17px; }
+.dg-dialog-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
+.dg-facts { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 0; }
+.dg-facts dt { color: var(--muted); }
+.dg-facts dd { margin: 0; }
+.dg-chips { display: flex; flex-wrap: wrap; gap: 4px; }
+.dg-chip { font-size: 12px; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 0 8px; }
+.dg-dialog .dg-form { display: flex; flex-direction: column; gap: 12px; }
+.dg-dialog .dg-form label { display: flex; flex-direction: column; gap: 4px; }
+/* the pages of the account and the preferences (tabs of the workspace, or over the page) */
+/* the whole tab, as the other tabs */
+.dg-pane { width: 100%; box-sizing: border-box; padding: 8px 12px 24px; display: flex; flex-direction: column; gap: 14px; }
+.dg-pane h2 { margin: 4px 0 0; font-size: 20px; }
+.dg-card { background: var(--bg); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; }
+.dg-card h3 { margin: 0 0 10px; font-size: 15px; display: flex; gap: 8px; align-items: baseline; }
+.dg-muted { color: var(--muted); font-size: 12.5px; font-weight: normal; }
+.dg-pick-row { display: flex; gap: 16px; align-items: flex-start; padding-bottom: 14px; border-bottom: 1px solid var(--border); }
+.dg-row-label { min-width: 90px; font-weight: 600; padding-top: 5px; }
+.dg-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.dg-app .dg-pill { border-radius: 16px; padding: 4px 12px; font-size: 13px; }
+.dg-app .dg-pill.dg-selected { background: var(--accent); border-color: var(--accent); color: #fff; }
+.dg-theme-block { display: flex; gap: 16px; padding-top: 14px; }
+.dg-theme-grid { display: flex; flex-wrap: wrap; gap: 12px; }
+.dg-app .dg-swatch { display: flex; flex-direction: column; gap: 6px; padding: 6px; border-radius: 10px; border: 2px solid var(--border); background: var(--bg); width: 132px; }
+.dg-app .dg-swatch.dg-selected { border-color: var(--accent); }
+.dg-swatch-preview { position: relative; height: 72px; border-radius: 6px; overflow: hidden; display: block; }
+.dg-swatch-half { position: absolute; top: 0; bottom: 0; display: flex; align-items: center; justify-content: center; }
+.dg-swatch-full { left: 0; right: 0; }
+.dg-swatch-left { left: 0; right: 50%; }
+.dg-swatch-right { left: 50%; right: 0; }
+.dg-swatch-card { width: 78%; min-width: 46px; padding: 7px; border: 1px solid; border-radius: 5px; display: flex; flex-direction: column; gap: 5px; }
+.dg-swatch-left .dg-swatch-card, .dg-swatch-right .dg-swatch-card { width: 70%; }
+.dg-swatch-line { height: 5px; border-radius: 3px; display: block; }
+.dg-swatch-pill { height: 9px; width: 34%; border-radius: 5px; display: block; }
+.dg-swatch-label { font-size: 13px; text-align: center; }
+.dg-swatch.dg-selected .dg-swatch-label { font-weight: 600; color: var(--accent); }
+.dg-account-card { display: flex; gap: 14px; align-items: center; }
+.dg-account-card > span:last-child { display: flex; flex-direction: column; gap: 2px; }
+.dg-avatar { width: 44px; height: 44px; border-radius: 50%; background: var(--accent); color: #fff; display: inline-flex; align-items: center; justify-content: center; font-size: 20px; font-weight: 700; }
+.dg-account-title { font-size: 16px; }
+.dg-permissions { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; }
+.dg-permissions li { display: flex; gap: 10px; padding: 8px 0; border-top: 1px solid var(--border); }
+.dg-permissions li:first-child { border-top: 0; }
+.dg-permission-mark { width: 22px; height: 22px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.dg-granted .dg-permission-mark { background: color-mix(in srgb, var(--ok) 16%, transparent); color: var(--ok); }
+.dg-denied .dg-permission-mark { background: var(--panel); color: var(--muted); }
+.dg-denied code { color: var(--muted); }
+.dg-permission-text { display: flex; flex-direction: column; gap: 2px; }
+.dg-permission-text code { font-weight: 600; }
+.dg-permission-description { font-size: 13px; color: var(--muted); }
+.dg-granted .dg-permission-description { color: var(--fg); }
+.dg-dialog .dg-pane { padding: 0; }
+.dg-dialog .dg-pane h2 { display: none; }
+.dg-dialog:has(.dg-pane) { width: min(720px, calc(100vw - 32px)); max-height: 80vh; overflow: auto; }
+/* a theme of the app (data-theme, its variables on .dg-app) reaches the workspace: its variables take those of the app */
+.dg-app[data-theme] .lw-workbench { --lw-bg: var(--bg); --lw-fg: var(--fg); --lw-muted: var(--muted); --lw-border: var(--border); --lw-accent: var(--accent); --lw-panel: var(--panel); }
+.dg-app[data-theme] { background: var(--panel); }
+.dg-app[data-theme] .dg-header { background: var(--bg); }
+.dg-culture { display: flex; flex-direction: column; gap: 4px; }
+.dg-culture-preview { font-size: 13px; color: var(--fg); }
+/* the IDE: the form of a connection */
+.dg-connection-form { display: flex; flex-direction: column; gap: 10px; max-width: 720px; }
+.dg-connection-form label { display: flex; flex-direction: column; gap: 4px; }
+.dg-url { display: grid; grid-template-columns: 170px 1fr; gap: 10px; }
+.dg-form-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.dg-ok { color: var(--ok); }
+.dg-app .dg-danger { border-color: var(--bad); color: var(--bad); }
+.dg-badge { font-size: 11px; font-weight: 600; border: 1px solid var(--border); border-radius: 10px; padding: 0 8px; margin-left: 8px; color: var(--muted); vertical-align: middle; }
+.dg-app .dg-header button { display: inline-flex; align-items: center; gap: 4px; }
+/* the tools of a connection (its Swagger, its WebSocket, its MCP) */
+.dg-tool { display: flex; flex-direction: column; gap: 10px; padding: 8px 12px 24px; }
+.dg-tool-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.dg-inline { display: inline-flex; align-items: center; gap: 6px; }
+.dg-tool-split { display: grid; grid-template-columns: minmax(280px, 1fr) minmax(280px, 1fr); gap: 12px; align-items: start; }
+.dg-tool-split > div { display: flex; flex-direction: column; gap: 8px; }
+.dg-tool-split > div > button { align-self: flex-start; }
+.dg-log { list-style: none; margin: 0; padding: 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--panel); max-height: 60vh; overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+.dg-log pre { margin: 2px 0 0; white-space: pre-wrap; word-break: break-word; font-size: 12px; }
+.dg-log-out pre { color: var(--accent); }
+.dg-tools { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; max-height: 65vh; overflow: auto; }
+.dg-app .dg-tools button { width: 100%; text-align: left; display: flex; flex-direction: column; gap: 2px; }
+.dg-app .dg-tools button.dg-selected { border-color: var(--accent); }
+.dg-swagger { background: #fff; color: #3b4151; border-radius: 6px; }
+.dg-advanced summary { cursor: pointer; color: var(--muted); }
+.dg-advanced[open] { display: flex; flex-direction: column; gap: 8px; }
+.dg-status.dg-pending { color: var(--warn); }
+@media (max-width: 900px) { .dg-tool-split { grid-template-columns: 1fr; } }
+.dg-clamp { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+
+/* the sessions of a connection (its page): its own and, with sessionAdmin, every one by credential */
+.dg-sessions h3 + p { margin-top: 0; }
+.dg-table-scroll { overflow-x: auto; max-width: 100%; }
+.dg-table { border-collapse: collapse; width: 100%; font-size: 13px; }
+.dg-table th, .dg-table td { text-align: left; padding: 5px 8px; border-bottom: 1px solid var(--border); white-space: nowrap; }
+.dg-table th { color: var(--muted); font-weight: 600; }
+.dg-table .dg-chip { margin-left: 6px; }
+.dg-session-group { margin: 10px 0 14px; }
+.dg-session-credential { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+/* the sections of the page of a connection, as tabs: connection, tools, roles, sessions */
+.dg-sections { display: flex; gap: 2px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
+.dg-app .dg-sections button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 6px 12px; color: var(--muted); }
+.dg-app .dg-sections button.dg-section-active { color: var(--fg); border-bottom-color: var(--accent); font-weight: 600; }

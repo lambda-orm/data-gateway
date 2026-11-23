@@ -1,0 +1,89 @@
+asyncapi: 3.0.0
+info:
+  title: λORM data-gateway — MCP over WebSocket
+  version: '3'
+  description: |
+    Model Context Protocol (JSON-RPC 2.0) over WebSocket. Not a standard MCP transport: for clients and gateways that
+    speak it; Claude Code and most clients use mcpHttp (Streamable HTTP).
+
+    - Connect to {basePath}/{schema}/mcp with the subprotocol `mcp` and the credential in the handshake headers
+      (Authorization: Bearer …, X-Api-Key: … or Authorization: Basic …). Without it the handshake answers 401.
+    - One JSON-RPC message per text message. The server answers each request with a response of the same id.
+    - Methods: initialize, notifications/initialized, ping, tools/list, tools/call, resources/list,
+      resources/templates/list, resources/read, resources/subscribe, resources/unsubscribe.
+    - tools/list answers only the tools the credential can use; tool failures come as a result with isError: true,
+      protocol failures (unknown tool, invalid arguments) as JSON-RPC errors (-32602).
+channels:
+  mcp:
+    address: /mcp
+    messages:
+      request:
+        $ref: '#/components/messages/request'
+      response:
+        $ref: '#/components/messages/response'
+      notification:
+        $ref: '#/components/messages/notification'
+operations:
+  sendRequest:
+    action: receive
+    channel:
+      $ref: '#/channels/mcp'
+    messages:
+      - $ref: '#/channels/mcp/messages/request'
+      - $ref: '#/channels/mcp/messages/notification'
+    reply:
+      channel:
+        $ref: '#/channels/mcp'
+      messages:
+        - $ref: '#/channels/mcp/messages/response'
+components:
+  messages:
+    request:
+      name: request
+      title: JSON-RPC request
+      payload:
+        type: object
+        required: [jsonrpc, id, method]
+        properties:
+          jsonrpc: { const: '2.0' }
+          id: { oneOf: [{ type: string }, { type: integer }] }
+          method:
+            type: string
+            examples: [initialize, tools/list, tools/call, resources/read]
+          params: { type: object }
+      examples:
+        - name: execute
+          payload:
+            jsonrpc: '2.0'
+            id: 2
+            method: tools/call
+            params:
+              name: orm_execute
+              arguments:
+                query: 'Products.filter(p => p.price > minPrice).map(p => ({ name: p.name, price: p.price }))'
+                data: { minPrice: 50 }
+    response:
+      name: response
+      title: JSON-RPC response
+      payload:
+        type: object
+        required: [jsonrpc, id]
+        properties:
+          jsonrpc: { const: '2.0' }
+          id: { oneOf: [{ type: string }, { type: integer }, { type: 'null' }] }
+          result: { type: object }
+          error:
+            type: object
+            properties:
+              code: { type: integer }
+              message: { type: string }
+    notification:
+      name: notification
+      title: JSON-RPC notification
+      payload:
+        type: object
+        required: [jsonrpc, method]
+        properties:
+          jsonrpc: { const: '2.0' }
+          method: { type: string, examples: [notifications/initialized] }
+          params: { type: object }

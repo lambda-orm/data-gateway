@@ -1,0 +1,102 @@
+name: Data gateway image
+# Publishes flaviorita/data-gateway when a new version of packages/data-gateway reaches main: the version is the one of
+# packages/data-gateway/package.json (bumped with its CHANGELOG entry on a release/data-gateway-<version> branch). A
+# version already on Docker Hub is skipped, so merges that don't bump it publish nothing; a prerelease (3.3.0-rc.1)
+# doesn't move latest. Before pushing, the image passes the conformance suite (packages/conformance) on its five
+# transports. The image installs the latest @lambdaorm/cli from npm.
+# Secret: DOCKERHUB_TOKEN (a Docker Hub access token, Read & Write, of the user in IMAGE).
+on:
+  push:
+    branches: [main]
+    paths:
+      - packages/data-gateway/**
+      - .github/workflows/data-gateway-image.yml
+  workflow_dispatch:
+    inputs:
+      force:
+        description: Publish even if the version is already on Docker Hub
+        type: boolean
+        default: false
+concurrency: ${{ github.workflow }}-${{ github.ref }}
+permissions:
+  contents: write # the data-gateway-v<version> tag
+env:
+  IMAGE: flaviorita/data-gateway
+jobs:
+  image:
+    name: Build, test and push
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - name: Version
+        id: version
+        run: |
+          V=$(node -p "require('./packages/data-gateway/package.json').version")
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          echo "cli=$(npm view @lambdaorm/cli version)" >> "$GITHUB_OUTPUT"
+          case "$V" in *-*) echo "latest=false" >> "$GITHUB_OUTPUT" ;; *) echo "latest=true" >> "$GITHUB_OUTPUT" ;; esac
+          if docker manifest inspect "$IMAGE:$V" > /dev/null 2>&1 && [ "${{ inputs.force }}" != "true" ]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "::notice::$IMAGE:$V is already on Docker Hub, nothing to publish"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+      - uses: pnpm/action-setup@v6
+        if: steps.version.outputs.exists == 'false'
+      - uses: actions/setup-node@v6
+        if: steps.version.outputs.exists == 'false'
+        with:
+          node-version: 24.16.0
+          cache: pnpm
+      - name: Install dependencies
+        if: steps.version.outputs.exists == 'false'
+        run: pnpm install --frozen-lockfile
+      - name: Build
+        if: steps.version.outputs.exists == 'false'
+        run: pnpm run build
+      # lint, build, test, and dist/
+      - name: Dist
+        if: steps.version.outputs.exists == 'false'
+        working-directory: packages/data-gateway
+        run: npx grunt dist && cp CHANGELOG.md dist/
+      - name: Docker build
+        if: steps.version.outputs.exists == 'false'
+        working-directory: packages/data-gateway
+        run: >-
+          docker build --build-arg CLI_VERSION=${{ steps.version.outputs.cli }}
+          -t $IMAGE:${{ steps.version.outputs.version }}
+          ${{ steps.version.outputs.latest == 'true' && format('-t {0}:latest', env.IMAGE) || '' }} .
+      - name: Test the image (conformance suite)
+        if: steps.version.outputs.exists == 'false'
+        run: scripts/ci-local.sh clients $IMAGE:${{ steps.version.outputs.version }}
+      - uses: docker/login-action@v3
+        if: steps.version.outputs.exists == 'false'
+        with:
+          username: flaviorita
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Push
+        if: steps.version.outputs.exists == 'false'
+        run: |
+          # Docker Hub sometimes drops an upload ("blob upload unknown"): each tag gets 3 tries, 15 s and 30 s apart
+          push() {
+            for attempt in 1 2 3; do
+              docker push "$1" && return 0
+              [ "$attempt" = 3 ] && break
+              echo "::warning::docker push $1 failed (attempt $attempt of 3), retrying in $((attempt * 15)) s"
+              sleep $((attempt * 15))
+            done
+            echo "::error::docker push $1 failed 3 times"
+            return 1
+          }
+          push $IMAGE:${{ steps.version.outputs.version }}
+          if [ "${{ steps.version.outputs.latest }}" = "true" ]; then push $IMAGE:latest; fi
+          echo "::notice::published $IMAGE:${{ steps.version.outputs.version }}"
+      - name: Tag data-gateway-v${{ steps.version.outputs.version }}
+        if: steps.version.outputs.exists == 'false'
+        run: |
+          T=data-gateway-v${{ steps.version.outputs.version }}
+          if git ls-remote --exit-code --tags origin "refs/tags/$T" > /dev/null; then echo "$T already exists"; exit 0; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag -a "$T" -m "data-gateway ${{ steps.version.outputs.version }}"
+          git push origin "$T"
