@@ -1,0 +1,39 @@
+# uuid columns (Postgres dbType uuid), as Ilusor's Cloud has every id since 2026-11-20 (docs/LAMBDAORM_PENDING.md L36,
+# L38). A model of its own on its own tables (lab_uuid.uuid_tasks, lab_uuid.uuid_task_steps, created by uuid.spec.ts), so the
+# lab's model and its drift check (globalSetup) stay as they are.
+domain:
+  entities:
+    - name: UuidTasks
+      primaryKey: [id]
+      properties:
+        - { name: id, length: 36, required: true }
+        - { name: name, required: true }
+      relations:
+        - { name: steps, type: manyToOne, composite: true, from: id, entity: UuidTaskSteps, to: taskId }
+    - name: UuidTaskSteps
+      primaryKey: [taskId, seq]
+      properties:
+        - { name: taskId, length: 36, required: true }
+        - { name: seq, type: integer, required: true }
+        - { name: code, length: 64 }
+      relations:
+        - { name: task, from: taskId, entity: UuidTasks, to: id }
+infrastructure:
+  mappings:
+    - name: site
+      entities:
+        - name: UuidTasks
+          mapping: uuid_tasks
+          properties:
+            - { name: id, mapping: id, dbType: uuid }
+        - name: UuidTaskSteps
+          mapping: uuid_task_steps
+          properties:
+            - { name: taskId, mapping: task_id, dbType: uuid }
+  sources:
+    - { name: uuid, dialect: PostgreSQL, mapping: site, connection: "${ORM_UUID_CNX}" }
+  stages:
+    - name: default
+      sources: [{ name: uuid }]
+    - name: ddl
+      sources: [{ name: uuid }]

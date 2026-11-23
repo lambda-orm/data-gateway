@@ -1,0 +1,69 @@
+# Ilusor Cloud lab: one Postgres with one schema per service (catalog, accounts, site),
+# each with its owner (DDL) and a DML-only user, as Ilusor's Cloud deploys it.
+#   docker compose -p ilusor-cloud-lab up -d                 # Postgres only (lib tests)
+#   docker compose -p ilusor-cloud-lab --profile svc up -d   # + lambdaorm-svc (service tests)
+services:
+  postgres:
+    container_name: ilusor-cloud-lab-postgres
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_DB: ilusor
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+    ports:
+      - 127.0.0.1:55432:5432
+    volumes:
+      - ./db:/docker-entrypoint-initdb.d:ro
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d ilusor"]
+      interval: 2s
+      retries: 30
+  # FerretDB (MongoDB API on Postgres + DocumentDB) as Ilusor's Cloud keeps its documents: no transactions (L35),
+  # UUIDs as binary subtype 4 and money as Decimal128 (L37). Its own Postgres; FerretDB on 127.0.0.1:57017.
+  documents-postgres:
+    container_name: ilusor-cloud-lab-documents-postgres
+    image: ghcr.io/ferretdb/postgres-documentdb:17-0.107.0-ferretdb-2.7.0
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d postgres"]
+      interval: 2s
+      retries: 30
+  ferretdb:
+    container_name: ilusor-cloud-lab-ferretdb
+    image: ghcr.io/ferretdb/ferretdb:2.7.0
+    depends_on:
+      documents-postgres:
+        condition: service_healthy
+    environment:
+      FERRETDB_POSTGRESQL_URL: postgres://admin:admin@documents-postgres:5432/postgres
+      FERRETDB_TELEMETRY: disable
+    ports:
+      - 127.0.0.1:57017:27017
+  # The published service, to compare with the one built from this repo
+  # (the gateway from source, lambda-orm/data-gateway: WORKSPACE=<this folder> PORT=59292 …, see README).
+  orm:
+    profiles: [svc]
+    container_name: ilusor-cloud-lab-orm
+    image: flaviorita/lambdaorm-svc:2.4.0
+    depends_on:
+      postgres:
+        condition: service_healthy
+    env_file: .env.svc
+    environment:
+      HOST: http://0.0.0.0
+      PORT: 9291
+      WORKSPACE: /workspace
+      REQUEST_BODY_SIZE: 10mb
+      RATE_LIMIT_WINDOWS_MS: 60000
+      RATE_LIMIT_MAX: 100000
+    ports:
+      - 127.0.0.1:59291:9291
+    volumes:
+      - ./:/workspace
