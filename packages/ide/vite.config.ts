@@ -4,8 +4,8 @@ import { readFileSync } from 'fs'
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'))
 
-// the data-gateway-ide (its own image) and, with --mode embedded, the UI a gateway serves at {basePath}/ui/:
-// relative paths, so it works under any base path
+// the data-gateway-ide (its own image, served by server/server.mjs): relative paths, so it works under any base path.
+// npm run dev: its requests to /gw/ go to the backend (npm start, DATA_GATEWAY_IDE_TARGETS=* on port 8080)
 export default defineConfig({
 	root: __dirname,
 	base: './',
@@ -16,5 +16,6 @@ export default defineConfig({
 		emptyOutDir: true,
 		chunkSizeWarningLimit: 8000
 	},
-	worker: { format: 'es' }
+	worker: { format: 'es' },
+	server: { proxy: { '/gw/': { target: 'http://127.0.0.1:8080', ws: true } } }
 })

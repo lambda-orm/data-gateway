@@ -1,21 +1,22 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { BrowserSessionStore, Workspace } from '@lambdaorm/ui'
 import { Cable, Menu as MenuIcon, Pencil, Plus, Settings, Trash2 } from 'lucide-react'
-import { ConnectionPage, ConnectionTools, Credential, getJson, Header, HeaderMenu, headersOf, Kind, OUT, PreferencesPage, usePrefs, Who, whoIs, wikiUrl } from './shared'
+import { ConnectionPage, ConnectionTools, Credential, CredentialFields, getJson, Header, HeaderMenu, headersOf, Kind, OUT, PreferencesPage, usePrefs, Who, whoIs, wikiUrl } from './shared'
 import { endpointsOf, McpTab, SwaggerTab, useTransports, WebSocketTab } from './tools'
-import { CredentialFields } from './embedded'
+import { forbiddenTarget, unreachable, viaProxy } from './proxy'
 
 /**
- * The IDE (its own image): no home, no login. It connects to data-gateways, each with its URL and its credential; their
- * schemas, workspaces and projects stay in them, as a database IDE connects to databases. What it keeps of each
- * connection is in this browser: where it is and how it authenticates (the key only if asked to be remembered; else in
- * this tab, asked again after closing it).
+ * The IDE (its own image): no home, no login. It connects to data-gateways, each with the URL of its management and its
+ * credential; their schemas, workspaces and projects stay in them, as a database IDE connects to databases. What it
+ * keeps of each connection is in this browser: where it is and how it authenticates (the key only if asked to be
+ * remembered; else in this tab, asked again after closing it). Every request goes through the backend of the IDE, which
+ * reaches the gateway at that URL (docs/DATA_GATEWAY.md §11.9).
  */
 export interface IdeConnection {
 	id: string
 	name: string
 	protocol: 'http' | 'https'
-	/** host, port and base path: localhost:8097/data-gateway */
+	/** host, port and base path of its management, as the backend of the IDE reaches it: data-gateway:9292 */
 	address: string
 	kind: Kind
 	header: string
@@ -23,7 +24,9 @@ export interface IdeConnection {
 	/** kept only when remember */
 	secret?: string
 	remember: boolean
-	/** the public URLs of its WebSocket and MCP, when the gateway is behind a proxy (else what it tells, on its host) */
+	/** the URLs of its REST, WebSocket and MCP when the backend of the IDE doesn't reach them at the ports the gateway
+	 * tells, on its host (a proxy in front, another network) */
+	restUrl?: string
 	webSocketUrl?: string
 	mcpUrl?: string
 }
@@ -38,6 +41,12 @@ const tab = () => window.sessionStorage
 export const urlOf = (c: Pick<IdeConnection, 'protocol' | 'address'>) => `${c.protocol}://${c.address.trim().replace(/^[a-z]+:\/\//i, '').replace(/\/+$/, '')}`
 const credentialOf = (c: IdeConnection, secrets: Record<string, string>): Credential => ({ kind: c.kind, header: c.header, user: c.user, secret: c.secret ?? secrets[c.id] ?? '' })
 const hasSecret = (c: IdeConnection, secrets: Record<string, string>) => c.kind === 'none' || !!(c.secret ?? secrets[c.id])
+/** Its management, through the backend of the IDE */
+const apiOf = (c: Pick<IdeConnection, 'protocol' | 'address'>) => viaProxy(urlOf(c))
+const fixedOf = (c: IdeConnection) => ({ rest: c.restUrl, webSocket: c.webSocketUrl, mcp: c.mcpUrl })
+/** What failed, said to the person: a target the IDE may not reach, a credential refused, a gateway not reached */
+const problemOf = (e: any, t: { invalid: string, unreachable: string }): string =>
+	forbiddenTarget(e) ? e.message : e?.status === 401 || e?.status === 403 ? t.invalid : unreachable(e) ? t.unreachable : (e?.message ?? String(e))
 
 /** The form of a connection: where it is, how it authenticates; test it, save it, remove it; then who it is */
 const ConnectionEditor: React.FC<{
@@ -60,11 +69,11 @@ const ConnectionEditor: React.FC<{
 	const test = async () => {
 		setBusy(true)
 		try {
-			const version = await getJson(urlOf(draft), '/version').catch(() => undefined)
-			const found = await whoIs(urlOf(draft), credential, t.noReady)
+			const version = await getJson(apiOf(draft), '/version').catch(() => undefined)
+			const found = await whoIs(apiOf(draft), credential, t.noReady)
 			setTested({ ok: true, text: `${t.connectedAs.replace('{name}', found.name)}${version?.version ? ` · data-gateway ${version.version}` : ''}` })
 		} catch (e: any) {
-			setTested({ ok: false, text: e?.status === 401 || e?.status === 403 ? t.invalid : (e?.message === 'Failed to fetch' ? t.unreachable : (e?.message ?? String(e))) })
+			setTested({ ok: false, text: problemOf(e, t) })
 		} finally { setBusy(false) }
 	}
 	const valid = draft.name.trim() && draft.address.trim()
@@ -86,6 +95,7 @@ const ConnectionEditor: React.FC<{
 				<details className="dg-advanced">
 					<summary>{t.publicUrls}</summary>
 					<span className="dg-muted">{t.publicUrlsNote}</span>
+					<label>{t.restUrl}<input aria-label={t.restUrl} value={draft.restUrl ?? ''} onChange={e => set({ restUrl: e.target.value || undefined })} placeholder="http://host:port" spellCheck={false} /></label>
 					<label>{t.webSocketUrl}<input aria-label={t.webSocketUrl} value={draft.webSocketUrl ?? ''} onChange={e => set({ webSocketUrl: e.target.value || undefined })} placeholder="ws://host:port" spellCheck={false} /></label>
 					<label>{t.mcpUrl}<input aria-label={t.mcpUrl} value={draft.mcpUrl ?? ''} onChange={e => set({ mcpUrl: e.target.value || undefined })} placeholder="http://host:port" spellCheck={false} /></label>
 				</details>
@@ -109,17 +119,17 @@ const ConnectionEditor: React.FC<{
 		: <div className="dg-pane"><h2>{t.newConnection}</h2>{form}</div>
 }
 
-/** The tools a connection may open: what its gateway exposes (GET /transports), or the URLs it fixes */
+/** The tools a connection may open: what its gateway exposes (GET /transports of its management), or the URLs it fixes */
 const ToolsOf: React.FC<{ connection: IdeConnection, onOpen: (tool: 'swagger' | 'websocket' | 'mcp') => void }> = ({ connection, onOpen }) => {
 	const transports = useTransports(urlOf(connection))
-	const endpoints = endpointsOf(urlOf(connection), transports, { webSocket: connection.webSocketUrl, mcp: connection.mcpUrl })
+	const endpoints = endpointsOf(urlOf(connection), transports, fixedOf(connection))
 	return <ConnectionTools available={{ swagger: !!endpoints.openapi, webSocket: !!endpoints.webSocket, mcp: !!endpoints.mcp }} onOpen={onOpen} />
 }
 
 /** A tool of a connection in its tab: where its transports are (they are read once the tab opens) */
 const ToolTab: React.FC<{ connection: IdeConnection, tool: 'swagger' | 'websocket' | 'mcp', headers: () => Record<string, string>, theme: 'light' | 'dark' }> = ({ connection, tool, headers, theme }) => {
 	const transports = useTransports(urlOf(connection))
-	const endpoints = endpointsOf(urlOf(connection), transports, { webSocket: connection.webSocketUrl, mcp: connection.mcpUrl })
+	const endpoints = endpointsOf(urlOf(connection), transports, fixedOf(connection))
 	return tool === 'swagger' ? <SwaggerTab endpoints={endpoints} headers={headers} /> : tool === 'websocket' ? <WebSocketTab endpoints={endpoints} headers={headers} theme={theme} /> : <McpTab endpoints={endpoints} headers={headers} theme={theme} />
 }
 
@@ -144,11 +154,11 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 				setProblems(p => ({ ...p, [c.id]: t.needsKey }))
 				continue
 			}
-			whoIs(urlOf(c), credentialOf(c, secrets), t.noReady).then(
+			whoIs(apiOf(c), credentialOf(c, secrets), t.noReady).then(
 				who => { setWhos(w => ({ ...w, [c.id]: who })); setProblems(p => ({ ...p, [c.id]: undefined })) },
 				(e: any) => {
 					setWhos(w => ({ ...w, [c.id]: undefined }))
-					setProblems(p => ({ ...p, [c.id]: e?.status === 401 || e?.status === 403 ? t.invalid : e?.message === 'Failed to fetch' ? t.unreachable : (e?.message ?? String(e)) }))
+					setProblems(p => ({ ...p, [c.id]: problemOf(e, t) }))
 				})
 		}
 	}, [signature, t])
@@ -169,7 +179,7 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 			id: c.id,
 			name: c.name,
 			description: urlOf(c),
-			baseUrl: urlOf(c),
+			baseUrl: apiOf(c),
 			headers: () => headersOf(credential),
 			// what is saved without the gateway's workspaces: per gateway and per user of the credential
 			workspaceKey: `${urlOf(c)}|${whos[c.id]?.name ?? c.user ?? ''}`,

@@ -2,7 +2,7 @@ name: IDE image
 # Publishes flaviorita/data-gateway-ide when a new version of packages/ide reaches main: the version is the one of
 # packages/ide/package.json (bumped with its CHANGELOG entry on a release/ide-<version> branch). A version already on
 # Docker Hub is skipped; a prerelease doesn't move latest. Before pushing, the image must answer /health and serve the
-# IDE. Multi-architecture (amd64, arm64): it is static files on nginx.
+# IDE. Multi-architecture (amd64, arm64): Node without native modules.
 # Secret: DOCKERHUB_TOKEN (a Docker Hub access token, Read & Write, of the user in IMAGE).
 on:
   push:

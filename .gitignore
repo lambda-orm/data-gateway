@@ -44,7 +44,6 @@ confidential/
 packages/*/src/**/*.d.ts
 !packages/ide/src/env.d.ts
 packages/ide/dist
-packages/ide/dist-embedded
 
 # the state the gateway keeps in a workspace (sessions)
 .data-gateway/

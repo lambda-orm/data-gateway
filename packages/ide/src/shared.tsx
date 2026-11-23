@@ -48,7 +48,11 @@ export const usePrefs = () => useContext(PrefsContext)
 /** A GET of a data-gateway (its base URL: http://host:port/{basePath}) */
 export const getJson = async (base: string, path: string, headers: Record<string, string> = {}) => {
 	const response = await fetch(base.replace(/\/+$/, '') + path, { headers })
-	if (!response.ok) throw Object.assign(new Error(`HTTP ${response.status}`), { status: response.status })
+	if (!response.ok) {
+		// the error of the gateway, or of the backend of the IDE (a target it may not reach, a gateway it can't reach)
+		const body = await response.json().catch(() => undefined)
+		throw Object.assign(new Error(body?.message ?? `HTTP ${response.status}`), { status: response.status, error: body?.error })
+	}
 	return response.json()
 }
 
@@ -311,5 +315,33 @@ export const AppShell: React.FC<{ children: (dark: boolean) => React.ReactNode }
 				{children(resolved.dark)}
 			</div>
 		</PrefsContext.Provider>
+	)
+}
+
+/** How a credential authenticates: its kind, its header or user, and its secret (shown on demand) */
+export const CredentialFields: React.FC<{ credential: Credential, onChange: (patch: Partial<Credential>) => void, autoFocus?: boolean }> = ({ credential, onChange, autoFocus }) => {
+	const { t } = usePrefs()
+	const [visible, setVisible] = useState(false)
+	return (
+		<>
+			<label>{t.authentication}
+				<select aria-label="authentication" value={credential.kind} onChange={e => onChange({ kind: e.target.value as Kind })}>
+					<option value="apikey">{t.apikey}</option>
+					<option value="bearer">{t.bearer}</option>
+					<option value="basic">{t.basic}</option>
+					<option value="none">{t.none}</option>
+				</select>
+			</label>
+			{credential.kind === 'apikey' && <label>{t.header}<input aria-label="header" value={credential.header} onChange={e => onChange({ header: e.target.value })} /></label>}
+			{credential.kind === 'basic' && <label>{t.user}<input aria-label="user" value={credential.user} onChange={e => onChange({ user: e.target.value })} autoComplete="username" /></label>}
+			{credential.kind !== 'none' && (
+				<label>{credential.kind === 'basic' ? t.password : credential.kind === 'apikey' ? t.key : t.token}
+					<span className="dg-secret">
+						<input aria-label="secret" type={visible ? 'text' : 'password'} value={credential.secret} onChange={e => onChange({ secret: e.target.value.trim() })} autoComplete="current-password" autoFocus={autoFocus} spellCheck={false} />
+						<button type="button" aria-label={visible ? t.hide : t.show} aria-pressed={visible} title={visible ? t.hide : t.show} onClick={() => setVisible(!visible)}>{visible ? t.hide : t.show}</button>
+					</span>
+				</label>
+			)}
+		</>
 	)
 }

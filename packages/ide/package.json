@@ -2,7 +2,7 @@
   "name": "@lambdaorm/data-gateway-ide",
   "version": "1.0.0",
   "private": true,
-  "description": "λORM data-gateway IDE: connects to data-gateways (their schemas, workspaces and projects stay in them) to write and run queries, model schemas and run commands. Also built into the data-gateway's own /ui (embedded mode).",
+  "description": "λORM data-gateway IDE: connects to data-gateways (their schemas, workspaces and projects stay in them) to write and run queries, model schemas and run commands. Its backend serves the app and reaches the gateways' management port.",
   "license": "MIT",
   "author": "Flavio Lionel Rita",
   "repository": {
@@ -16,9 +16,10 @@
     "lint": "eslint -c ../../eslint.config.js \"src/**/*.{ts,tsx}\"",
     "typecheck": "tsc -p tsconfig.json",
     "build": "vite build",
-    "build:embedded": "vite build --mode embedded --outDir dist-embedded --emptyOutDir",
+    "test": "node --test server/server.test.mjs",
+    "start": "node server/server.mjs",
     "dev": "vite",
-    "dist": "npm run lint && npm run typecheck && npm run build"
+    "dist": "npm run lint && npm run typecheck && npm test && npm run build"
   },
   "devDependencies": {
     "@lambdaorm/ui": "workspace:*",

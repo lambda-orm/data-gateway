@@ -1,50 +1,65 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react'
 import { CodeEditor } from '@lambdaorm/ui'
 import { getJson, SchemaState, usePrefs } from './shared'
+import { viaProxy } from './proxy'
 
 /**
  * What a connection opens in tabs, with its credential: the REST API (its Swagger), its WebSocket (its AsyncAPI and a
- * console) and its MCP (its tools, called). The gateway tells its transports at GET {basePath}/transports; behind a
- * proxy their public URLs are given in the connection.
+ * console) and its MCP (its tools, called). The management of the gateway tells its transports at
+ * GET {basePath}/transports; the backend of the IDE reaches them on the host of the connection, or at the URLs the
+ * connection fixes. Every URL here goes through the backend of the IDE (viaProxy).
  */
 export interface TransportInfo { name: 'http' | 'webSocket' | 'mcpHttp' | 'mcpWebSocket', port: number, basePath: string, docs?: string, schemaPath?: string }
 export interface Endpoints {
-	/** the REST base (the connection's URL) */
-	rest: string
+	/** the management of the gateway (the connection's URL): its schemas */
+	management: string
+	/** the REST base of the http transport, and its OpenAPI */
+	rest?: string
 	openapi?: string
-	/** ws(s)://host:port/basePath of the WebSocket, and its AsyncAPI */
+	/** the WebSocket (ws(s)://…), and its AsyncAPI */
 	webSocket?: string
 	asyncapi?: string
-	/** http(s)://host:port/basePath of the MCP (Streamable HTTP) */
+	/** the MCP (Streamable HTTP) */
 	mcp?: string
+	/** the URLs as the backend of the IDE reaches them, to show */
+	targets: { rest?: string, webSocket?: string, mcp?: string }
 }
 
 /** Where the transports of a gateway are: what it tells, on the host of the connection; what the connection fixes, first */
-export const endpointsOf = (rest: string, transports: TransportInfo[] | undefined, fixed: { webSocket?: string, mcp?: string } = {}): Endpoints => {
-	const url = new URL(rest)
+export const endpointsOf = (management: string, transports: TransportInfo[] | undefined, fixed: { rest?: string, webSocket?: string, mcp?: string } = {}): Endpoints => {
+	const url = new URL(management)
 	const at = (t: TransportInfo, scheme: string) => `${scheme}://${url.hostname}:${t.port}${t.basePath}`
 	const http = transports?.find(t => t.name === 'http')
 	const ws = transports?.find(t => t.name === 'webSocket')
 	const mcp = transports?.find(t => t.name === 'mcpHttp')
 	const secure = url.protocol === 'https:'
-	const webSocket = fixed.webSocket?.trim() || (ws ? at(ws, secure ? 'wss' : 'ws') : undefined)
+	const clean = (u?: string) => u?.trim().replace(/\/+$/, '') || undefined
+	const targets = {
+		rest: clean(fixed.rest) ?? (http ? at(http, secure ? 'https' : 'http') : undefined),
+		webSocket: clean(fixed.webSocket) ?? (ws ? at(ws, secure ? 'wss' : 'ws') : undefined),
+		mcp: clean(fixed.mcp) ?? (mcp ? at(mcp, secure ? 'https' : 'http') : undefined)
+	}
+	const rest = targets.rest ? viaProxy(targets.rest) : undefined
+	const webSocket = targets.webSocket ? viaProxy(targets.webSocket) : undefined
 	return {
+		management: viaProxy(management),
 		rest,
-		// without what the gateway tells (an older one), its swagger is at /openapi.json if it has it
-		openapi: http ? (http.docs ? `${rest}${http.docs}` : undefined) : `${rest}/openapi.json`,
+		openapi: rest && http?.docs ? `${rest}${http.docs}` : undefined,
 		webSocket,
 		asyncapi: webSocket && ws?.docs ? `${webSocket.replace(/^ws/, 'http')}${ws.docs}` : undefined,
-		mcp: fixed.mcp?.trim() || (mcp ? at(mcp, secure ? 'https' : 'http') : undefined)
+		mcp: targets.mcp ? viaProxy(targets.mcp) : undefined,
+		targets
 	}
 }
 
-export const useTransports = (rest: string) => {
+/** The transports a gateway tells at its management (the connection's URL, through the backend of the IDE) */
+export const useTransports = (management: string) => {
 	const [transports, setTransports] = useState<TransportInfo[]>()
 	useEffect(() => {
 		let alive = true
-		getJson(rest, '/transports').then(t => { if (alive) setTransports(t) }, () => { if (alive) setTransports(undefined) })
+		getJson(viaProxy(management), '/transports').then(t => { if (alive) setTransports(t) }, () => { if (alive) setTransports(undefined) })
 		return () => { alive = false }
-	}, [rest])
+	}, [management])
 	return transports
 }
 
@@ -87,8 +102,8 @@ export const SwaggerTab: React.FC<{ endpoints: Endpoints, headers: () => Record<
 	useEffect(() => {
 		if (!endpoints.openapi) return
 		getJson(endpoints.openapi, '').then(
-			// the servers it tells are the gateway's own (its port): the connection's URL is the one the browser reaches
-			document => setSpec({ ...document, servers: [{ url: endpoints.rest }] }),
+			// the servers it tells are the gateway's own (its port): the browser reaches it through the backend of the IDE
+			document => setSpec({ ...document, servers: [{ url: endpoints.rest!, description: endpoints.targets.rest }] }),
 			e => setError(e?.message ?? String(e)))
 	}, [endpoints.openapi, endpoints.rest])
 	if (!endpoints.openapi) return <div className="dg-pane"><p className="dg-muted">{t.notExposed}</p></div>
@@ -108,7 +123,7 @@ export const SwaggerTab: React.FC<{ endpoints: Endpoints, headers: () => Record<
 /** The WebSocket of the connection: its methods (AsyncAPI), a request written as JSON-RPC, what comes back */
 export const WebSocketTab: React.FC<{ endpoints: Endpoints, headers: () => Record<string, string>, theme: 'light' | 'dark' }> = ({ endpoints, headers, theme }) => {
 	const { t } = usePrefs()
-	const schemas = useSchemas(endpoints.rest)
+	const schemas = useSchemas(endpoints.management)
 	const [schema, setSchema] = useState('')
 	useEffect(() => { if (!schemas.some(s => s.path === schema) && schemas[0]) setSchema(schemas[0].path) }, [schemas])
 	const [methods, setMethods] = useState<string[]>([])
@@ -141,7 +156,7 @@ export const WebSocketTab: React.FC<{ endpoints: Endpoints, headers: () => Recor
 		setState('connecting')
 		const ws = new WebSocket(url, protocolsFor(headers()))
 		socket.current = ws
-		ws.onopen = () => { setState('open'); add('info', `${t.connected} ${url}`) }
+		ws.onopen = () => { setState('open'); add('info', `${t.connected} ${endpoints.targets.webSocket}${schema ? `/${schema}` : ''}`) }
 		ws.onmessage = e => { try { add('in', pretty(JSON.parse(String(e.data)))) } catch { add('in', String(e.data)) } }
 		ws.onclose = e => { setState('closed'); add('info', `${t.closed}${e.code ? ` (${e.code}${e.reason ? `: ${e.reason}` : ''})` : ''}`) }
 		ws.onerror = () => add('info', t.unreachable)
@@ -161,7 +176,7 @@ export const WebSocketTab: React.FC<{ endpoints: Endpoints, headers: () => Recor
 		<div className="dg-tool">
 			<div className="dg-tool-bar">
 				<SchemaPick schemas={schemas} value={schema} onChange={setSchema} />
-				<code className="dg-muted">{endpoints.webSocket}/{schema}</code>
+				<code className="dg-muted">{endpoints.targets.webSocket}/{schema}</code>
 				<span className="dg-spacer" />
 				<span className={`dg-status dg-${state === 'open' ? 'ready' : state === 'connecting' ? 'pending' : 'error'}`}>{state === 'open' ? t.connected : state === 'connecting' ? t.checking : t.closed}</span>
 				{state === 'open' ? <button onClick={() => socket.current?.close()}>{t.disconnect}</button> : <button className="dg-primary" onClick={connect} disabled={state === 'connecting'}>{t.connect}</button>}
@@ -196,7 +211,7 @@ const argumentsOf = (schema: any): Record<string, unknown> => {
 /** The MCP of the connection: its tools (of a schema), each called with its arguments, what it gives back */
 export const McpTab: React.FC<{ endpoints: Endpoints, headers: () => Record<string, string>, theme: 'light' | 'dark' }> = ({ endpoints, headers, theme }) => {
 	const { t } = usePrefs()
-	const schemas = useSchemas(endpoints.rest)
+	const schemas = useSchemas(endpoints.management)
 	const [schema, setSchema] = useState('')
 	useEffect(() => { if (!schemas.some(s => s.path === schema) && schemas[0]) setSchema(schemas[0].path) }, [schemas])
 	const client = useRef<any>()
@@ -209,6 +224,7 @@ export const McpTab: React.FC<{ endpoints: Endpoints, headers: () => Record<stri
 	const [busy, setBusy] = useState(false)
 	useEffect(() => () => { client.current?.close?.() }, [])
 	const url = endpoints.mcp ? `${endpoints.mcp}${schema ? `/${schema}` : ''}/mcp` : ''
+	const shown = endpoints.targets.mcp ? `${endpoints.targets.mcp}${schema ? `/${schema}` : ''}/mcp` : ''
 	const connect = async () => {
 		setState('connecting'); setError(undefined); setTools([]); setTool(undefined); setResult(undefined)
 		try {
@@ -243,7 +259,7 @@ export const McpTab: React.FC<{ endpoints: Endpoints, headers: () => Record<stri
 		<div className="dg-tool">
 			<div className="dg-tool-bar">
 				<SchemaPick schemas={schemas} value={schema} onChange={setSchema} />
-				<code className="dg-muted">{url}</code>
+				<code className="dg-muted">{shown}</code>
 				<span className="dg-spacer" />
 				<span className={`dg-status dg-${state === 'open' ? 'ready' : state === 'connecting' ? 'pending' : 'error'}`}>{state === 'open' ? t.connected : state === 'connecting' ? t.checking : t.closed}</span>
 				<button className="dg-primary" onClick={connect} disabled={state === 'connecting' || !url}>{state === 'open' ? t.reconnect : t.connect}</button>
