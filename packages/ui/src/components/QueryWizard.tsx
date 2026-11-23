@@ -89,17 +89,23 @@ export const QueryWizard: React.FC<QueryWizardProps> = ({ api, schema, domain, i
 
 	return (
 		<Modal title={m.title} onClose={onClose} theme={theme}>
+			<div className="lw-wizard-top">
+				<div className="lw-wizard-start">
+					<label className="lw-wizard-field">
+						<span>{m.startFrom}</span>
+						<select aria-label={m.startFrom} value={state.root} onChange={e => { setState(emptyWizard(e.target.value)); setNotice(undefined) }}>
+							{names.map(name => <option key={name} value={name}>{name}</option>)}
+						</select>
+					</label>
+					<span className="lw-hint">{m.tablesHint}</span>
+				</div>
+				<div className="lw-form-actions">
+					<button type="button" onClick={onClose}>{m.cancel}</button>
+					<button type="button" className="lw-primary" disabled={!state.root} onClick={() => onAccept(state, query)}>{initial ? m.update : m.create}</button>
+				</div>
+			</div>
 			<div className="lw-wizard">
 				<div className="lw-wizard-diagram">
-					<div className="lw-wizard-start">
-						<label className="lw-wizard-field">
-							<span>{m.startFrom}</span>
-							<select aria-label={m.startFrom} value={state.root} onChange={e => { setState(emptyWizard(e.target.value)); setNotice(undefined) }}>
-								{names.map(name => <option key={name} value={name}>{name}</option>)}
-							</select>
-						</label>
-						<span className="lw-hint">{m.tablesHint}</span>
-					</div>
 					{state.root && (
 						<DomainDiagram key={state.root} api={api} schema={schema} theme={theme} locale={locale as Locale | undefined} entities={entities} keep={state.root}
 							positions={state.positions} onPositionsChange={positions => setState(s => ({ ...s, positions }))}
@@ -108,10 +114,10 @@ export const QueryWizard: React.FC<QueryWizardProps> = ({ api, schema, domain, i
 					{notice && <div className="lw-hint lw-error-text" role="status">{notice}</div>}
 				</div>
 				<div className="lw-wizard-side">
-					<div className="lw-wizard-field">
+					<div className="lw-wizard-field lw-wizard-grow">
 						<span>{m.query}</span>
 						<div className="lw-wizard-query">
-							<CodeEditor ariaLabel={m.query} language="typescript" theme={theme} value={query} readOnly lambda compact onChange={() => undefined} height={200} />
+							<CodeEditor ariaLabel={m.query} language="typescript" theme={theme} value={query} readOnly lambda compact onChange={() => undefined} height="100%" />
 						</div>
 					</div>
 					{edited && <div className="lw-hint lw-warning-text" role="alert">{m.edited}</div>}
@@ -148,10 +154,6 @@ export const QueryWizard: React.FC<QueryWizardProps> = ({ api, schema, domain, i
 							<input aria-label={m.pageSize} placeholder={m.pageSize} inputMode="numeric" value={state.page.size} onChange={e => setState(s => ({ ...s, page: { ...s.page, size: e.target.value } }))} />
 						</div>
 						<div className="lw-hint">{m.pageHint}</div>
-					</div>
-					<div className="lw-form-actions">
-						<button type="button" onClick={onClose}>{m.cancel}</button>
-						<button type="button" className="lw-primary" disabled={!state.root} onClick={() => onAccept(state, query)}>{initial ? m.update : m.create}</button>
 					</div>
 				</div>
 			</div>
