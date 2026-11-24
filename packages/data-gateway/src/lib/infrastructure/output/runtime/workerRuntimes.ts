@@ -1,3 +1,4 @@
+import { ResolvedObservability } from '@lambdaorm/base'
 import path from 'path'
 import fs from 'fs'
 import os from 'os'
@@ -152,6 +153,8 @@ export interface WorkerRuntimeSettings {
 	/** Where process-mode schemas open their channel socket */
 	socketDir?: string
 	logger: LoggerPort
+	/** the observability of the gateway, resolved in the main thread: the workers don't get the OTEL_* variables */
+	observability?: ResolvedObservability
 }
 
 /** Schema workers in threads or processes, by settings.runtime.mode */
@@ -172,7 +175,8 @@ export class SchemaWorkerRuntime implements SchemaRuntimePort {
 			version,
 			socketDir: this.settings.socketDir ?? os.tmpdir(),
 			metricsEnabled: config.metrics.enabled,
-			admin: config.admin.enabled
+			admin: config.admin.enabled,
+			observability: this.settings.observability
 		}
 		const maxMemoryMb = spec.settings.runtime.maxMemoryMb
 		return spec.settings.runtime.mode === 'process'
@@ -221,7 +225,7 @@ export class EdgeWorkerRuntime implements EdgeRuntimePort {
 		const schemas = specs.map(withoutEnv)
 		// the edge has the gateway's variables only if they are passthrough: it doesn't need them, the config is resolved
 		const config = { ...this.settings.config, orm: { ...this.settings.config.orm, schemas: this.settings.config.orm.schemas.map(s => ({ ...s, env: undefined })) } }
-		return new EdgeThreadHandle('edge', EDGE_ENTRY, { config, schemas, version: this.settings.version }, events, {
+		return new EdgeThreadHandle('edge', EDGE_ENTRY, { config, schemas, version: this.settings.version, observability: this.settings.observability }, events, {
 			env: baseEnv(this.settings.config),
 			maxMemoryMb: this.settings.config.runtime.maxMemoryMb
 		})

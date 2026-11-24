@@ -1,3 +1,4 @@
+import { ResolvedObservability } from '@lambdaorm/base'
 import { parentPort, workerData, TransferListItem } from 'worker_threads'
 import { DataGatewayConfig } from '../../domain/config/dataGatewayConfig'
 import { SchemaDescriptor, SchemaSettings } from '../../domain/runtime/schemas'
@@ -38,6 +39,8 @@ export interface SchemaWorkerData {
 	metricsEnabled: boolean
 	/** transports.management: the read-only administration tools in its MCP server */
 	admin?: boolean
+	/** the observability of the gateway, resolved in the main thread (with the OTEL_* of the gateway) */
+	observability?: ResolvedObservability
 }
 
 /** What the edge gets: the configuration (credentials included: it authenticates) and the schemas, without their env */
@@ -46,6 +49,7 @@ export interface EdgeWorkerData {
 	config: DataGatewayConfig
 	schemas: { descriptor: SchemaDescriptor, settings: SchemaSettings }[]
 	version: string
+	observability?: ResolvedObservability
 }
 
 export interface Control {

@@ -77,6 +77,6 @@ export class StageUseCases {
 
 	public async import (ctx: RequestContext, stage: string, data: unknown): Promise<void> {
 		authorize(ctx.principal, 'stageImport')
-		return this.auditor.track(ctx, { operation: 'stageImport', stage, data }, () => this.orm.import(stage, data))
+		return this.auditor.track(ctx, { operation: 'stageImport', stage, data }, () => this.orm.import(stage, data, ctx.principal.actor))
 	}
 }

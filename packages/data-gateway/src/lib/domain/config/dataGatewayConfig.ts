@@ -1,3 +1,4 @@
+import { ObservabilityConfig } from '@lambdaorm/base'
 import { Permission } from '../auth/permission'
 
 /** A credential of a `local` authenticator. The secret is `value` (bearer token, API key) or `password` (basic). */
@@ -202,6 +203,11 @@ export interface DataGatewayConfig {
 	server: ServerConfig
 	logger: LoggerConfig
 	metrics: MetricsConfig
+	/**
+	 * The OpenTelemetry of the gateway (docs/OBSERVABILITY.md): the same shape as infrastructure.observability of a
+	 * lambdaORM.yaml; the OTEL_* variables override it. Its SDK is the one of λORM too.
+	 */
+	observability?: ObservabilityConfig
 	audit: AuditConfig
 	authentication: AuthenticationConfig
 	rateLimit: RateLimitConfig

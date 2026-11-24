@@ -5,6 +5,7 @@ import { classifyQuery, QueryClassification } from '../../domain/query/queryClas
 import { ExecuteRequest, QueryRequest, RequestContext } from '../ports/input/dataGatewayPort'
 import { OrmQueryPort } from '../ports/output/ormPorts'
 import { Auditor } from './auditor'
+import { withActor } from './actor'
 
 export const requireQuery = (query: unknown): string => {
 	if (typeof query !== 'string' || query.trim() === '') {
@@ -52,7 +53,7 @@ export class QueryUseCases {
 		const query = requireQuery(request.query)
 		const classification = await this.classify(query)
 		authorize(ctx.principal, 'execute', classification.writes)
-		const run = () => this.orm.execute(query, request.data, request.options)
+		const run = () => this.orm.execute(query, request.data, withActor(request.options, ctx))
 		if (!classification.writes) return run()
 		return this.auditor.track(ctx, {
 			operation: 'execute',

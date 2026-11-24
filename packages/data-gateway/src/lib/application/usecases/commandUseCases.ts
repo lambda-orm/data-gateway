@@ -51,11 +51,11 @@ export class CommandUseCases {
 		case 'pushSentences': return this.orm.pushSentences(stage)
 		case 'dropSentences': return this.orm.dropSentences(stage)
 		case 'export': return this.orm.export(stage)
-		case 'push': return this.auditor.track(ctx, { operation: 'stagePush', stage }, () => this.orm.push(stage, force))
-		case 'drop': return this.auditor.track(ctx, { operation: 'stageDrop', stage }, () => this.orm.drop(stage, force))
-		case 'import': return this.auditor.track(ctx, { operation: 'stageImport', stage, data: args[1] }, () => this.orm.import(stage, args[1]))
+		case 'push': return this.auditor.track(ctx, { operation: 'stagePush', stage }, () => this.orm.push(stage, force, ctx.principal.actor))
+		case 'drop': return this.auditor.track(ctx, { operation: 'stageDrop', stage }, () => this.orm.drop(stage, force, ctx.principal.actor))
+		case 'import': return this.auditor.track(ctx, { operation: 'stageImport', stage, data: args[1] }, () => this.orm.import(stage, args[1], ctx.principal.actor))
 		case 'pullSchema': return this.orm.pullSchema(stage)
-		case 'pull': return this.orm.pull(stage)
+		case 'pull': return this.orm.pull(stage, ctx.principal.actor)
 		}
 	}
 }

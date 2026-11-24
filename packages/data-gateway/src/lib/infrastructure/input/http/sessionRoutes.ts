@@ -1,3 +1,4 @@
+import { withActor } from '../../../domain/auth/principal'
 import express from 'express'
 import { Authenticated, SessionService } from '../../../application/session/sessionService'
 import { AuthenticatorPort } from '../../../application/ports/output/supportPorts'
@@ -35,7 +36,13 @@ export const sessionAuthentication = (deps: SessionDeps, open: string[]): expres
 		if (open.includes(req.path)) return next()
 		try {
 			const auth = deps.service.authenticate(tokenOf(req), ipOf(req, deps.address))
-			res.locals.principal = auth.principal
+			// who it is for λORM and the history: the credential, the session, the IDE and its address
+			const client = auth.session.client
+			res.locals.principal = withActor(auth.principal, {
+				session: auth.session.id,
+				client: client?.app ? `${client.app}${client.version ? ` ${client.version}` : ''}` : undefined,
+				ip: auth.session.ip ?? ipOf(req, deps.address)
+			})
 			res.locals.session = auth
 			next()
 		} catch (error) {

@@ -13,6 +13,7 @@ import { ConsoleLogger, WinstonLogger } from '../output/logger/loggers'
 import { PromClientMetrics } from '../output/metrics/promClientMetrics'
 import { composeSchema, ComposedSchema } from './schemaComposer'
 import { control, SchemaWorkerData } from './workerControl'
+import { startObservability, stopObservability } from './observability'
 
 const ctl = control()
 let started = false
@@ -42,9 +43,13 @@ const run = async (): Promise<void> => {
 		} else if (request.type === 'stop') {
 			server?.close()
 			await schema?.stop()
+			// what is pending goes to the exporter
+			await stopObservability().catch(() => undefined)
 			process.exit(0)
 		}
 	})
+	// the SDK before λORM: its Orm uses it
+	const tracing = await startObservability(data.observability, logger)
 	try {
 		schema = await composeSchema({
 			path: data.descriptor.path,
@@ -70,7 +75,7 @@ const run = async (): Promise<void> => {
 		setTimeout(() => process.exit(1), 50)
 		return
 	}
-	dispatcher = new ChannelDispatcher(schema.gateway, schema.mcp, data.settings.server.maxResponseBytes, logger, metrics ? () => metrics.snapshot() : undefined, schema.commands)
+	dispatcher = new ChannelDispatcher(schema.gateway, schema.mcp, data.settings.server.maxResponseBytes, logger, metrics ? () => metrics.snapshot() : undefined, schema.commands, tracing)
 	for (const port of pendingPorts.splice(0)) senders.push(receiveOnPort(port, dispatcher))
 	let socketPath: string | undefined
 	if (data.settings.runtime.mode === 'process') {

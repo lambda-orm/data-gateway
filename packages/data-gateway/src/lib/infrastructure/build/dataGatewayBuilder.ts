@@ -1,3 +1,4 @@
+import { resolveObservability, startObservability, stopObservability } from './observability'
 import path from 'path'
 import fs from 'fs'
 import { InlineSchema, InlineSchemaDirectory } from '../../application/runtime/inlineSchemaDirectory'
@@ -54,6 +55,7 @@ export class RunningGateway {
 	public async stop (): Promise<void> {
 		await Promise.all(this.transports.map(transport => transport.stop().catch(error => this.logger.error(error))))
 		await Promise.all(this.schemas.map(schema => schema.stop()))
+		await stopObservability().catch(() => undefined)
 	}
 }
 
@@ -143,6 +145,8 @@ export class DataGatewayBuilder {
 		const audit = options.audit ?? new StdoutAuditAdapter()
 		const version = options.version ?? packageVersion()
 		const authenticators = options.authenticators ?? new AuthenticatorRegistry()
+		// the SDK before λORM (inline, one for every schema of this thread)
+		await startObservability(resolveObservability(config.observability, process.env), logger)
 
 		const composed: ComposedSchema[] = []
 		const inline: InlineSchema[] = []

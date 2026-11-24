@@ -1,3 +1,4 @@
+import { requestTracer } from '../telemetry/requestTracer'
 import express from 'express'
 import http from 'http'
 import path from 'path'
@@ -8,7 +9,7 @@ import swaggerUi from 'swagger-ui-express'
 import { DataGatewayPort, RequestContext } from '../../../application/ports/input/dataGatewayPort'
 import { SchemaDirectoryPort, ServedSchema } from '../../../application/ports/input/schemaDirectoryPort'
 import { AuthenticatorPort, CredentialScheme, LoggerPort, MetricsPort } from '../../../application/ports/output/supportPorts'
-import { Principal } from '../../../domain/auth/principal'
+import { Principal, withActor } from '../../../domain/auth/principal'
 import { Transport } from '../transport'
 import { toHttpError } from './httpErrors'
 import { closestNames } from '@lambdaorm/base'
@@ -120,6 +121,15 @@ export class HttpTransport implements Transport {
 		return this.deps.directory.schemas().filter(s => s.exposedOn(this.name))
 	}
 
+	/** the route template of a request, for its span: the schema as {schema} (its routes are mounted under each schema) */
+	private routeOf (req: express.Request): string | undefined {
+		const relative = req.route?.path as string | undefined
+		if (relative === undefined) return undefined
+		const tail = relative === '/' ? '' : relative
+		const schema = this.served.find(s => s.path && this.schemaBase(s) === req.baseUrl)
+		return schema ? `${this.options.basePath}/{schema}${tail}` : `${req.baseUrl}${tail}` || '/'
+	}
+
 	private schemaBase (schema: ServedSchema): string {
 		return `${this.options.basePath}${schema.path ? `/${schema.path}` : ''}`
 	}
@@ -140,6 +150,8 @@ export class HttpTransport implements Transport {
 		const app = express()
 		const { metrics } = this.deps
 		app.disable('x-powered-by')
+		// the span of the request first: everything after runs inside it
+		app.use(requestTracer.http(req => this.routeOf(req)))
 		app.use((req, res, next) => {
 			const end = metrics.startTimer()
 			res.on('finish', () => end({
@@ -273,7 +285,7 @@ export class HttpTransport implements Transport {
 				res.status(401).json({ error: 'Unauthorized', message: result.reason ?? 'a valid credential is required' })
 				return
 			}
-			res.locals.principal = result.principal
+			res.locals.principal = withActor(result.principal, { ip: req.socket.remoteAddress })
 			next()
 		} catch (error) {
 			next(error)
