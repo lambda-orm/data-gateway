@@ -212,6 +212,22 @@ export class AdminService {
 		return this.history.read(this.workspaceOf(path), filter)
 	}
 
+	/**
+	 * Who changed an element last (for the 412 of a form: "<credential> changed it at <time>"): the newest change of the
+	 * history on it, on what holds it or inside it, or a write of the whole file
+	 */
+	private async changedBy (workspace: string, target?: string): Promise<{ credential?: string, client?: string, time: string, kind: string, target?: string } | undefined> {
+		if (!this.history) return undefined
+		try {
+			const { items } = await this.history.read(workspace, { limit: 100 })
+			const touches = (other?: string) => !target || !other || other.startsWith(target) || target.startsWith(other)
+			const last = items.find(p => p.kind === 'schema.write' || p.kind === 'schema.file' || (p.kind === 'schema.patch' && touches(p.target)))
+			return last ? { credential: last.actor?.credential, client: last.actor?.client, time: last.time, kind: last.kind, target: last.target } : undefined
+		} catch {
+			return undefined
+		}
+	}
+
 	/** the JSON Patch between two texts of the lambdaORM.yaml; none if one doesn't parse */
 	private diffOf (before: string, after: string) {
 		try {
@@ -332,7 +348,7 @@ export class AdminService {
 			} catch (error) {
 				if (error instanceof VersionConflict) {
 					const current = await this.store.read(workspace, SCHEMA_FILE)
-					throw preconditionFailed(`${SCHEMA_FILE} of "${path}" changed since it was read`, { version: current?.version, text: current?.text })
+					throw preconditionFailed(`${SCHEMA_FILE} of "${path}" changed since it was read`, { version: current?.version, text: current?.text, changedBy: await this.changedBy(workspace) })
 				}
 				throw error
 			}
@@ -363,7 +379,7 @@ export class AdminService {
 				changed = applyPatch(structuredClone(before), patch)
 			} catch (error) {
 				if (!(error instanceof PatchError)) throw error
-				if (error.kind === 'conflict') throw preconditionFailed(error.message, { current: error.current, version: file.version })
+				if (error.kind === 'conflict') throw preconditionFailed(error.message, { current: error.current, version: file.version, changedBy: await this.changedBy(workspace, patch.at.join('/')) })
 				throw error.kind === 'notFound' ? notFound(error.message) : badRequest('ValidationError', error.message)
 			}
 			const text = this.yaml.merge(file.text, changed.schema)
