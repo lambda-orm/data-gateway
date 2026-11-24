@@ -13,6 +13,7 @@ export class PromClientMetrics implements MetricsPort {
 	public readonly enabled = true
 	private readonly register: any
 	private readonly requestTimer: any
+	private readonly serverDuration: any
 	private readonly operations: any
 	private readonly durations: any
 	private readonly forbiddenTotal: any
@@ -29,6 +30,15 @@ export class PromClientMetrics implements MetricsPort {
 			help: 'Duration of HTTP requests in seconds',
 			labelNames: ['method', 'route', 'code', 'credential'],
 			buckets: [0.1, 0.3, 0.5, 0.7, 1, 3, 5, 7, 10],
+			registers
+		})
+		// http.server.request.duration of the OpenTelemetry conventions, with their names in Prometheus (the one above stays
+		// for the dashboards that use it)
+		this.serverDuration = new promClient.Histogram({
+			name: 'http_server_request_duration_seconds',
+			help: 'Duration of HTTP server requests',
+			labelNames: ['http_request_method', 'http_route', 'http_response_status_code'],
+			buckets: [0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10],
 			registers
 		})
 		this.operations = new promClient.Counter({
@@ -59,7 +69,17 @@ export class PromClientMetrics implements MetricsPort {
 	}
 
 	public startTimer () {
-		return this.requestTimer.startTimer()
+		const end = this.requestTimer.startTimer()
+		const start = process.hrtime.bigint()
+		return (labels: Record<string, string | number>) => {
+			const { template, ...rest } = labels
+			end(rest)
+			this.serverDuration.observe({
+				http_request_method: String(labels.method ?? ''),
+				http_route: template === undefined ? '' : String(template),
+				http_response_status_code: String(labels.code ?? '')
+			}, Number(process.hrtime.bigint() - start) / 1e9)
+		}
 	}
 
 	public operation (sample: OperationSample): void {

@@ -25,6 +25,18 @@ export const resolveObservability = (config: ObservabilityConfig | undefined, en
  * finds it and uses it (one SDK, the gateway's service.name and exporter; the traces and rules of each schema still
  * decide λORM's spans). A meter taken before the provider stays a no-op: that is why it goes first.
  */
+/**
+ * With metrics.enabled (the /metrics of Prometheus, on by default) the SDK of every worker also has a Prometheus reader
+ * (without a server of its own): λORM's metrics are added to /metrics. OTLP metrics only if observability asks for them.
+ */
+export const withPrometheus = (config: ResolvedObservability | undefined, metricsEnabled: boolean): ResolvedObservability | undefined => {
+	if (!metricsEnabled) return config
+	const base = config ?? new ObservabilityConfigService().resolve({ serviceName: GATEWAY_SERVICE_NAME }, {})
+	if (base.sdkDisabled) return config
+	const exporters = base.metrics.enabled ? base.metrics.exporters.filter(p => p.type !== 'prometheus') : []
+	return { ...base, metrics: { ...base.metrics, enabled: true, exporters: [...exporters, { type: 'prometheus' }] } }
+}
+
 export const startObservability = async (config: ResolvedObservability | undefined, logger: LoggerPort): Promise<TracingPort> => {
 	if (!config) return NO_TRACING
 	await ObservabilitySdk.start(config, message => logger.warn(message))

@@ -1,5 +1,5 @@
 import { IOrm, Orm } from '@lambdaorm/lib'
-import { Actor, QueryOptions, ScriptOptions } from '@lambdaorm/base'
+import { Actor, QueryOptions, ResolvedObservability, ScriptOptions } from '@lambdaorm/base'
 import { OrmCommandPort, OrmQueryPort, OrmSchemaPort, OrmScriptPort, OrmStagePort } from '../../../application/ports/output/ormPorts'
 
 /** λORM (@lambdaorm/lib) behind the ports of the application: one instance per schema. */
@@ -56,6 +56,12 @@ export class LambdaOrmAdapter implements OrmQueryPort, OrmScriptPort, OrmSchemaP
 	/** The raw infrastructure of the loaded schema (queue, legacy service settings, …) */
 	public infrastructure (): any {
 		return this.orm.state?.schema?.infrastructure
+	}
+
+	/** λORM's spans and metrics with this configuration (the gateway's, for a schema without its own) */
+	public observe (config: ResolvedObservability): void {
+		const helper = (this.orm as any).helper
+		helper.telemetry.configure(config, this.orm.state.schema?.name || '', this.orm.exp, (message: string) => helper.logger.log(message))
 	}
 
 	// ─── queries ─────────────────────────────────────────────────────────────

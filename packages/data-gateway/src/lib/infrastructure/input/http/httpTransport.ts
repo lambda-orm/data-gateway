@@ -157,6 +157,7 @@ export class HttpTransport implements Transport {
 			res.on('finish', () => end({
 				method: req.method,
 				route: req.route?.path ?? 'unmatched',
+				template: this.routeOf(req) ?? '',
 				code: res.statusCode,
 				credential: (res.locals.principal as Principal | undefined)?.name ?? '-'
 			}))

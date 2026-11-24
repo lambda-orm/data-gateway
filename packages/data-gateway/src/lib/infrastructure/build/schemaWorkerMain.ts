@@ -14,6 +14,7 @@ import { PromClientMetrics } from '../output/metrics/promClientMetrics'
 import { composeSchema, ComposedSchema } from './schemaComposer'
 import { control, SchemaWorkerData } from './workerControl'
 import { startObservability, stopObservability } from './observability'
+import { otelMetricsAsPromJson } from '../output/metrics/otelPrometheus'
 
 const ctl = control()
 let started = false
@@ -60,7 +61,8 @@ const run = async (): Promise<void> => {
 			pageSize: data.mcp.pageSize,
 			version: data.version,
 			checkConnections: data.settings.runtime.checkConnections,
-			admin: data.admin
+			admin: data.admin,
+			observability: data.observability
 		}, {
 			logger,
 			audit: new StdoutAuditAdapter(),
@@ -75,7 +77,7 @@ const run = async (): Promise<void> => {
 		setTimeout(() => process.exit(1), 50)
 		return
 	}
-	dispatcher = new ChannelDispatcher(schema.gateway, schema.mcp, data.settings.server.maxResponseBytes, logger, metrics ? () => metrics.snapshot() : undefined, schema.commands, tracing)
+	dispatcher = new ChannelDispatcher(schema.gateway, schema.mcp, data.settings.server.maxResponseBytes, logger, metrics ? async () => [...await metrics.snapshot(), ...await otelMetricsAsPromJson(`schema:${data.descriptor.path || '/'}`)] : undefined, schema.commands, tracing)
 	for (const port of pendingPorts.splice(0)) senders.push(receiveOnPort(port, dispatcher))
 	let socketPath: string | undefined
 	if (data.settings.runtime.mode === 'process') {

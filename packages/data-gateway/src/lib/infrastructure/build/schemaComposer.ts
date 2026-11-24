@@ -1,3 +1,4 @@
+import { ResolvedObservability } from '@lambdaorm/base'
 import fs from 'fs'
 import path from 'path'
 import { DataGateway } from '../../application/facade/dataGateway'
@@ -34,6 +35,8 @@ export interface SchemaCompositionInput {
 	checkConnections: boolean
 	/** transports.management: the read-only tools of the administration in its MCP server */
 	admin?: boolean
+	/** the observability of the gateway: λORM's spans and metrics of a schema without infrastructure.observability */
+	observability?: ResolvedObservability
 }
 
 export interface ComposedSchema {
@@ -58,6 +61,8 @@ export const composeSchema = async (input: SchemaCompositionInput, deps: { logge
 	if (!fs.existsSync(file)) throw new ConfigError([`schema "${input.path || '/'}": ${file} not found (the workspace must have its lambdaORM.yaml)`])
 	const orm = new LambdaOrmAdapter()
 	await orm.init(input.workspace)
+	// a schema without its own observability takes the gateway's (with its own, it decides)
+	if (input.observability && !orm.infrastructure()?.observability) orm.observe(input.observability)
 	let queue: KafkaQueueAdapter | undefined
 	try {
 		if (input.checkConnections) await orm.checkConnections(Math.min(input.settings.server.timeout, 30000))
