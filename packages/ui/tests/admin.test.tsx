@@ -72,7 +72,7 @@ class FakeAdmin implements AdminApiPort {
 	async files (_schema: string, dir?: string) {
 		const roots = { data: 'data', src: 'src', model: 'src/domain' }
 		// the code of two languages, each in its folder of src/
-		if (dir === 'src') return { roots, files: [{ path: 'src/kotlin', dir: true, modified: 'now' }, { path: 'src/kotlin/Model.kt', dir: false, modified: 'now' }, { path: 'src/node', dir: true, modified: 'now' }, { path: 'src/node/domain', dir: true, modified: 'now' }, { path: 'src/node/domain/model.ts', dir: false, modified: 'now' }] }
+		if (dir === 'src') return { roots, files: [{ path: 'src/domain', dir: true, modified: 'now' }, { path: 'src/domain/model.ts', dir: false, modified: 'now' }, { path: 'src/kotlin', dir: true, modified: 'now' }, { path: 'src/kotlin/Model.kt', dir: false, modified: 'now' }, { path: 'src/node', dir: true, modified: 'now' }, { path: 'src/node/domain', dir: true, modified: 'now' }, { path: 'src/node/domain/model.ts', dir: false, modified: 'now' }] }
 		return { roots, files: [{ path: 'data/seed.sql', dir: false, modified: 'now' }] }
 	}
 	async folderZip (schema: string, dir: string) { this.calls.push(`zip ${schema} ${dir}`); return new Blob(['zip']) }
@@ -606,13 +606,15 @@ describe('the explorer as the workspace is', () => {
 		const file = await screen.findByLabelText('data/seed.sql', { selector: 'textarea' }) as HTMLTextAreaElement
 		expect(file.value).toBe('INSERT INTO x VALUES (1);')
 		expect(file.readOnly).toBe(true)
-		// the source code: a node for each language, named so; its files; its zip
+		// the source code: a node for each code, named by its language (and its build: node, client-node); its files; its zip
 		fireEvent.click(row('Source code'))
-		await rowSoon('node')
-		expect(row('kotlin')).toBeTruthy()
-		fireEvent.click(row('node'))
+		await rowSoon('TypeScript · node')
+		expect(row('Kotlin')).toBeTruthy()
+		// code written before each language had its folder: by its language
+		expect(row('TypeScript')).toBeTruthy()
+		fireEvent.click(row('TypeScript · node'))
 		expect(await rowSoon('domain/model.ts')).toBeTruthy()
-		fireEvent.click(within(row('kotlin')!).getByRole('button', { name: 'Download kotlin as .zip' }))
+		fireEvent.click(within(row('Kotlin')!).getByRole('button', { name: 'Download Kotlin as .zip' }))
 		await waitFor(() => expect(admin.calls).toContain('zip northwind/v1 src/kotlin'))
 		// its build, from the source code too
 		fireEvent.click(within(row('Source code')!).getByRole('button', { name: 'Code (build): northwind/v1' }))

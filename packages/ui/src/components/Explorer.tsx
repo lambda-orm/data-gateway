@@ -58,6 +58,9 @@ export interface ExplorerAdmin {
 	onRemoveSchema: (schema: string) => void
 }
 
+/** the folders of src/ the build of the gateway writes, one for each of its languages */
+const BUILD_FOLDERS = ['node', 'client-node']
+
 type Dialog =
 	| { kind: 'folder', schema: string, parentId?: string }
 	| { kind: 'edit', item: SavedItem }
@@ -183,6 +186,16 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 				onOpen={admin?.onOpenFile ? () => admin.onOpenFile!(schema, f.path) : undefined} />
 		))
 	}
+	// the language of a folder of code, by the extensions of its files (the most of them)
+	const LANGUAGES: Record<string, string> = { ts: 'TypeScript', tsx: 'TypeScript', js: 'JavaScript', mjs: 'JavaScript', kt: 'Kotlin', java: 'Java', go: 'Go', py: 'Python', cs: 'C#', rs: 'Rust', php: 'PHP', rb: 'Ruby', swift: 'Swift', dart: 'Dart', scala: 'Scala' }
+	/** what a node of code is named: its language, and the folder when it is the one of a build (node, client-node) */
+	const codeName = (folder: string, paths: string[]): string => {
+		const counts = new Map<string, number>()
+		for (const p of paths) { const language = LANGUAGES[p.split('.').pop()?.toLowerCase() ?? '']; if (language) counts.set(language, (counts.get(language) ?? 0) + 1) }
+		const language = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0]
+		if (!language) return folder
+		return BUILD_FOLDERS.includes(folder) ? `${language} · ${folder}` : language
+	}
 	// the source code: a folder of src/ for each language built (node, client-node…), with its files and its zip
 	const codeRows = (schema: string, level: number, k: (part: string) => string, unfold: (part: string) => () => void) => {
 		const list = files[`${schema}\0src`]
@@ -194,11 +207,12 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 		return codes.flatMap(name => {
 			const dir = `${root}/${name}`
 			const inside = list.filter(f => !f.dir && f.path.startsWith(`${dir}/`))
+			const label = codeName(name, inside.map(f => f.path))
 			const download = admin?.api?.folderZip
-				? <Action label={format(a.downloadZip, { name })} onClick={() => { admin.api!.folderZip!(schema, dir).then(blob => downloadBlob(blob, `${schema.replace(/\//g, '_') || 'root'}-${name}.zip`), e => setMessage(e?.message ?? String(e))) }}><Icons.download /></Action>
+				? <Action label={format(a.downloadZip, { name: label })} onClick={() => { admin.api!.folderZip!(schema, dir).then(blob => downloadBlob(blob, `${schema.replace(/\//g, '_') || 'root'}-${name}.zip`), e => setMessage(e?.message ?? String(e))) }}><Icons.download /></Action>
 				: undefined
 			return [
-				<Row key={`code:${name}`} level={level} label={name} icon={<Icons.code />} title={dir} expanded={expanded.has(k(`code:${name}`))} onToggle={unfold(`code:${name}`)} actions={download} />,
+				<Row key={`code:${name}`} level={level} label={label} icon={<Icons.code />} title={dir} expanded={expanded.has(k(`code:${name}`))} onToggle={unfold(`code:${name}`)} actions={download} />,
 				...(expanded.has(k(`code:${name}`))
 					? inside.length
 						? inside.map(f => <Row key={f.path} level={level + 1} label={f.path.slice(dir.length + 1)} icon={<Icons.query />} title={f.path} onOpen={admin?.onOpenFile ? () => admin.onOpenFile!(schema, f.path) : undefined} />)
