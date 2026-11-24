@@ -767,6 +767,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 						{connectionsHeading && (
 							<div className="lw-connections-root">
 								{connectionsHeading.lead}
+								{/* with a menu before it, the connections go to the right: their title, count and actions together */}
+								{connectionsHeading.lead && <span className="lw-spacer" />}
 								<button type="button" className="lw-icon-button" aria-expanded={!rootFolded} aria-label={`${rootFolded ? x.showExplorer : x.hideExplorer} ${connectionsHeading.title}`} onClick={() => setRootFolded(!rootFolded)}>
 									<span className={`lw-chevron ${rootFolded ? '' : 'lw-open'}`} aria-hidden="true"><Icons.chevron /></span>
 								</button>
@@ -774,7 +776,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 								{!connectionsHeading.lead && <Icons.connections />}
 								<strong className="lw-connections-title">{connectionsHeading.title}</strong>
 								<span className="lw-type">{connections.length}</span>
-								<span className="lw-spacer" />
+								{!connectionsHeading.lead && <span className="lw-spacer" />}
 								<span className="lw-connection-actions">{connectionsHeading.actions}</span>
 							</div>
 						)}
