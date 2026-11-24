@@ -3,10 +3,18 @@
 import React from 'react'
 import { afterEach, describe, expect, test } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { StageDiagram } from '../src/components/StageDiagram'
+import { StageDiagram, StageView } from '../src/components/StageDiagram'
 import { AdminApiPort, StageRouting } from '../src/application/ports'
 
 afterEach(cleanup)
+
+// jsdom has no PointerEvent: without it the coordinates of a drag are lost
+if (!(globalThis as any).PointerEvent) {
+	(globalThis as any).PointerEvent = class extends MouseEvent {
+		pointerId: number
+		constructor (type: string, init: PointerEventInit = {}) { super(type, init); this.pointerId = init.pointerId ?? 1 }
+	}
+}
 
 const ROUTING: StageRouting = {
 	stage: 'default',
@@ -50,5 +58,40 @@ describe('StageDiagram', () => {
 	test('a gateway before 4.1.0 has no routing: it says so', async () => {
 		render(<StageDiagram admin={adminOf(undefined, Object.assign(new Error('GET /admin/workspaces/x/stages/default/routing is not a route of this gateway'), { status: 404 }))} schema="x" stage="default" />)
 		expect((await screen.findByRole('alert')).textContent).toMatch(/4\.1\.0 or later/)
+	})
+
+	test('its toolbar: only the names of the sources, the gateway on the left, a box dragged where one wants; kept with its tab', async () => {
+		const views: StageView[] = []
+		const { container } = render(<StageDiagram admin={adminOf(ROUTING)} schema="northwind" stage="default" onViewChange={v => views.push(v)} />)
+		await screen.findByRole('img', { name: 'Stage default' })
+		const translateOf = (key: string) => container.querySelector(`[data-source="${key}"]`)!.getAttribute('transform')
+		// only the names: no table
+		fireEvent.change(screen.getByLabelText('show'), { target: { value: 'names' } })
+		expect(container.querySelector('[data-source="main"]')!.textContent).not.toContain('TBL_CUSTOMERS')
+		expect(views.at(-1)).toMatchObject({ detail: 'names' })
+		// the gateway on the left: the sources in a column
+		const before = [translateOf('documents'), translateOf('main')]
+		fireEvent.click(screen.getByRole('button', { name: 'the gateway on the left, the sources on the right' }))
+		expect(views.at(-1)).toMatchObject({ orientation: 'left', positions: {} })
+		const after = [translateOf('documents'), translateOf('main')]
+		expect(after).not.toEqual(before)
+		const x = (t: string | null) => Number(/translate\(([-\d.]+),/.exec(t ?? '')![1])
+		expect(x(after[0])).toBe(x(after[1]))
+		// a box dragged: where it was put, told to be kept
+		const box = container.querySelector('[data-source="main"]')!
+		fireEvent.pointerDown(box, { button: 0, clientX: 100, clientY: 100, pointerId: 1 })
+		fireEvent.pointerMove(container.querySelector('.lw-stage-canvas')!, { clientX: 160, clientY: 130, pointerId: 1 })
+		fireEvent.pointerUp(container.querySelector('.lw-stage-canvas')!, { pointerId: 1 })
+		expect(views.at(-1)?.positions?.main).toBeTruthy()
+		// lay out again: every box where it goes by itself
+		fireEvent.click(screen.getByRole('button', { name: 'lay out again' }))
+		expect(views.at(-1)).toMatchObject({ positions: {} })
+	})
+
+	test('how it was left: turned and with a box moved, it opens so', async () => {
+		const { container } = render(<StageDiagram admin={adminOf(ROUTING)} schema="northwind" stage="default" view={{ orientation: 'left', positions: { main: { x: 900, y: 40 } } }} />)
+		await screen.findByRole('img', { name: 'Stage default' })
+		expect(container.querySelector('[data-source="main"]')!.getAttribute('transform')).toBe('translate(900,40)')
+		expect(screen.getByRole('button', { name: 'the gateway on the left, the sources on the right' }).getAttribute('aria-pressed')).toBe('true')
 	})
 })

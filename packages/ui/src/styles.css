@@ -408,7 +408,10 @@
 
 /* the diagram of a stage: the drawing scrolls, the condition of the source chosen stays below */
 .lw-stage-diagram { display: flex; flex-direction: column; gap: var(--lw-space-2); height: 100%; min-height: 0; }
-.lw-stage-canvas { flex: 1 1 auto; min-height: 240px; overflow: auto; border: 1px solid var(--lw-border); border-radius: var(--lw-radius); }
+.lw-stage-canvas { flex: 1 1 auto; height: 62vh; min-height: 240px; overflow: hidden; border: 1px solid var(--lw-border); border-radius: var(--lw-radius); touch-action: none; cursor: default; outline: none; user-select: none; -webkit-user-select: none; }
+.lw-stage-canvas.lw-tool-move, .lw-stage-canvas.lw-tool-move .lw-movable { cursor: grab; }
+.lw-stage-canvas .lw-movable { cursor: move; }
+.lw-stage-diagram > .lw-header { flex-wrap: wrap; }
 .lw-stage-arrow { cursor: pointer; outline: none; }
 .lw-stage-arrow:focus-visible path:nth-child(2) { stroke-width: 3; }
 .lw-stage-condition-panel { flex: none; min-height: 88px; max-height: 30vh; overflow: auto; padding: var(--lw-space-3); border: 1px solid var(--lw-border); border-radius: var(--lw-radius); background: var(--lw-panel); }

@@ -67,4 +67,4 @@ export type { ExpressionInputProps } from './components/ExpressionInput'
 // the numbers and dates of a result in the format of a culture
 export { formatValue, culturePreview, validCulture } from './domain/culture'
 export { StageDiagram } from './components/StageDiagram'
-export type { StageDiagramProps } from './components/StageDiagram'
+export type { StageDiagramProps, StageView } from './components/StageDiagram'

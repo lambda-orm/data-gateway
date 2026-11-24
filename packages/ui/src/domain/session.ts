@@ -19,6 +19,8 @@ export interface SessionTab {
 	file?: string
 	page?: string
 	stage?: string
+	/** a diagram of a stage: how it was left */
+	stageView?: unknown
 }
 
 export interface WorkspaceSession {

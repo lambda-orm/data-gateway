@@ -1,8 +1,17 @@
-import React, { useEffect, useMemo, useState } from 'react'
+import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { AdminApiPort, StageRouting } from '../application/ports'
 import { adminMessagesOf } from '../domain/adminI18n'
-import { format } from '../domain/i18n'
+import { format, messagesOf } from '../domain/i18n'
 import { ExpressionView } from './ExpressionView'
+import { Icons } from './dialogs'
+
+/** How a stage diagram was left: where the gateway goes, what each source shows, where each box was put by hand */
+export interface StageView {
+	orientation?: 'top' | 'left'
+	detail?: 'tables' | 'names'
+	/** the boxes moved by hand: the gateway (GATEWAY_KEY) and each source by its name */
+	positions?: Record<string, { x: number, y: number }>
+}
 
 export interface StageDiagramProps {
 	admin: AdminApiPort
@@ -12,6 +21,9 @@ export interface StageDiagramProps {
 	locale?: string
 	/** it changes when the schema is reloaded: the routing is read again */
 	revision?: number | string
+	/** how it was left (kept with its tab), and each change of it */
+	view?: StageView
+	onViewChange?: (view: StageView) => void
 }
 
 /** The colours are in the drawing, as in the diagram of the domain */
@@ -26,14 +38,20 @@ const ROW = 18
 const HEADER = 44
 const GAP = 56
 const MARGIN = 24
-const GATEWAY = { width: 240, height: 56 }
-/** where the boxes of the sources start: under the gateway, with room for the arrows */
-const SOURCES_Y = MARGIN + GATEWAY.height + 110
+const GATEWAY_SIZE = { width: 240, height: 56 }
+/** the key of the gateway among the positions (a source can't be named so) */
+export const GATEWAY_KEY = '@gateway'
+/** the room between the gateway and the sources, for the arrows */
+const REACH = 150
 
 type Source = StageRouting['sources'][number]
+type Messages = ReturnType<typeof adminMessagesOf>
+interface Point { x: number, y: number }
+interface Row { table: string, note: string, visitor?: true }
+interface Box { key: string, width: number, height: number, rows: Row[], source?: Source, order?: number }
 
 /** A row of a source: its table, the entity when it is named otherwise, and where its reads or writes go */
-const rowText = (e: Source['entities'][number], m: ReturnType<typeof adminMessagesOf>): { table: string, note: string } => ({
+const rowText = (e: Source['entities'][number], m: Messages): Row => ({
 	table: e.table,
 	note: [
 		e.table !== e.entity ? e.entity : '',
@@ -44,7 +62,7 @@ const rowText = (e: Source['entities'][number], m: ReturnType<typeof adminMessag
 })
 
 /** The tables whose reads or writes a source takes while they live in another one (a replica for reading) */
-const visitorsOf = (routing: StageRouting, source: Source, m: ReturnType<typeof adminMessagesOf>): { table: string, note: string, visitor: true }[] =>
+const visitorsOf = (routing: StageRouting, source: Source, m: Messages): Row[] =>
 	routing.sources.filter(other => other !== source).flatMap(other => other.entities
 		.filter(e => e.read === source.name || e.write === source.name)
 		.map(e => ({
@@ -53,25 +71,63 @@ const visitorsOf = (routing: StageRouting, source: Source, m: ReturnType<typeof 
 			visitor: true as const
 		})))
 
-const boxOf = (routing: StageRouting, source: Source, m: ReturnType<typeof adminMessagesOf>, order: number) => {
-	const rows: { table: string, note: string, visitor?: true }[] = [...source.entities.map(e => rowText(e, m)), ...visitorsOf(routing, source, m)]
-	const title = (`${order}. ${source.name}`.length) * 8 + 24
-	const sub = ([source.dialect, source.mapping].filter(Boolean).join(' · ').length) * 6.6 + 24
+const sourceBox = (routing: StageRouting, source: Source, m: Messages, order: number, names: boolean): Box => {
+	const rows = names ? [] : [...source.entities.map(e => rowText(e, m)), ...visitorsOf(routing, source, m)]
+	const title = `${order}. ${source.name}`.length * 8 + 24
+	const sub = [source.dialect, source.mapping, format(m.stageTables, { n: source.entities.length })].filter(Boolean).join(' · ').length * 6.6 + 24
 	const width = Math.ceil(Math.max(200, title, sub, ...rows.map(r => (r.table.length + (r.note ? r.note.length + 2 : 0)) * CHAR + 24)))
-	return { width, height: HEADER + 6 + Math.max(1, rows.length) * ROW + 6, rows }
+	return { key: source.name, width, height: names ? HEADER : HEADER + 6 + Math.max(1, rows.length) * ROW + 6, rows, source, order }
+}
+
+/** Where each box goes by itself: the gateway on top (the sources in a row under it) or on the left (in a column) */
+const autoLayout = (boxes: Box[], gateway: Box, orientation: 'top' | 'left'): Record<string, Point> => {
+	const at: Record<string, Point> = {}
+	if (orientation === 'top') {
+		let x = MARGIN
+		for (const b of boxes) { at[b.key] = { x, y: MARGIN + gateway.height + REACH }; x += b.width + GAP }
+		const span = Math.max(x - GAP - MARGIN, gateway.width)
+		at[GATEWAY_KEY] = { x: MARGIN + span / 2 - gateway.width / 2, y: MARGIN }
+	} else {
+		let y = MARGIN
+		for (const b of boxes) { at[b.key] = { x: MARGIN + gateway.width + REACH * 1.6, y }; y += b.height + GAP / 2 }
+		const span = Math.max(y - GAP / 2 - MARGIN, gateway.height)
+		at[GATEWAY_KEY] = { x: MARGIN, y: MARGIN + span / 2 - gateway.height / 2 }
+	}
+	return at
+}
+
+/** The point of a cubic Bézier at t */
+const bezier = (p: Point[], t: number): Point => {
+	const u = 1 - t
+	return {
+		x: u * u * u * p[0].x + 3 * u * u * t * p[1].x + 3 * u * t * t * p[2].x + t * t * t * p[3].x,
+		y: u * u * u * p[0].y + 3 * u * u * t * p[1].y + 3 * u * t * t * p[2].y + t * t * t * p[3].y
+	}
 }
 
 /**
- * The diagram of a stage: the Data Gateway on top and, under it, each source of the stage in its order with the tables
- * that live in it (by its mapping). Each source has an arrow to the gateway; a click on it shows its condition below, in
- * the colours of the editor. Where each entity goes is told by the gateway, as λORM routes a sentence.
+ * The diagram of a stage: the Data Gateway and each source of the stage in its order with the tables that live in it (by
+ * its mapping), on top and below, or on the left and on the right. Each source has an arrow to the gateway; a click on
+ * it shows its condition below, in the colours of the editor. Its toolbar zooms, selects or moves the view, shows the
+ * tables or only the names of the sources, and turns it; the boxes are put where one wants by dragging them.
  */
-export const StageDiagram: React.FC<StageDiagramProps> = ({ admin, schema, stage, theme = 'light', locale, revision }) => {
+export const StageDiagram: React.FC<StageDiagramProps> = ({ admin, schema, stage, theme = 'light', locale, revision, view: kept, onViewChange }) => {
 	const m = adminMessagesOf(locale)
+	const d = messagesOf(locale)
 	const colors = PALETTES[theme]
 	const [routing, setRouting] = useState<StageRouting>()
 	const [error, setError] = useState<string>()
 	const [chosen, setChosen] = useState<number>()
+	const [orientation, setOrientation] = useState<'top' | 'left'>(kept?.orientation ?? 'top')
+	const [detail, setDetail] = useState<'tables' | 'names'>(kept?.detail ?? 'tables')
+	const [moved, setMoved] = useState<Record<string, Point>>(kept?.positions ?? {})
+	const [tool, setTool] = useState<'select' | 'move'>('select')
+	const [selected, setSelected] = useState<Set<string>>(new Set())
+	const [view, setView] = useState({ x: 0, y: 0, k: 1 })
+	const [band, setBand] = useState<{ from: Point, to: Point }>()
+	const canvas = useRef<HTMLDivElement>(null)
+	const drag = useRef<{ kind: 'pan' | 'boxes' | 'band', start: Point, view: { x: number, y: number, k: number }, origin: Record<string, Point>, moved: boolean }>()
+	const fitted = useRef(false)
 
 	useEffect(() => {
 		let alive = true
@@ -83,31 +139,176 @@ export const StageDiagram: React.FC<StageDiagramProps> = ({ admin, schema, stage
 		return () => { alive = false }
 	}, [admin, schema, stage, revision])
 
+	const tell = (next: Partial<StageView>) => onViewChange?.({ orientation, detail, positions: moved, ...next })
+
+	// the boxes and where each one is: by itself, or where it was put
 	const layout = useMemo(() => {
 		if (!routing) return undefined
-		let x = MARGIN
-		const boxes = routing.sources.map((source, i) => {
-			const box = boxOf(routing, source, m, i + 1)
-			const at = { x, y: SOURCES_Y }
-			x += box.width + GAP
-			return { source, ...box, ...at }
-		})
-		const width = Math.max(x - GAP + MARGIN, GATEWAY.width + 2 * MARGIN)
-		const height = Math.max(SOURCES_Y + 40, ...boxes.map(b => b.y + b.height)) + MARGIN
-		const gateway = { x: width / 2 - GATEWAY.width / 2, y: MARGIN }
-		return { boxes, width, height, gateway }
-	}, [routing, locale])
+		const gateway: Box = { key: GATEWAY_KEY, width: GATEWAY_SIZE.width, height: GATEWAY_SIZE.height, rows: [] }
+		const boxes = routing.sources.map((source, i) => sourceBox(routing, source, m, i + 1, detail === 'names'))
+		const auto = autoLayout(boxes, gateway, orientation)
+		const at = (key: string): Point => moved[key] ?? auto[key]
+		return { gateway, boxes, at }
+	}, [routing, locale, detail, orientation, moved])
+
+	// the drawing as a whole: what fit shows
+	const bounds = () => {
+		if (!layout) return undefined
+		const all = [layout.gateway, ...layout.boxes].map(b => ({ ...layout.at(b.key), w: b.width, h: b.height }))
+		const x0 = Math.min(...all.map(b => b.x)); const y0 = Math.min(...all.map(b => b.y))
+		const x1 = Math.max(...all.map(b => b.x + b.w)); const y1 = Math.max(...all.map(b => b.y + b.h))
+		return { x0, y0, x1, y1 }
+	}
+	const fit = () => {
+		const box = canvas.current?.getBoundingClientRect()
+		const b = bounds()
+		if (!box || !b || box.width === 0) return
+		const k = Math.min(1.25, Math.max(0.05, Math.min((box.width - 2 * MARGIN) / (b.x1 - b.x0), (box.height - 2 * MARGIN) / (b.y1 - b.y0))))
+		setView({ k, x: (box.width - (b.x1 - b.x0) * k) / 2 - b.x0 * k, y: (box.height - (b.y1 - b.y0) * k) / 2 - b.y0 * k })
+	}
+	// shown whole the first time it can be measured (and after turning it or changing what it shows)
+	useEffect(() => {
+		if (fitted.current || !layout) return
+		const box = canvas.current?.getBoundingClientRect()
+		if (!box || box.width === 0) return
+		fitted.current = true
+		fit()
+	})
+	const zoomBy = (factor: number, around?: Point) => {
+		const box = canvas.current?.getBoundingClientRect()
+		const c = around ?? { x: (box?.width ?? 0) / 2, y: (box?.height ?? 0) / 2 }
+		setView(v => { const k = Math.min(3, Math.max(0.05, v.k * factor)); return { k, x: c.x - (c.x - v.x) * (k / v.k), y: c.y - (c.y - v.y) * (k / v.k) } })
+	}
+	// the wheel zooms where the pointer is (not the page)
+	useEffect(() => {
+		const el = canvas.current
+		if (!el) return
+		const wheel = (e: WheelEvent) => {
+			e.preventDefault()
+			const r = el.getBoundingClientRect()
+			zoomBy(e.deltaY < 0 ? 1.1 : 1 / 1.1, { x: e.clientX - r.left, y: e.clientY - r.top })
+		}
+		el.addEventListener('wheel', wheel, { passive: false })
+		return () => el.removeEventListener('wheel', wheel)
+	}, [routing])
+
+	const local = (e: React.PointerEvent): Point => {
+		const r = canvas.current!.getBoundingClientRect()
+		return { x: e.clientX - r.left, y: e.clientY - r.top }
+	}
+	// the pointer stays with the drawing while it is dragged (a browser without capture still drags inside it)
+	const capture = (e: React.PointerEvent) => { try { canvas.current?.setPointerCapture?.(e.pointerId) } catch { /* no capture */ } }
+	const world = (p: Point): Point => ({ x: (p.x - view.x) / view.k, y: (p.y - view.y) / view.k })
+
+	const backgroundDown = (e: React.PointerEvent) => {
+		if (!layout || (e.button !== 0 && e.button !== 1)) return
+		capture(e)
+		const p = local(e)
+		if (tool === 'move' || e.button === 1) drag.current = { kind: 'pan', start: p, view, origin: {}, moved: false }
+		else {
+			if (!e.shiftKey && !e.ctrlKey && !e.metaKey) setSelected(new Set())
+			drag.current = { kind: 'band', start: p, view, origin: {}, moved: false }
+			setBand({ from: world(p), to: world(p) })
+		}
+	}
+	const boxDown = (key: string) => (e: React.PointerEvent) => {
+		if (!layout || e.button !== 0) return
+		e.stopPropagation()
+		if (tool === 'move') { backgroundDown(e); return }
+		capture(e)
+		let now = selected
+		if (e.shiftKey || e.ctrlKey || e.metaKey) { now = new Set(selected); if (now.has(key)) now.delete(key); else now.add(key) } else if (!selected.has(key)) now = new Set([key])
+		setSelected(now)
+		const origin = Object.fromEntries([...now].map(k => [k, layout.at(k)]))
+		drag.current = { kind: 'boxes', start: local(e), view, origin, moved: false }
+	}
+	const pointerMove = (e: React.PointerEvent) => {
+		const g = drag.current
+		if (!g || !layout) return
+		const p = local(e)
+		const dx = p.x - g.start.x; const dy = p.y - g.start.y
+		if (Math.abs(dx) + Math.abs(dy) > 2) g.moved = true
+		if (g.kind === 'pan') setView({ ...g.view, x: g.view.x + dx, y: g.view.y + dy })
+		else if (g.kind === 'boxes') setMoved(all => ({ ...all, ...Object.fromEntries(Object.entries(g.origin).map(([k, at]) => [k, { x: at.x + dx / view.k, y: at.y + dy / view.k }])) }))
+		else setBand(b => b && { ...b, to: world(p) })
+	}
+	const pointerUp = () => {
+		const g = drag.current
+		drag.current = undefined
+		if (!g || !layout) return
+		if (g.kind === 'boxes' && g.moved) tell({ positions: { ...moved } })
+		if (g.kind === 'band' && band) {
+			const x0 = Math.min(band.from.x, band.to.x); const x1 = Math.max(band.from.x, band.to.x)
+			const y0 = Math.min(band.from.y, band.to.y); const y1 = Math.max(band.from.y, band.to.y)
+			const inside = [layout.gateway, ...layout.boxes].filter(b => { const at = layout.at(b.key); return at.x < x1 && at.x + b.width > x0 && at.y < y1 && at.y + b.height > y0 })
+			if (g.moved) setSelected(s => new Set([...s, ...inside.map(b => b.key)]))
+			setBand(undefined)
+		}
+	}
+	const keys = (e: React.KeyboardEvent) => {
+		if (!layout) return
+		if (e.key === 'Escape') setSelected(new Set())
+		else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'a') { e.preventDefault(); setSelected(new Set([GATEWAY_KEY, ...layout.boxes.map(b => b.key)])) }
+	}
+
+	const turn = (next: 'top' | 'left') => { setOrientation(next); setMoved({}); fitted.current = false; tell({ orientation: next, positions: {} }) }
+	const show = (next: 'tables' | 'names') => { setDetail(next); fitted.current = false; tell({ detail: next }) }
+	const relayout = () => { setMoved({}); fitted.current = false; tell({ positions: {} }) }
 
 	if (error) return <div className="lw-stage-diagram"><p className="lw-error-text" role="alert">{error}</p></div>
 	if (!routing || !layout) return <div className="lw-stage-diagram"><p className="lw-muted">…</p></div>
 
-	const { boxes, width, height, gateway } = layout
-	const selected = chosen !== undefined ? routing.sources[chosen] : undefined
+	const { gateway, boxes, at } = layout
+	const g = at(GATEWAY_KEY)
+	const selectedSource = chosen !== undefined ? routing.sources[chosen] : undefined
+	// the arrows reach the side of the gateway that faces the sources, each one at its own place, in the order of the sources
+	const along = (b: Box) => orientation === 'top' ? at(b.key).x + b.width / 2 : at(b.key).y + b.height / 2
+	const order = [...boxes].sort((a, b) => along(a) - along(b))
+	const arrowOf = (b: Box): Point[] => {
+		const p = at(b.key)
+		const slot = (order.indexOf(b) + 1) / (boxes.length + 1)
+		if (orientation === 'top') {
+			const from = { x: p.x + b.width / 2, y: p.y }
+			const to = { x: g.x + gateway.width * slot, y: g.y + gateway.height + 2 }
+			const bend = Math.max(40, Math.abs(from.y - to.y) / 2)
+			return [from, { x: from.x, y: from.y - bend }, { x: to.x, y: to.y + bend }, to]
+		}
+		const from = { x: p.x, y: p.y + b.height / 2 }
+		const to = { x: g.x + gateway.width + 2, y: g.y + gateway.height * slot }
+		const bend = Math.max(40, Math.abs(from.x - to.x) / 2)
+		return [from, { x: from.x - bend, y: from.y }, { x: to.x + bend, y: to.y }, to]
+	}
+	const isSelected = (key: string) => selected.has(key)
+
 	return (
-		<div className="lw-stage-diagram">
+		<div className={`lw-stage-diagram lw-diagram lw-workbench lw-${theme}`}>
+			<div className="lw-header">
+				<span className="lw-tool-group" role="group" aria-label={d.toolSelect}>
+					<button className="lw-tool" aria-label={d.toolSelect} title={d.toolSelect} aria-pressed={tool === 'select'} onClick={() => setTool('select')}><Icons.pointer size={18} /></button>
+					<button className="lw-tool" aria-label={d.toolMove} title={d.toolMove} aria-pressed={tool === 'move'} onClick={() => setTool('move')}><Icons.hand size={18} /></button>
+				</span>
+				<span className="lw-tool-group" role="group" aria-label={d.zoomIn}>
+					<button className="lw-tool" aria-label={d.zoomOut} title={d.zoomOut} onClick={() => zoomBy(1 / 1.25)}><Icons.zoomOut size={18} /></button>
+					<span className="lw-zoom" aria-live="polite">{Math.round(view.k * 100)}%</span>
+					<button className="lw-tool" aria-label={d.zoomIn} title={d.zoomIn} onClick={() => zoomBy(1.25)}><Icons.zoomIn size={18} /></button>
+				</span>
+				<button onClick={fit}>{d.fit}</button>
+				<label className="lw-check">{m.stageShow}{' '}
+					<select aria-label={m.stageShow} value={detail} onChange={e => show(e.target.value as 'tables' | 'names')}>
+						<option value="tables">{m.stageShowTables}</option>
+						<option value="names">{m.stageShowNames}</option>
+					</select>
+				</label>
+				<span className="lw-tool-group" role="group" aria-label={m.stageGatewayTop}>
+					<button className="lw-tool" aria-label={m.stageGatewayTop} title={m.stageGatewayTop} aria-pressed={orientation === 'top'} onClick={() => turn('top')}><Icons.gatewayTop size={18} /></button>
+					<button className="lw-tool" aria-label={m.stageGatewayLeft} title={m.stageGatewayLeft} aria-pressed={orientation === 'left'} onClick={() => turn('left')}><Icons.gatewayLeft size={18} /></button>
+				</span>
+				<button onClick={relayout} disabled={Object.keys(moved).length === 0}>{d.relayout}</button>
+			</div>
 			{routing.unrouted.length > 0 && <p className="lw-hint lw-warning-text" role="status">{format(m.stageUnrouted, { names: routing.unrouted.join(', ') })}</p>}
-			<div className="lw-stage-canvas" style={{ background: colors.canvas }}>
-				<svg width={width} height={height} role="img" aria-label={format(m.stageDiagramOf, { name: stage })} style={{ display: 'block' }}>
+			<div ref={canvas} className={`lw-stage-canvas ${tool === 'move' ? 'lw-tool-move' : ''}`} style={{ background: colors.canvas }} tabIndex={0} onKeyDown={keys}
+				onPointerDown={backgroundDown} onPointerMove={pointerMove} onPointerUp={pointerUp} onPointerCancel={pointerUp}>
+				<svg width="100%" height="100%" role="img" aria-label={format(m.stageDiagramOf, { name: stage })} style={{ display: 'block' }}>
 					<defs>
 						<marker id="lw-stage-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="8" markerHeight="8" orient="auto-start-reverse">
 							<path d="M0,0 L10,5 L0,10 z" fill={colors.line} />
@@ -116,59 +317,69 @@ export const StageDiagram: React.FC<StageDiagramProps> = ({ admin, schema, stage
 							<path d="M0,0 L10,5 L0,10 z" fill={colors.accent} />
 						</marker>
 					</defs>
-					{/* the gateway */}
-					<g transform={`translate(${gateway.x},${gateway.y})`}>
-						<rect width={GATEWAY.width} height={GATEWAY.height} rx={10} fill={colors.gateway} stroke={colors.accent} strokeWidth={1.5} />
-						<text x={GATEWAY.width / 2} y={24} textAnchor="middle" fontFamily={SANS} fontSize={14} fontWeight={700} fill={colors.text}>{m.stageGateway}</text>
-						<text x={GATEWAY.width / 2} y={42} textAnchor="middle" fontFamily={MONO} fontSize={11} fill={colors.muted}>{`${schema || '/'} · ${stage}`}</text>
-					</g>
-					{/* an arrow from each source to the gateway: a click shows its condition */}
-					{boxes.map((b, i) => {
-						const from = { x: b.x + b.width / 2, y: b.y }
-						const to = { x: gateway.x + GATEWAY.width * (i + 1) / (boxes.length + 1), y: gateway.y + GATEWAY.height }
-						const d = `M${from.x},${from.y} C${from.x},${from.y - 60} ${to.x},${to.y + 60} ${to.x},${to.y + 2}`
-						const on = chosen === i
-						const label = b.source.condition ? m.condition : m.theRest
-						const mid = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 + 6 }
-						return (
-							<g key={b.source.name} role="button" tabIndex={0} aria-pressed={on} aria-label={`${m.condition} ${i + 1}. ${b.source.name}`} className="lw-stage-arrow"
-								onClick={() => setChosen(on ? undefined : i)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setChosen(on ? undefined : i) } }}>
-								<path d={d} fill="none" stroke="transparent" strokeWidth={16} />
-								<path d={d} fill="none" stroke={on ? colors.accent : b.source.error ? colors.warn : colors.line} strokeWidth={on ? 2.5 : 1.5}
-									strokeDasharray={b.source.condition ? undefined : '6 4'} markerEnd={`url(#${on ? 'lw-stage-arrow-on' : 'lw-stage-arrow'})`} />
-								<rect x={mid.x - label.length * 3.6 - 8} y={mid.y - 13} width={label.length * 7.2 + 16} height={18} rx={9}
-									fill={colors.box} stroke={on ? colors.accent : colors.border} />
-								<text x={mid.x} y={mid.y} textAnchor="middle" fontFamily={SANS} fontSize={11} fill={on ? colors.accent : colors.muted}>{label}</text>
-							</g>
-						)
-					})}
-					{/* each source with its tables */}
-					{boxes.map((b, i) => (
-						<g key={b.source.name} transform={`translate(${b.x},${b.y})`} data-source={b.source.name}>
-							<rect width={b.width} height={b.height} rx={6} fill={colors.box} stroke={chosen === i ? colors.accent : colors.border} strokeWidth={chosen === i ? 2 : 1} />
-							<rect width={b.width} height={HEADER} rx={6} fill={colors.header} />
-							<rect y={HEADER - 6} width={b.width} height={6} fill={colors.header} />
-							<line x1={0} x2={b.width} y1={HEADER} y2={HEADER} stroke={colors.border} />
-							<text x={10} y={18} fontFamily={SANS} fontSize={13} fontWeight={700} fill={colors.text}>{`${i + 1}. ${b.source.name}`}</text>
-							<text x={10} y={35} fontFamily={SANS} fontSize={11} fill={colors.muted}>{[b.source.dialect, b.source.mapping, format(m.stageTables, { n: b.source.entities.length })].filter(Boolean).join(' · ')}</text>
-							{b.rows.map((r, k) => (
-								<text key={k} x={10} y={HEADER + 6 + k * ROW + 13} fontFamily={MONO} fontSize={12} fill={r.visitor ? colors.muted : colors.text} fontStyle={r.visitor ? 'italic' : undefined}>
-									{r.table}{r.note && <tspan fill={colors.muted}>{`  ${r.note}`}</tspan>}
-								</text>
-							))}
+					<g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
+						{/* an arrow from each source to the gateway: a click shows its condition */}
+						{boxes.map((b, i) => {
+							const p = arrowOf(b)
+							const path = `M${p[0].x},${p[0].y} C${p[1].x},${p[1].y} ${p[2].x},${p[2].y} ${p[3].x},${p[3].y}`
+							const on = chosen === i
+							const label = b.source!.condition ? m.condition : m.theRest
+							const mid = bezier(p, 0.5)
+							return (
+								<g key={b.key} role="button" tabIndex={0} aria-pressed={on} aria-label={`${m.condition} ${i + 1}. ${b.key}`} className="lw-stage-arrow"
+									onPointerDown={e => e.stopPropagation()}
+									onClick={() => setChosen(on ? undefined : i)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setChosen(on ? undefined : i) } }}>
+									<path d={path} fill="none" stroke="transparent" strokeWidth={16} />
+									<path d={path} fill="none" stroke={on ? colors.accent : b.source!.error ? colors.warn : colors.line} strokeWidth={on ? 2.5 : 1.5}
+										strokeDasharray={b.source!.condition ? undefined : '6 4'} markerEnd={`url(#${on ? 'lw-stage-arrow-on' : 'lw-stage-arrow'})`} />
+									<rect x={mid.x - label.length * 3.6 - 8} y={mid.y - 9} width={label.length * 7.2 + 16} height={18} rx={9} fill={colors.box} stroke={on ? colors.accent : colors.border} />
+									<text x={mid.x} y={mid.y + 4} textAnchor="middle" fontFamily={SANS} fontSize={11} fill={on ? colors.accent : colors.muted}>{label}</text>
+								</g>
+							)
+						})}
+						{/* the gateway */}
+						<g transform={`translate(${g.x},${g.y})`} data-box={GATEWAY_KEY} className="lw-movable" onPointerDown={boxDown(GATEWAY_KEY)}>
+							<rect width={gateway.width} height={gateway.height} rx={10} fill={colors.gateway} stroke={colors.accent} strokeWidth={isSelected(GATEWAY_KEY) ? 3 : 1.5} />
+							<text x={gateway.width / 2} y={24} textAnchor="middle" fontFamily={SANS} fontSize={14} fontWeight={700} fill={colors.text}>{m.stageGateway}</text>
+							<text x={gateway.width / 2} y={42} textAnchor="middle" fontFamily={MONO} fontSize={11} fill={colors.muted}>{`${schema || '/'} · ${stage}`}</text>
 						</g>
-					))}
+						{/* each source with its tables */}
+						{boxes.map((b, i) => {
+							const p = at(b.key)
+							const on = chosen === i || isSelected(b.key)
+							return (
+								<g key={b.key} transform={`translate(${p.x},${p.y})`} data-source={b.key} className="lw-movable" onPointerDown={boxDown(b.key)}>
+									<rect width={b.width} height={b.height} rx={6} fill={colors.box} stroke={on ? colors.accent : colors.border} strokeWidth={on ? 2 : 1} />
+									<rect width={b.width} height={detail === 'names' ? b.height : HEADER} rx={6} fill={colors.header} />
+									{detail !== 'names' && <rect y={HEADER - 6} width={b.width} height={6} fill={colors.header} />}
+									{detail !== 'names' && <line x1={0} x2={b.width} y1={HEADER} y2={HEADER} stroke={colors.border} />}
+									<rect width={b.width} height={b.height} rx={6} fill="none" stroke={on ? colors.accent : colors.border} strokeWidth={on ? 2 : 1} />
+									<text x={10} y={18} fontFamily={SANS} fontSize={13} fontWeight={700} fill={colors.text}>{`${b.order}. ${b.key}`}</text>
+									<text x={10} y={35} fontFamily={SANS} fontSize={11} fill={colors.muted}>{[b.source!.dialect, b.source!.mapping, format(m.stageTables, { n: b.source!.entities.length })].filter(Boolean).join(' · ')}</text>
+									{b.rows.map((r, k) => (
+										<text key={k} x={10} y={HEADER + 6 + k * ROW + 13} fontFamily={MONO} fontSize={12} fill={r.visitor ? colors.muted : colors.text} fontStyle={r.visitor ? 'italic' : undefined}>
+											{r.table}{r.note && <tspan fill={colors.muted}>{`  ${r.note}`}</tspan>}
+										</text>
+									))}
+								</g>
+							)
+						})}
+						{band && (
+							<rect x={Math.min(band.from.x, band.to.x)} y={Math.min(band.from.y, band.to.y)} width={Math.abs(band.to.x - band.from.x)} height={Math.abs(band.to.y - band.from.y)}
+								fill={colors.accent} fillOpacity={0.08} stroke={colors.accent} strokeDasharray="4 3" />
+						)}
+					</g>
 				</svg>
 			</div>
 			<div className="lw-stage-condition-panel" aria-live="polite">
-				{selected
+				{selectedSource
 					? (
 						<>
-							<div className="lw-stage-condition-title"><strong>{`${chosen! + 1}. ${selected.name}`}</strong> <span className="lw-muted">{[selected.dialect, selected.mapping].filter(Boolean).join(' · ')}</span></div>
+							<div className="lw-stage-condition-title"><strong>{`${chosen! + 1}. ${selectedSource.name}`}</strong> <span className="lw-muted">{[selectedSource.dialect, selectedSource.mapping].filter(Boolean).join(' · ')}</span></div>
 							<div className="lw-stage-condition-code" aria-label={m.condition}>
-								<ExpressionView expression={selected.condition ?? ''} empty={m.theRest} />
+								<ExpressionView expression={selectedSource.condition ?? ''} empty={m.theRest} />
 							</div>
-							{selected.error && <p className="lw-hint lw-error-text">{format(m.stageConditionError, { error: selected.error })}</p>}
+							{selectedSource.error && <p className="lw-hint lw-error-text">{format(m.stageConditionError, { error: selectedSource.error })}</p>}
 						</>
 						)
 					: <p className="lw-hint">{m.stageChoose}</p>}

@@ -21,7 +21,7 @@ import { CommandsPanel } from './CommandsPanel'
 import { FormFocus, SchemaForms } from './SchemaForms'
 import { FileView } from './FileView'
 import { QueryWizard } from './QueryWizard'
-import { StageDiagram } from './StageDiagram'
+import { StageDiagram, StageView } from './StageDiagram'
 import { queryOf, WizardReading, WizardState, wizardFromQuery } from '../domain/queryWizard'
 import { wizardMessagesOf } from '../domain/wizardI18n'
 import { fromYaml } from '../domain/results'
@@ -128,8 +128,9 @@ interface Tab {
 	focus?: FormFocus
 	/** The file of a file tab (data/…, src/…) */
 	file?: string
-	/** The stage of a diagram of a stage */
+	/** The stage of a diagram of a stage, and how it was left (turned, what it shows, its boxes moved) */
 	stage?: string
+	stageView?: StageView
 	/** The page of the application of a page tab (account, preferences) */
 	page?: string
 	/** The connection it belongs to (by default the first) */
@@ -833,7 +834,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 									</CommandsPanel>
 								)}
 								{r && tab.kind === 'stageDiagram' && adminApi && tab.stage && (
-									<StageDiagram admin={adminApi} schema={tab.schema ?? ''} stage={tab.stage} theme={theme} locale={workbench.locale} revision={sinceOf(conn, tab.schema)} />
+									<StageDiagram admin={adminApi} schema={tab.schema ?? ''} stage={tab.stage} theme={theme} locale={workbench.locale} revision={sinceOf(conn, tab.schema)}
+										view={tab.stageView} onViewChange={stageView => setTabs(all => all.map(t => t.id === tab.id ? { ...t, stageView } : t))} />
 								)}
 								{r && tab.kind === 'file' && adminApi && tab.file && (
 									<FileView admin={adminApi} schema={tab.schema ?? ''} path={tab.file} theme={theme} revision={sinceOf(conn, tab.schema)} />
