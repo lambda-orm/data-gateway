@@ -66,7 +66,7 @@ class FakeAdmin implements AdminApiPort {
 		return this.variables()
 	}
 
-	async build () { return { language: 'node', files: [{ path: 'src/domain/model.ts', written: 'created', bytes: 10 }, { path: 'src/domain/repositoryProduct.ts', written: 'kept', bytes: 5 }] } }
+	async build (_schema?: string, language = 'node', parts: any = {}) { this.calls.push(`build ${language}${parts.model === false ? ' -r' : parts.repositories === false ? ' -m' : ''}`); return { language: 'node', files: [{ path: 'src/domain/model.ts', written: 'created', bytes: 10 }, { path: 'src/domain/repositoryProduct.ts', written: 'kept', bytes: 5 }] } }
 	async buildZip () { return new Blob(['zip']) }
 
 	async files (_schema: string, dir?: string) {
@@ -75,6 +75,7 @@ class FakeAdmin implements AdminApiPort {
 		if (dir === 'src') return { roots, files: [{ path: 'src/domain', dir: true, modified: 'now' }, { path: 'src/domain/model.ts', dir: false, modified: 'now' }, { path: 'src/kotlin', dir: true, modified: 'now' }, { path: 'src/kotlin/Model.kt', dir: false, modified: 'now' }, { path: 'src/node', dir: true, modified: 'now' }, { path: 'src/node/domain', dir: true, modified: 'now' }, { path: 'src/node/domain/model.ts', dir: false, modified: 'now' }] }
 		return { roots, files: [{ path: 'data/seed.sql', dir: false, modified: 'now' }] }
 	}
+	async removeCode (schema: string, dir: string) { this.calls.push(`remove code ${schema} ${dir}`); return { removed: dir } }
 	async folderZip (schema: string, dir: string) { this.calls.push(`zip ${schema} ${dir}`); return new Blob(['zip']) }
 	async fileContent (_schema: string, path: string) { return { path, text: 'INSERT INTO x VALUES (1);', version: 'f1' } }
 
@@ -616,6 +617,23 @@ describe('the explorer as the workspace is', () => {
 		expect(await rowSoon('domain/model.ts')).toBeTruthy()
 		fireEvent.click(within(row('Kotlin')!).getByRole('button', { name: 'Download Kotlin as .zip' }))
 		await waitFor(() => expect(admin.calls).toContain('zip northwind/v1 src/kotlin'))
+		// built again (a build of the gateway: node), or deleted after asking; the code written before has no build again
+		expect(within(row('TypeScript')!).queryByRole('button', { name: 'Build TypeScript again' })).toBeNull()
+		fireEvent.click(within(row('TypeScript · node')!).getByRole('button', { name: 'Build TypeScript · node again' }))
+		// its dialog, on its language: only the model (-m)
+		const again = await screen.findByRole('dialog', { name: 'Code (build)' })
+		expect((within(again).getByLabelText('language') as HTMLSelectElement).value).toBe('node')
+		fireEvent.click(within(again).getByRole('checkbox', { name: /repositories/ }))
+		// at least one: the model can't be left out now
+		expect((within(again).getByRole('checkbox', { name: /model/ }) as HTMLInputElement).disabled).toBe(true)
+		fireEvent.click(within(again).getByRole('button', { name: 'Write in src/ of the workspace' }))
+		await waitFor(() => expect(admin.calls).toContain('build node -m'))
+		expect(await screen.findByText('TypeScript · node built again: 1 files written (the repositories already there stay)')).toBeTruthy()
+		fireEvent.click(within(row('Kotlin')!).getByRole('button', { name: 'Delete Kotlin' }))
+		const confirm = await screen.findByRole('dialog', { name: 'Delete Kotlin' })
+		expect(confirm.textContent).toContain('the repositories written by hand too')
+		fireEvent.click(within(confirm).getByRole('button', { name: 'Delete' }))
+		await waitFor(() => expect(admin.calls).toContain('remove code northwind/v1 src/kotlin'))
 		// its build, from the source code too
 		fireEvent.click(within(row('Source code')!).getByRole('button', { name: 'Code (build): northwind/v1' }))
 		expect(await screen.findByRole('dialog', { name: 'Code (build)' })).toBeTruthy()

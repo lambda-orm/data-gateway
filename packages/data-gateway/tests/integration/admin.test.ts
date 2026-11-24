@@ -219,7 +219,7 @@ describe('admin over REST (inline)', () => {
 		fs.writeFileSync(path.join(root, 'iot/v1/lambdaORM.yaml'), text)
 	})
 
-		test('build: the model and the repositories in src/<language>/domain; a repository written once is the user\'s; also as a zip, and the folder of a language as it is', async () => {
+		test('build: the model and the repositories in src/<language>/domain; a repository written once is the user\'s; also as a zip, the folder of a language as it is, and removed', async () => {
 		const url = '/admin/workspaces/iot%2Fv1/build'
 		expect((await call(base, url, { body: {}, headers: READER })).status).toBe(403)
 		const built = await call(base, url, { body: { language: 'node', write: true }, headers: ADMIN })
@@ -243,6 +243,12 @@ describe('admin over REST (inline)', () => {
 		expect(zip.toString('latin1')).toContain('src/client-node/domain/model.ts')
 		expect(zip.toString('utf8')).toContain("from '@lambdaorm/client'")
 		fs.writeFileSync(path.join(os.tmpdir(), 'data-gateway-build-test.zip'), zip)
+		// only the model, or only the repositories (as -m and -r of the CLI)
+		const onlyModel = await call(base, url, { body: { language: 'client-node', write: true, repositories: false }, headers: ADMIN })
+		expect(onlyModel.body.files.map((f: any) => f.path)).toEqual(['src/client-node/domain/model.ts'])
+		const repositories = Buffer.from(await (await fetch(`${base}${url}.zip?language=node&model=false`, { headers: ADMIN })).arrayBuffer()).toString('latin1')
+		expect(repositories).toContain('repositoryProduct.ts')
+		expect(repositories).not.toContain('model.ts')
 		// the folder of a language as it is in the workspace: its repository as the user left it
 		const folder = await fetch(`${base}/admin/workspaces/iot%2Fv1/files.zip?dir=src/node`, { headers: ADMIN })
 		expect(folder.status).toBe(200)
@@ -251,6 +257,16 @@ describe('admin over REST (inline)', () => {
 		expect(zipped).toContain('domain/repositoryProduct.ts')
 		expect(zipped).toContain('// mine')
 		expect((await fetch(`${base}/admin/workspaces/iot%2Fv1/files.zip?dir=orm_state`, { headers: ADMIN })).status).toBe(403)
+		// the code of a language removed: only a folder of src/, with build
+		const remove = (dir: string, headers = ADMIN) => fetch(`${base}/admin/workspaces/iot%2Fv1/files?dir=${dir}`, { method: 'DELETE', headers })
+		expect((await remove('src/node', READER)).status).toBe(403)
+		expect((await remove('data')).status).toBe(403)
+		expect((await remove('src')).status).toBe(403)
+		expect((await remove('src/kotlin')).status).toBe(404)
+		const removed = await remove('src/node')
+		expect(removed.status).toBe(200)
+		expect(await removed.json()).toEqual({ removed: 'src/node' })
+		expect(fs.existsSync(path.join(root, 'iot/v1/src/node'))).toBe(false)
 	})
 
 		test('the files of data/ and src/ are listed and read; the .env, the state and what is outside them are not', async () => {

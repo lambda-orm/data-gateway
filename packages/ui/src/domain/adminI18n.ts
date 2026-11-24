@@ -152,6 +152,14 @@ export interface AdminMessages {
 	state: string
 	sourceCode: string
 	downloadZip: string
+	rebuildCode: string
+	removeCode: string
+	removeCodeConfirm: string
+	rebuilt: string
+	removedCode: string
+	buildParts: string
+	buildModel: string
+	buildRepositories: string
 }
 
 type Row = [keyof AdminMessages, ...string[]]
@@ -293,6 +301,14 @@ ROWS.push(
 	['state', 'State', 'Estado', 'Estado', 'État', 'Stato', 'Zustand', 'Status', 'Estat', 'Estado', 'Egoera'],
 	['sourceCode', 'Source code', 'Código fuente', 'Código-fonte', 'Code source', 'Codice sorgente', 'Quellcode', 'Broncode', 'Codi font', 'Código fonte', 'Iturburu-kodea'],
 	['downloadZip', 'Download {name} as .zip', 'Descargar {name} como .zip', 'Baixar {name} como .zip', 'Télécharger {name} en .zip', 'Scarica {name} come .zip', '{name} als .zip herunterladen', '{name} als .zip downloaden', 'Baixa {name} com a .zip', 'Descargar {name} como .zip', 'Deskargatu {name} .zip gisa'],
+	['rebuildCode', 'Build {name} again', 'Volver a generar {name}', 'Gerar {name} de novo', 'Régénérer {name}', 'Rigenera {name}', '{name} neu erzeugen', '{name} opnieuw genereren', 'Torna a generar {name}', 'Xerar {name} de novo', 'Sortu {name} berriro'],
+	['removeCode', 'Delete {name}', 'Eliminar {name}', 'Excluir {name}', 'Supprimer {name}', 'Elimina {name}', '{name} löschen', '{name} verwijderen', 'Elimina {name}', 'Eliminar {name}', 'Ezabatu {name}'],
+	['removeCodeConfirm', 'Delete the code {name} ({dir})? Its files go, the repositories written by hand too. It cannot be undone.', '¿Eliminar el código {name} ({dir})? Se van sus archivos, también los repositorios escritos a mano. No se puede deshacer.', 'Excluir o código {name} ({dir})? Os seus arquivos se vão, também os repositórios escritos à mão. Não pode ser desfeito.', 'Supprimer le code {name} ({dir}) ? Ses fichiers partent, les dépôts écrits à la main aussi. C’est irréversible.', 'Eliminare il codice {name} ({dir})? I suoi file se ne vanno, anche i repository scritti a mano. Non si può annullare.', 'Den Code {name} ({dir}) löschen? Seine Dateien gehen, auch die von Hand geschriebenen Repositories. Das kann nicht rückgängig gemacht werden.', 'De code {name} ({dir}) verwijderen? Zijn bestanden gaan weg, ook de met de hand geschreven repositories. Dit kan niet ongedaan worden.', 'Eliminar el codi {name} ({dir})? Se’n van els fitxers, també els repositoris escrits a mà. No es pot desfer.', 'Eliminar o código {name} ({dir})? Vanse os seus ficheiros, tamén os repositorios escritos a man. Non se pode desfacer.', '{name} kodea ({dir}) ezabatu? Bere fitxategiak joango dira, eskuz idatzitako biltegiak ere bai. Ezin da desegin.'],
+	['rebuilt', '{name} built again: {n} files written (the repositories already there stay)', '{name} generado de nuevo: {n} archivos escritos (los repositorios que ya estaban quedan)', '{name} gerado de novo: {n} arquivos gravados (os repositórios que já estavam ficam)', '{name} régénéré : {n} fichiers écrits (les dépôts déjà là restent)', '{name} rigenerato: {n} file scritti (i repository già presenti restano)', '{name} neu erzeugt: {n} Dateien geschrieben (vorhandene Repositories bleiben)', '{name} opnieuw gegenereerd: {n} bestanden geschreven (bestaande repositories blijven)', '{name} generat de nou: {n} fitxers escrits (els repositoris que ja hi eren es queden)', '{name} xerado de novo: {n} ficheiros escritos (os repositorios que xa estaban quedan)', '{name} berriro sortua: {n} fitxategi idatzita (lehendik zeuden biltegiak geratzen dira)'],
+	['removedCode', '{name} deleted', '{name} eliminado', '{name} excluído', '{name} supprimé', '{name} eliminato', '{name} gelöscht', '{name} verwijderd', '{name} eliminat', '{name} eliminado', '{name} ezabatuta'],
+	['buildParts', 'What it generates', 'Qué genera', 'O que gera', 'Ce qu’il génère', 'Cosa genera', 'Was erzeugt wird', 'Wat het genereert', 'Què genera', 'Que xera', 'Zer sortzen duen'],
+	['buildModel', 'the model (rewritten)', 'el modelo (se reescribe)', 'o modelo (reescrito)', 'le modèle (réécrit)', 'il modello (riscritto)', 'das Modell (neu geschrieben)', 'het model (herschreven)', 'el model (es reescriu)', 'o modelo (reescríbese)', 'eredua (berridazten da)'],
+	['buildRepositories', 'the repositories (one already there stays)', 'los repositorios (uno que ya está queda)', 'os repositórios (um que já existe fica)', 'les dépôts (un déjà là reste)', 'i repository (uno già presente resta)', 'die Repositories (vorhandene bleiben)', 'de repositories (een bestaande blijft)', 'els repositoris (un que ja hi és es queda)', 'os repositorios (un que xa está queda)', 'biltegiak (lehendik dagoena geratzen da)'],
 	['condition', 'Condition', 'Condición', 'Condição', 'Condition', 'Condizione', 'Bedingung', 'Voorwaarde', 'Condició', 'Condición', 'Baldintza'],
 	['conditionHint', 'An expression, e.g. entity.in(["Products","Orders"]) && read — empty: the rest', 'Una expresión, p. ej. entity.in(["Products","Orders"]) && read — vacía: el resto', 'Uma expressão, p. ex. entity.in(["Products","Orders"]) && read — vazia: o resto', 'Une expression, p. ex. entity.in(["Products","Orders"]) && read — vide : le reste', 'Un’espressione, es. entity.in(["Products","Orders"]) && read — vuota: il resto', 'Ein Ausdruck, z. B. entity.in(["Products","Orders"]) && read — leer: der Rest', 'Een expressie, bv. entity.in(["Products","Orders"]) && read — leeg: de rest', 'Una expressió, p. ex. entity.in(["Products","Orders"]) && read — buida: la resta', 'Unha expresión, p. ex. entity.in(["Products","Orders"]) && read — baleira: o resto', 'Adierazpen bat, adib. entity.in(["Products","Orders"]) && read — hutsik: gainerakoa'],
 	['addSource', 'Add source', 'Agregar source', 'Adicionar source', 'Ajouter une source', 'Aggiungi source', 'Source hinzufügen', 'Source toevoegen', 'Afegeix source', 'Engadir source', 'Gehitu source'],

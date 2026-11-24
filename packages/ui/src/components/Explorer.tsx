@@ -132,8 +132,9 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 	const [docs, setDocs] = useState<Record<string, any>>({})
 	const [files, setFiles] = useState<Record<string, { path: string, dir: boolean }[] | string>>({})
 	const [roots, setRoots] = useState<Record<string, { data: string, src: string, model: string }>>({})
-	// the schema whose code is being built (its dialog)
-	const [building, setBuilding] = useState<string>()
+	// the schema whose code is being built (its dialog), and the code being deleted (its confirmation)
+	const [building, setBuilding] = useState<{ schema: string, language?: 'node' | 'client-node', name?: string }>()
+	const [removingCode, setRemovingCode] = useState<{ schema: string, dir: string, name: string }>()
 	const loadDoc = (schema: string) => {
 		if (!admin?.loadSchemaDoc) return
 		admin.loadSchemaDoc(schema).then(doc => setDocs(d => ({ ...d, [schema]: doc ?? {} })), () => setDocs(d => ({ ...d, [schema]: {} })))
@@ -208,11 +209,19 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 			const dir = `${root}/${name}`
 			const inside = list.filter(f => !f.dir && f.path.startsWith(`${dir}/`))
 			const label = codeName(name, inside.map(f => f.path))
-			const download = admin?.api?.folderZip
-				? <Action label={format(a.downloadZip, { name: label })} onClick={() => { admin.api!.folderZip!(schema, dir).then(blob => downloadBlob(blob, `${schema.replace(/\//g, '_') || 'root'}-${name}.zip`), e => setMessage(e?.message ?? String(e))) }}><Icons.download /></Action>
-				: undefined
+			const api = admin?.api
+			const canBuild = !!admin?.can.build && !!api
+			const actions = (
+				<>
+					{api?.folderZip && <Action label={format(a.downloadZip, { name: label })} onClick={() => { api.folderZip!(schema, dir).then(blob => downloadBlob(blob, `${schema.replace(/\//g, '_') || 'root'}-${name}.zip`), e => setMessage(e?.message ?? String(e))) }}><Icons.download /></Action>}
+					{canBuild && BUILD_FOLDERS.includes(name) && (
+						<Action label={format(a.rebuildCode, { name: label })} onClick={() => setBuilding({ schema, language: name as 'node' | 'client-node', name: label })}><Icons.rebuild /></Action>
+					)}
+					{canBuild && api!.removeCode && <Action label={format(a.removeCode, { name: label })} onClick={() => setRemovingCode({ schema, dir, name: label })}><Icons.trash /></Action>}
+				</>
+			)
 			return [
-				<Row key={`code:${name}`} level={level} label={label} icon={<Icons.code />} title={dir} expanded={expanded.has(k(`code:${name}`))} onToggle={unfold(`code:${name}`)} actions={download} />,
+				<Row key={`code:${name}`} level={level} label={label} icon={<Icons.code />} title={dir} expanded={expanded.has(k(`code:${name}`))} onToggle={unfold(`code:${name}`)} actions={actions} />,
 				...(expanded.has(k(`code:${name}`))
 					? inside.length
 						? inside.map(f => <Row key={f.path} level={level + 1} label={f.path.slice(dir.length + 1)} icon={<Icons.query />} title={f.path} onOpen={admin?.onOpenFile ? () => admin.onOpenFile!(schema, f.path) : undefined} />)
@@ -478,7 +487,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 											{expanded.has(k('st')) && <Row level={3} label={a.data} icon={<Icons.data />} expanded={expanded.has(k('da'))} onToggle={unfold('da', () => loadFolder(s.path, 'data'))} />}
 											{expanded.has(k('st')) && expanded.has(k('da')) && fileRows(s.path, 'data', 4)}
 											<Row level={2} label={a.sourceCode} icon={<Icons.src />} expanded={expanded.has(k('sc'))} onToggle={unfold('sc', () => loadFolder(s.path, 'src'))}
-												actions={admin.can.build && admin.api ? <Action label={`${a.build}: ${s.path || '/'}`} onClick={() => setBuilding(s.path)}><Icons.code /></Action> : null} />
+												actions={admin.can.build && admin.api ? <Action label={`${a.build}: ${s.path || '/'}`} onClick={() => setBuilding({ schema: s.path })}><Icons.code /></Action> : null} />
 											{expanded.has(k('sc')) && codeRows(s.path, 3, k, unfold)}
 										</>
 									)}
@@ -493,9 +502,23 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 				})}
 			</div>
 
-			{building !== undefined && admin?.api && (
-				<BuildDialog admin={admin.api} schema={building} locale={locale} theme={theme} onClose={() => setBuilding(undefined)}
-					onBuilt={() => { const schema = building; loadFolder(schema, 'src'); setExpanded(e => new Set([...e, `sc:${schema}`])) }} />
+			{removingCode && admin?.api?.removeCode && (
+				<ConfirmDialog title={a.removeCode.replace('{name}', removingCode.name)} confirm={format(a.removeCode, { name: '' }).trim()} cancel={m.cancel} theme={theme}
+					message={format(a.removeCodeConfirm, { name: removingCode.name, dir: removingCode.dir })}
+					onConfirm={() => {
+						const { schema, name } = removingCode
+						admin.api!.removeCode!(schema, removingCode.dir).then(() => { setMessage(format(a.removedCode, { name })); loadFolder(schema, 'src') }, e => setMessage(e?.message ?? String(e)))
+					}}
+					onClose={() => setRemovingCode(undefined)} />
+			)}
+			{building && admin?.api && (
+				<BuildDialog admin={admin.api} schema={building.schema} language={building.language} locale={locale} theme={theme} onClose={() => setBuilding(undefined)}
+					onBuilt={(built, language) => {
+						const { schema, name } = building
+						setMessage(format(a.rebuilt, { name: name ?? language, n: built.filter(f => f.written === 'created' || f.written === 'updated').length }))
+						loadFolder(schema, 'src')
+						setExpanded(e => new Set([...e, `sc:${schema}`]))
+					}} />
 			)}
 			{dialog?.kind === 'folder' && (
 				<ItemDialog title={m.newFolder} submit={m.create} texts={m} theme={theme} initial={{ parentId: dialog.parentId }} folders={folders(dialog.schema)}

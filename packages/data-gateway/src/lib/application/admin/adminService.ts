@@ -411,6 +411,23 @@ export class AdminService {
 		return { name: folder.split('/').pop() || folder, files }
 	}
 
+	/**
+	 * A folder of the source code taken out of the workspace (the code of a language under src/, with its repositories):
+	 * nothing else can be removed so
+	 */
+	public async removeCode (principal: Principal, path: string, dir: unknown): Promise<{ removed: string }> {
+		this.require(principal, 'build')
+		const workspace = this.workspaceOf(path)
+		const roots = await this.fileRoots(workspace)
+		const folder = await this.readable(workspace, dir)
+		if (!folder.startsWith(`${roots.src}/`)) throw new GatewayError(403, 'ForbiddenError', `only a folder of ${roots.src}/ can be removed here`)
+		const listed = await this.store.list(workspace, folder)
+		if (!listed.length) throw notFound(`"${folder}" is not in the workspace of "${path}"`)
+		await this.store.withLock(workspace, () => this.store.remove(workspace, folder))
+		this.audit(principal, `removed the code ${folder} of`, path)
+		return { removed: folder }
+	}
+
 	public async fileContent (principal: Principal, path: string, file: unknown): Promise<{ path: string, text: string, version: string, modified: string }> {
 		this.require(principal, 'schemaRead')
 		const workspace = this.workspaceOf(path)

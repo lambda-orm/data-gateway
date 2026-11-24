@@ -421,3 +421,8 @@
 /* the outline of a diagram: all of it small, in a corner of the view, with a frame on what the view shows */
 .lw-outline { position: absolute; top: 8px; right: 8px; bottom: 8px; z-index: 2; border: 1px solid; border-radius: var(--lw-radius); box-shadow: var(--lw-shadow-pop, 0 4px 12px rgb(0 0 0 / 15%)); overflow: hidden; cursor: crosshair; touch-action: none; }
 .lw-outline svg { display: block; width: 100%; height: 100%; }
+
+/* what the build generates: a check, its name and what it is, on one line each */
+.lw-build-parts { display: flex; flex-direction: column; align-items: flex-start; gap: var(--lw-space-2); text-align: left; }
+.lw-form .lw-build-part, .lw-build-part { display: flex; flex-direction: row; align-items: center; gap: var(--lw-space-2); margin: 0; }
+.lw-build-part > input { margin: 0; }

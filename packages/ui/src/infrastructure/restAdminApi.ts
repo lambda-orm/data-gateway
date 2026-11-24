@@ -1,4 +1,4 @@
-import { AdminApiPort, AdminCapabilities, CommandName, CommandPreview, CommandsSummary, ExpressionCheck, ExpressionLanguage, Job, SchemaIssue, SchemaPatch, SchemaVariable, StageRouting, WorkbenchProblem } from '../application/ports'
+import { AdminApiPort, AdminCapabilities, CommandName, CommandPreview, CommandsSummary, ExpressionCheck, ExpressionLanguage, Job, SchemaIssue, SchemaPatch, SchemaVariable, StageRouting, WorkbenchProblem, CodeParts } from '../application/ports'
 import { SavedItem } from '../domain/savedItems'
 import { GatewayRequestError, HeadersProvider } from './restQueryApi'
 
@@ -6,6 +6,9 @@ import { GatewayRequestError, HeadersProvider } from './restQueryApi'
 export const schemaSegment = (schema: string): string => schema === '' ? '~' : encodeURIComponent(schema)
 
 /** The administration of a gateway over REST ({baseUrl}/admin) */
+/** only what is left out is sent: the gateway generates both by default */
+const partsOf = (parts: CodeParts): Record<string, boolean> => ({ ...(parts.model === false ? { model: false } : {}), ...(parts.repositories === false ? { repositories: false } : {}) })
+
 export class RestAdminApi implements AdminApiPort {
 	private readonly baseUrl: string
 
@@ -59,16 +62,21 @@ export class RestAdminApi implements AdminApiPort {
 		return (await this.request(`/workspaces/${schemaSegment(schema)}/variables`, { method: 'PUT', body: change })).body as { variables: SchemaVariable[] }
 	}
 
-	public async build (schema: string, language: 'node' | 'client-node') {
-		return (await this.request(`/workspaces/${schemaSegment(schema)}/build`, { body: { language, write: true } })).body as { language: string, files: { path: string, written?: string, bytes: number }[] }
+	public async build (schema: string, language: 'node' | 'client-node', parts: CodeParts = {}) {
+		return (await this.request(`/workspaces/${schemaSegment(schema)}/build`, { body: { language, write: true, ...partsOf(parts) } })).body as { language: string, files: { path: string, written?: string, bytes: number }[] }
+	}
+
+	public async removeCode (schema: string, dir: string) {
+		return (await this.request(`/workspaces/${schemaSegment(schema)}/files?dir=${encodeURIComponent(dir)}`, { method: 'DELETE' })).body as { removed: string }
 	}
 
 	public async folderZip (schema: string, dir: string) {
 		return await this.blob(`${this.baseUrl}/admin/workspaces/${schemaSegment(schema)}/files.zip?dir=${encodeURIComponent(dir)}`)
 	}
 
-	public async buildZip (schema: string, language: 'node' | 'client-node') {
-		return await this.blob(`${this.baseUrl}/admin/workspaces/${schemaSegment(schema)}/build.zip?language=${language}`)
+	public async buildZip (schema: string, language: 'node' | 'client-node', parts: CodeParts = {}) {
+		const only = Object.entries(partsOf(parts)).map(([k, v]) => `&${k}=${v}`).join('')
+		return await this.blob(`${this.baseUrl}/admin/workspaces/${schemaSegment(schema)}/build.zip?language=${language}${only}`)
 	}
 
 	/** a file to download (a zip): the error of the gateway when it isn't one */

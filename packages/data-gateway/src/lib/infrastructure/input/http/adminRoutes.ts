@@ -64,11 +64,13 @@ export const adminRouter = (admin: AdminService, authenticate: express.RequestHa
 		return { language: result.language, files: result.files.map(f => ({ path: f.path, written: f.written, bytes: Buffer.byteLength(f.content) })) }
 	}))
 	router.get('/workspaces/:schema/build.zip', handle(async (req, res) => {
-		const result = await admin.build(principal(res), schemaParam(req.params.schema), { language: req.query.language ?? 'node' }, await domainOf(req, res))
+		// model=false, repositories=false: only the other (as the -m and -r of the CLI)
+		const result = await admin.build(principal(res), schemaParam(req.params.schema), { language: req.query.language ?? 'node', model: req.query.model !== 'false', repositories: req.query.repositories !== 'false' }, await domainOf(req, res))
 		res.status(200).type('application/zip').setHeader('Content-Disposition', `attachment; filename="${(schemaParam(req.params.schema) || 'root').replace(/\//g, '_')}-${result.language}.zip"`)
 		res.send(zipOf(result.files.map(f => ({ path: f.path, content: f.content }))))
 		return undefined
 	}))
+	router.delete('/workspaces/:schema/files', handle(async (req, res) => admin.removeCode(principal(res), schemaParam(req.params.schema), req.query.dir)))
 	router.get('/workspaces/:schema/files.zip', handle(async (req, res) => {
 		const folder = await admin.folderFiles(principal(res), schemaParam(req.params.schema), req.query.dir)
 		res.status(200).type('application/zip').setHeader('Content-Disposition', `attachment; filename="${(schemaParam(req.params.schema) || 'root').replace(/\//g, '_')}-${folder.name}.zip"`)
