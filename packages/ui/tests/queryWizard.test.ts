@@ -145,4 +145,11 @@ describe('the query wizard', () => {
 		expect(wizardFromQuery('', domain)).toBeUndefined()
 		expect(wizardFromQuery('Orders', domain)).toEqual({ state: emptyWizard('Orders'), unread: [] })
 	})
+
+	test('a map with every field of its table is no map: all of them ticked', () => {
+		const reading = wizardFromQuery('Customers.include(p => p.orders.map(q => ({ id: q.id, customerId: q.customerId, orderDate: q.orderDate }))).map(p => ({ id: p.id, name: p.name, country: p.country }))', domain)
+		expect(reading?.state.fields).toEqual({})
+		expect(reading?.state.tables).toEqual([{ entity: 'Orders', from: 'Customers', relation: 'orders' }])
+		expect(reading?.unread).toEqual([])
+	})
 })

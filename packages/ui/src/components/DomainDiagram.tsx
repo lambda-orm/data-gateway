@@ -52,7 +52,7 @@ export interface DomainDiagramProps {
 	/** A + on each box that has related tables out of the diagram adds them (editable); from: the box of the + */
 	onAddEntities?: (entities: string[], from?: string) => void
 	/** The query wizard: a check on each field of each box; a click on a field chooses it or leaves it */
-	fieldSelection?: { chosen: Record<string, string[]>, onToggle: (entity: string, field: string) => void }
+	fieldSelection?: { chosen: Record<string, string[]>, onToggle: (entity: string, field: string) => void, onToggleAll?: (entity: string) => void }
 	/** An entity that can't be taken out (the one the wizard starts from) */
 	keep?: string
 	/** Buttons of the application in the bar (Save) */
@@ -127,8 +127,10 @@ const Box: React.FC<{
 	onAddRelated?: () => void, addRelatedLabel?: string
 	/** the fields chosen (the wizard), and a click on a field */
 	chosen?: Set<string>, onToggleField?: (field: string) => void
-}> = ({ entity, at, compact, focused, foreignKeys, colors, onClick, onDoubleClick, onPointerDown, onRemove, removeLabel, onAddRelated, addRelatedLabel, chosen, onToggleField }) => {
-	const { width, height } = boxSize(entity, compact)
+	/** the check of the title: every field (no map), and a click on it */
+	allChosen?: boolean, onToggleAll?: () => void, allLabel?: string
+}> = ({ entity, at, compact, focused, foreignKeys, colors, onClick, onDoubleClick, onPointerDown, onRemove, removeLabel, onAddRelated, addRelatedLabel, chosen, onToggleField, allChosen, onToggleAll, allLabel }) => {
+	const { width, height } = boxSize(entity, compact, !!onToggleAll)
 	const keys = new Set(entity.primaryKey ?? [])
 	return (
 		<g transform={`translate(${at.x},${at.y})`} className={`lw-entity ${onPointerDown ? 'lw-movable' : ''}`} data-entity={entity.name} onClick={onClick} onDoubleClick={onDoubleClick} onPointerDown={onPointerDown}>
@@ -138,7 +140,15 @@ const Box: React.FC<{
 			{!compact && <rect y={HEADER - 6} width={width} height={6} fill={colors.header} />}
 			{!compact && <line x1={0} x2={width} y1={HEADER} y2={HEADER} stroke={colors.border} />}
 			<rect width={width} height={height} rx={6} fill="none" stroke={focused ? colors.accent : colors.border} strokeWidth={focused ? 2 : 1} />
-			<text x={10} y={17} fontFamily={SANS} fontSize={13} fontWeight={700} fontStyle={entity.abstract ? 'italic' : undefined} fill={colors.text}>
+			{onToggleAll && (
+				<g role="checkbox" aria-checked={!!allChosen} aria-label={`${entity.name}: ${allLabel ?? 'all properties'}`} className="lw-field-row"
+					onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onToggleAll() }} onDoubleClick={e => e.stopPropagation()}>
+					<title>{allLabel}</title>
+					<rect x={9} y={7} width={12} height={12} rx={2} fill={allChosen ? colors.accent : colors.box} stroke={allChosen ? colors.accent : colors.border} />
+					{allChosen && <path d="M11.5 13l2.5 2.5 4.5 -5" fill="none" stroke="#fff" strokeWidth={1.8} />}
+				</g>
+			)}
+			<text x={onToggleAll ? 28 : 10} y={17} fontFamily={SANS} fontSize={13} fontWeight={700} fontStyle={entity.abstract ? 'italic' : undefined} fill={colors.text}>
 				{entity.name}{entity.extends && <tspan fill={colors.muted} fontWeight={400}> : {entity.extends}</tspan>}
 			</text>
 			{!compact && (entity.properties ?? []).map((property, i) => {
@@ -249,6 +259,8 @@ const Line: React.FC<{
  */
 export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 	const { schema: fixedSchema, theme = 'light', locale, onQuery, onOpenEntity, layout = elkLayout, height = '70vh', entities: only, positions, onPositionsChange, toolbar } = props
+	// the boxes of the wizard have a check in their title (every field)
+	const checks = !!props.fieldSelection?.onToggleAll
 	const editable = onPositionsChange !== undefined
 	const m = messagesOf(locale)
 	const colors = PALETTES[theme]
@@ -347,7 +359,7 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 		const entity = domain?.entities.find(e => e.name === focus)
 		if (depth !== 'all' && !only && k < READABLE && at && entity) {
 			// the neighbours don't fit readable: readable, on the entity in focus (the wheel shows the rest)
-			const size = boxSize(entity, compact)
+			const size = boxSize(entity, compact, checks)
 			setView({ k: READABLE, x: box.clientWidth / 2 - (at.x + size.width / 2) * READABLE, y: MARGIN - Math.max(0, at.y * READABLE - box.clientHeight / 3) })
 			return
 		}
@@ -365,7 +377,7 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 		const boxes = new Map<string, Placed>()
 		for (const e of shownEntities) {
 			const at = placed?.[e.name] ?? base.nodes.get(e.name)
-			if (at) boxes.set(e.name, { ...at, ...boxSize(e, compact) })
+			if (at) boxes.set(e.name, { ...at, ...boxSize(e, compact, checks) })
 		}
 		let width = 0
 		let height = 0
@@ -378,7 +390,7 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 		let live = true
 		setDrawing(true)
 		layout({
-			nodes: shownEntities.map(e => ({ id: e.name, ...boxSize(e, compact) })),
+			nodes: shownEntities.map(e => ({ id: e.name, ...boxSize(e, compact, checks) })),
 			edges: shownEdges.map(e => ({ id: e.id, source: e.parent, target: e.child }))
 		}).then(result => {
 			if (!live) return
@@ -390,7 +402,7 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 			let height = 0
 			for (const e of shownEntities) {
 				const at = nodes.get(e.name)!
-				const size = boxSize(e, compact)
+				const size = boxSize(e, compact, checks)
 				width = Math.max(width, at.x + size.width)
 				height = Math.max(height, at.y + size.height)
 			}
@@ -433,7 +445,7 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 		const entity = domain?.entities.find(e => e.name === name)
 		const box = viewport.current
 		if (!at || !entity || !box) return
-		const size = boxSize(entity, compact)
+		const size = boxSize(entity, compact, checks)
 		setView(v => ({ k: v.k, x: box.clientWidth / 2 - (at.x + size.width / 2) * v.k, y: box.clientHeight / 2 - (at.y + Math.min(size.height, 200) / 2) * v.k }))
 	}
 	const choose = (name: string) => {
@@ -617,7 +629,7 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 		const inside = tiny ? [] : shownEntities.filter(entity => {
 			const at = laid.nodes.get(entity.name)
 			if (!at) return false
-			const size = boxSize(entity, compact)
+			const size = boxSize(entity, compact, checks)
 			return at.x < right && at.x + size.width > left && at.y < bottom && at.y + size.height > top
 		}).map(e => e.name)
 		setSelected(s => new Set([...(band.add ? s : []), ...inside]))
@@ -755,8 +767,11 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 									colors={colors} onClick={e => click(entity.name, e)} onDoubleClick={() => doubleClick(entity)} onPointerDown={editable ? boxDown(entity.name) : undefined}
 									onRemove={props.onRemoveEntity && shownEntities.length > 1 && entity.name !== props.keep ? () => props.onRemoveEntity!(entity.name) : undefined} removeLabel={m.removeFromDiagram}
 									onAddRelated={props.onAddEntities && outside.get(entity.name)?.size ? () => setAdding({ entity: entity.name, chosen: new Set() }) : undefined} addRelatedLabel={m.addRelated}
-									chosen={props.fieldSelection ? new Set(props.fieldSelection.chosen[entity.name] ?? []) : undefined}
-									onToggleField={props.fieldSelection ? field => props.fieldSelection!.onToggle(entity.name, field) : undefined} />
+									// no field chosen: every field (no map), all of them ticked
+									chosen={props.fieldSelection ? new Set(props.fieldSelection.chosen[entity.name]?.length ? props.fieldSelection.chosen[entity.name] : (entity.properties ?? []).map(p => p.name)) : undefined}
+									onToggleField={props.fieldSelection ? field => props.fieldSelection!.onToggle(entity.name, field) : undefined}
+									allChosen={props.fieldSelection ? !props.fieldSelection.chosen[entity.name]?.length : undefined}
+									onToggleAll={props.fieldSelection?.onToggleAll ? () => props.fieldSelection!.onToggleAll!(entity.name) : undefined} allLabel={m.detailAll} />
 							)
 						})}
 					</g>

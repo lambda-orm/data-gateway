@@ -40,16 +40,24 @@ describe('QueryWizard', () => {
 		const dialog = await screen.findByRole('dialog', { name: 'Query wizard' })
 		expect((within(dialog).getByLabelText('start from') as HTMLSelectElement).value).toBe('Customers')
 		fireEvent.change(within(dialog).getByLabelText('start from'), { target: { value: 'Orders' } })
-		// a click on a field chooses it
-		fireEvent.click(await screen.findByRole('checkbox', { name: 'Orders.orderDate' }))
-		fireEvent.click(screen.getByRole('checkbox', { name: 'Orders.id' }))
+		// no map: every field ticked, and the check of its title
+		expect((await screen.findByRole('checkbox', { name: 'Orders.orderDate' })).getAttribute('aria-checked')).toBe('true')
+		expect(screen.getByRole('checkbox', { name: 'Orders: all properties' }).getAttribute('aria-checked')).toBe('true')
+		// the check of the title off: only its primary key; then a click on a field ticks it
+		fireEvent.click(screen.getByRole('checkbox', { name: 'Orders: all properties' }))
+		expect(screen.getByRole('checkbox', { name: 'Orders.customerId' }).getAttribute('aria-checked')).toBe('false')
+		fireEvent.click(screen.getByRole('checkbox', { name: 'Orders.orderDate' }))
 		expect(screen.getByRole('checkbox', { name: 'Orders.id' }).getAttribute('aria-checked')).toBe('true')
+		expect(screen.getByRole('checkbox', { name: 'Orders: all properties' }).getAttribute('aria-checked')).toBe('false')
 		// the + of Orders adds Customers (its relation to one)
 		fireEvent.click(screen.getByRole('button', { name: /Orders$/ }))
 		const related = await screen.findByRole('dialog', { name: /Orders/ })
 		fireEvent.click(within(related).getByRole('checkbox', { name: /Customers/ }))
 		fireEvent.click(within(related).getByRole('button', { name: /\(1\)/ }))
-		fireEvent.click(await screen.findByRole('checkbox', { name: 'Customers.name' }))
+		// all of Customers ticked: unticking id leaves name; the last one stays
+		fireEvent.click(await screen.findByRole('checkbox', { name: 'Customers.id' }))
+		fireEvent.click(screen.getByRole('checkbox', { name: 'Customers.name' }))
+		expect(screen.getByRole('checkbox', { name: 'Customers.name' }).getAttribute('aria-checked')).toBe('true')
 		fireEvent.change(screen.getByRole('textbox', { name: 'filter' }), { target: { value: 'p.orderDate > from' } })
 		fireEvent.click(screen.getByRole('button', { name: '+ add an order' }))
 		fireEvent.change(screen.getByLabelText('order 1'), { target: { value: 'orderDate' } })

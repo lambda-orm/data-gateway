@@ -250,6 +250,12 @@ export const wizardFromQuery = (query: string, domain: DomainInfo): WizardReadin
 	const state = emptyWizard(chain.head)
 	const unread: string[] = []
 	const short = (text: string) => text.replace(/\s+/g, ' ').trim()
+	// the fields of a map; all of them is the same as no map (every field ticked)
+	const keep = (entity: string, fields: string[]) => {
+		const all = entityOf(domain, entity)?.properties ?? []
+		if (all.length && all.every(p => fields.includes(p.name))) return
+		state.fields[entity] = fields
+	}
 
 	/** the includes of a table: each one a relation of it, with its map and its own includes */
 	const include = (entity: string, args: string) => {
@@ -266,7 +272,7 @@ export const wizardFromQuery = (query: string, domain: DomainInfo): WizardReadin
 				else if (call.name === 'map') {
 					const inner = lambdaOf(call.args)
 					const map = inner && fieldsOf(inner.body, inner.v, entityOf(domain, relation.entity))
-					if (map?.fields.length) state.fields[relation.entity] = map.fields
+					if (map?.fields.length) keep(relation.entity, map.fields)
 					if (!map) unread.push(`${v}.${name}.map(${short(call.args)})`)
 					else unread.push(...map.other.map(o => `${v}.${name}.map(${inner!.v} => ({ ${o} }))`))
 				} else unread.push(`${v}.${name}.${call.name}(${short(call.args)})`)
@@ -281,7 +287,7 @@ export const wizardFromQuery = (query: string, domain: DomainInfo): WizardReadin
 		else if (call.name === 'include') include(state.root, call.args)
 		else if (call.name === 'map' && lambda && !state.fields[state.root]) {
 			const map = fieldsOf(lambda.body, lambda.v, entityOf(domain, state.root))
-			if (map?.fields.length) state.fields[state.root] = map.fields
+			if (map?.fields.length) keep(state.root, map.fields)
 			if (!map) unread.push(`.map(${short(call.args)})`)
 			else unread.push(...map.other.map(o => `.map(${lambda.v} => ({ ${o} }))`))
 		} else if (call.name === 'sort' && lambda) sorts.push(call)
