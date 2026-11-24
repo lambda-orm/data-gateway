@@ -152,7 +152,13 @@ export class ManagementClient {
 		const error = await failure(response)
 		if (!ENDED.includes(error.error ?? '')) return response
 		this.ended(error)
-		if (this.revoked || !this.credential()) return response
+		if (this.revoked) return response
+		if (!this.credential()) {
+			// no key to log in again (not remembered, or the gateway restarted): the connection asks for it, and what
+			// asked says so instead of the gateway's "management needs a session"
+			this.set({ who: undefined, problem: this.texts.needsKey })
+			return new Response(JSON.stringify({ error: error.error, message: this.texts.needsKey }), { status: 401, headers: { 'Content-Type': 'application/json' } })
+		}
 		try { await this.login() } catch { return response }
 		return send()
 	}
