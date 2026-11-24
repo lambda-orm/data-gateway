@@ -422,12 +422,79 @@ describe('the schema as forms', () => {
 		fireEvent.click(await rowSoon('Entities'))
 		fireEvent.click(await rowSoon('Products'))
 		const tabs = await screen.findByRole('tablist', { name: 'Products' })
-		expect(within(tabs).getAllByRole('tab').map(t => t.textContent)).toEqual(['Properties (1)', 'Relations (0)', 'Keys and indexes', 'Data', 'Diagram'])
+		expect(within(tabs).getAllByRole('tab').map(t => t.textContent)).toEqual(['Properties (1)', 'Relations (0)', 'Keys and indexes', 'Validations (0)', 'Data', 'Diagram'])
 		fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
 		// its form, in a tab of its own, read first
 		const form = await waitFor(() => { const found = document.querySelector('[role=tabpanel]:not([hidden]) .lw-schema-forms'); expect(found).toBeTruthy(); return found as HTMLElement })
 		expect(within(form).getByRole('button', { name: 'Edit' })).toBeTruthy()
 		expect(screen.getAllByRole('tab').filter(t => t.textContent?.trim() === 'Products')).toHaveLength(2)
+	})
+
+	test('a property with expressions: ƒ Expression in its row, and under the table its expressions in colors', async () => {
+		class ExpressionsApi extends FakeApi {
+			async domain () { return { entities: [{ name: 'Products', primaryKey: ['id'], properties: [{ name: 'id', type: 'integer' }, { name: 'code', readValue: 'decrypt(code,"k")', writeValue: 'encrypt(code,"k")' }], relations: [] }], enums: [] } as any }
+		}
+		const admin = new FakeAdmin()
+		admin.text = FORMS_SCHEMA
+		render(<Workspace api={new ExpressionsApi()} admin={admin} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" refreshMs={0} />)
+		await waitFor(() => expect(row('domain')).toBeTruthy())
+		fireEvent.click(row('domain'))
+		fireEvent.click(await rowSoon('Entities'))
+		fireEvent.click(await rowSoon('Products'))
+		const toggles = await screen.findAllByRole('button', { name: 'ƒ Expression' })
+		expect(toggles).toHaveLength(1)
+		expect(toggles[0].getAttribute('title')).toBe('readValue, writeValue')
+		fireEvent.click(toggles[0])
+		const detail = screen.getByRole('region', { name: 'Expressions of code' })
+		expect([...detail.querySelectorAll('dt')].map(d => d.textContent)).toEqual(['readValue', 'writeValue'])
+		expect(detail.querySelector('dd .lw-tok-variable')?.textContent).toBe('code')
+		fireEvent.click(toggles[0])
+		expect(screen.queryByRole('region', { name: 'Expressions of code' })).toBeNull()
+	})
+
+	test('the validations: their own tab, and under a property those whose condition uses it', async () => {
+		class ValidationsApi extends FakeApi {
+			async domain () {
+				return { entities: [{ name: 'Products', primaryKey: ['id'], relations: [],
+					properties: [{ name: 'id', type: 'integer' }, { name: 'price', type: 'decimal' }, { name: 'cost', type: 'decimal' }],
+					constraints: [{ message: 'price is not negative', condition: 'isNull(price) || price >= 0' }, { message: 'cost is not over price', condition: 'cost <= price' }] }], enums: [] } as any
+			}
+		}
+		const admin = new FakeAdmin()
+		admin.text = FORMS_SCHEMA
+		render(<Workspace api={new ValidationsApi()} admin={admin} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" refreshMs={0} />)
+		await waitFor(() => expect(row('domain')).toBeTruthy())
+		fireEvent.click(row('domain'))
+		fireEvent.click(await rowSoon('Entities'))
+		fireEvent.click(await rowSoon('Products'))
+		// a property with validations has its button, though it has no expressions; id has none
+		const toggles = await screen.findAllByRole('button', { name: 'ƒ Expression' })
+		expect(toggles.map(b => b.getAttribute('title'))).toEqual(['Validations (2)', 'Validations (1)'])
+		fireEvent.click(toggles[1])
+		const detail = screen.getByRole('region', { name: 'Expressions of cost' })
+		expect([...detail.querySelectorAll('dl.lw-validations dt')].map(d => d.textContent)).toEqual(['cost is not over price'])
+		// the tab: each validation, its condition in colors and the properties it uses
+		fireEvent.click(screen.getByRole('tab', { name: 'Validations (2)' }))
+		const table = screen.getByRole('table', { name: 'Validations' })
+		const rows = within(table).getAllByRole('row').slice(1)
+		expect(rows.map(r => r.querySelectorAll('td')[1].textContent)).toEqual(['price is not negative', 'cost is not over price'])
+		expect([...rows[1].querySelectorAll('.lw-uses')].map(c => c.textContent)).toEqual(['cost', 'price'])
+		expect(rows[1].querySelector('.lw-tok-variable')?.textContent).toBe('cost')
+	})
+
+	test('a validation of the form: its message in the row, its condition in an editor under the table', async () => {
+		const admin = new FakeAdmin()
+		await openForms(admin)
+		await editEntity('Products')
+		const constraints = await screen.findByRole('table', { name: 'constraints' })
+		fireEvent.click(within(constraints).getByRole('button', { name: 'Add' }))
+		fireEvent.change(within(constraints).getByLabelText('0 message'), { target: { value: 'id is positive' } })
+		fireEvent.click(within(constraints).getByRole('button', { name: '0 condition' }))
+		const detail = await screen.findByRole('region', { name: 'id is positive' })
+		fireEvent.change(within(detail).getByLabelText('id is positive condition', { selector: 'textarea' }), { target: { value: 'id > 0' } })
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+		await waitFor(() => expect(admin.patches).toHaveLength(1))
+		expect(admin.patches[0].value.constraints).toEqual([{ message: 'id is positive', condition: 'id > 0' }])
 	})
 
 	test('an entity: a property added and saved as one change, with the entity as it was read', async () => {
@@ -446,6 +513,23 @@ describe('the schema as forms', () => {
 			value: { name: 'Products', primaryKey: ['id'], properties: [{ name: 'id', type: 'integer' }, { name: 'price', type: 'decimal' }] },
 			expected: { name: 'Products', primaryKey: ['id'], properties: [{ name: 'id', type: 'integer' }] }
 		})
+	})
+
+	test('a property: its expressions under the table, written in an editor and saved with it', async () => {
+		const admin = new FakeAdmin()
+		await openForms(admin)
+		await editEntity('Products')
+		const properties = await screen.findByRole('table', { name: 'properties' })
+		// no type: string, as λORM takes it
+		expect((within(properties).getByLabelText('id type') as HTMLSelectElement).selectedOptions[0].textContent).toBe('integer')
+		fireEvent.click(within(properties).getByRole('button', { name: 'id expressions' }))
+		const detail = await screen.findByRole('region', { name: 'Expressions of id' })
+		const writeValue = within(detail).getByLabelText('id writeValue', { selector: 'textarea' })
+		fireEvent.change(writeValue, { target: { value: 'encrypt(id,"${KEY}")' } })
+		expect(within(properties).getByRole('button', { name: 'id expressions' }).textContent).toContain('ƒ 1')
+		fireEvent.click(screen.getByRole('button', { name: 'Save' }))
+		await waitFor(() => expect(admin.patches).toHaveLength(1))
+		expect(admin.patches[0].value.properties).toEqual([{ name: 'id', type: 'integer', writeValue: 'encrypt(id,"${KEY}")' }])
 	})
 
 	test('someone else changed the same element: the form shows what it has now', async () => {

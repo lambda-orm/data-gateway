@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react'
 import { QueryApiPort } from '../application/ports'
-import { cardinalityOf, DomainInfo, edgesOf, EntityInfo, referencesTo } from '../domain/diagram'
+import { cardinalityOf, constraintsOf, DomainInfo, edgesOf, EntityInfo, expressionsOf, propertiesIn, referencesTo } from '../domain/diagram'
 import { explorerMessagesOf, format } from '../domain/explorerI18n'
 import { Locale } from '../domain/i18n'
 import { measure, failure, QueryResult } from '../domain/results'
@@ -32,7 +32,7 @@ export interface EntityViewProps {
 	pageSize?: number
 }
 
-type Section = 'properties' | 'relations' | 'keys' | 'data' | 'diagram'
+type Section = 'properties' | 'relations' | 'keys' | 'validations' | 'data' | 'diagram'
 
 const Check: React.FC<{ on?: boolean }> = ({ on }) => <>{on ? '✓' : ''}</>
 
@@ -48,6 +48,8 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 	const [section, setSection] = useState<Section>('properties')
 	const [page, setPage] = useState(1)
 	const [result, setResult] = useState<QueryResult>()
+	// the property whose expressions are shown under the table
+	const [expressionsShown, setExpressionsShown] = useState<string>()
 
 	useEffect(() => { loadDomain().then(setDomain, e => setError(e?.message ?? String(e))) }, [loadDomain])
 
@@ -84,6 +86,7 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 	const keys = new Set(entity.primaryKey ?? [])
 	const unique = new Set(entity.uniqueKey ?? [])
 	const link = (target: string) => <button className="lw-link" onClick={() => onOpenEntity(schema, target)}>{target}</button>
+	const shown = entity.properties?.find(p => p.name === expressionsShown)
 	const rows = Array.isArray(result?.value) ? (result!.value as unknown[]).length : 0
 
 	return (
@@ -100,7 +103,7 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 			</div>
 			<div className="lw-toolbar" role="tablist" aria-label={entity.name}>
 				{([['properties', `${m.properties} (${entity.properties?.length ?? 0})`], ['relations', `${m.relations} (${(entity.relations?.length ?? 0) + referencedBy.length})`],
-					['keys', m.keysIndexes], ...(entity.abstract ? [] : [['data', m.data]]), ['diagram', m.diagram]] as [Section, string][]).map(([key, label]) => (
+					['keys', m.keysIndexes], ['validations', `${m.validations} (${entity.constraints?.length ?? 0})`], ...(entity.abstract ? [] : [['data', m.data]]), ['diagram', m.diagram]] as [Section, string][]).map(([key, label]) => (
 					<button key={key} role="tab" aria-selected={section === key} className={section === key ? 'lw-active' : ''} onClick={() => setSection(key)}>{label}</button>
 				))}
 			</div>
@@ -111,7 +114,7 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 						<thead><tr><th>#</th><th>{m.name}</th><th>{m.type}</th><th>{m.length}</th><th>{m.required}</th><th>PK</th><th>{m.auto}</th><th>{m.defaultValue}</th><th>{m.references}</th><th>{m.expressions}</th></tr></thead>
 						<tbody>
 							{(entity.properties ?? []).map((p, i) => (
-								<tr key={p.name}>
+								<tr key={p.name} className={expressionsShown === p.name ? 'lw-active' : undefined}>
 									<td className="lw-muted">{i + 1}</td>
 									<td className={keys.has(p.name) ? 'lw-pk' : ''}>{p.name}</td>
 									<td>{p.enum ? `${p.enum} (enum)` : p.type ?? 'string'}</td>
@@ -121,11 +124,37 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 									<td><Check on={p.autoIncrement} /></td>
 									<td><code>{p.default ?? ''}</code></td>
 									<td>{references.has(p.name) && link(references.get(p.name)!.split('.')[0])}{references.has(p.name) && <span className="lw-muted">.{references.get(p.name)!.split('.').slice(1).join('.')}</span>}</td>
-									<td>{p.readExp && <span className="lw-exp"><span className="lw-muted">read </span><ExpressionView expression={p.readExp} variables={names} /></span>}{p.writeExp && <span className="lw-exp"><span className="lw-muted">write </span><ExpressionView expression={p.writeExp} variables={names} /></span>}</td>
+									<td>{(expressionsOf(p).length > 0 || constraintsOf(entity, p.name).length > 0) && (
+										<button type="button" className="lw-link lw-expression-toggle" aria-pressed={expressionsShown === p.name}
+											title={[...expressionsOf(p), ...(constraintsOf(entity, p.name).length ? [`${m.validations} (${constraintsOf(entity, p.name).length})`] : [])].join(', ')}
+											onClick={() => setExpressionsShown(expressionsShown === p.name ? undefined : p.name)}>ƒ {m.expression}</button>
+									)}</td>
 								</tr>
 							))}
 						</tbody>
 					</table>
+					{shown && (
+						<section className="lw-expression-detail" aria-label={format(m.expressionsOf, { name: shown.name })}>
+							<h4>{format(m.expressionsOf, { name: shown.name })}</h4>
+							{expressionsOf(shown).length > 0 && (
+								<dl>
+									{expressionsOf(shown).map(k => (
+										<React.Fragment key={k}><dt>{k}</dt><dd><ExpressionView expression={shown[k]!} variables={names} /></dd></React.Fragment>
+									))}
+								</dl>
+							)}
+							{constraintsOf(entity, shown.name).length > 0 && (
+								<>
+									<h5>{m.validations}</h5>
+									<dl className="lw-validations">
+										{constraintsOf(entity, shown.name).map((c, i) => (
+											<React.Fragment key={i}><dt>{c.message}</dt><dd><ExpressionView expression={c.condition} variables={names} /></dd></React.Fragment>
+										))}
+									</dl>
+								</>
+							)}
+						</section>
+					)}
 				</div>
 			)}
 
@@ -167,10 +196,26 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 						<table className="lw-table lw-form-table"><thead><tr><th>{m.name}</th><th>{m.fields}</th></tr></thead>
 							<tbody>{entity.indexes.map(i => <tr key={i.name}><td>{i.name}</td><td><code>{i.fields.join(', ')}</code></td></tr>)}</tbody></table>
 					) : <p className="lw-muted">{m.none}</p>}
-					<h4>{m.constraints}</h4>
+				</div>
+			)}
+
+			{section === 'validations' && (
+				<div className="lw-view">
+					<p className="lw-muted">{m.validationsHint}</p>
 					{entity.constraints?.length ? (
-						<table className="lw-table lw-form-table"><thead><tr><th>{m.message}</th><th>{m.condition}</th></tr></thead>
-							<tbody>{entity.constraints.map((c, i) => <tr key={i}><td>{c.message}</td><td><ExpressionView expression={c.condition} variables={names} /></td></tr>)}</tbody></table>
+						<table className="lw-table lw-form-table" aria-label={m.validations}>
+							<thead><tr><th>#</th><th>{m.message}</th><th>{m.condition}</th><th>{m.usesProperties}</th></tr></thead>
+							<tbody>
+								{entity.constraints.map((c, i) => (
+									<tr key={i}>
+										<td className="lw-muted">{i + 1}</td>
+										<td>{c.message}</td>
+										<td className="lw-condition"><ExpressionView expression={c.condition} variables={names} /></td>
+										<td>{propertiesIn(c.condition, names).map(n => <code key={n} className="lw-uses">{n}</code>)}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
 					) : <p className="lw-muted">{m.none}</p>}
 				</div>
 			)}

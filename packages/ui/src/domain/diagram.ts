@@ -1,3 +1,4 @@
+import { expressionTokens } from './expressionTokens'
 /** The domain of a schema as GET /{schema}/domain gives it (the part the diagram draws) */
 export interface DomainInfo {
 	entities: EntityInfo[]
@@ -26,9 +27,23 @@ export interface PropertyInfo {
 	enum?: string
 	default?: string
 	view?: boolean
+	/** the expression of the column when it is read (SQL) */
 	readExp?: string
+	/** the expression of the column when it is written (SQL) */
 	writeExp?: string
+	/** what λORM does with the value after reading it (in the gateway, e.g. decrypt) */
+	readValue?: string
+	/** what λORM does with the value before writing it (in the gateway, e.g. encrypt) */
+	writeValue?: string
 }
+
+/** The expressions of a property, in the order they are shown */
+export const PROPERTY_EXPRESSIONS = ['readExp', 'writeExp', 'readValue', 'writeValue'] as const
+export type PropertyExpression = typeof PROPERTY_EXPRESSIONS[number]
+
+/** The expressions a property has, in that order */
+export const expressionsOf = (property: Partial<Record<PropertyExpression, unknown>>): PropertyExpression[] =>
+	PROPERTY_EXPRESSIONS.filter(k => typeof property[k] === 'string' && (property[k] as string).trim() !== '')
 
 export interface RelationInfo {
 	name: string
@@ -190,4 +205,14 @@ export const routeOrthogonal = (edges: DiagramEdge[], boxes: Map<string, Placed>
 		}
 	}
 	return routes
+}
+
+/** The properties of the entity a condition uses (its variables), in the order they appear */
+export const propertiesIn = (condition: string, properties: string[]): string[] =>
+	[...new Set(expressionTokens(condition, properties).filter(t => t.kind === 'variable' && properties.includes(t.text)).map(t => t.text))]
+
+/** The constraints (validations) of an entity whose condition uses a property */
+export const constraintsOf = (entity: Pick<EntityInfo, 'properties' | 'constraints'>, property: string): { message: string, condition: string }[] => {
+	const names = (entity.properties ?? []).map(p => p.name)
+	return (entity.constraints ?? []).filter(c => typeof c.condition === 'string' && propertiesIn(c.condition, names).includes(property))
 }

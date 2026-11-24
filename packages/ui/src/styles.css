@@ -219,8 +219,30 @@
 .lw-forms-element .lw-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .lw-form-field { display: grid; grid-template-columns: 120px minmax(0, 360px); gap: 8px; align-items: center; margin: 4px 0; }
 .lw-form-group { border: 1px solid var(--lw-border); border-radius: 6px; margin: 8px 0; padding: 6px; overflow-x: auto; }
-.lw-form-rows input:not([type=checkbox]) { width: 100%; min-width: 60px; }
-.lw-form-rows td, .lw-form-rows th { padding: 2px 4px; }
+.lw-form-rows { width: 100%; table-layout: auto; }
+.lw-form-rows td, .lw-form-rows th { padding: 3px 4px; vertical-align: middle; }
+.lw-form-rows th { white-space: nowrap; }
+.lw-form-rows input:not([type=checkbox]), .lw-form-rows select { box-sizing: border-box; width: 100%; min-width: 0; margin: 0; }
+.lw-form-rows .lw-col-text { min-width: 140px; }
+.lw-form-rows .lw-col-select { min-width: 120px; }
+.lw-form-rows .lw-col-fields { min-width: 140px; }
+.lw-form-rows .lw-col-number { width: 72px; }
+.lw-form-rows .lw-col-check, .lw-form-rows .lw-col-expressions, .lw-form-rows .lw-col-remove { width: 1%; text-align: center; white-space: nowrap; }
+.lw-form-rows .lw-col-check input { margin: 0; vertical-align: middle; }
+.lw-form-rows select:disabled, .lw-form-rows input[readonly] { color: var(--lw-fg); opacity: 1; }
+.lw-form-rows tbody tr.lw-active > td { background: var(--lw-selected); }
+.lw-expression-toggle { font: inherit; font-family: var(--lw-mono, monospace); color: var(--lw-muted); white-space: nowrap; }
+.lw-expression-toggle.lw-has { color: var(--lw-accent); }
+.lw-workbench button.lw-expression-toggle[aria-pressed=true] { border-color: var(--lw-accent); color: var(--lw-accent); }
+.lw-form-table tbody tr.lw-active > td { background: var(--lw-selected); }
+/* the expressions of a property, under its table */
+.lw-expression-detail { border: 1px solid var(--lw-border); border-left: 3px solid var(--lw-accent); border-radius: 6px; padding: 8px 10px; margin: 8px 0; min-width: 0; }
+.lw-expression-detail h4 { margin: 0 0 6px; }
+.lw-expression-detail dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 12px; margin: 6px 0 0; align-items: start; }
+.lw-expression-detail dt { color: var(--lw-muted); font-family: var(--lw-mono, monospace); padding-top: 3px; }
+.lw-expression-detail dd { margin: 0; min-width: 0; }
+.lw-expression-detail .lw-expression-view { display: block; white-space: pre-wrap; overflow-wrap: anywhere; padding: 4px 6px; background: var(--lw-panel); border-radius: 4px; }
+.lw-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .lw-element-form { display: flex; flex-direction: column; align-items: stretch; }
 .lw-element-form .lw-form-field > span { color: var(--lw-muted); }
 .lw-schema-forms.lw-focused { grid-template-columns: 1fr; }
@@ -431,3 +453,10 @@
 .lw-connections-root { min-width: 0; }
 .lw-connections-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lw-connections-toggle { min-width: 0; border: 0; background: none; padding: 2px 4px; cursor: pointer; color: inherit; }
+/* the validations (constraints) of an entity: their tab, and those of a property under its expressions */
+.lw-expression-detail h5 { margin: 10px 0 4px; color: var(--lw-muted); font-size: var(--lw-text-sm); text-transform: uppercase; letter-spacing: .03em; }
+.lw-expression-detail dl.lw-validations { grid-template-columns: minmax(160px, max-content) minmax(0, 1fr); }
+.lw-expression-detail dl.lw-validations dt { font-family: inherit; color: var(--lw-fg); }
+.lw-form-table td.lw-condition { min-width: 280px; }
+.lw-form-table td.lw-condition .lw-expression-view { white-space: pre-wrap; overflow-wrap: anywhere; }
+.lw-uses { display: inline-block; margin: 1px 4px 1px 0; padding: 0 6px; border: 1px solid var(--lw-border); border-radius: 10px; background: var(--lw-panel); font-size: 12px; }

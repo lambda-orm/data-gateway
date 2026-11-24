@@ -3,7 +3,9 @@ import { AdminApiPort, SchemaVariable } from '../application/ports'
 import { adminMessagesOf, format } from '../domain/adminI18n'
 import { fromYaml, toYaml } from '../domain/results'
 import { ExpressionDialog } from './ExpressionDialog'
+import { ExpressionInput } from './ExpressionInput'
 import { ExpressionView } from './ExpressionView'
+import { PROPERTY_EXPRESSIONS, propertiesIn } from '../domain/diagram'
 import { Icons } from './dialogs'
 import { CodeEditor } from './CodeEditor'
 
@@ -110,46 +112,66 @@ const clean = (value: Json): Json => {
 	return value
 }
 
+/** A column of Rows: a field of each row; `expressions` is a button that shows, under the table, the expressions of the row */
+type RowColumn = { key: string, kind?: 'text' | 'number' | 'check' | 'select' | 'fields' | 'expressions', options?: string[], placeholder?: string, keys?: readonly string[] }
+
 /** A table of rows of an element (properties, relations, values…): each cell a field */
 const Rows: React.FC<{
 	rows: Json[]
-	columns: { key: string, kind?: 'text' | 'number' | 'check' | 'select' | 'fields', options?: string[] }[]
+	columns: RowColumn[]
 	readOnly: boolean
 	addLabel: string
 	onChange: (rows: Json[]) => void
 	label: string
-}> = ({ rows, columns, readOnly, addLabel, onChange, label }) => {
+	/** the button of a column of kind expressions */
+	expressionLabel?: string
+	/** what is shown under the table for the row whose expressions are open */
+	detail?: (row: Json, set: (key: string, value: unknown) => void) => React.ReactNode
+}> = ({ rows, columns, readOnly, addLabel, onChange, label, expressionLabel = 'ƒ', detail }) => {
+	const [open, setOpen] = useState<number>()
 	const set = (i: number, key: string, value: unknown) => onChange(rows.map((row, k) => k === i ? { ...row, [key]: value } : row))
+	const has = (row: Json, keys: readonly string[] = []) => keys.filter(k => typeof row[k] === 'string' && row[k].trim() !== '')
 	return (
-		<table className="lw-table lw-form-rows" aria-label={label}>
-			<thead><tr>{columns.map(c => <th key={c.key}>{c.key}</th>)}<th /></tr></thead>
-			<tbody>
-				{rows.map((row, i) => (
-					<tr key={i}>
-						{columns.map(c => (
-							<td key={c.key}>
-								{c.kind === 'check'
-									? <input type="checkbox" aria-label={`${row.name ?? i} ${c.key}`} disabled={readOnly} checked={row[c.key] === true} onChange={e => set(i, c.key, e.target.checked ? true : undefined)} />
-									: c.kind === 'select'
-										? (
-											<select aria-label={`${row.name ?? i} ${c.key}`} disabled={readOnly} value={row[c.key] ?? ''} onChange={e => set(i, c.key, e.target.value || undefined)}>
-												<option value="" />
-												{(c.options ?? []).map(o => <option key={o} value={o}>{o}</option>)}
-											</select>
-											)
-										: (
-											<input aria-label={`${row.name ?? i} ${c.key}`} readOnly={readOnly} size={c.kind === 'number' ? 5 : 12}
-												value={c.kind === 'fields' ? fieldsText(row[c.key]) : row[c.key] ?? ''}
-												onChange={e => set(i, c.key, c.kind === 'number' ? (e.target.value === '' ? undefined : Number(e.target.value)) : c.kind === 'fields' ? textFields(e.target.value) : e.target.value)} />
-											)}
-							</td>
-						))}
-						<td>{!readOnly && <button type="button" aria-label={`remove ${row.name ?? i}`} onClick={() => onChange(rows.filter((_, k) => k !== i))}>×</button>}</td>
-					</tr>
-				))}
-			</tbody>
-			{!readOnly && <tfoot><tr><td colSpan={columns.length + 1}><button type="button" onClick={() => onChange([...rows, {}])}>{addLabel}</button></td></tr></tfoot>}
-		</table>
+		<>
+			<table className="lw-table lw-form-rows" aria-label={label}>
+				<thead><tr>{columns.map(c => <th key={c.key} className={`lw-col-${c.kind ?? 'text'}`}>{c.key}</th>)}{!readOnly && <th className="lw-col-remove" />}</tr></thead>
+				<tbody>
+					{rows.map((row, i) => (
+						<tr key={i} className={open === i ? 'lw-active' : undefined}>
+							{columns.map(c => (
+								<td key={c.key} className={`lw-col-${c.kind ?? 'text'}`}>
+									{c.kind === 'check'
+										? <input type="checkbox" aria-label={`${row.name ?? i} ${c.key}`} disabled={readOnly} checked={row[c.key] === true} onChange={e => set(i, c.key, e.target.checked ? true : undefined)} />
+										: c.kind === 'expressions'
+											? (
+												<button type="button" className={`lw-expression-toggle${has(row, c.keys).length ? ' lw-has' : ''}`} aria-pressed={open === i}
+													aria-label={`${row.name ?? i} ${c.key}`} title={has(row, c.keys).join(', ') || c.key}
+													disabled={readOnly && !has(row, c.keys).length} onClick={() => setOpen(open === i ? undefined : i)}>
+													ƒ{has(row, c.keys).length ? ` ${has(row, c.keys).length}` : ''}{expressionLabel !== 'ƒ' && <span className="lw-sr-only"> {expressionLabel}</span>}
+												</button>
+												)
+											: c.kind === 'select'
+												? (
+													<select aria-label={`${row.name ?? i} ${c.key}`} disabled={readOnly} value={row[c.key] ?? ''} onChange={e => set(i, c.key, e.target.value || undefined)}>
+														<option value="">{c.placeholder ?? ''}</option>
+														{(c.options ?? []).map(o => <option key={o} value={o}>{o}</option>)}
+													</select>
+													)
+												: (
+													<input aria-label={`${row.name ?? i} ${c.key}`} readOnly={readOnly} placeholder={c.placeholder}
+														value={c.kind === 'fields' ? fieldsText(row[c.key]) : row[c.key] ?? ''}
+														onChange={e => set(i, c.key, c.kind === 'number' ? (e.target.value === '' ? undefined : Number(e.target.value)) : c.kind === 'fields' ? textFields(e.target.value) : e.target.value)} />
+													)}
+								</td>
+							))}
+							{!readOnly && <td className="lw-col-remove"><button type="button" aria-label={`remove ${row.name ?? i}`} onClick={() => { onChange(rows.filter((_, k) => k !== i)); setOpen(undefined) }}>×</button></td>}
+						</tr>
+					))}
+				</tbody>
+				{!readOnly && <tfoot><tr><td colSpan={columns.length + 1}><button type="button" onClick={() => onChange([...rows, {}])}>{addLabel}</button></td></tr></tfoot>}
+			</table>
+			{detail && open !== undefined && rows[open] && detail(rows[open], (key, value) => set(open, key, value))}
+		</>
 	)
 }
 
@@ -304,12 +326,66 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, theme, schema, 
 			{options.map(o => <option key={o} value={o}>{o}</option>)}
 		</select>
 	))
-	const rows = (key: string, columns: Parameters<typeof Rows>[0]['columns']) => (
+	const rows = (key: string, columns: RowColumn[], detail?: Parameters<typeof Rows>[0]['detail']) => (
 		<fieldset className="lw-form-group"><legend>{key}</legend>
 			<Rows label={key} rows={Array.isArray(draft?.[key]) ? draft[key] : []} columns={columns} readOnly={!editable} addLabel={m.addRow}
-				onChange={value => setDraft({ ...draft, [key]: value })} />
+				expressionLabel={m.expression} detail={detail} onChange={value => setDraft({ ...draft, [key]: value })} />
 		</fieldset>
 	)
+
+	// the expressions of a property, under the table: editors while editing, the colored expressions otherwise
+	const propertyExpressions = (row: Json, set: (key: string, value: unknown) => void) => {
+		const variables = (Array.isArray(draft?.properties) ? draft.properties : []).map((p: Json) => p?.name).filter(Boolean)
+		const title = format(m.expressionsOf, { name: row.name ?? '' })
+		return (
+			<section className="lw-expression-detail" aria-label={title}>
+				<h4>{title}</h4>
+				{editable && <small className="lw-type">{m.propertyExpressionsHint}</small>}
+				<dl>
+					{PROPERTY_EXPRESSIONS.filter(k => editable || (typeof row[k] === 'string' && row[k].trim())).map(k => (
+						<React.Fragment key={k}>
+							<dt>{k}</dt>
+							<dd>{editable
+								? <ExpressionInput admin={admin} value={typeof row[k] === 'string' ? row[k] : ''} onChange={value => set(k, value.trim() ? value : undefined)}
+									variables={variables} height={52} ariaLabel={`${row.name ?? ''} ${k}`} theme={theme} locale={locale} />
+								: <ExpressionView expression={row[k]} variables={variables} />}</dd>
+						</React.Fragment>
+					))}
+				</dl>
+				{(() => {
+					const uses = (Array.isArray(draft?.constraints) ? draft.constraints : [])
+						.filter((c: Json) => typeof c?.condition === 'string' && row.name && propertiesIn(c.condition, variables).includes(row.name))
+					return uses.length > 0 && (
+						<>
+							<h5>{m.validations}</h5>
+							<dl className="lw-validations">
+								{uses.map((c: Json, i: number) => <React.Fragment key={i}><dt>{c.message}</dt><dd><ExpressionView expression={c.condition} variables={variables} /></dd></React.Fragment>)}
+							</dl>
+						</>
+					)
+				})()}
+			</section>
+		)
+	}
+
+	// the condition of a validation (constraint), under its table: an editor while editing
+	const constraintCondition = (row: Json, set: (key: string, value: unknown) => void) => {
+		const variables = (Array.isArray(draft?.properties) ? draft.properties : []).map((p: Json) => p?.name).filter(Boolean)
+		const title = row.message || m.condition
+		return (
+			<section className="lw-expression-detail" aria-label={title}>
+				<h4>{title}</h4>
+				{editable && <small className="lw-type">{m.validationsHint}</small>}
+				<dl>
+					<dt>condition</dt>
+					<dd>{editable
+						? <ExpressionInput admin={admin} value={typeof row.condition === 'string' ? row.condition : ''} onChange={value => set('condition', value.trim() ? value : undefined)}
+							variables={variables} height={52} ariaLabel={`${row.message ?? ''} condition`} theme={theme} locale={locale} />
+						: <ExpressionView expression={row.condition ?? ''} variables={variables} />}</dd>
+				</dl>
+			</section>
+		)
+	}
 
 	const form = () => {
 		if (!selected || !draft) return <p className="lw-type">{m.nothingSelected}</p>
@@ -324,9 +400,10 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, theme, schema, 
 					{check('view')}
 					{text('primaryKey', { fields: true })}
 					{text('uniqueKey', { fields: true })}
-					{rows('properties', [{ key: 'name' }, { key: 'type', kind: 'select', options: TYPES }, { key: 'length', kind: 'number' }, { key: 'required', kind: 'check' }, { key: 'autoIncrement', kind: 'check' }, { key: 'default' }, { key: 'enum', kind: 'select', options: names.enums }])}
-					{rows('relations', [{ key: 'name' }, { key: 'type', kind: 'select', options: RELATION_TYPES }, { key: 'from', kind: 'fields' }, { key: 'entity', kind: 'select', options: names.entities }, { key: 'to', kind: 'fields' }, { key: 'target' }, { key: 'weak', kind: 'check' }])}
+					{rows('properties', [{ key: 'name' }, { key: 'type', kind: 'select', options: TYPES, placeholder: 'string' }, { key: 'length', kind: 'number' }, { key: 'required', kind: 'check' }, { key: 'autoIncrement', kind: 'check' }, { key: 'default' }, { key: 'enum', kind: 'select', options: names.enums }, { key: 'expressions', kind: 'expressions', keys: PROPERTY_EXPRESSIONS }], propertyExpressions)}
+					{rows('relations', [{ key: 'name' }, { key: 'type', kind: 'select', options: RELATION_TYPES, placeholder: 'oneToMany' }, { key: 'from', kind: 'fields' }, { key: 'entity', kind: 'select', options: names.entities }, { key: 'to', kind: 'fields' }, { key: 'target' }, { key: 'weak', kind: 'check' }])}
 					{rows('indexes', [{ key: 'name' }, { key: 'fields', kind: 'fields' }])}
+					{rows('constraints', [{ key: 'message' }, { key: 'condition', kind: 'expressions', keys: ['condition'] }], constraintCondition)}
 				</>
 			)
 		case 'enums':

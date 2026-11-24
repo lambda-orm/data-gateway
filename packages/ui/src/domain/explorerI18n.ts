@@ -51,6 +51,9 @@ export interface ExplorerMessages {
 	uniqueKey: string
 	indexes: string
 	constraints: string
+	validations: string
+	usesProperties: string
+	validationsHint: string
 	type: string
 	length: string
 	required: string
@@ -58,6 +61,8 @@ export interface ExplorerMessages {
 	defaultValue: string
 	references: string
 	expressions: string
+	expression: string
+	expressionsOf: string
 	entity: string
 	from: string
 	to: string
@@ -147,6 +152,9 @@ const ROWS: Row[] = [
 	['uniqueKey', 'Unique key', 'Clave única', 'Chave única', 'Clé unique', 'Chiave univoca', 'Eindeutiger Schlüssel', 'Unieke sleutel', 'Clau única', 'Clave única', 'Gako bakarra'],
 	['indexes', 'Indexes', 'Índices', 'Índices', 'Index', 'Indici', 'Indizes', 'Indexen', 'Índexs', 'Índices', 'Indizeak'],
 	['constraints', 'Constraints', 'Restricciones', 'Restrições', 'Contraintes', 'Vincoli', 'Einschränkungen', 'Beperkingen', 'Restriccions', 'Restricións', 'Murriztapenak'],
+	['validations', 'Validations', 'Validaciones', 'Validações', 'Validations', 'Validazioni', 'Validierungen', 'Validaties', 'Validacions', 'Validacións', 'Balioztapenak'],
+	['usesProperties', 'Properties it uses', 'Propiedades que usa', 'Propriedades que usa', 'Propriétés utilisées', 'Proprietà usate', 'Verwendete Eigenschaften', 'Gebruikte eigenschappen', 'Propietats que usa', 'Propiedades que usa', 'Erabiltzen dituen propietateak'],
+	['validationsHint', 'Checked by λORM before each insert and update (after writeValue): a condition that is false rejects the sentence with its message.', 'λORM las comprueba antes de cada insert y update (después de writeValue): una condición falsa rechaza la sentencia con su mensaje.', 'O λORM as verifica antes de cada insert e update (depois do writeValue): uma condição falsa rejeita a sentença com sua mensagem.', 'λORM les vérifie avant chaque insert et update (après writeValue) : une condition fausse rejette la requête avec son message.', 'λORM le verifica prima di ogni insert e update (dopo writeValue): una condizione falsa rifiuta l’istruzione con il suo messaggio.', 'λORM prüft sie vor jedem Insert und Update (nach writeValue): eine falsche Bedingung weist die Anweisung mit ihrer Meldung ab.', 'λORM controleert ze vóór elke insert en update (na writeValue): een onware voorwaarde weigert de opdracht met haar melding.', 'λORM les comprova abans de cada insert i update (després de writeValue): una condició falsa rebutja la sentència amb el seu missatge.', 'λORM compróbaas antes de cada insert e update (despois de writeValue): unha condición falsa rexeita a sentenza coa súa mensaxe.', 'λORMek insert eta update bakoitzaren aurretik egiaztatzen ditu (writeValue ondoren): baldintza faltsu batek sententzia baztertzen du bere mezuarekin.'],
 	['type', 'Type', 'Tipo', 'Tipo', 'Type', 'Tipo', 'Typ', 'Type', 'Tipus', 'Tipo', 'Mota'],
 	['length', 'Length', 'Largo', 'Tamanho', 'Longueur', 'Lunghezza', 'Länge', 'Lengte', 'Llargada', 'Lonxitude', 'Luzera'],
 	['required', 'Required', 'Obligatoria', 'Obrigatória', 'Obligatoire', 'Obbligatoria', 'Pflicht', 'Verplicht', 'Obligatòria', 'Obrigatoria', 'Derrigorrezkoa'],
@@ -154,6 +162,8 @@ const ROWS: Row[] = [
 	['defaultValue', 'Default', 'Por defecto', 'Padrão', 'Par défaut', 'Predefinito', 'Standard', 'Standaard', 'Per defecte', 'Por defecto', 'Lehenetsia'],
 	['references', 'References', 'Referencia a', 'Referencia', 'Référence', 'Riferimento', 'Verweist auf', 'Verwijst naar', 'Referència a', 'Referencia a', 'Erreferentzia'],
 	['expressions', 'Expressions', 'Expresiones', 'Expressões', 'Expressions', 'Espressioni', 'Ausdrücke', 'Expressies', 'Expressions', 'Expresións', 'Adierazpenak'],
+	['expression', 'Expression', 'Expresión', 'Expressão', 'Expression', 'Espressione', 'Ausdruck', 'Expressie', 'Expressió', 'Expresión', 'Adierazpena'],
+	['expressionsOf', 'Expressions of {name}', 'Expresiones de {name}', 'Expressões de {name}', 'Expressions de {name}', 'Espressioni di {name}', 'Ausdrücke von {name}', 'Expressies van {name}', 'Expressions de {name}', 'Expresións de {name}', '{name}(r)en adierazpenak'],
 	['entity', 'Entity', 'Entidad', 'Entidade', 'Entité', 'Entità', 'Entität', 'Entiteit', 'Entitat', 'Entidade', 'Entitatea'],
 	['from', 'From', 'Desde', 'De', 'De', 'Da', 'Von', 'Van', 'Des de', 'Desde', 'Nondik'],
 	['to', 'To', 'Hasta', 'Para', 'Vers', 'A', 'Nach', 'Naar', 'Fins a', 'Ata', 'Nora'],
