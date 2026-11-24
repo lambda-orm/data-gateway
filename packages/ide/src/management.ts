@@ -1,3 +1,4 @@
+import type { WorkspaceChangeEvent } from '@lambdaorm/ui'
 import { Credential, headersOf, Who } from './shared'
 import { viaProxy } from './proxy'
 
@@ -40,11 +41,22 @@ const failure = async (response: Response) => {
 	return Object.assign(new Error(body?.message ?? `HTTP ${response.status}`), { status: response.status, error: body?.error as string | undefined })
 }
 
+/** n random bytes in hex (never all zeros: an invalid id for W3C Trace Context) */
+const randomHex = (bytes: number): string => {
+	const values = crypto.getRandomValues(new Uint8Array(bytes))
+	if (values.every(p => p === 0)) values[0] = 1
+	return [...values].map(p => p.toString(16).padStart(2, '0')).join('')
+}
+
 export class ManagementClient {
 	private token?: string
 	private state: ManagementState = { live: false }
 	private readonly listeners = new Set<(state: ManagementState) => void>()
-	private readonly changeListeners = new Set<() => void>()
+	private readonly changeListeners = new Set<(event?: WorkspaceChangeEvent) => void>()
+	/** the id of this session in the gateway: a change of another session is told apart */
+	private sessionId?: string
+	/** the trace of the user action in course: the requests of a click share it */
+	private trace?: { id: string, at: number }
 	private socket?: WebSocket
 	private retryMs = 1000
 	private retry?: ReturnType<typeof setTimeout>
@@ -76,9 +88,23 @@ export class ManagementClient {
 	}
 
 	/** For the workspace: called when the gateway says something changed */
-	public readonly changes = (listener: () => void): (() => void) => {
+	public readonly changes = (listener: (event?: WorkspaceChangeEvent) => void): (() => void) => {
 		this.changeListeners.add(listener)
 		return () => { this.changeListeners.delete(listener) }
+	}
+
+	/** the session of this IDE in the gateway (its id, as the gateway's history and events say it) */
+	public readonly session = (): string | undefined => this.sessionId
+
+	/**
+	 * A traceparent for a request: the requests of one user action (a click runs several, close in time) share a trace,
+	 * each with a span of its own; a new action, after a second without requests, starts another.
+	 */
+	private traceparent (): string {
+		const now = Date.now()
+		if (!this.trace || now - this.trace.at > 1000) this.trace = { id: randomHex(16), at: now }
+		this.trace.at = now
+		return `00-${this.trace.id}-${randomHex(8)}-01`
 	}
 
 	/** Starts: with a token kept in this tab it goes on with it; else it logs in when the key is at hand */
@@ -88,6 +114,7 @@ export class ManagementClient {
 				const current = await this.fetch(`${this.base}/sessions/current`)
 				if (!current.ok) throw await failure(current)
 				const session = await current.json()
+				this.sessionId = session.id
 				this.set({ who: { name: session.credential, permissions: this.state.who?.permissions ?? [] }, problem: undefined })
 				// its permissions: the login gave them; after a reload, whoami of the session says them
 				await this.readWho()
@@ -132,6 +159,7 @@ export class ManagementClient {
 			throw error
 		}
 		const session = await response.json()
+		this.sessionId = session.id
 		this.setToken(session.token)
 		const who: Who = { name: session.credential, permissions: session.permissions ?? [] }
 		this.set({ who, problem: undefined, expiring: false })
@@ -145,6 +173,8 @@ export class ManagementClient {
 		const send = () => {
 			const headers = new Headers(init.headers)
 			if (this.token) headers.set(SESSION_HEADER, this.token)
+			// W3C Trace Context: the gateway's spans of this request are part of the trace of the user action
+			if (!headers.has('traceparent')) headers.set('traceparent', this.traceparent())
 			return fetch(input, { ...init, headers })
 		}
 		const response = await send()
@@ -248,7 +278,7 @@ export class ManagementClient {
 			switch (message?.method) {
 			case 'schema.statusChanged':
 			case 'workspace.changed':
-				for (const listener of [...this.changeListeners]) listener()
+				for (const listener of [...this.changeListeners]) listener(message.params)
 				break
 			case 'session.expiring':
 				// with the key at hand, a new session before this one ends; else, the person is told

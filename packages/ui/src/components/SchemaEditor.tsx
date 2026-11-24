@@ -1,3 +1,4 @@
+import { changedByText, ChangedBy } from '../domain/changedBy'
 import React, { useCallback, useEffect, useRef, useState } from 'react'
 import { AdminApiPort, SchemaIssue } from '../application/ports'
 import { adminMessagesOf, format } from '../domain/adminI18n'
@@ -45,7 +46,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({ admin, schema, writa
 	const [saving, setSaving] = useState(false)
 	const [notice, setNotice] = useState<string>()
 	const [error, setError] = useState<string>()
-	const [theirs, setTheirs] = useState<{ text: string, version: string, why: 'conflict' | 'changed' }>()
+	const [theirs, setTheirs] = useState<{ text: string, version: string, why: 'conflict' | 'changed', by?: ChangedBy }>()
 	// read first; Edit (with schemaWrite) to change it, then Save or Cancel
 	const [editing, setEditing] = useState(false)
 	const dirty = base !== undefined && draft !== base.text
@@ -109,7 +110,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({ admin, schema, writa
 			setEditing(false)
 			setNotice(m.saved)
 		} catch (e: any) {
-			if (statusOf(e) === 412 && e.details?.text !== undefined) setTheirs({ text: e.details.text, version: e.details.version, why: 'conflict' })
+			if (statusOf(e) === 412 && e.details?.text !== undefined) setTheirs({ text: e.details.text, version: e.details.version, why: 'conflict', by: e.details.changedBy })
 			else if (statusOf(e) === 422 && Array.isArray(e.details?.issues)) {
 				setIssues(e.details.issues)
 				setError(m.invalidNotSaved)
@@ -158,7 +159,7 @@ export const SchemaEditor: React.FC<SchemaEditorProps> = ({ admin, schema, writa
 			{error && <div className="lw-notice" role="alert">{error}</div>}
 			{theirs && (
 				<div className="lw-conflict" role="alert">
-					<p>{theirs.why === 'conflict' ? m.conflict : m.changedOnGateway}</p>
+					<p>{theirs.why === 'conflict' ? (theirs.by ? changedByText(theirs.by, locale, m.conflict) : m.conflict) : m.changedOnGateway}</p>
 					<div className="lw-conflict-sides">
 						<div>
 							<strong>{m.theirs}</strong>

@@ -42,6 +42,8 @@ export type { SavedItem, SavedFolder, SavedQuery, SavedDiagram, SavedQueryConten
 export { explorerMessagesOf } from './domain/explorerI18n'
 export type { ExplorerMessages } from './domain/explorerI18n'
 export { EntityView } from './components/EntityView'
+export { HistoryView } from './components/HistoryView'
+export type { SchemaChange, ChangeActor, JsonPatchOperation, SchemaHistoryQuery, WorkspaceChangeEvent } from './application/ports'
 export type { EntityViewProps } from './components/EntityView'
 export { routeOrthogonal, referencesTo, cardinalityOf } from './domain/diagram'
 

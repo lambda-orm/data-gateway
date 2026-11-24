@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { QueryApiPort } from '../application/ports'
+import { AdminApiPort, QueryApiPort } from '../application/ports'
+import { adminMessagesOf } from '../domain/adminI18n'
+import { HistoryView } from './HistoryView'
 import { cardinalityOf, constraintsOf, DomainInfo, edgesOf, EntityInfo, EXPRESSION_HELP, expressionsOf, propertiesIn, referencesTo } from '../domain/diagram'
 import { explorerMessagesOf, format } from '../domain/explorerI18n'
 import { Locale } from '../domain/i18n'
@@ -34,9 +36,15 @@ export interface EntityViewProps {
 	removeLabel?: string
 	/** Rows per page of the data (default 50) */
 	pageSize?: number
+	/** the administration (schemaRead): the tab History, with the changes of this entity */
+	admin?: AdminApiPort
+	/** where to see the traces of this entity (Grafana / Tempo, filtered by lambdaorm.entity) */
+	tracesUrl?: string
+	/** when it changes, the history is read again */
+	revision?: string | number
 }
 
-type Section = 'properties' | 'relations' | 'keys' | 'constraints' | 'data' | 'diagram'
+type Section = 'properties' | 'relations' | 'keys' | 'constraints' | 'data' | 'diagram' | 'history'
 
 const Check: React.FC<{ on?: boolean }> = ({ on }) => <>{on ? '✓' : ''}</>
 
@@ -45,8 +53,9 @@ const Check: React.FC<{ on?: boolean }> = ({ on }) => <>{on ? '✓' : ''}</>
  * auto, default, enum, what each foreign key references, expressions), its relations and what references it, its
  * keys, indexes and constraints, its rows (read only, by pages) and its diagram with its neighbours.
  */
-export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: name, domain: loadDomain, theme = 'light', locale, onOpenEntity, onQuery, onQueryText, onEdit, culture, editLabel = 'Edit', onRemove, removeLabel = 'Remove', pageSize = 50 }) => {
+export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: name, domain: loadDomain, theme = 'light', locale, onOpenEntity, onQuery, onQueryText, onEdit, culture, editLabel = 'Edit', onRemove, removeLabel = 'Remove', pageSize = 50, admin, tracesUrl, revision }) => {
 	const m = explorerMessagesOf(locale)
+	const a = adminMessagesOf(locale)
 	const [domain, setDomain] = useState<DomainInfo>()
 	const [error, setError] = useState<string>()
 	const [section, setSection] = useState<Section>('properties')
@@ -102,17 +111,19 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 				{entity.view && <span className="lw-badge">{m.viewEntity}</span>}
 				{entity.extends && <span className="lw-badge">{format(m.extendsEntity, { name: entity.extends })}</span>}
 				<span className="lw-spacer" />
+				{tracesUrl && <a href={tracesUrl} target="_blank" rel="noopener noreferrer">{a.viewTraces}</a>}
 				{onRemove && <button className="lw-danger" onClick={() => onRemove(schema, entity.name)}>{removeLabel}</button>}
 				{onEdit && <button onClick={() => onEdit(schema, entity.name)}>{editLabel}</button>}
 				{!entity.abstract && <button className="lw-primary" onClick={() => onQuery(schema, entity.name)}>{m.queryIt}</button>}
 			</div>
 			<div className="lw-toolbar" role="tablist" aria-label={entity.name}>
 				{([['properties', `${m.properties} (${entity.properties?.length ?? 0})`], ['relations', `${m.relations} (${(entity.relations?.length ?? 0) + referencedBy.length})`],
-					['keys', m.keysIndexes], ['constraints', `${m.constraints} (${entity.constraints?.length ?? 0})`], ...(entity.abstract ? [] : [['data', m.data]]), ['diagram', m.diagram]] as [Section, string][]).map(([key, label]) => (
+					['keys', m.keysIndexes], ['constraints', `${m.constraints} (${entity.constraints?.length ?? 0})`], ...(entity.abstract ? [] : [['data', m.data]]), ['diagram', m.diagram], ...(admin?.history ? [['history', a.history]] : [])] as [Section, string][]).map(([key, label]) => (
 					<button key={key} role="tab" aria-selected={section === key} className={section === key ? 'lw-active' : ''} onClick={() => setSection(key)}>{label}</button>
 				))}
 			</div>
 
+			{section === 'history' && admin && <HistoryView admin={admin} schema={schema} target={`domain/entities/${entity.name}`} locale={locale} revision={revision} />}
 			{section === 'properties' && (
 				<div className="lw-view">
 					<table className="lw-table lw-form-table">
