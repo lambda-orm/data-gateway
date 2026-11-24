@@ -17,6 +17,16 @@ describe('the expressions of a schema', () => {
 		expect(language.check('entity.nope(1)').error).toMatch(/nope not found/)
 	})
 
+	test('the functions λORM adds (encrypt, decrypt…): known, as the expressions of the properties use them', () => {
+		const language = new ThreeExprLanguage()
+		const names = language.language().functions.map(f => f.name)
+		expect(names).toEqual(expect.arrayContaining(['encrypt', 'decrypt', 'toBase64', 'getBase64']))
+		expect(language.check('if(isNull(email)){null}else{decrypt(email,"${DATA_SECRET_KEY}")}')).toEqual({ variables: ['email'] })
+		expect(language.check('toNumber(decrypt(lat,"k"))').error).toBeUndefined()
+		// twice: added once
+		expect(new ThreeExprLanguage().language().functions.filter(f => f.name === 'encrypt')).toHaveLength(1)
+	})
+
 	test('the validator: a condition that doesn\'t parse is an error, a variable of nothing a warning', async () => {
 		const schema = (condition: string) => `domain: { entities: [] }\ninfrastructure:\n  sources:\n    - { name: a, dialect: PostgreSQL }\n  stages:\n    - name: default\n      sources:\n        - name: a\n          condition: '${condition}'\n`
 		const validator = new LambdaSchemaValidator()
