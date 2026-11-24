@@ -94,4 +94,16 @@ describe('StageDiagram', () => {
 		expect(container.querySelector('[data-source="main"]')!.getAttribute('transform')).toBe('translate(900,40)')
 		expect(screen.getByRole('button', { name: 'the gateway on the left, the sources on the right' }).getAttribute('aria-pressed')).toBe('true')
 	})
+
+	test('the outline: hidden at first, shown and hidden by its button', async () => {
+		const { container } = render(<StageDiagram admin={adminOf(ROUTING)} schema="northwind" stage="default" />)
+		await screen.findByRole('img', { name: 'Stage default' })
+		expect(container.querySelector('.lw-outline')).toBeNull()
+		fireEvent.click(screen.getByRole('button', { name: 'outline: the whole diagram' }))
+		const outline = container.querySelector('.lw-outline')!
+		expect(outline.querySelectorAll('[data-source]').length).toBe(3)
+		expect(outline.querySelector('.lw-outline-frame')).toBeTruthy()
+		fireEvent.click(screen.getByRole('button', { name: 'outline: the whole diagram' }))
+		expect(container.querySelector('.lw-outline')).toBeNull()
+	})
 })

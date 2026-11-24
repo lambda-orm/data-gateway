@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { AdminApiPort, StageRouting } from '../application/ports'
 import { adminMessagesOf } from '../domain/adminI18n'
 import { format, messagesOf } from '../domain/i18n'
+import { DiagramOutline } from './DiagramOutline'
 import { ExpressionView } from './ExpressionView'
 import { Icons } from './dialogs'
 
@@ -127,6 +128,8 @@ export const StageDiagram: React.FC<StageDiagramProps> = ({ admin, schema, stage
 	const [selected, setSelected] = useState<Set<string>>(new Set())
 	const [view, setView] = useState({ x: 0, y: 0, k: 1 })
 	const [band, setBand] = useState<{ from: Point, to: Point }>()
+	// the outline of the drawing: hidden until its button shows it
+	const [outline, setOutline] = useState(false)
 	const canvas = useRef<HTMLDivElement>(null)
 	const drag = useRef<{ kind: 'pan' | 'boxes' | 'band', start: Point, view: { x: number, y: number, k: number }, origin: Record<string, Point>, moved: boolean }>()
 	const fitted = useRef(false)
@@ -281,6 +284,63 @@ export const StageDiagram: React.FC<StageDiagramProps> = ({ admin, schema, stage
 		return [from, { x: from.x - bend, y: from.y }, { x: to.x + bend, y: to.y }, to]
 	}
 	const isSelected = (key: string) => selected.has(key)
+	// the drawing: in the view, and small in the outline
+	const drawing = (
+		<>
+			{/* an arrow from each source to the gateway: a click shows its condition */}
+			{boxes.map((b, i) => {
+				const p = arrowOf(b)
+				const path = `M${p[0].x},${p[0].y} C${p[1].x},${p[1].y} ${p[2].x},${p[2].y} ${p[3].x},${p[3].y}`
+				const on = chosen === i
+				const label = b.source!.condition ? m.condition : m.theRest
+				const mid = bezier(p, 0.5)
+				return (
+					<g key={b.key} role="button" tabIndex={0} aria-pressed={on} aria-label={`${m.condition} ${i + 1}. ${b.key}`} className="lw-stage-arrow"
+						onPointerDown={e => e.stopPropagation()}
+						onClick={() => setChosen(on ? undefined : i)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setChosen(on ? undefined : i) } }}>
+						<path d={path} fill="none" stroke="transparent" strokeWidth={16} />
+						<path d={path} fill="none" stroke={on ? colors.accent : b.source!.error ? colors.warn : colors.line} strokeWidth={on ? 2.5 : 1.5}
+							strokeDasharray={b.source!.condition ? undefined : '6 4'} markerEnd={`url(#${on ? 'lw-stage-arrow-on' : 'lw-stage-arrow'})`} />
+						<rect x={mid.x - label.length * 3.6 - 8} y={mid.y - 9} width={label.length * 7.2 + 16} height={18} rx={9} fill={colors.box} stroke={on ? colors.accent : colors.border} />
+						<text x={mid.x} y={mid.y + 4} textAnchor="middle" fontFamily={SANS} fontSize={11} fill={on ? colors.accent : colors.muted}>{label}</text>
+					</g>
+				)
+			})}
+			{/* the gateway */}
+			<g transform={`translate(${g.x},${g.y})`} data-box={GATEWAY_KEY} className="lw-movable" onPointerDown={boxDown(GATEWAY_KEY)}>
+				<rect width={gateway.width} height={gateway.height} rx={10} fill={colors.gateway} stroke={colors.accent} strokeWidth={isSelected(GATEWAY_KEY) ? 3 : 1.5} />
+				<text x={gateway.width / 2} y={24} textAnchor="middle" fontFamily={SANS} fontSize={14} fontWeight={700} fill={colors.text}>{m.stageGateway}</text>
+				<text x={gateway.width / 2} y={42} textAnchor="middle" fontFamily={MONO} fontSize={11} fill={colors.muted}>{`${schema || '/'} · ${stage}`}</text>
+			</g>
+			{/* each source with its tables */}
+			{boxes.map((b, i) => {
+				const p = at(b.key)
+				const on = chosen === i || isSelected(b.key)
+				return (
+					<g key={b.key} transform={`translate(${p.x},${p.y})`} data-source={b.key} className="lw-movable" onPointerDown={boxDown(b.key)}>
+						<rect width={b.width} height={b.height} rx={6} fill={colors.box} stroke={on ? colors.accent : colors.border} strokeWidth={on ? 2 : 1} />
+						<rect width={b.width} height={detail === 'names' ? b.height : HEADER} rx={6} fill={colors.header} />
+						{detail !== 'names' && <rect y={HEADER - 6} width={b.width} height={6} fill={colors.header} />}
+						{detail !== 'names' && <line x1={0} x2={b.width} y1={HEADER} y2={HEADER} stroke={colors.border} />}
+						<rect width={b.width} height={b.height} rx={6} fill="none" stroke={on ? colors.accent : colors.border} strokeWidth={on ? 2 : 1} />
+						<text x={10} y={18} fontFamily={SANS} fontSize={13} fontWeight={700} fill={colors.text}>{`${b.order}. ${b.key}`}</text>
+						<text x={10} y={35} fontFamily={SANS} fontSize={11} fill={colors.muted}>{[b.source!.dialect, b.source!.mapping, format(m.stageTables, { n: b.source!.entities.length })].filter(Boolean).join(' · ')}</text>
+						{b.rows.map((r, k) => (
+							<text key={k} x={10} y={HEADER + 6 + k * ROW + 13} fontFamily={MONO} fontSize={12} fill={r.visitor ? colors.muted : colors.text} fontStyle={r.visitor ? 'italic' : undefined}>
+								{r.table}{r.note && <tspan fill={colors.muted}>{`  ${r.note}`}</tspan>}
+							</text>
+						))}
+					</g>
+				)
+			})}
+		</>
+	)
+	const whole = bounds()
+	const outlineTo = (p: Point) => {
+		const box = canvas.current
+		if (!box) return
+		setView(v => ({ k: v.k, x: box.clientWidth / 2 - p.x * v.k, y: box.clientHeight / 2 - p.y * v.k }))
+	}
 
 	return (
 		<div className={`lw-stage-diagram lw-diagram lw-workbench lw-${theme}`}>
@@ -296,6 +356,7 @@ export const StageDiagram: React.FC<StageDiagramProps> = ({ admin, schema, stage
 					<button className="lw-tool" aria-label={d.zoomIn} title={d.zoomIn} onClick={() => zoomBy(1.25)}><Icons.zoomIn size={18} /></button>
 				</span>
 				<button onClick={fit}>{d.fit}</button>
+				<button className="lw-tool" aria-label={d.outline} title={d.outline} aria-pressed={outline} onClick={() => setOutline(o => !o)}><Icons.outline size={18} /></button>
 				<label className="lw-check">{m.stageShow}{' '}
 					<select aria-label={m.stageShow} value={detail} onChange={e => show(e.target.value as 'tables' | 'names')}>
 						<option value="tables">{m.stageShowTables}</option>
@@ -321,58 +382,17 @@ export const StageDiagram: React.FC<StageDiagramProps> = ({ admin, schema, stage
 						</marker>
 					</defs>
 					<g transform={`translate(${view.x},${view.y}) scale(${view.k})`}>
-						{/* an arrow from each source to the gateway: a click shows its condition */}
-						{boxes.map((b, i) => {
-							const p = arrowOf(b)
-							const path = `M${p[0].x},${p[0].y} C${p[1].x},${p[1].y} ${p[2].x},${p[2].y} ${p[3].x},${p[3].y}`
-							const on = chosen === i
-							const label = b.source!.condition ? m.condition : m.theRest
-							const mid = bezier(p, 0.5)
-							return (
-								<g key={b.key} role="button" tabIndex={0} aria-pressed={on} aria-label={`${m.condition} ${i + 1}. ${b.key}`} className="lw-stage-arrow"
-									onPointerDown={e => e.stopPropagation()}
-									onClick={() => setChosen(on ? undefined : i)} onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setChosen(on ? undefined : i) } }}>
-									<path d={path} fill="none" stroke="transparent" strokeWidth={16} />
-									<path d={path} fill="none" stroke={on ? colors.accent : b.source!.error ? colors.warn : colors.line} strokeWidth={on ? 2.5 : 1.5}
-										strokeDasharray={b.source!.condition ? undefined : '6 4'} markerEnd={`url(#${on ? 'lw-stage-arrow-on' : 'lw-stage-arrow'})`} />
-									<rect x={mid.x - label.length * 3.6 - 8} y={mid.y - 9} width={label.length * 7.2 + 16} height={18} rx={9} fill={colors.box} stroke={on ? colors.accent : colors.border} />
-									<text x={mid.x} y={mid.y + 4} textAnchor="middle" fontFamily={SANS} fontSize={11} fill={on ? colors.accent : colors.muted}>{label}</text>
-								</g>
-							)
-						})}
-						{/* the gateway */}
-						<g transform={`translate(${g.x},${g.y})`} data-box={GATEWAY_KEY} className="lw-movable" onPointerDown={boxDown(GATEWAY_KEY)}>
-							<rect width={gateway.width} height={gateway.height} rx={10} fill={colors.gateway} stroke={colors.accent} strokeWidth={isSelected(GATEWAY_KEY) ? 3 : 1.5} />
-							<text x={gateway.width / 2} y={24} textAnchor="middle" fontFamily={SANS} fontSize={14} fontWeight={700} fill={colors.text}>{m.stageGateway}</text>
-							<text x={gateway.width / 2} y={42} textAnchor="middle" fontFamily={MONO} fontSize={11} fill={colors.muted}>{`${schema || '/'} · ${stage}`}</text>
-						</g>
-						{/* each source with its tables */}
-						{boxes.map((b, i) => {
-							const p = at(b.key)
-							const on = chosen === i || isSelected(b.key)
-							return (
-								<g key={b.key} transform={`translate(${p.x},${p.y})`} data-source={b.key} className="lw-movable" onPointerDown={boxDown(b.key)}>
-									<rect width={b.width} height={b.height} rx={6} fill={colors.box} stroke={on ? colors.accent : colors.border} strokeWidth={on ? 2 : 1} />
-									<rect width={b.width} height={detail === 'names' ? b.height : HEADER} rx={6} fill={colors.header} />
-									{detail !== 'names' && <rect y={HEADER - 6} width={b.width} height={6} fill={colors.header} />}
-									{detail !== 'names' && <line x1={0} x2={b.width} y1={HEADER} y2={HEADER} stroke={colors.border} />}
-									<rect width={b.width} height={b.height} rx={6} fill="none" stroke={on ? colors.accent : colors.border} strokeWidth={on ? 2 : 1} />
-									<text x={10} y={18} fontFamily={SANS} fontSize={13} fontWeight={700} fill={colors.text}>{`${b.order}. ${b.key}`}</text>
-									<text x={10} y={35} fontFamily={SANS} fontSize={11} fill={colors.muted}>{[b.source!.dialect, b.source!.mapping, format(m.stageTables, { n: b.source!.entities.length })].filter(Boolean).join(' · ')}</text>
-									{b.rows.map((r, k) => (
-										<text key={k} x={10} y={HEADER + 6 + k * ROW + 13} fontFamily={MONO} fontSize={12} fill={r.visitor ? colors.muted : colors.text} fontStyle={r.visitor ? 'italic' : undefined}>
-											{r.table}{r.note && <tspan fill={colors.muted}>{`  ${r.note}`}</tspan>}
-										</text>
-									))}
-								</g>
-							)
-						})}
+						{drawing}
 						{band && (
 							<rect x={Math.min(band.from.x, band.to.x)} y={Math.min(band.from.y, band.to.y)} width={Math.abs(band.to.x - band.from.x)} height={Math.abs(band.to.y - band.from.y)}
 								fill={colors.accent} fillOpacity={0.08} stroke={colors.accent} strokeDasharray="4 3" />
 						)}
 					</g>
 				</svg>
+				{outline && whole && (
+					<DiagramOutline bounds={{ x: whole.x0, y: whole.y0, width: whole.x1 - whole.x0, height: whole.y1 - whole.y0 }} view={view}
+						viewport={{ width: canvas.current?.clientWidth ?? 0, height: canvas.current?.clientHeight ?? 0 }} colors={colors} label={d.outline} onCenter={outlineTo}>{drawing}</DiagramOutline>
+				)}
 			</div>
 			<div className="lw-stage-condition-panel" aria-live="polite">
 				{selectedSource

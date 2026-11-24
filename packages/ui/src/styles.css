@@ -408,7 +408,7 @@
 
 /* the diagram of a stage: the drawing scrolls, the condition of the source chosen stays below */
 .lw-stage-diagram { display: flex; flex-direction: column; gap: var(--lw-space-2); height: 100%; min-height: 0; }
-.lw-stage-canvas { flex: 1 1 auto; height: 62vh; min-height: 240px; overflow: hidden; border: 1px solid var(--lw-border); border-radius: var(--lw-radius); touch-action: none; cursor: default; outline: none; user-select: none; -webkit-user-select: none; }
+.lw-stage-canvas { position: relative; flex: 1 1 auto; height: 62vh; min-height: 240px; overflow: hidden; border: 1px solid var(--lw-border); border-radius: var(--lw-radius); touch-action: none; cursor: default; outline: none; user-select: none; -webkit-user-select: none; }
 .lw-stage-canvas.lw-tool-move, .lw-stage-canvas.lw-tool-move .lw-movable { cursor: grab; }
 .lw-stage-canvas .lw-movable { cursor: move; }
 .lw-stage-diagram > .lw-header { flex-wrap: wrap; }
@@ -417,3 +417,7 @@
 .lw-stage-condition-panel { flex: none; min-height: 88px; max-height: 30vh; overflow: auto; padding: var(--lw-space-3); border: 1px solid var(--lw-border); border-radius: var(--lw-radius); background: var(--lw-panel); }
 .lw-stage-condition-title { margin-bottom: var(--lw-space-2); }
 .lw-stage-condition-code .lw-expression-view { display: block; white-space: pre-wrap; font-size: var(--lw-text-md); }
+
+/* the outline of a diagram: all of it small, in a corner of the view, with a frame on what the view shows */
+.lw-outline { position: absolute; top: 8px; right: 8px; z-index: 2; border: 1px solid; border-radius: var(--lw-radius); box-shadow: var(--lw-shadow-pop, 0 4px 12px rgb(0 0 0 / 15%)); overflow: hidden; cursor: crosshair; touch-action: none; }
+.lw-outline svg { display: block; }

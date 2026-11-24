@@ -100,6 +100,20 @@ class DomainApi extends FakeApi {
 }
 
 describe('DomainDiagram', () => {
+	test('the outline: hidden at first; its button shows the whole drawing small with a frame on what the view shows, and hides it', async () => {
+		const { container } = render(<DomainDiagram api={new DomainApi()} schema="northwind/v1" layout={rowLayout} />)
+		await waitFor(() => expect(container.querySelectorAll('.lw-entity').length).toBeGreaterThan(0))
+		expect(container.querySelector('.lw-outline')).toBeNull()
+		const button = screen.getByRole('button', { name: 'outline: the whole diagram' })
+		fireEvent.click(button)
+		expect(button.getAttribute('aria-pressed')).toBe('true')
+		const outline = container.querySelector('.lw-outline')!
+		expect(outline.querySelectorAll('.lw-entity').length).toBe(container.querySelectorAll('.lw-diagram-svg .lw-entity').length)
+		expect(outline.querySelector('.lw-outline-frame')).toBeTruthy()
+		fireEvent.click(button)
+		expect(container.querySelector('.lw-outline')).toBeNull()
+	})
+
 	test('starts on the hub and its neighbours; a click moves the focus, a double click queries', async () => {
 		const onQuery = vi.fn()
 		const { container } = render(<DomainDiagram api={new DomainApi()} schema="northwind/v1" layout={rowLayout} onQuery={onQuery} />)
