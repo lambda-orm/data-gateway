@@ -198,3 +198,14 @@ div.dg-error { border: 1px solid var(--bad); border-radius: 6px; padding: 6px 10
 .dg-page .lw-tabs > [role="tabpanel"] > .lw-diagram-tab { height: 100%; display: flex; flex-direction: column; }
 .dg-page .lw-diagram-tab > .lw-diagram { flex: 1; min-height: 0; display: flex; flex-direction: column; }
 .dg-page .lw-diagram-tab .lw-diagram-view { flex: 1 1 auto; min-height: 320px; height: auto !important; }
+
+/* the menu of the app, by the connections: λORM */
+.dg-app-menu { margin: 0; flex: none; }
+.dg-app .dg-app-menu-button, .lw-connections-root .dg-app-menu .dg-app-menu-button { display: inline-flex; align-items: center; gap: 1px; padding: 2px 4px; min-width: 0; height: 28px; border-radius: 6px; font-weight: 700; }
+.dg-app-mark { font-weight: 800; letter-spacing: -0.01em; color: var(--accent, #2563eb); }
+.dg-menu.dg-menu-left { left: 0; right: auto; }
+.dg-about-name { font-size: 18px; margin: 0 0 6px; }
+.dg-about { display: grid; grid-template-columns: max-content 1fr; gap: 6px 14px; margin: 14px 0 0; }
+.dg-about dt { color: var(--muted); }
+.dg-about dd { margin: 0; }
+.dg-code { background: var(--panel, #f6f7f9); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 13px; overflow: auto; }

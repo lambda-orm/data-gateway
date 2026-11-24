@@ -3,4 +3,10 @@
 const { contextBridge, ipcRenderer } = require('electron')
 
 const config = ipcRenderer.sendSync('ide:config')
-contextBridge.exposeInMainWorld('ideDesktop', Object.freeze({ proxyBase: config.proxyBase, version: config.version, platform: config.platform }))
+// checkForUpdates: as Help → Check for updates (the menu λORM → Update of the page)
+contextBridge.exposeInMainWorld('ideDesktop', Object.freeze({
+	proxyBase: config.proxyBase,
+	version: config.version,
+	platform: config.platform,
+	checkForUpdates: () => ipcRenderer.invoke('ide:check-updates')
+}))

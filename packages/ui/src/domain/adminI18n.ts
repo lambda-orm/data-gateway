@@ -207,7 +207,7 @@ ROWS.push(
 	['data', 'data', 'data', 'data', 'data', 'data', 'data', 'data', 'data', 'data', 'data'],
 	['src', 'src', 'src', 'src', 'src', 'src', 'src', 'src', 'src', 'src', 'src'],
 	['model', 'model', 'model', 'model', 'model', 'model', 'model', 'model', 'model', 'model', 'model'],
-	['projects', 'projects', 'proyectos', 'projetos', 'projets', 'progetti', 'Projekte', 'projecten', 'projectes', 'proxectos', 'proiektuak'],
+	['projects', 'Workbench', 'Workbench', 'Workbench', 'Workbench', 'Workbench', 'Workbench', 'Workbench', 'Workbench', 'Workbench', 'Workbench'],
 	['newProject', 'New project', 'Nuevo proyecto', 'Novo projeto', 'Nouveau projet', 'Nuovo progetto', 'Neues Projekt', 'Nieuw project', 'Projecte nou', 'Novo proxecto', 'Proiektu berria'],
 	['empty', '(empty)', '(vacío)', '(vazio)', '(vide)', '(vuoto)', '(leer)', '(leeg)', '(buit)', '(baleiro)', '(hutsa)'],
 	['commandsOf', 'Schema {name}', 'Esquema {name}', 'Esquema {name}', 'Schéma {name}', 'Schema {name}', 'Schema {name}', 'Schema {name}', 'Esquema {name}', 'Esquema {name}', '{name} eskema'],

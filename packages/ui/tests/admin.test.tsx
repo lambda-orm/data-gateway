@@ -293,10 +293,10 @@ describe('what is saved, in the workspaces of the gateway', () => {
 		const admin = new SharedAdmin()
 		render(<Workspace api={new FakeApi()} admin={admin} history={false} locale="en" refreshMs={0} />)
 		// what is saved lives in the projects of the schema: a project is a folder at its top
-		await waitFor(() => expect(row('projects')).toBeTruthy())
-		fireEvent.click(row('projects'))
+		await waitFor(() => expect(row('Workbench')).toBeTruthy())
+		fireEvent.click(row('Workbench'))
 		await waitFor(() => expect(row('shared reports')).toBeTruthy())
-		fireEvent.click(within(row('projects')).getByRole('button', { name: 'Add' }))
+		fireEvent.click(within(row('Workbench')).getByRole('button', { name: 'Add' }))
 		fireEvent.click(screen.getByRole('menuitem', { name: /New project/ }))
 		fireEvent.change(screen.getByLabelText('name'), { target: { value: 'mine' } })
 		fireEvent.click(screen.getByRole('button', { name: 'Create' }))
@@ -598,7 +598,7 @@ describe('the explorer as the workspace is', () => {
 		await waitFor(() => expect(row('State')).toBeTruthy())
 		const level = (n: number) => screen.getAllByRole('treeitem').filter(r => r.getAttribute('aria-level') === String(n)).map(r => r.querySelector('.lw-tree-label')?.textContent)
 		// the schema: its metadata, its state, its source code and its projects
-		expect(level(2)).toEqual(['Metadata', 'State', 'Source code', 'projects'])
+		expect(level(2)).toEqual(['Metadata', 'State', 'Source code', 'Workbench'])
 		if (!row('config')) fireEvent.click(row('Metadata'))
 		await waitFor(() => expect(level(3)).toEqual(['config', 'domain', 'application', 'infrastructure']))
 		fireEvent.click(row('State'))

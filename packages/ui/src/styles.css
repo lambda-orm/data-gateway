@@ -426,3 +426,7 @@
 .lw-build-parts { display: flex; flex-direction: column; align-items: flex-start; gap: var(--lw-space-2); text-align: left; }
 .lw-form .lw-build-part, .lw-build-part { display: flex; flex-direction: row; align-items: center; gap: var(--lw-space-2); margin: 0; }
 .lw-build-part > input { margin: 0; }
+
+/* the root of the connections: its title shrinks before the row overflows the explorer */
+.lw-connections-root { min-width: 0; }
+.lw-connections-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -62,7 +62,8 @@ export interface WorkspaceProps extends Omit<QueryWorkbenchProps, 'initial' | 'o
 	 */
 	connections?: WorkspaceConnection[]
 	/** The root of the connections in the explorer (an IDE): its title and its buttons (add one) */
-	connectionsHeading?: { title: string, actions?: React.ReactNode }
+	/** the root of the connections in the explorer: its title, what goes before it (the menu of the app) and its actions */
+	connectionsHeading?: { title: string, lead?: React.ReactNode, actions?: React.ReactNode }
 }
 
 /** A data-gateway the workspace is connected to: its workspaces stay in it (the IDE only connects) */
@@ -765,11 +766,13 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 					<div className="lw-space-side" style={{ width }} ref={side}>
 						{connectionsHeading && (
 							<div className="lw-connections-root">
+								{connectionsHeading.lead}
 								<button type="button" className="lw-icon-button" aria-expanded={!rootFolded} aria-label={`${rootFolded ? x.showExplorer : x.hideExplorer} ${connectionsHeading.title}`} onClick={() => setRootFolded(!rootFolded)}>
 									<span className={`lw-chevron ${rootFolded ? '' : 'lw-open'}`} aria-hidden="true"><Icons.chevron /></span>
 								</button>
-								<Icons.connections />
-								<strong>{connectionsHeading.title}</strong>
+								{/* with a menu before it (the app), no icon: the row fits the explorer */}
+								{!connectionsHeading.lead && <Icons.connections />}
+								<strong className="lw-connections-title">{connectionsHeading.title}</strong>
 								<span className="lw-type">{connections.length}</span>
 								<span className="lw-spacer" />
 								<span className="lw-connection-actions">{connectionsHeading.actions}</span>

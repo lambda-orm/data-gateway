@@ -136,7 +136,8 @@ const upgrade = (req, socket, head, allowed) => {
 
 // the app: nothing from elsewhere (Monaco and its workers are bundled), never framed; it talks only to its own origin
 const SECURITY = {
-	'Content-Security-Policy': "default-src 'self'; connect-src 'self' data: blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'none'",
+	// api.github.com: the latest version of the IDE (its menu λORM → Update), read by the browser
+	'Content-Security-Policy': "default-src 'self'; connect-src 'self' https://api.github.com data: blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'none'",
 	'X-Frame-Options': 'DENY',
 	'Referrer-Policy': 'no-referrer',
 	'X-Content-Type-Options': 'nosniff'

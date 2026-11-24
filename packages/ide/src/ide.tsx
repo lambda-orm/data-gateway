@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { BrowserSessionStore, Workspace } from '@lambdaorm/ui'
-import { Cable, Menu as MenuIcon, Pencil, Plus, Settings, Trash2 } from 'lucide-react'
-import { ConnectionPage, ConnectionTools, Credential, CredentialFields, getJson, Header, HeaderMenu, headersOf, Kind, OUT, PreferencesPage, usePrefs, Who, wikiUrl } from './shared'
+import { Cable, Pencil, Plus, Settings, Trash2 } from 'lucide-react'
+import { ConnectionPage, ConnectionTools, Credential, CredentialFields, getJson, headersOf, Kind, PreferencesPage, usePrefs, Who } from './shared'
+import { AppMenu } from './appMenu'
 import { ManagementClient, ManagementState, testConnection } from './management'
 import { SessionsPanel } from './sessions'
 import { endpointsOf, McpTab, SwaggerTab, useTransports, WebSocketTab } from './tools'
@@ -255,16 +256,10 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 	}, [])
 	return (
 		<div className="dg-page">
-			<Header brand="Data Gateway IDE" version={__APP_VERSION__}
-				menu={<HeaderMenu label={t.menu} icon={<MenuIcon size={20} strokeWidth={1.75} aria-hidden="true" />} items={[
-					{ label: t.newConnection, icon: <Plus size={16} aria-hidden="true" />, onClick: () => openOf('connection:new') },
-					{ label: t.preferences, icon: <Settings size={16} aria-hidden="true" />, onClick: () => openOf('preferences') }
-				]} />}>
-				<a className="dg-link" href={wikiUrl(locale)} {...OUT}>{t.documentation}</a>
-			</Header>
 			<Workspace connections={specs} theme={dark ? 'dark' : 'light'} locale={locale} culture={culture} pages={pages} openPage={openPage} session={session}
 				connectionsHeading={{
 					title: t.connections,
+					lead: <AppMenu onPreferences={() => openOf('preferences')} />,
 					actions: <button type="button" className="lw-icon-button" aria-label={t.newConnection} title={t.newConnection} onClick={() => openOf('connection:new')}><Plus size={14} aria-hidden="true" /></button>
 				}} />
 			{removing && (
