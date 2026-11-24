@@ -48,4 +48,6 @@ export interface SchemaDirectoryPort {
 	onSchemasChange (listener: () => void): () => void
 	/** Something changed in a workspace (WebSocket: workspace.changed) */
 	onWorkspaceChange (listener: (change: WorkspaceChange) => void): () => void
+	/** announces a change of a workspace (the administration, with who and what) */
+	workspaceChanged? (change: WorkspaceChange): void
 }

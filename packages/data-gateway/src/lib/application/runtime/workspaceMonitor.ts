@@ -92,8 +92,8 @@ export class WorkspaceMonitor {
 		else this.timer = setTimeout(run, delayMs)
 	}
 
-	private change (path: string, kind: WorkspaceChangeKind, files?: string[]): void {
-		this.runtime.workspaceChanged({ path, kind, ...(files?.length ? { files } : {}), at: this.clock.now().toISOString() })
+	private change (path: string, kind: WorkspaceChangeKind, files?: string[], version?: string): void {
+		this.runtime.workspaceChanged({ path, kind, ...(files?.length ? { files } : {}), at: this.clock.now().toISOString(), ...(version ? { version } : {}) })
 	}
 
 	private async apply (): Promise<void> {
@@ -130,7 +130,8 @@ export class WorkspaceMonitor {
 			if (!schemaChanged && !envChanged) continue
 			this.known.set(path, { workspace, fingerprint })
 			this.runtime.reload(this.options.spec(schema))
-			if (schemaChanged) this.change(path, 'schema', ['lambdaORM.yaml'])
+			// with its hash: the edge tells a change of its administration (already announced) from one from outside
+			if (schemaChanged) this.change(path, 'schema', ['lambdaORM.yaml'], fingerprint.schema)
 			// the names of the variables only: their values are secrets
 			if (envChanged) this.change(path, 'env', ['.env'])
 		}

@@ -1,3 +1,4 @@
+import { FileSchemaHistory } from '../output/admin/fileSchemaHistory'
 import { resolveObservability, startObservability, stopObservability, withPrometheus } from './observability'
 import { otelMetricsAsPromJson } from '../output/metrics/otelPrometheus'
 import path from 'path'
@@ -126,7 +127,8 @@ export const buildAdmin = (config: DataGatewayConfig, directory: SchemaDirectory
 	() => directory.schemas().filter(s => s.workspace !== undefined).map(s => ({ path: s.path, workspace: s.workspace! })),
 	() => directory.states(),
 	store, new LambdaSchemaValidator(), new YamlAdapter(), clock, logger, new NodeCodeGenerator(), new ThreeExprLanguage(),
-	config.orm.workspacePath ? new SqliteSessionState(path.join(path.resolve(config.orm.workspacePath), '.data-gateway', 'state.sqlite')) : undefined)
+	config.orm.workspacePath ? new SqliteSessionState(path.join(path.resolve(config.orm.workspacePath), '.data-gateway', 'state.sqlite')) : undefined,
+	new FileSchemaHistory(change => directory.workspaceChanged?.(change)))
 	return { service, commands }
 }
 

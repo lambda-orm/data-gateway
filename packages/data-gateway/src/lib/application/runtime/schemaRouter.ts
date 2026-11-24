@@ -92,7 +92,21 @@ export class SchemaRouter implements SchemaDirectoryPort {
 		return this.workspaceChanges.subscribe(listener)
 	}
 
+	/** the versions of the lambdaORM.yaml that the administration wrote and announced (with who), by their hash */
+	private readonly announced = new Map<string, number>()
+
+	/**
+	 * A change of a workspace, to the IDEs. One of the administration comes with who and what; the monitor sees the same
+	 * file a moment later: that second one is not announced again. One from outside (an editor, git) goes as it comes.
+	 */
 	public workspaceChanged (change: WorkspaceChange): void {
+		const now = Date.now()
+		for (const [version, at] of this.announced) if (now - at > 60000) this.announced.delete(version)
+		if (change.change?.version) {
+			this.announced.set(change.change.version, now)
+		} else if (change.kind === 'schema' && change.version && this.announced.delete(change.version.slice(0, 16))) {
+			return
+		}
 		this.workspaceChanges.emit(change)
 	}
 
