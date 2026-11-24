@@ -1,3 +1,4 @@
+import { tracesOfEntity } from './observability'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { BrowserSessionStore, Workspace } from '@lambdaorm/ui'
 import { Cable, Plus, Settings } from 'lucide-react'
@@ -32,6 +33,9 @@ export interface IdeConnection {
 	restUrl?: string
 	webSocketUrl?: string
 	mcpUrl?: string
+	/** where its traces are seen: Grafana, with a Tempo datasource (its uid; tempo by default) */
+	grafanaUrl?: string
+	tempoDatasource?: string
 }
 
 const CONNECTIONS = 'data-gateway-ide.connections'
@@ -104,6 +108,12 @@ const ConnectionEditor: React.FC<{
 					<label>{t.restUrl}<input aria-label={t.restUrl} value={draft.restUrl ?? ''} onChange={e => set({ restUrl: e.target.value || undefined })} placeholder="http://host:port" spellCheck={false} /></label>
 					<label>{t.webSocketUrl}<input aria-label={t.webSocketUrl} value={draft.webSocketUrl ?? ''} onChange={e => set({ webSocketUrl: e.target.value || undefined })} placeholder="ws://host:port" spellCheck={false} /></label>
 					<label>{t.mcpUrl}<input aria-label={t.mcpUrl} value={draft.mcpUrl ?? ''} onChange={e => set({ mcpUrl: e.target.value || undefined })} placeholder="http://host:port" spellCheck={false} /></label>
+				</details>
+				<details className="dg-advanced">
+					<summary>{t.observability}</summary>
+					<span className="dg-muted">{t.observabilityNote}</span>
+					<label>{t.grafanaUrl}<input aria-label={t.grafanaUrl} value={draft.grafanaUrl ?? ''} onChange={e => set({ grafanaUrl: e.target.value || undefined })} placeholder="http://grafana:3000" spellCheck={false} /></label>
+					<label>{t.tempoDatasource}<input aria-label={t.tempoDatasource} value={draft.tempoDatasource ?? ''} onChange={e => set({ tempoDatasource: e.target.value || undefined })} placeholder="tempo" spellCheck={false} /></label>
 				</details>
 				<span className="dg-muted">{t.connectionNote}</span>
 				{tested && <div className={tested.ok ? 'dg-ok' : 'dg-error'} role="status">{tested.text}</div>}
@@ -231,6 +241,10 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 			fetch: fetchOf(c.id),
 			// the gateway says what changed: read at once; the polling, slower while its events come
 			changes: clients.current.get(c.id)?.client.changes,
+			// its session: a change of another session is announced (with who), one's own is not
+			session: clients.current.get(c.id)?.client.session,
+			// the link of an entity to its traces, when the connection says where Grafana is
+			tracesUrl: c.grafanaUrl ? (_schema: string, entity: string) => tracesOfEntity(c.grafanaUrl!, c.tempoDatasource || 'tempo', entity) : undefined,
 			refreshMs: states[c.id]?.live ? 60000 : undefined,
 			// what is saved without the gateway's workspaces: per gateway and per user of the credential
 			workspaceKey: `${urlOf(c)}|${whos[c.id]?.name ?? c.user ?? ''}`,

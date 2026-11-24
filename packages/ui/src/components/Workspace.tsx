@@ -1,5 +1,6 @@
+import { HistoryView } from './HistoryView'
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { QueryApiPort, SchemaInfo, SessionStorePort, WorkspaceStore } from '../application/ports'
+import { QueryApiPort, SchemaInfo, SessionStorePort, WorkspaceStore, WorkspaceChangeEvent } from '../application/ports'
 import { readSession, WorkspaceSession } from '../domain/session'
 import { BrowserSessionStore, FallbackSessionStore, GatewaySessionStore } from '../infrastructure/sessionStores'
 import { WorkspaceController, WorkspaceState } from '../application/workspaceController'
@@ -96,9 +97,13 @@ export interface WorkspaceConnection {
 	 * The gateway says something changed (its WebSocket of events: schema.statusChanged, workspace.changed): the schemas
 	 * and what is saved are read again at once. A subscription; it answers how to unsubscribe
 	 */
-	changes?: (listener: () => void) => () => void
+	changes?: (listener: (event?: WorkspaceChangeEvent) => void) => () => void
 	/** How often its schemas are read again while `changes` works (it replaces refreshMs of the workspace) */
 	refreshMs?: number
+	/** the id of the session of this IDE in the gateway: a change of another session is announced, with a Refresh */
+	session?: () => string | undefined
+	/** where to see the traces of an entity (Grafana / Tempo filtered by lambdaorm.entity), when the connection has it */
+	tracesUrl?: (schema: string, entity: string) => string | undefined
 }
 
 /** A flag of this browser (a convenience: without storage it is never set) */
@@ -331,6 +336,19 @@ const ConnectionSection: React.FC<{
 		const timer = refreshMs > 0 ? setInterval(read, refreshMs) : undefined
 		return () => { off?.(); if (timer) clearInterval(timer) }
 	}, [api, refreshMs, poke, spec.changes])
+	// a change of another session (another IDE, the CLI through the gateway): said, with a Refresh
+	const [remote, setRemote] = useState<{ text: string, schema?: string }>()
+	useEffect(() => {
+		const off = spec.changes?.(event => {
+			const change = event?.change
+			if (!change || (change.actor?.session && change.actor.session === spec.session?.())) return
+			setRemote({
+				text: format(a.remoteChange, { name: change.actor?.credential ?? change.actor?.client ?? '?', target: change.target ?? change.kind, schema: event?.path || '/' }),
+				schema: event?.path
+			})
+		})
+		return () => { off?.() }
+	}, [spec.changes, spec.session, a])
 	const pokeSoon = useCallback(() => { for (const ms of [300, 1500, 4000]) setTimeout(() => setPoke(p => p + 1), ms) }, [])
 	// Refresh: the schemas, the domains, what is saved and what the explorer read, again
 	const [refreshing, setRefreshing] = useState<{ n: number, schema?: string }>({ n: 0 })
@@ -383,6 +401,11 @@ const ConnectionSection: React.FC<{
 						<div className="lw-notice" role="alert">
 							{a.unreadableFiles}
 							<ul className="lw-issues">{sharedStore!.problems.map(p => <li key={`${p.schema}/${p.file}`}>{p.schema || '/'}/{p.file}: {p.message}</li>)}</ul>
+						</div>
+					)}
+					{remote && (
+						<div className="lw-notice" role="status">
+							{remote.text} <button type="button" onClick={() => { refresh(remote.schema); setRemote(undefined) }}>{a.refreshNow}</button>
 						</div>
 					)}
 					{inBrowser.length > 0 && (
@@ -918,6 +941,12 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 											<SchemaForms admin={adminApi} theme={theme} schema={tab.schema ?? ''} writable={!!can?.schemaWrite} canAdmin={!!can?.schemaAdmin} revision={sinceOf(conn, tab.schema)} locale={workbench.locale}
 												focus={{ section: 'about' }} onRemoveSchema={can?.schemaAdmin ? () => openers.removeSchema(conn, tab.schema ?? '') : undefined} />
 										)}
+										{can?.schemaRead && adminApi.history && (
+											<details className="lw-history-section">
+												<summary>{a.history}</summary>
+												<HistoryView admin={adminApi} schema={tab.schema ?? ''} locale={workbench.locale} revision={sinceOf(conn, tab.schema)} />
+											</details>
+										)}
 									</CommandsPanel>
 								)}
 								{r && tab.kind === 'stageDiagram' && adminApi && tab.stage && (
@@ -944,7 +973,9 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 									<EntityView key={sinceOf(conn, tab.schema)} api={r.api} schema={tab.schema ?? ''} entity={tab.entity ?? ''} domain={r.loaderOf(tab.schema ?? '')} theme={theme} locale={workbench.locale}
 										onOpenEntity={(schema, entity) => openEntity(conn, schema, entity)} onQuery={queryEntity(conn)} onQueryText={queryOfDiagram(conn)} culture={workbench.culture}
 										onEdit={adminApi && can?.schemaWrite ? (schema, entity) => openElement(conn, schema, { section: 'entities', name: entity }, true) : undefined} editLabel={a.edit}
-										onRemove={adminApi && can?.schemaWrite ? (schema, entity) => openElement(conn, schema, { section: 'entities', name: entity }, false, true) : undefined} removeLabel={a.remove} />
+										onRemove={adminApi && can?.schemaWrite ? (schema, entity) => openElement(conn, schema, { section: 'entities', name: entity }, false, true) : undefined} removeLabel={a.remove}
+										admin={adminApi && can?.schemaRead ? adminApi : undefined} revision={sinceOf(conn, tab.schema)}
+										tracesUrl={connections.find(c => c.id === conn)?.tracesUrl?.(tab.schema ?? '', tab.entity ?? '')} />
 								)}
 								{r && tab.kind === 'diagram' && tab.draft && (
 									<div tabIndex={-1} className="lw-diagram-tab">
