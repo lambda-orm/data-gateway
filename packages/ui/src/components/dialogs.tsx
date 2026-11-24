@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { ArrowDownToLine, ArrowUpToLine, Boxes, Braces, ChartNetwork, ChevronRight, Code, Database, DatabasePlus, Download, Ellipsis, Eraser, FileCode, FileCog, FilePlus, FileSpreadsheet, FileText, Folder, FolderCode, FolderDown, FolderInput, FolderKanban, FolderOutput, FolderPlus, GitCompareArrows, HardDriveDownload, HardDriveUpload, Info, KeyRound, Layers, ListTree, Merge, PanelLeft, Pencil, Plug, Plus, Route, ScanSearch, Server, Settings2, SquareArrowOutUpRight, SquareTerminal, Table2, Trash2, Upload, Workflow, X, Cable, Copy, Hand, Library, MousePointer2, Network, TriangleAlert, WandSparkles, ListIndentIncrease, ZoomIn, ZoomOut, PanelTop, Map as MapIcon, HardDrive, RefreshCw, type LucideIcon } from 'lucide-react'
+import { ArrowDownToLine, ArrowUpToLine, Boxes, Braces, ChartNetwork, ChevronRight, Code, Database, DatabasePlus, Download, Ellipsis, Eraser, FileCode, FileCog, FilePlus, FileSpreadsheet, FileText, Folder, FolderCode, FolderDown, FolderInput, FolderKanban, FolderOutput, FolderPlus, GitCompareArrows, HardDriveDownload, HardDriveUpload, Info, KeyRound, Layers, ListTree, Merge, PanelLeft, Pencil, Plug, Plus, Route, ScanSearch, Server, Settings2, SquareArrowOutUpRight, SquareTerminal, Table2, Trash2, Upload, Workflow, X, Cable, Copy, Hand, Library, MousePointer2, Network, TriangleAlert, WandSparkles, ListIndentIncrease, ZoomIn, ZoomOut, PanelTop, Map as MapIcon, HardDrive, RefreshCw, RotateCw, type LucideIcon } from 'lucide-react'
 import { createPortal } from 'react-dom'
 
 /** A modal: the page behind can't be used; Escape or Cancel closes it. On the body: no panel clips it or covers it */
@@ -140,6 +140,7 @@ export const Icons = {
 	code: icon(Code),
 	/** the code of a language built again */
 	rebuild: icon(RefreshCw),
+	refresh: icon(RotateCw),
 	info: icon(Info),
 	more: icon(Ellipsis),
 	close: icon(X),

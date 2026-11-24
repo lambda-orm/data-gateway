@@ -455,8 +455,19 @@
 .lw-connections-toggle { min-width: 0; border: 0; background: none; padding: 2px 4px; cursor: pointer; color: inherit; }
 /* the validations (constraints) of an entity: their tab, and those of a property under its expressions */
 .lw-expression-detail h5 { margin: 10px 0 4px; color: var(--lw-muted); font-size: var(--lw-text-sm); text-transform: uppercase; letter-spacing: .03em; }
-.lw-expression-detail dl.lw-validations { grid-template-columns: minmax(160px, max-content) minmax(0, 1fr); }
-.lw-expression-detail dl.lw-validations dt { font-family: inherit; color: var(--lw-fg); }
 .lw-form-table td.lw-condition { min-width: 280px; }
 .lw-form-table td.lw-condition .lw-expression-view { white-space: pre-wrap; overflow-wrap: anywhere; }
 .lw-uses { display: inline-block; margin: 1px 4px 1px 0; padding: 0 6px; border: 1px solid var(--lw-border); border-radius: 10px; background: var(--lw-panel); font-size: 12px; }
+/* each expression of a property: "name: what it does", and under it its editor (or the expression in colors) */
+.lw-expression-item { margin: 8px 0 12px; min-width: 0; }
+.lw-expression-label { margin: 0 0 4px; color: var(--lw-muted); font-size: var(--lw-text-sm); line-height: 1.4; }
+.lw-expression-label code { color: var(--lw-fg); font-weight: 600; }
+.lw-constraint-message { margin: 0 0 3px; font-size: var(--lw-text-sm); }
+.lw-expression-detail .lw-validations { border-top: 1px solid var(--lw-border); margin-top: 10px; padding-top: 8px; }
+/* checks on one line (abstract, view): the first one under the labels of the others */
+.lw-form-inline { display: flex; align-items: center; gap: 24px; }
+.lw-form-inline .lw-form-field { grid-template-columns: 120px auto; }
+.lw-form-inline .lw-form-field + .lw-form-field { grid-template-columns: auto auto; }
+/* the name of a connection opens its page */
+.lw-workbench button.lw-connection-open { background: none; border: 0; padding: 0; text-align: left; cursor: pointer; color: inherit; font: inherit; }
+.lw-workbench button.lw-connection-open:hover strong { text-decoration: underline; }

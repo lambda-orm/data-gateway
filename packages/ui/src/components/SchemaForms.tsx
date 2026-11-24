@@ -1,11 +1,12 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AdminApiPort, SchemaVariable } from '../application/ports'
 import { adminMessagesOf, format } from '../domain/adminI18n'
+import { explorerMessagesOf } from '../domain/explorerI18n'
 import { fromYaml, toYaml } from '../domain/results'
 import { ExpressionDialog } from './ExpressionDialog'
 import { ExpressionInput } from './ExpressionInput'
 import { ExpressionView } from './ExpressionView'
-import { PROPERTY_EXPRESSIONS, propertiesIn } from '../domain/diagram'
+import { EXPRESSION_HELP, PROPERTY_EXPRESSIONS, propertiesIn } from '../domain/diagram'
 import { Icons } from './dialogs'
 import { CodeEditor } from './CodeEditor'
 
@@ -24,6 +25,14 @@ export interface SchemaFormsProps {
 	focus?: FormFocus
 	/** an element renamed or removed: the explorer follows it */
 	onChanged?: (focus: FormFocus | undefined) => void
+	/** When it was asked to edit (Edit): it opens in edit, and goes to edit when this changes */
+	editRequest?: number
+	/** Opened by Edit, its Cancel or its Save is done with it: back to what was being viewed */
+	onDone?: () => void
+	/** When its removal was asked (Remove in the view of the element): what uses it, and its confirmation */
+	removeRequest?: number
+	/** The schema itself removed (its Remove, next to Edit in what it is) */
+	onRemoveSchema?: () => void
 }
 
 /** The variables of the connections (.env): defined or not, and where used; a value is set, never shown */
@@ -175,6 +184,8 @@ const Rows: React.FC<{
 	)
 }
 
+type EntityTab = 'properties' | 'relations' | 'indexes' | 'constraints'
+
 const ABOUT = ['name', 'description', 'version'] as const
 type About = Record<typeof ABOUT[number], string>
 
@@ -184,14 +195,18 @@ type About = Record<typeof ABOUT[number], string>
  * with the element as it was read: someone else's change to another element doesn't collide; to the same one, the
  * form shows what it has now. The gateway writes it keeping the comments and the rest of the file.
  */
-export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, theme, schema, writable, revision, locale, canAdmin = false, focus, onChanged }) => {
+export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, theme, schema, writable, revision, locale, canAdmin = false, focus, onChanged, editRequest, onDone, removeRequest, onRemoveSchema }) => {
 	const [showVariables, setShowVariables] = useState(focus?.section === 'variables')
 	const [showApplication] = useState(focus?.section === 'application')
 	// a focused element is read first: Edit to change it; the forms of the whole schema edit at once
 	// a new element (focused on a section without a name) starts blank, in edit
 	const creating = !!focus && focus.section !== 'application' && focus.section !== 'variables' && focus.section !== 'about' && (focus as any).name === undefined
-	const [editing, setEditing] = useState(!focus || creating)
+	const [editing, setEditing] = useState(!focus || creating || editRequest !== undefined)
+	useEffect(() => { if (editRequest !== undefined) setEditing(true) }, [editRequest])
 	const m = adminMessagesOf(locale)
+	const e = explorerMessagesOf(locale)
+	// the tab of the form of an entity: its properties, relations, indexes or constraints
+	const [entityTab, setEntityTab] = useState<EntityTab>('properties')
 	const [doc, setDoc] = useState<Json>()
 	const [selected, setSelected] = useState<{ section: Section, name?: string } | undefined>(
 		focus && focus.section !== 'application' && focus.section !== 'variables' && focus.section !== 'about' ? { section: focus.section, name: (focus as any).name } : undefined)
@@ -253,6 +268,8 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, theme, schema, 
 		setNotice(m.saved)
 		if (focus) setEditing(false)
 		await load()
+		// opened by Edit: saved, back to the view
+		if (editRequest !== undefined && selected.name !== undefined) onDone?.()
 	})
 
 	// what the schema is: its name, description and version (keys of the top of the lambdaORM.yaml)
@@ -303,6 +320,14 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, theme, schema, 
 		setRemoving((await admin.references(schema, [...sectionAt(selected.section), selected.name])).references)
 	})
 
+	// asked by Remove in the view of the element: once it is read, what uses it and the confirmation
+	const removeAsked = useRef<number>()
+	useEffect(() => {
+		if (removeRequest === undefined || removeRequest === removeAsked.current || !read || !selected?.name) return
+		removeAsked.current = removeRequest
+		askRemove()
+	}, [removeRequest, read])
+
 	const remove = () => attempt(async () => {
 		if (!selected?.name) return
 		await admin.patchSchema(schema, { op: 'remove', at: [...sectionAt(selected.section), selected.name], expected: read })
@@ -326,8 +351,8 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, theme, schema, 
 			{options.map(o => <option key={o} value={o}>{o}</option>)}
 		</select>
 	))
-	const rows = (key: string, columns: RowColumn[], detail?: Parameters<typeof Rows>[0]['detail']) => (
-		<fieldset className="lw-form-group"><legend>{key}</legend>
+	const rows = (key: string, columns: RowColumn[], detail?: Parameters<typeof Rows>[0]['detail'], legend = true) => (
+		<fieldset className="lw-form-group">{legend && <legend>{key}</legend>}
 			<Rows label={key} rows={Array.isArray(draft?.[key]) ? draft[key] : []} columns={columns} readOnly={!editable} addLabel={m.addRow}
 				expressionLabel={m.expression} detail={detail} onChange={value => setDraft({ ...draft, [key]: value })} />
 		</fieldset>
@@ -340,28 +365,28 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, theme, schema, 
 		return (
 			<section className="lw-expression-detail" aria-label={title}>
 				<h4>{title}</h4>
-				{editable && <small className="lw-type">{m.propertyExpressionsHint}</small>}
-				<dl>
-					{PROPERTY_EXPRESSIONS.filter(k => editable || (typeof row[k] === 'string' && row[k].trim())).map(k => (
-						<React.Fragment key={k}>
-							<dt>{k}</dt>
-							<dd>{editable
-								? <ExpressionInput admin={admin} value={typeof row[k] === 'string' ? row[k] : ''} onChange={value => set(k, value.trim() ? value : undefined)}
-									variables={variables} height={52} ariaLabel={`${row.name ?? ''} ${k}`} theme={theme} locale={locale} />
-								: <ExpressionView expression={row[k]} variables={variables} />}</dd>
-						</React.Fragment>
-					))}
-				</dl>
+				{PROPERTY_EXPRESSIONS.filter(k => editable || (typeof row[k] === 'string' && row[k].trim())).map(k => (
+					<div key={k} className="lw-expression-item">
+						<p className="lw-expression-label"><code>{k}</code>: {m[EXPRESSION_HELP[k]]}</p>
+						{editable
+							? <ExpressionInput admin={admin} value={typeof row[k] === 'string' ? row[k] : ''} onChange={value => set(k, value.trim() ? value : undefined)}
+								variables={variables} height={52} ariaLabel={`${row.name ?? ''} ${k}`} theme={theme} locale={locale} />
+							: <ExpressionView expression={row[k]} variables={variables} />}
+					</div>
+				))}
 				{(() => {
 					const uses = (Array.isArray(draft?.constraints) ? draft.constraints : [])
 						.filter((c: Json) => typeof c?.condition === 'string' && row.name && propertiesIn(c.condition, variables).includes(row.name))
 					return uses.length > 0 && (
-						<>
-							<h5>{m.validations}</h5>
-							<dl className="lw-validations">
-								{uses.map((c: Json, i: number) => <React.Fragment key={i}><dt>{c.message}</dt><dd><ExpressionView expression={c.condition} variables={variables} /></dd></React.Fragment>)}
-							</dl>
-						</>
+						<div className="lw-validations">
+							<p className="lw-expression-label"><code>constraints</code>: {m.validationsHint}</p>
+							{uses.map((c: Json, i: number) => (
+								<div key={i} className="lw-expression-item">
+									<p className="lw-constraint-message">{c.message}</p>
+									<ExpressionView expression={c.condition} variables={variables} />
+								</div>
+							))}
+						</div>
 					)
 				})()}
 			</section>
@@ -375,14 +400,13 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, theme, schema, 
 		return (
 			<section className="lw-expression-detail" aria-label={title}>
 				<h4>{title}</h4>
-				{editable && <small className="lw-type">{m.validationsHint}</small>}
-				<dl>
-					<dt>condition</dt>
-					<dd>{editable
+				<div className="lw-expression-item">
+					<p className="lw-expression-label"><code>condition</code>: {m.validationsHint}</p>
+					{editable
 						? <ExpressionInput admin={admin} value={typeof row.condition === 'string' ? row.condition : ''} onChange={value => set('condition', value.trim() ? value : undefined)}
 							variables={variables} height={52} ariaLabel={`${row.message ?? ''} condition`} theme={theme} locale={locale} />
-						: <ExpressionView expression={row.condition ?? ''} variables={variables} />}</dd>
-				</dl>
+						: <ExpressionView expression={row.condition ?? ''} variables={variables} />}
+				</div>
 			</section>
 		)
 	}
@@ -396,14 +420,26 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, theme, schema, 
 				<>
 					{isNew && text('name')}
 					{select('extends', names.entities.filter(n => n !== draft.name))}
-					{check('abstract')}
-					{check('view')}
+					<div className="lw-form-inline">{check('abstract')}{check('view')}</div>
 					{text('primaryKey', { fields: true })}
 					{text('uniqueKey', { fields: true })}
-					{rows('properties', [{ key: 'name' }, { key: 'type', kind: 'select', options: TYPES, placeholder: 'string' }, { key: 'length', kind: 'number' }, { key: 'required', kind: 'check' }, { key: 'autoIncrement', kind: 'check' }, { key: 'default' }, { key: 'enum', kind: 'select', options: names.enums }, { key: 'expressions', kind: 'expressions', keys: PROPERTY_EXPRESSIONS }], propertyExpressions)}
-					{rows('relations', [{ key: 'name' }, { key: 'type', kind: 'select', options: RELATION_TYPES, placeholder: 'oneToMany' }, { key: 'from', kind: 'fields' }, { key: 'entity', kind: 'select', options: names.entities }, { key: 'to', kind: 'fields' }, { key: 'target' }, { key: 'weak', kind: 'check' }])}
-					{rows('indexes', [{ key: 'name' }, { key: 'fields', kind: 'fields' }])}
-					{rows('constraints', [{ key: 'message' }, { key: 'condition', kind: 'expressions', keys: ['condition'] }], constraintCondition)}
+					{(() => {
+						const count = (key: string) => Array.isArray(draft?.[key]) ? draft[key].length : 0
+						const tabs: [EntityTab, string][] = [['properties', e.properties], ['relations', e.relations], ['indexes', e.indexes], ['constraints', e.constraints]]
+						return (
+							<>
+								<div className="lw-toolbar lw-entity-tabs" role="tablist" aria-label={draft.name ?? ''}>
+									{tabs.map(([key, label]) => (
+										<button key={key} type="button" role="tab" aria-selected={entityTab === key} className={entityTab === key ? 'lw-active' : ''} onClick={() => setEntityTab(key)}>{label} ({count(key)})</button>
+									))}
+								</div>
+								{entityTab === 'properties' && rows('properties', [{ key: 'name' }, { key: 'type', kind: 'select', options: TYPES, placeholder: 'string' }, { key: 'length', kind: 'number' }, { key: 'required', kind: 'check' }, { key: 'autoIncrement', kind: 'check' }, { key: 'default' }, { key: 'enum', kind: 'select', options: names.enums }, { key: 'expressions', kind: 'expressions', keys: PROPERTY_EXPRESSIONS }], propertyExpressions, false)}
+								{entityTab === 'relations' && rows('relations', [{ key: 'name' }, { key: 'type', kind: 'select', options: RELATION_TYPES, placeholder: 'oneToMany' }, { key: 'from', kind: 'fields' }, { key: 'entity', kind: 'select', options: names.entities }, { key: 'to', kind: 'fields' }, { key: 'target' }, { key: 'weak', kind: 'check' }], undefined, false)}
+								{entityTab === 'indexes' && rows('indexes', [{ key: 'name' }, { key: 'fields', kind: 'fields' }], undefined, false)}
+								{entityTab === 'constraints' && rows('constraints', [{ key: 'message' }, { key: 'condition', kind: 'expressions', keys: ['condition'] }], constraintCondition, false)}
+							</>
+						)
+					})()}
 				</>
 			)
 		case 'enums':
@@ -512,6 +548,7 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, theme, schema, 
 						<div className="lw-toolbar">
 							<strong>{m.about}</strong>
 							<span className="lw-spacer" />
+							{onRemoveSchema && !editing && <button type="button" className="lw-danger" onClick={onRemoveSchema}>{m.remove}</button>}
 							{writable && !editing && <button type="button" className="lw-primary" onClick={() => setEditing(true)}>{m.edit}</button>}
 							{writable && editing && (
 								<>
@@ -561,7 +598,7 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, theme, schema, 
 						{writable && selected.name && <button type="button" className="lw-danger" disabled={busy} onClick={askRemove}>{m.remove}</button>}
 						{writable && !editing && <button type="button" className="lw-primary" onClick={() => setEditing(true)}>{m.edit}</button>}
 						{writable && editing && focus && selected.name && (
-							<button type="button" onClick={() => { setEditing(false); setDraft(read ? JSON.parse(JSON.stringify(read)) : undefined); setError(undefined) }}>{m.cancel}</button>
+							<button type="button" onClick={() => { setEditing(false); setDraft(read ? JSON.parse(JSON.stringify(read)) : undefined); setError(undefined); if (editRequest !== undefined) onDone?.() }}>{m.cancel}</button>
 						)}
 						{writable && editing && <button type="button" className="lw-primary" disabled={busy || !changed || (selected.name === undefined && !draft?.name)} onClick={save}>{m.save}</button>}
 					</div>

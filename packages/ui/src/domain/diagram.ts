@@ -216,3 +216,8 @@ export const constraintsOf = (entity: Pick<EntityInfo, 'properties' | 'constrain
 	const names = (entity.properties ?? []).map(p => p.name)
 	return (entity.constraints ?? []).filter(c => typeof c.condition === 'string' && propertiesIn(c.condition, names).includes(property))
 }
+
+/** The message that explains each expression of a property (helpReadExp…), by its key */
+export const EXPRESSION_HELP: Record<PropertyExpression, 'helpReadExp' | 'helpWriteExp' | 'helpReadValue' | 'helpWriteValue'> = {
+	readExp: 'helpReadExp', writeExp: 'helpWriteExp', readValue: 'helpReadValue', writeValue: 'helpWriteValue'
+}

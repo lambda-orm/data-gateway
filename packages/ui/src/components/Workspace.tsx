@@ -81,8 +81,10 @@ export interface WorkspaceConnection {
 	/** where its saved items are kept when the gateway doesn't keep them (by default this browser, under workspaceKey) */
 	store?: WorkspaceStore
 	workspaceKey?: string
-	/** buttons of its heading (open its page, edit, remove) */
+	/** buttons of its heading */
 	actions?: React.ReactNode
+	/** Its page (edit, remove): opened by a click on its name */
+	onOpen?: () => void
 	/** it can't be reached now: why (its explorer says it) */
 	problem?: string
 	/**
@@ -127,6 +129,10 @@ interface Tab {
 	draft?: DiagramDraft
 	/** The element of an element tab (an entity, a source, the application section…) */
 	focus?: FormFocus
+	/** When its form was asked to edit (Edit, not a click to read it): it opens in edit, Cancel and Save */
+	editRequest?: number
+	/** When its removal was asked (Remove in the view of the element) */
+	removeRequest?: number
 	/** The file of a file tab (data/…, src/…) */
 	file?: string
 	/** The stage of a diagram of a stage, and how it was left (turned, what it shows, its boxes moved) */
@@ -195,6 +201,10 @@ interface Runtime {
 	domainOf: (schema: string) => Promise<DomainInfo>
 	loaderOf: (schema: string) => () => Promise<DomainInfo>
 	pokeSoon: () => void
+	/** Read again what was read of a schema (or of all): changed elsewhere, by another IDE or user */
+	refresh: (schema?: string) => void
+	/** How many times it was refreshed: the forms and views read again when it changes */
+	refreshes: number
 }
 
 /** What the explorer of a connection asks the workspace to open (the connection is given by the section) */
@@ -206,7 +216,7 @@ interface Openers {
 	newDiagram: (conn: string, schema: string, parentId?: string) => void
 	schemaFile: (conn: string, schema: string) => void
 	schema: (conn: string, schema: string) => void
-	element: (conn: string, schema: string, focus: FormFocus) => void
+	element: (conn: string, schema: string, focus: FormFocus, edit?: boolean) => void
 	file: (conn: string, schema: string, file: string) => void
 	stageDiagram: (conn: string, schema: string, stage: string) => void
 	newSchema: (conn: string) => void
@@ -322,11 +332,19 @@ const ConnectionSection: React.FC<{
 		return () => { off?.(); if (timer) clearInterval(timer) }
 	}, [api, refreshMs, poke, spec.changes])
 	const pokeSoon = useCallback(() => { for (const ms of [300, 1500, 4000]) setTimeout(() => setPoke(p => p + 1), ms) }, [])
+	// Refresh: the schemas, the domains, what is saved and what the explorer read, again
+	const [refreshing, setRefreshing] = useState<{ n: number, schema?: string }>({ n: 0 })
+	const refresh = useCallback((schema?: string) => {
+		for (const path of [...domains.current.keys()]) if (schema === undefined || path === schema) { domains.current.delete(path); loaders.current.delete(path) }
+		setPoke(p => p + 1)
+		if (known) controller.load()
+		setRefreshing(r => ({ n: r.n + 1, schema }))
+	}, [controller, known])
 	const revision = useMemo(() => revisionOf(listed), [listed])
 	const schemas = useMemo(() => listed.filter(s => s.status === 'ready'), [listed])
 
-	const runtime = useMemo<Runtime>(() => ({ id, api, adminApi, can, controller, state, listed, schemas, revision, domainOf, loaderOf, pokeSoon }),
-		[id, api, adminApi, can, controller, state, listed, schemas, revision, domainOf, loaderOf, pokeSoon])
+	const runtime = useMemo<Runtime>(() => ({ id, api, adminApi, can, controller, state, listed, schemas, revision, domainOf, loaderOf, pokeSoon, refresh, refreshes: refreshing.n }),
+		[id, api, adminApi, can, controller, state, listed, schemas, revision, domainOf, loaderOf, pokeSoon, refresh, refreshing.n])
 	useEffect(() => { onRuntime(id, runtime) }, [id, runtime, onRuntime])
 	useEffect(() => () => onRuntime(id, undefined), [id, onRuntime])
 
@@ -341,11 +359,21 @@ const ConnectionSection: React.FC<{
 						<span className={`lw-chevron ${folded ? '' : 'lw-open'}`} aria-hidden="true"><Icons.chevron /></span>
 					</button>
 					<span className={spec.problem ? 'lw-connection-icon lw-problem' : 'lw-connection-icon'} title={spec.problem}>{spec.problem ? <Icons.warning /> : <Icons.connection />}</span>
-					<span className="lw-connection-name" title={spec.description}>
-						<strong>{spec.name}</strong>{spec.current && <span className="lw-badge">{a.current}</span>}
-						{spec.description && <span className="lw-type lw-connection-url">{spec.description}</span>}
+					{(() => {
+						const name = (
+							<>
+								<strong>{spec.name}</strong>{spec.current && <span className="lw-badge">{a.current}</span>}
+								{spec.description && <span className="lw-type lw-connection-url">{spec.description}</span>}
+							</>
+						)
+						return spec.onOpen
+							? <button type="button" className="lw-connection-name lw-connection-open" title={spec.description} aria-label={spec.name} onClick={spec.onOpen}>{name}</button>
+							: <span className="lw-connection-name" title={spec.description}>{name}</span>
+					})()}
+					<span className="lw-connection-actions">
+						<button type="button" className="lw-icon-button" aria-label={format(x.refreshOf, { name: spec.name })} title={format(x.refreshOf, { name: spec.name })} onClick={() => refresh()}><Icons.refresh /></button>
+						{spec.actions}
 					</span>
-					<span className="lw-connection-actions">{spec.actions}</span>
 				</div>
 			)}
 			{!folded && (
@@ -362,7 +390,7 @@ const ConnectionSection: React.FC<{
 							{format(a.browserItems, { n: inBrowser.length })} <button type="button" onClick={copyToWorkspace}>{a.copyToWorkspace}</button>
 						</div>
 					)}
-					<Explorer schemas={listed} controller={controller} api={api} locale={locale} theme={theme} activeId={activeId}
+					<Explorer schemas={listed} controller={controller} api={api} refresh={refreshing} onRefreshSchema={refresh} locale={locale} theme={theme} activeId={activeId}
 						expanded={expanded} onExpandedChange={onExpandedChange}
 						loadDomain={domainOf} onOpen={item => open.saved(id, item)} onOpenDomain={schema => open.domain(id, schema)} onOpenEntity={(schema, entity) => open.entity(id, schema, entity)}
 						onNewQuery={(schema, parentId) => open.newQuery(id, schema, parentId)}
@@ -371,7 +399,7 @@ const ConnectionSection: React.FC<{
 							can,
 							onOpenSchemaFile: schema => open.schemaFile(id, schema),
 							onOpenSchema: schema => open.schema(id, schema),
-							onOpenElement: (schema, focus) => open.element(id, schema, focus),
+							onOpenElement: (schema, focus, edit) => open.element(id, schema, focus, edit),
 							onOpenFile: (schema, file) => open.file(id, schema, file),
 							onOpenStageDiagram: (schema, stage) => open.stageDiagram(id, schema, stage),
 							api: adminApi,
@@ -521,7 +549,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 			neighbours: (name: string) => edges.flatMap(e => e.parent === name ? [e.child] : e.child === name ? [e.parent] : [])
 		}
 	}
-	const sinceOf = (conn: string, schema: string | undefined) => rt(conn)?.listed.find(s => s.path === schema)?.since ?? ''
+	const sinceOf = (conn: string, schema: string | undefined) => `${rt(conn)?.listed.find(s => s.path === schema)?.since ?? ''}#${rt(conn)?.refreshes ?? 0}`
 	useEffect(() => { if (!notice) return; const t = setTimeout(() => setNotice(undefined), 5000); return () => clearTimeout(t) }, [notice])
 
 	const savedOf = (tab: Tab): SavedItem | undefined => tab.savedId ? rt(connOf(tab))?.state.items.find(i => i.id === tab.savedId) : undefined
@@ -607,13 +635,38 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 	const focusKey = (f: FormFocus) => `${f.section}:${(f as any).name ?? ''}`
 	const focusTitle = (f: FormFocus) => (f as any).name ?? (f.section === 'application' || f.section === 'variables' || f.section === 'about' ? a[f.section] : format(a.newNamed, { name: a[f.section] }))
 	// one element of the schema; a new one (no name) is always a tab of its own
-	const openElement = (conn: string, schema: string, focus: FormFocus) => {
+	// edit: asked by Edit, it opens in edit (an open tab of it goes to edit too)
+	// remove: asked by Remove in the view of the element (its form says what uses it and asks to confirm)
+	const openElement = (conn: string, schema: string, focus: FormFocus, edit = false, remove = false) => {
 		const named = (focus as any).name !== undefined || focus.section === 'application' || focus.section === 'variables' || focus.section === 'about'
+		const editRequest = edit ? Date.now() : undefined
+		const removeRequest = remove ? Date.now() : undefined
+		const open = named ? tabs.find(t => same(conn, t) && t.kind === 'element' && t.schema === schema && !!t.focus && focusKey(t.focus) === focusKey(focus)) : undefined
+		if (open && (editRequest || removeRequest)) setTabs(all => all.map(t => t.id === open.id ? { ...t, editRequest: editRequest ?? t.editRequest, removeRequest: removeRequest ?? t.removeRequest } : t))
 		if (named && reuse(t => same(conn, t) && t.kind === 'element' && t.schema === schema && !!t.focus && focusKey(t.focus) === focusKey(focus))) return
-		add({ kind: 'element', title: focusTitle(focus), schema, focus, connection: conn })
+		add({ kind: 'element', title: focusTitle(focus), schema, focus, connection: conn, editRequest, removeRequest })
+	}
+	// a form opened by Edit, cancelled or saved: it closes, and an entity goes back to its view
+	const elementDone = (conn: string, tab: Tab) => {
+		close(tab.id)
+		const focus = tab.focus as { section: string, name?: string } | undefined
+		if (focus?.section === 'entities' && focus.name) openEntity(conn, tab.schema ?? '', focus.name)
 	}
 	const elementChanged = (id: number, focus: FormFocus | undefined) => {
-		if (!focus) { close(id); return }
+		if (!focus) {
+			// removed: the view of a removed entity goes too
+			const form = tabs.find(t => t.id === id)
+			const was = form?.focus as { section: string, name?: string } | undefined
+			const gone = new Set([id, ...(form && was?.section === 'entities' && was.name
+				? tabs.filter(t => t.kind === 'entity' && same(connOf(form), t) && t.schema === form.schema && t.entity === was.name).map(t => t.id)
+				: [])])
+			const index = tabs.findIndex(t => t.id === id)
+			const rest = tabs.filter(t => !gone.has(t.id))
+			for (const g of gone) contents.current.delete(g)
+			setTabs(rest)
+			if (gone.has(active)) setActive(rest[Math.max(0, Math.min(index, rest.length) - 1)]?.id ?? -1)
+			return
+		}
 		setTabs(all => all.map(t => t.id === id ? { ...t, focus, title: focusTitle(focus) } : t))
 	}
 	const openFile = (conn: string, schema: string, file: string) => {
@@ -787,7 +840,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 											<span className="lw-spacer" />
 										</>
 										)}
-								<span className="lw-connection-actions">{connectionsHeading.actions}</span>
+								<span className="lw-connection-actions"><button type="button" className="lw-icon-button" aria-label={format(x.refreshOf, { name: connectionsHeading.title })} title={format(x.refreshOf, { name: connectionsHeading.title })} onClick={() => { for (const r of Object.values(runtimes)) r.refresh() }}><Icons.refresh /></button>{connectionsHeading.actions}</span>
 							</div>
 						)}
 						{/* the sections stay mounted while folded: what each connection knows (its schemas) is kept */}
@@ -855,14 +908,15 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 								{tab.kind !== 'page' && !r && <div className={`lw-workbench lw-${theme}`}><p className="lw-muted">{x.loading}</p></div>}
 								{r && tab.kind === 'element' && adminApi && tab.focus && (
 									<SchemaForms admin={adminApi} theme={theme} schema={tab.schema ?? ''} writable={!!can?.schemaWrite} canAdmin={!!can?.schemaAdmin} revision={sinceOf(conn, tab.schema)} locale={workbench.locale}
-										focus={tab.focus} onChanged={focus => elementChanged(tab.id, focus)} />
+										focus={tab.focus} editRequest={tab.editRequest} removeRequest={tab.removeRequest} onChanged={focus => elementChanged(tab.id, focus)}
+										onDone={() => elementDone(conn, tab)} />
 								)}
 								{r && tab.kind === 'schema' && adminApi && (
 									<CommandsPanel admin={adminApi} schema={tab.schema ?? ''} canSave={!!can?.workbenchWrite} canBuild={!!can?.build} locale={workbench.locale}
 										title={format(a.commandsOf, { name: tab.schema || '/' })}>
 										{can?.schemaRead && (
 											<SchemaForms admin={adminApi} theme={theme} schema={tab.schema ?? ''} writable={!!can?.schemaWrite} canAdmin={!!can?.schemaAdmin} revision={sinceOf(conn, tab.schema)} locale={workbench.locale}
-												focus={{ section: 'about' }} />
+												focus={{ section: 'about' }} onRemoveSchema={can?.schemaAdmin ? () => openers.removeSchema(conn, tab.schema ?? '') : undefined} />
 										)}
 									</CommandsPanel>
 								)}
@@ -889,7 +943,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 								{r && tab.kind === 'entity' && (
 									<EntityView key={sinceOf(conn, tab.schema)} api={r.api} schema={tab.schema ?? ''} entity={tab.entity ?? ''} domain={r.loaderOf(tab.schema ?? '')} theme={theme} locale={workbench.locale}
 										onOpenEntity={(schema, entity) => openEntity(conn, schema, entity)} onQuery={queryEntity(conn)} onQueryText={queryOfDiagram(conn)} culture={workbench.culture}
-										onEdit={adminApi && can?.schemaWrite ? (schema, entity) => openElement(conn, schema, { section: 'entities', name: entity }) : undefined} editLabel={a.edit} />
+										onEdit={adminApi && can?.schemaWrite ? (schema, entity) => openElement(conn, schema, { section: 'entities', name: entity }, true) : undefined} editLabel={a.edit}
+										onRemove={adminApi && can?.schemaWrite ? (schema, entity) => openElement(conn, schema, { section: 'entities', name: entity }, false, true) : undefined} removeLabel={a.remove} />
 								)}
 								{r && tab.kind === 'diagram' && tab.draft && (
 									<div tabIndex={-1} className="lw-diagram-tab">

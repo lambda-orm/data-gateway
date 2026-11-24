@@ -15,6 +15,10 @@ import { BuildDialog, downloadBlob } from './BuildDialog'
 export interface ExplorerProps {
 	schemas: SchemaInfo[]
 	controller: WorkspaceController
+	/** Asked to read again (its Refresh): what it has read of a schema, or of all when schema is undefined */
+	refresh?: { n: number, schema?: string }
+	/** Its Refresh of a schema (a button on its row) */
+	onRefreshSchema?: (schema: string) => void
 	api: QueryApiPort
 	locale?: Locale
 	theme?: 'light' | 'dark'
@@ -43,7 +47,8 @@ export interface ExplorerAdmin {
 	/** the schema itself: its tab with the commands in a toolbar */
 	onOpenSchema?: (schema: string) => void
 	/** one element of the schema (an entity, a source…), the application section or the variables */
-	onOpenElement?: (schema: string, focus: FormFocus) => void
+	/** edit: asked by Edit (the form opens in edit), not by a click to read it */
+	onOpenElement?: (schema: string, focus: FormFocus, edit?: boolean) => void
 	/** a file of data/ or src/ */
 	onOpenFile?: (schema: string, path: string) => void
 	/** the diagram of a stage: its sources, the tables of each one, their conditions */
@@ -121,7 +126,7 @@ const Action: React.FC<{ label: string, onClick: () => void, children: React.Rea
  * saved in it (folders, queries, diagrams) with a name and a description. Folders nest; items are dragged into them.
  * The whole workspace is exported to and imported from a JSON file.
  */
-export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, locale, theme, activeId, onOpen, onOpenEntity, onOpenDomain, onNewQuery, onNewDiagram, loadDomain: domainOf, admin, expanded: expandedProp, onExpandedChange }) => {
+export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, schemas, controller, api, locale, theme, activeId, onOpen, onOpenEntity, onOpenDomain, onNewQuery, onNewDiagram, loadDomain: domainOf, admin, expanded: expandedProp, onExpandedChange }) => {
 	const m = explorerMessagesOf(locale)
 	const a = adminMessagesOf(locale)
 	// the lambdaORM.yaml of a schema (to fix one that didn't start, too) and removing it
@@ -287,6 +292,22 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 		read(schema).then(domain => setDomains(d => ({ ...d, [schema]: domain })), e => setDomains(d => ({ ...d, [schema]: e?.message ?? String(e) })))
 	}
 
+	// Refresh: what it read of the schema (or of all) is read again (its domain, its YAML, its folders)
+	useEffect(() => {
+		if (!refresh?.n) return
+		const of = (path: string) => refresh.schema === undefined || refresh.schema === path
+		const read = domainOf ?? (api.domain ? (path: string) => api.domain!(path) : undefined)
+		for (const path of Object.keys(domains)) {
+			if (!of(path) || !read) continue
+			read(path).then(domain => setDomains(d => ({ ...d, [path]: domain })), e => setDomains(d => ({ ...d, [path]: e?.message ?? String(e) })))
+		}
+		for (const path of Object.keys(docs)) if (of(path)) loadDoc(path)
+		for (const id of Object.keys(files)) {
+			const [path, which] = id.split('\0')
+			if (of(path) && (which === 'data' || which === 'src')) loadFolder(path, which)
+		}
+	}, [refresh?.n])
+
 	const move = (id: string, parentId: string | undefined) => { controller.move(id, parentId).catch(e => setMessage(problemText(e, m))) }
 
 	const download = () => {
@@ -375,11 +396,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 			const relations = entity.relations ?? []
 			const rows: React.ReactNode[] = [
 				<Row key={key} level={5} label={entity.name} icon={<Icons.entity />} title={`${entity.name} — ${m.openEntity}`}
-					expanded={expanded.has(key)} onToggle={() => { if (!expanded.has(key)) onOpenEntity(schema, entity.name); toggle(key) }} onOpen={() => onOpenEntity(schema, entity.name)}
-					actions={<>
-						{canWrite && <Action label={`${a.edit} ${entity.name}`} onClick={() => admin!.onOpenElement!(schema, { section: 'entities', name: entity.name })}><Icons.edit /></Action>}
-						<Action label={m.open} onClick={() => onOpenEntity(schema, entity.name)}><Icons.open /></Action>
-					</>} />
+					expanded={expanded.has(key)} onToggle={() => { if (!expanded.has(key)) onOpenEntity(schema, entity.name); toggle(key) }} onOpen={() => onOpenEntity(schema, entity.name)} />
 			]
 			if (!expanded.has(key)) {
 				// what the filter found in it, without opening it
@@ -440,10 +457,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 								onToggle={() => { if (!expanded.has(key)) admin?.onOpenSchema?.(s.path); toggle(key) }}
 								onOpen={admin?.onOpenSchema ? () => admin.onOpenSchema!(s.path) : undefined}
 								title={s.pending ? `${m.schemaPending}: ${s.pending}` : undefined}
-								actions={<>
-									{admin?.onOpenSchema && <Action label={format(a.openSchema, { name: s.path || '/' })} onClick={() => admin.onOpenSchema!(s.path)}><Icons.open /></Action>}
-									{removeSchema(s.path)}
-								</>} />
+								actions={onRefreshSchema ? <Action label={format(m.refreshOf, { name: s.path || '/' })} onClick={() => onRefreshSchema(s.path)}><Icons.refresh /></Action> : undefined} />
 							{expanded.has(key) && (
 								<>
 									{s.pending && <div className="lw-schema-reason lw-schema-pending" role="note" style={{ paddingLeft: 6 + 14 + 22 }}>{m.schemaPending}: {s.pending}</div>}

@@ -222,7 +222,9 @@ describe('new and removed schemas', () => {
 		const admin = new FakeAdmin()
 		show(admin)
 		await waitFor(() => expect(row('northwind/v1')).toBeTruthy())
-		fireEvent.click(within(row('northwind/v1')).getByRole('button', { name: 'Remove the schema northwind/v1' }))
+		// its Remove is in its view, next to Edit
+		fireEvent.doubleClick(row('northwind/v1'))
+		fireEvent.click(await screen.findByRole('button', { name: 'Remove' }))
 		const dialog = screen.getByRole('dialog')
 		const remove = within(dialog).getByRole('button', { name: 'Remove' }) as HTMLButtonElement
 		expect(remove.disabled).toBe(true)
@@ -407,12 +409,14 @@ describe('the schema as forms', () => {
 		render(<Workspace api={new FormsApi()} admin={admin} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" refreshMs={0} />)
 		await waitFor(() => expect(row('domain')).toBeTruthy())
 	}
-	/** an entity of the tree, as a form: read first, then Edit */
+	/** an entity of the tree, opened, and the Edit of its view: its form opens in edit (Cancel, Save) */
 	const editEntity = async (name: string) => {
 		fireEvent.click(row('domain'))
 		fireEvent.click(await rowSoon('Entities'))
-		fireEvent.click(within(await waitFor(() => row(name))).getByRole('button', { name: `Edit ${name}` }))
-		fireEvent.click(await screen.findByRole('button', { name: 'Edit' }))
+		fireEvent.click(await rowSoon(name))
+		const view = await waitFor(() => { const v = document.querySelector('[role=tabpanel]:not([hidden]) .lw-entity-view'); expect(v).toBeTruthy(); return v as HTMLElement })
+		fireEvent.click(await within(view).findByRole('button', { name: 'Edit' }))
+		await screen.findByRole('button', { name: 'Save' })
 	}
 
 	test('a click on an entity opens it as before (properties, relations, keys, data, diagram); its Edit opens its form', async () => {
@@ -422,11 +426,15 @@ describe('the schema as forms', () => {
 		fireEvent.click(await rowSoon('Entities'))
 		fireEvent.click(await rowSoon('Products'))
 		const tabs = await screen.findByRole('tablist', { name: 'Products' })
-		expect(within(tabs).getAllByRole('tab').map(t => t.textContent)).toEqual(['Properties (1)', 'Relations (0)', 'Keys and indexes', 'Validations (0)', 'Data', 'Diagram'])
+		expect(within(tabs).getAllByRole('tab').map(t => t.textContent)).toEqual(['Properties (1)', 'Relations (0)', 'Keys and indexes', 'Constraints (0)', 'Data', 'Diagram'])
 		fireEvent.click(screen.getByRole('button', { name: 'Edit' }))
-		// its form, in a tab of its own, read first
+		// its form, in a tab of its own, already in edit: Cancel and Save
 		const form = await waitFor(() => { const found = document.querySelector('[role=tabpanel]:not([hidden]) .lw-schema-forms'); expect(found).toBeTruthy(); return found as HTMLElement })
-		expect(within(form).getByRole('button', { name: 'Edit' })).toBeTruthy()
+		expect(within(form).getByRole('button', { name: 'Cancel' })).toBeTruthy()
+		expect(within(form).getByRole('button', { name: 'Save' })).toBeTruthy()
+		expect(within(form).queryByRole('button', { name: 'Edit' })).toBeNull()
+		// its parts in tabs
+		expect(within(form).getAllByRole('tab').map(t => t.textContent)).toEqual(['Properties (1)', 'Relations (0)', 'Indexes (0)', 'Constraints (0)'])
 		expect(screen.getAllByRole('tab').filter(t => t.textContent?.trim() === 'Products')).toHaveLength(2)
 	})
 
@@ -446,8 +454,12 @@ describe('the schema as forms', () => {
 		expect(toggles[0].getAttribute('title')).toBe('readValue, writeValue')
 		fireEvent.click(toggles[0])
 		const detail = screen.getByRole('region', { name: 'Expressions of code' })
-		expect([...detail.querySelectorAll('dt')].map(d => d.textContent)).toEqual(['readValue', 'writeValue'])
-		expect(detail.querySelector('dd .lw-tok-variable')?.textContent).toBe('code')
+		// each one: its name and what it does, and under it the expression
+		const labels = [...detail.querySelectorAll('.lw-expression-label')].map(d => d.textContent)
+		expect(labels.map(l => l?.split(':')[0])).toEqual(['readValue', 'writeValue'])
+		expect(labels[0]).toMatch(/^readValue: Transforms each value after reading it/)
+		expect(detail.querySelector('.lw-expression-item .lw-expression-view')).toBeTruthy()
+		expect(detail.querySelector('.lw-expression-item .lw-tok-variable')?.textContent).toBe('code')
 		fireEvent.click(toggles[0])
 		expect(screen.queryByRole('region', { name: 'Expressions of code' })).toBeNull()
 	})
@@ -469,13 +481,13 @@ describe('the schema as forms', () => {
 		fireEvent.click(await rowSoon('Products'))
 		// a property with validations has its button, though it has no expressions; id has none
 		const toggles = await screen.findAllByRole('button', { name: 'ƒ Expression' })
-		expect(toggles.map(b => b.getAttribute('title'))).toEqual(['Validations (2)', 'Validations (1)'])
+		expect(toggles.map(b => b.getAttribute('title'))).toEqual(['Constraints (2)', 'Constraints (1)'])
 		fireEvent.click(toggles[1])
 		const detail = screen.getByRole('region', { name: 'Expressions of cost' })
-		expect([...detail.querySelectorAll('dl.lw-validations dt')].map(d => d.textContent)).toEqual(['cost is not over price'])
+		expect([...detail.querySelectorAll('.lw-validations .lw-constraint-message')].map(d => d.textContent)).toEqual(['cost is not over price'])
 		// the tab: each validation, its condition in colors and the properties it uses
-		fireEvent.click(screen.getByRole('tab', { name: 'Validations (2)' }))
-		const table = screen.getByRole('table', { name: 'Validations' })
+		fireEvent.click(screen.getByRole('tab', { name: 'Constraints (2)' }))
+		const table = screen.getByRole('table', { name: 'Constraints' })
 		const rows = within(table).getAllByRole('row').slice(1)
 		expect(rows.map(r => r.querySelectorAll('td')[1].textContent)).toEqual(['price is not negative', 'cost is not over price'])
 		expect([...rows[1].querySelectorAll('.lw-uses')].map(c => c.textContent)).toEqual(['cost', 'price'])
@@ -486,6 +498,7 @@ describe('the schema as forms', () => {
 		const admin = new FakeAdmin()
 		await openForms(admin)
 		await editEntity('Products')
+		fireEvent.click(await screen.findByRole('tab', { name: 'Constraints (0)' }))
 		const constraints = await screen.findByRole('table', { name: 'constraints' })
 		fireEvent.click(within(constraints).getByRole('button', { name: 'Add' }))
 		fireEvent.change(within(constraints).getByLabelText('0 message'), { target: { value: 'id is positive' } })
@@ -495,6 +508,49 @@ describe('the schema as forms', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 		await waitFor(() => expect(admin.patches).toHaveLength(1))
 		expect(admin.patches[0].value.constraints).toEqual([{ message: 'id is positive', condition: 'id > 0' }])
+	})
+
+	test('opened by Edit, its Cancel and its Save go back to the view of the entity', async () => {
+		const admin = new FakeAdmin()
+		await openForms(admin)
+		fireEvent.click(row('domain'))
+		fireEvent.click(await rowSoon('Entities'))
+		fireEvent.click(await rowSoon('Products'))
+		const activeView = () => document.querySelector('[role=tabpanel]:not([hidden])') as HTMLElement
+		const edit = async () => {
+			fireEvent.click(await within(activeView()).findByRole('button', { name: 'Edit' }))
+			await waitFor(() => expect(activeView().querySelector('.lw-schema-forms')).toBeTruthy())
+		}
+		await edit()
+		fireEvent.click(within(activeView()).getByRole('button', { name: 'Cancel' }))
+		// the form closed: the view of the entity, its tabs
+		await waitFor(() => expect(within(activeView()).getByRole('tablist', { name: 'Products' })).toBeTruthy())
+		expect(document.querySelectorAll('.lw-schema-forms')).toHaveLength(0)
+		await edit()
+		fireEvent.change(within(activeView()).getByLabelText('primaryKey'), { target: { value: 'id, code' } })
+		fireEvent.click(within(activeView()).getByRole('button', { name: 'Save' }))
+		await waitFor(() => expect(admin.patches).toHaveLength(1))
+		await waitFor(() => expect(within(activeView()).getByRole('tablist', { name: 'Products' })).toBeTruthy())
+		expect(document.querySelectorAll('.lw-schema-forms')).toHaveLength(0)
+	})
+
+	test('an entity is removed from its view: what uses it, the confirmation, and its tabs close', async () => {
+		const admin = new FakeAdmin()
+		await openForms(admin)
+		fireEvent.click(row('domain'))
+		fireEvent.click(await rowSoon('Entities'))
+		// its row has no actions: they are in its view
+		expect(within(await rowSoon('Products')).queryAllByRole('button')).toHaveLength(0)
+		fireEvent.click(row('Products'))
+		const view = await waitFor(() => { const v = document.querySelector('[role=tabpanel]:not([hidden]) .lw-entity-view'); expect(v).toBeTruthy(); return v as HTMLElement })
+		fireEvent.click(await within(view).findByRole('button', { name: 'Remove' }))
+		// its form asks to confirm (and says what uses it)
+		const confirm = await screen.findByRole('alert')
+		fireEvent.click(within(confirm).getByRole('button', { name: 'Remove' }))
+		await waitFor(() => expect(admin.patches).toHaveLength(1))
+		expect(admin.patches[0]).toMatchObject({ op: 'remove', at: ['domain', 'entities', 'Products'] })
+		// the form and the view of the entity closed
+		await waitFor(() => expect(screen.queryAllByRole('tab').filter(t => t.textContent?.trim() === 'Products')).toHaveLength(0))
 	})
 
 	test('an entity: a property added and saved as one change, with the entity as it was read', async () => {
@@ -808,10 +864,11 @@ describe('where the workspace was', () => {
 		expect(session.saved.at(-1)).toMatchObject({ version: 1, expanded: expect.arrayContaining(['md:northwind/v1']), tabs: [{ kind: 'query', initial: { query: 'Products.map(p => p.price)' } }, { kind: 'schema' }] })
 	})
 
-	test('the schema has an open button: its tab, with its commands', async () => {
+	test('the schema opens by a click: its tab, with its commands; its row has only its Refresh', async () => {
 		show(new FakeAdmin())
 		await waitFor(() => expect(row('northwind/v1')).toBeTruthy())
-		fireEvent.click(within(row('northwind/v1')).getByRole('button', { name: 'Open northwind/v1: its commands' }))
+		expect(within(row('northwind/v1')).queryAllByRole('button').map(b => b.getAttribute('aria-label'))).toEqual(['Refresh northwind/v1: read again what changed elsewhere'])
+		fireEvent.doubleClick(row('northwind/v1'))
 		expect(await screen.findByRole('toolbar', { name: 'Commands' })).toBeTruthy()
 	})
 })
@@ -834,6 +891,40 @@ describe('the pages of the application', () => {
 })
 
 describe('several data-gateways', () => {
+	test('Refresh: the connection, a schema or all of them read again what changed elsewhere (another IDE, another user)', async () => {
+		let reads = 0
+		class CountingApi extends FakeApi { async domain (schema: string) { reads++; return super.domain(schema) } }
+		const a = { id: 'a', name: 'local', api: new CountingApi(), admin: false as const, store: new MemoryWorkspaceStore([], true) }
+		render(<Workspace locale="en" refreshMs={0} history={false} connections={[a]} connectionsHeading={{ title: 'Connections' }} />)
+		await waitFor(() => expect(screen.getAllByRole('treeitem').length).toBeGreaterThan(0))
+		fireEvent.click(row('Metadata'))
+		fireEvent.click(await rowSoon('domain'))
+		fireEvent.click(await rowSoon('Entities'))
+		await waitFor(() => expect(reads).toBeGreaterThan(0))
+		let before = reads
+		const readAgain = async () => { await waitFor(() => expect(reads).toBeGreaterThan(before)); before = reads }
+		// the connection
+		fireEvent.click(screen.getByRole('button', { name: 'Refresh local: read again what changed elsewhere' }))
+		await readAgain()
+		// a schema, on its row
+		fireEvent.click(screen.getAllByRole('button').find(b => b.getAttribute('aria-label')?.startsWith('Refresh ') && !b.getAttribute('aria-label')?.includes('local') && !b.getAttribute('aria-label')?.includes('Connections'))!)
+		await readAgain()
+		// all the connections
+		fireEvent.click(screen.getByRole('button', { name: 'Refresh Connections: read again what changed elsewhere' }))
+		await readAgain()
+	})
+
+	test('a connection opens its page by a click on its name (its edit and remove are there)', async () => {
+		let opened = 0
+		const a = { id: 'a', name: 'local', description: 'http://localhost:8097/data-gateway', api: new FakeApi(), admin: false as const, store: new MemoryWorkspaceStore([], true), onOpen: () => { opened++ } }
+		const b = { id: 'b', name: 'staging', api: new FakeApi(), admin: false as const, store: new MemoryWorkspaceStore([], true) }
+		render(<Workspace locale="en" refreshMs={0} history={false} connections={[a, b]} />)
+		fireEvent.click(await screen.findByRole('button', { name: 'local' }))
+		expect(opened).toBe(1)
+		// without onOpen, its name is not a button
+		expect(screen.queryByRole('button', { name: 'staging' })).toBeNull()
+	})
+
 	test('each connection with its heading and its schemas; a tab of the second runs on its gateway and says which', async () => {
 		class SalesApi extends FakeApi { async schemas () { return [{ path: 'sales', status: 'ready' }] as any } }
 		const first = new FakeApi()
