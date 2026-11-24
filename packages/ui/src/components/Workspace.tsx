@@ -767,21 +767,31 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 						{connectionsHeading && (
 							<div className="lw-connections-root">
 								{connectionsHeading.lead}
-								{/* with a menu before it, the connections go to the right: their title, count and actions together */}
-								{connectionsHeading.lead && <span className="lw-spacer" />}
-								<button type="button" className="lw-icon-button" aria-expanded={!rootFolded} aria-label={`${rootFolded ? x.showExplorer : x.hideExplorer} ${connectionsHeading.title}`} onClick={() => setRootFolded(!rootFolded)}>
-									<span className={`lw-chevron ${rootFolded ? '' : 'lw-open'}`} aria-hidden="true"><Icons.chevron /></span>
-								</button>
-								{/* with a menu before it (the app), no icon: the row fits the explorer */}
-								{!connectionsHeading.lead && <Icons.connections />}
-								<strong className="lw-connections-title">{connectionsHeading.title}</strong>
-								<span className="lw-type">{connections.length}</span>
-								{!connectionsHeading.lead && <span className="lw-spacer" />}
+								{connectionsHeading.lead
+									? (
+										<>
+											{/* by the menu of the app: their title and count, nothing to fold */}
+											<span className="lw-spacer" />
+											<strong className="lw-connections-title">{connectionsHeading.title}</strong>
+											<span className="lw-type">{connections.length}</span>
+										</>
+										)
+									: (
+										<>
+											<button type="button" className="lw-icon-button" aria-expanded={!rootFolded} aria-label={`${rootFolded ? x.showExplorer : x.hideExplorer} ${connectionsHeading.title}`} onClick={() => setRootFolded(!rootFolded)}>
+												<span className={`lw-chevron ${rootFolded ? '' : 'lw-open'}`} aria-hidden="true"><Icons.chevron /></span>
+											</button>
+											<Icons.connections />
+											<strong className="lw-connections-title">{connectionsHeading.title}</strong>
+											<span className="lw-type">{connections.length}</span>
+											<span className="lw-spacer" />
+										</>
+										)}
 								<span className="lw-connection-actions">{connectionsHeading.actions}</span>
 							</div>
 						)}
 						{/* the sections stay mounted while folded: what each connection knows (its schemas) is kept */}
-						<div className={connectionsHeading ? 'lw-connections-list' : undefined} hidden={!!connectionsHeading && rootFolded}>
+						<div className={connectionsHeading ? 'lw-connections-list' : undefined} hidden={!!connectionsHeading && !connectionsHeading.lead && rootFolded}>
 							{connections.map(spec => (
 								<ConnectionSection key={spec.id} spec={spec} heading={heading} refreshMs={refreshMs} theme={theme} locale={workbench.locale}
 									activeId={activeTab && connOf(activeTab) === spec.id ? activeTab.savedId : undefined}

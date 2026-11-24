@@ -430,3 +430,4 @@
 /* the root of the connections: its title shrinks before the row overflows the explorer */
 .lw-connections-root { min-width: 0; }
 .lw-connections-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lw-connections-toggle { min-width: 0; border: 0; background: none; padding: 2px 4px; cursor: pointer; color: inherit; }

@@ -210,6 +210,10 @@ div.dg-error { border: 1px solid var(--bad); border-radius: 6px; padding: 6px 10
 .dg-about dd { margin: 0; }
 .dg-code { background: var(--panel, #f6f7f9); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 13px; overflow: auto; }
 .dg-app-name { margin-left: 4px; font-weight: 600; white-space: nowrap; }
-/* the name of the app on a line of its own, at the top of the explorer; the connections under it, to the right */
-.lw-connections-root:has(> .dg-app-menu) { flex-wrap: wrap; row-gap: 2px; }
-.lw-connections-root > .dg-app-menu { flex: 1 0 100%; }
+/* the name of the app and the connections on one line: compact, so they fit the explorer */
+.lw-connections-root:has(> .dg-app-menu) { gap: 2px; }
+.lw-connections-root:has(> .dg-app-menu) .dg-app-menu-button { font-size: 12px; padding: 2px 3px; }
+.lw-connections-root:has(> .dg-app-menu) .dg-app-menu-button svg { width: 12px; height: 12px; }
+.lw-connections-root:has(> .dg-app-menu) > .lw-icon-button, .lw-connections-root:has(> .dg-app-menu) .lw-connection-actions .lw-icon-button { width: 24px; min-width: 24px; padding: 0; justify-content: center; }
+.lw-connections-root:has(> .dg-app-menu) .lw-connections-title { font-size: 13px; }
+.lw-connections-root:has(> .dg-app-menu) > .lw-type { margin-left: 2px; }
