@@ -209,3 +209,7 @@ div.dg-error { border: 1px solid var(--bad); border-radius: 6px; padding: 6px 10
 .dg-about dt { color: var(--muted); }
 .dg-about dd { margin: 0; }
 .dg-code { background: var(--panel, #f6f7f9); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font-size: 13px; overflow: auto; }
+.dg-app-name { margin-left: 4px; font-weight: 600; white-space: nowrap; }
+/* the name of the app on a line of its own, at the top of the explorer; the connections under it, to the right */
+.lw-connections-root:has(> .dg-app-menu) { flex-wrap: wrap; row-gap: 2px; }
+.lw-connections-root > .dg-app-menu { flex: 1 0 100%; }

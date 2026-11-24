@@ -66,7 +66,7 @@ export const AppMenu: React.FC<{ onPreferences: () => void }> = ({ onPreferences
 	return (
 		<span className="dg-account dg-app-menu" ref={box}>
 			<button type="button" className="dg-app-menu-button" aria-label={APP_NAME} title={APP_NAME} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>
-				<span className="dg-app-mark">λORM</span>
+				<span className="dg-app-mark">λORM</span><span className="dg-app-name">Data Gateway</span>
 				<ChevronDown size={14} aria-hidden="true" />
 			</button>
 			{open && (
