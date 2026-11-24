@@ -3,6 +3,7 @@ import { badRequest, unavailable } from '../../domain/errors/gatewayError'
 import { QueuedRequest, RequestContext } from '../ports/input/dataGatewayPort'
 import { QueueEventsPort, QueuePort } from '../ports/output/supportPorts'
 import { Auditor } from './auditor'
+import { withActor } from './actor'
 import { QueryUseCases, requireQuery } from './queryUseCases'
 
 /** Runs a query in the background and sends its result to a topic. Needs `queue`, and `write` when the query writes. */
@@ -38,7 +39,7 @@ export class QueueUseCase {
 				query,
 				data: request.data,
 				chunk: request.chunk,
-				options: request.options,
+				options: withActor(request.options, ctx),
 				onDone: outcome => this.events?.completed(outcome)
 			})
 		}))

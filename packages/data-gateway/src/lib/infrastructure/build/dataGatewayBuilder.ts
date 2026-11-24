@@ -1,3 +1,6 @@
+import { FileSchemaHistory } from '../output/admin/fileSchemaHistory'
+import { resolveObservability, startObservability, stopObservability, withPrometheus } from './observability'
+import { otelMetricsAsPromJson } from '../output/metrics/otelPrometheus'
 import path from 'path'
 import fs from 'fs'
 import { InlineSchema, InlineSchemaDirectory } from '../../application/runtime/inlineSchemaDirectory'
@@ -54,6 +57,7 @@ export class RunningGateway {
 	public async stop (): Promise<void> {
 		await Promise.all(this.transports.map(transport => transport.stop().catch(error => this.logger.error(error))))
 		await Promise.all(this.schemas.map(schema => schema.stop()))
+		await stopObservability().catch(() => undefined)
 	}
 }
 
@@ -123,7 +127,8 @@ export const buildAdmin = (config: DataGatewayConfig, directory: SchemaDirectory
 	() => directory.schemas().filter(s => s.workspace !== undefined).map(s => ({ path: s.path, workspace: s.workspace! })),
 	() => directory.states(),
 	store, new LambdaSchemaValidator(), new YamlAdapter(), clock, logger, new NodeCodeGenerator(), new ThreeExprLanguage(),
-	config.orm.workspacePath ? new SqliteSessionState(path.join(path.resolve(config.orm.workspacePath), '.data-gateway', 'state.sqlite')) : undefined)
+	config.orm.workspacePath ? new SqliteSessionState(path.join(path.resolve(config.orm.workspacePath), '.data-gateway', 'state.sqlite')) : undefined,
+	new FileSchemaHistory(change => directory.workspaceChanged?.(change)))
 	return { service, commands }
 }
 
@@ -143,6 +148,11 @@ export class DataGatewayBuilder {
 		const audit = options.audit ?? new StdoutAuditAdapter()
 		const version = options.version ?? packageVersion()
 		const authenticators = options.authenticators ?? new AuthenticatorRegistry()
+		// the SDK before λORM (inline, one for every schema of this thread)
+		const observability = withPrometheus(resolveObservability(config.observability, process.env), config.metrics.enabled)
+		await startObservability(observability, logger)
+		// λORM's metrics (OpenTelemetry) in /metrics, with the gateway's
+		if (metrics.enabled) metrics.addSource(() => otelMetricsAsPromJson('edge'))
 
 		const composed: ComposedSchema[] = []
 		const inline: InlineSchema[] = []
@@ -160,7 +170,8 @@ export class DataGatewayBuilder {
 					pageSize: config.mcp.pageSize,
 					version,
 					checkConnections: options.checkConnections ?? false,
-					admin: config.admin.enabled
+					admin: config.admin.enabled,
+					observability
 				}, { logger, audit, clock, queueEvents: { completed: outcome => queueOutcomes.emit(outcome) } })
 				composed.push(schema)
 				inline.push({

@@ -8,7 +8,7 @@ import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { SchemaDirectoryPort, ServedSchema } from '../../../application/ports/input/schemaDirectoryPort'
 import { AuthenticatorPort, LoggerPort, MetricsPort } from '../../../application/ports/output/supportPorts'
-import { Principal } from '../../../domain/auth/principal'
+import { Principal, withActor } from '../../../domain/auth/principal'
 import { Transport } from '../transport'
 import { createSdkServer } from './sdkMcpServer'
 
@@ -176,7 +176,7 @@ export class McpHttpTransport implements Transport {
 				rpcError(res, 401, -32001, result.reason ?? 'a valid credential is required')
 				return
 			}
-			res.locals.principal = result.principal
+			res.locals.principal = withActor(result.principal, { ip: req.socket.remoteAddress })
 			next()
 		} catch (error) {
 			next(error)

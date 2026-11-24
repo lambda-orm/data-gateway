@@ -1,5 +1,5 @@
 import { IOrm, Orm } from '@lambdaorm/lib'
-import { QueryOptions, ScriptOptions } from '@lambdaorm/base'
+import { Actor, QueryOptions, ResolvedObservability, ScriptOptions } from '@lambdaorm/base'
 import { OrmCommandPort, OrmQueryPort, OrmSchemaPort, OrmScriptPort, OrmStagePort } from '../../../application/ports/output/ormPorts'
 
 /** λORM (@lambdaorm/lib) behind the ports of the application: one instance per schema. */
@@ -58,6 +58,12 @@ export class LambdaOrmAdapter implements OrmQueryPort, OrmScriptPort, OrmSchemaP
 		return this.orm.state?.schema?.infrastructure
 	}
 
+	/** λORM's spans and metrics with this configuration (the gateway's, for a schema without its own) */
+	public observe (config: ResolvedObservability): void {
+		const helper = (this.orm as any).helper
+		helper.telemetry.configure(config, this.orm.state.schema?.name || '', this.orm.exp, (message: string) => helper.logger.log(message))
+	}
+
 	// ─── queries ─────────────────────────────────────────────────────────────
 
 	public execute (query: string, data?: unknown, options?: QueryOptions) { return this.orm.execute(query, data, options) }
@@ -97,16 +103,16 @@ export class LambdaOrmAdapter implements OrmQueryPort, OrmScriptPort, OrmSchemaP
 
 	public exists (stage: string) { return this.orm.stage.exists(stage) }
 	public export (stage: string) { return this.orm.stage.export({ stage }).execute() }
-	public import (stage: string, data: unknown) { return this.orm.stage.import({ stage }).execute(data as any) }
+	public import (stage: string, data: unknown, actor?: Actor) { return this.orm.stage.import({ stage, actor }).execute(data as any) }
 
 	// ─── commands (admin) ────────────────────────────────────────────────────
 
 	public stageNames (): string[] { return (this.orm.state.getSchemaStages() ?? []).map((s: { name: string }) => s.name) }
 	public fetch (stage: string) { return this.orm.stage.fetch({ stage }) as Promise<unknown[]> }
 	public pushSentences (stage: string) { return this.orm.stage.push({ stage }).sentencesBySource() }
-	public push (stage: string, force: boolean) { return this.orm.stage.push({ stage, tryAllCan: force }).execute() as Promise<unknown[]> }
+	public push (stage: string, force: boolean, actor?: Actor) { return this.orm.stage.push({ stage, tryAllCan: force, actor }).execute() as Promise<unknown[]> }
 	public dropSentences (stage: string) { return this.orm.stage.drop({ stage }).sentence() as Promise<unknown[]> }
-	public drop (stage: string, force: boolean) { return this.orm.stage.drop({ stage, tryAllCan: force }).execute() as Promise<unknown[]> }
+	public drop (stage: string, force: boolean, actor?: Actor) { return this.orm.stage.drop({ stage, tryAllCan: force, actor }).execute() as Promise<unknown[]> }
 
 	/** The schema as written (variables unsolved), without its application: code of the schema that must not run here */
 	private writtenSchema (): { schema: any, application: unknown } {
@@ -140,12 +146,12 @@ export class LambdaOrmAdapter implements OrmQueryPort, OrmScriptPort, OrmSchemaP
 	 * pull on the schema served: the state of the stage (orm_state) updated as λORM does, but without letting λORM write
 	 * the lambdaORM.yaml (js-yaml loses its comments and order): the gateway writes the schema it answers.
 	 */
-	public async pull (stage: string): Promise<unknown> {
+	public async pull (stage: string, actor?: Actor): Promise<unknown> {
 		const facade = (this.orm.state as any).facade
 		const write = facade.write
 		facade.write = async () => undefined
 		try {
-			await this.orm.stage.pull({ stage })
+			await this.orm.stage.pull({ stage, actor })
 		} finally {
 			facade.write = write
 		}

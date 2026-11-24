@@ -36,6 +36,9 @@ export const adminRouter = (admin: AdminService, authenticate: express.RequestHa
 	router.get('/workspaces', handle(async (_req, res) => admin.workspaces(principal(res))))
 	router.post('/workspaces', handle(async (req, res) => admin.create(principal(res), req.body ?? {})))
 	router.delete('/workspaces/:schema', handle(async (req, res) => admin.remove(principal(res), schemaParam(req.params.schema), req.query.confirm)))
+	// the history of the schema (docs/OBSERVABILITY.md §5.3): ?since=&target=&kind=&limit=&cursor=, the newest first
+	router.get('/workspaces/:schema/history', handle(async (req, res) =>
+		admin.changes(principal(res), schemaParam(req.params.schema), req.query as Record<string, unknown>)))
 	router.get('/workspaces/:schema/schema', handle(async (req, res) => {
 		const file = await admin.readSchema(principal(res), schemaParam(req.params.schema))
 		res.setHeader('ETag', `"${file.version}"`)

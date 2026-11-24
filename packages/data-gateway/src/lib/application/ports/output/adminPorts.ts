@@ -1,3 +1,4 @@
+import { SchemaChange } from '@lambdaorm/base'
 /** A file of a workspace as it is now: its text and its version (a hash of the content) */
 export interface StoredFile {
 	text: string
@@ -95,3 +96,24 @@ export interface SessionStatePort {
 	remove (credential: string): Promise<void>
 }
 
+
+export interface SchemaHistoryFilter {
+	/** ISO time: only the changes from then */
+	since?: string
+	/** a target or a part of it (domain/entities/Customers: also its properties) */
+	target?: string
+	/** schema.patch, stage.push… */
+	kind?: string
+	limit: number
+	/** the id where the last page ended */
+	cursor?: string
+}
+
+/**
+ * The history of the changes of a schema (docs/OBSERVABILITY.md §5.3): the events schema.change of the gateway and of
+ * λORM, in <workspace>/<paths.logs>/changes.jsonl, and in OpenTelemetry (Loki…) when its logs are exported.
+ */
+export interface SchemaHistoryPort {
+	record (path: string, workspace: string, change: SchemaChange): Promise<void>
+	read (workspace: string, filter: SchemaHistoryFilter): Promise<{ items: SchemaChange[], nextCursor?: string }>
+}

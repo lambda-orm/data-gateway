@@ -1,3 +1,4 @@
+import { requestTracer } from '../telemetry/requestTracer'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import {
 	CallToolRequestSchema, ErrorCode, ListResourcesRequestSchema, ListResourceTemplatesRequestSchema, ListToolsRequestSchema,
@@ -38,16 +39,22 @@ export const createSdkServer = (port: McpServerPort, ctx: RequestContext, logger
 		const page = await port.listTools(ctx, request.params?.cursor)
 		return { tools: page.items as any[], nextCursor: page.nextCursor }
 	}))
-	server.setRequestHandler(CallToolRequestSchema, request => guard(async () =>
-		await port.callTool(ctx, request.params.name, request.params.arguments) as any))
+	// a span per call (MCP over HTTP or WebSocket), child of the traceparent of its _meta if it brings one
+	const traced = <T>(method: string, attributes: Record<string, string>, meta: unknown, run: () => Promise<T>): Promise<T> =>
+		requestTracer.call(attributes['gen_ai.tool.name'] ? `${method} ${attributes['gen_ai.tool.name']}` : method,
+			{ 'mcp.method.name': method, 'enduser.id': ctx.principal.name, ...attributes }, meta as Record<string, unknown> | undefined, run)
+	server.setRequestHandler(CallToolRequestSchema, request => guard(() => traced('tools/call',
+		{ 'gen_ai.tool.name': request.params.name, 'gen_ai.operation.name': 'execute_tool' }, request.params._meta,
+		async () => await port.callTool(ctx, request.params.name, request.params.arguments) as any)))
 	server.setRequestHandler(ListResourcesRequestSchema, request => guard(async () => {
 		const page = await port.listResources(ctx, request.params?.cursor)
 		return { resources: page.items, nextCursor: page.nextCursor }
 	}))
 	server.setRequestHandler(ListResourceTemplatesRequestSchema, () => guard(async () =>
 		({ resourceTemplates: await port.listResourceTemplates(ctx) })))
-	server.setRequestHandler(ReadResourceRequestSchema, request => guard(async () =>
-		({ contents: [await port.readResource(ctx, request.params.uri)] })))
+	server.setRequestHandler(ReadResourceRequestSchema, request => guard(() => traced('resources/read',
+		{ 'mcp.resource.uri': request.params.uri }, request.params._meta,
+		async () => ({ contents: [await port.readResource(ctx, request.params.uri)] }))))
 	// the schema doesn't change while running: nothing to notify
 	server.setRequestHandler(SubscribeRequestSchema, async () => ({}))
 	server.setRequestHandler(UnsubscribeRequestSchema, async () => ({}))
