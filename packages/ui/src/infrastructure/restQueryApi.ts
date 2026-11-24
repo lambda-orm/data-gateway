@@ -1,6 +1,11 @@
 import { WhoAmI } from '../domain/operations'
 import { DomainInfo } from '../domain/diagram'
 import { QueryParameter } from '../domain/workspace'
+
+/** names from a list of names or of objects with a name (the stages come as objects, the views as names) */
+const namesOf = (list: unknown): string[] => Array.isArray(list)
+	? list.map(item => typeof item === 'string' ? item : (item as { name?: unknown })?.name).filter((name): name is string => typeof name === 'string')
+	: []
 import { Options, QueryApiPort, SchemaInfo } from '../application/ports'
 
 export type HeadersProvider = () => Record<string, string> | Promise<Record<string, string>>
@@ -47,6 +52,8 @@ export class RestQueryApi implements QueryApiPort {
 	public whoami (schema: string): Promise<WhoAmI> { return this.request(this.url(schema, '/whoami')) }
 	public typings (schema: string): Promise<string> { return this.request(this.url(schema, '/typings'), undefined, 'text') }
 	public domain (schema: string): Promise<DomainInfo> { return this.request(this.url(schema, '/domain')) }
+	public async stages (schema: string): Promise<string[]> { return namesOf(await this.request(this.url(schema, '/stages'))) }
+	public async views (schema: string): Promise<string[]> { return namesOf(await this.request(this.url(schema, '/views'))) }
 	public plan (schema: string, query: string, options?: Options) { return this.request(this.url(schema, '/plan'), { query, options }) }
 	public metadata (schema: string, query: string) { return this.request(this.url(schema, '/metadata'), { query }) }
 	public model (schema: string, query: string) { return this.request(this.url(schema, '/model'), { query }) }

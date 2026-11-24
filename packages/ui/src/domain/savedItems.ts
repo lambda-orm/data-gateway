@@ -1,3 +1,4 @@
+import { WizardState, wizardOf } from './queryWizard'
 /** What a person keeps in a schema: folders to organise, queries (and diagrams) with a name and a description */
 export type SavedKind = 'folder' | 'query' | 'diagram'
 
@@ -23,6 +24,8 @@ export interface SavedQueryContent {
 	/** JSON texts, as the editors have them */
 	data: string
 	options: string
+	/** the query wizard that wrote the query (QueryWizard): it can be opened again on it */
+	wizard?: WizardState
 }
 
 export interface SavedQuery extends SavedBase, SavedQueryContent { kind: 'query' }
@@ -134,7 +137,8 @@ export const parseExport = (text: string): SavedItem[] | undefined => {
 				query: isString(raw.query) ? raw.query : '',
 				script: isString(raw.script) ? raw.script : '',
 				data: isString(raw.data) ? raw.data : '{}',
-				options: isString(raw.options) ? raw.options : '{}'
+				options: isString(raw.options) ? raw.options : '{}',
+				...(wizardOf(raw.wizard) ? { wizard: wizardOf(raw.wizard) } : {})
 			})
 		} else {
 			if (!Array.isArray(raw.entities) || !raw.entities.every(isString)) return undefined

@@ -49,8 +49,12 @@ export interface DomainDiagramProps {
 	/** What each box shows: all its properties, the keys (PK and FK), the primary key, or its name */
 	detail?: DiagramDetail
 	onDetailChange?: (detail: DiagramDetail) => void
-	/** A + on each box that has related tables out of the diagram adds them (editable) */
-	onAddEntities?: (entities: string[]) => void
+	/** A + on each box that has related tables out of the diagram adds them (editable); from: the box of the + */
+	onAddEntities?: (entities: string[], from?: string) => void
+	/** The query wizard: a check on each field of each box; a click on a field chooses it or leaves it */
+	fieldSelection?: { chosen: Record<string, string[]>, onToggle: (entity: string, field: string) => void }
+	/** An entity that can't be taken out (the one the wizard starts from) */
+	keep?: string
 	/** Buttons of the application in the bar (Save) */
 	toolbar?: React.ReactNode
 	/** File name of the exports, without extension */
@@ -121,7 +125,9 @@ const Box: React.FC<{
 	onRemove?: () => void, removeLabel?: string
 	/** A + in the title that adds its related tables out of the diagram */
 	onAddRelated?: () => void, addRelatedLabel?: string
-}> = ({ entity, at, compact, focused, foreignKeys, colors, onClick, onDoubleClick, onPointerDown, onRemove, removeLabel, onAddRelated, addRelatedLabel }) => {
+	/** the fields chosen (the wizard), and a click on a field */
+	chosen?: Set<string>, onToggleField?: (field: string) => void
+}> = ({ entity, at, compact, focused, foreignKeys, colors, onClick, onDoubleClick, onPointerDown, onRemove, removeLabel, onAddRelated, addRelatedLabel, chosen, onToggleField }) => {
 	const { width, height } = boxSize(entity, compact)
 	const keys = new Set(entity.primaryKey ?? [])
 	return (
@@ -138,6 +144,20 @@ const Box: React.FC<{
 			{!compact && (entity.properties ?? []).map((property, i) => {
 				const y = HEADER + 4 + i * ROW + 13
 				const tag = keys.has(property.name) ? 'PK' : foreignKeys?.has(property.name) ? 'FK' : ''
+				if (onToggleField) {
+					// the wizard: a check instead of the tag (a key keeps its colour), the whole row chooses it
+					const on = chosen?.has(property.name) ?? false
+					return (
+						<g key={property.name} fontFamily={MONO} fontSize={12} role="checkbox" aria-checked={on} aria-label={`${entity.name}.${property.name}`} className="lw-field-row"
+							onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onToggleField(property.name) }} onDoubleClick={e => e.stopPropagation()}>
+							<rect x={1} y={y - 13} width={width - 2} height={ROW} fill={on ? colors.accent : 'transparent'} fillOpacity={on ? 0.14 : 0} />
+							<rect x={9} y={y - 10} width={12} height={12} rx={2} fill={on ? colors.accent : colors.box} stroke={on ? colors.accent : colors.border} />
+							{on && <path d={`M11.5 ${y - 4}l2.5 2.5 4.5 -5`} fill="none" stroke="#fff" strokeWidth={1.8} />}
+							<text x={32} y={y} fill={tag === 'PK' ? colors.pk : tag === 'FK' ? colors.fk : colors.text} fontWeight={property.required ? 700 : 400}>{property.name}</text>
+							<text x={width - 8} y={y} textAnchor="end" fill={colors.muted}>{typeText(property)}</text>
+						</g>
+					)
+				}
 				return (
 					<g key={property.name} fontFamily={MONO} fontSize={12}>
 						{tag && <text x={8} y={y} fontSize={9} fontWeight={700} fill={tag === 'PK' ? colors.pk : colors.fk}>{tag}</text>}
@@ -705,7 +725,7 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 						<div className="lw-form-actions">
 							<button type="button" onClick={() => setAdding(undefined)}>{m.cancelAdd}</button>
 							<button type="button" className="lw-primary" disabled={adding.chosen.size === 0}
-								onClick={() => { props.onAddEntities!([...adding.chosen]); setAdding(undefined) }}>{m.addChosen} ({adding.chosen.size})</button>
+								onClick={() => { props.onAddEntities!([...adding.chosen], adding.entity); setAdding(undefined) }}>{m.addChosen} ({adding.chosen.size})</button>
 						</div>
 					</Modal>
 				)
@@ -733,8 +753,10 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 							return at && (
 								<Box key={entity.name} entity={entity} at={at} compact={compact} focused={entity.name === focus || selected.has(entity.name)} foreignKeys={foreignKeys.get(entity.name)}
 									colors={colors} onClick={e => click(entity.name, e)} onDoubleClick={() => doubleClick(entity)} onPointerDown={editable ? boxDown(entity.name) : undefined}
-									onRemove={props.onRemoveEntity && shownEntities.length > 1 ? () => props.onRemoveEntity!(entity.name) : undefined} removeLabel={m.removeFromDiagram}
-									onAddRelated={props.onAddEntities && outside.get(entity.name)?.size ? () => setAdding({ entity: entity.name, chosen: new Set() }) : undefined} addRelatedLabel={m.addRelated} />
+									onRemove={props.onRemoveEntity && shownEntities.length > 1 && entity.name !== props.keep ? () => props.onRemoveEntity!(entity.name) : undefined} removeLabel={m.removeFromDiagram}
+									onAddRelated={props.onAddEntities && outside.get(entity.name)?.size ? () => setAdding({ entity: entity.name, chosen: new Set() }) : undefined} addRelatedLabel={m.addRelated}
+									chosen={props.fieldSelection ? new Set(props.fieldSelection.chosen[entity.name] ?? []) : undefined}
+									onToggleField={props.fieldSelection ? field => props.fieldSelection!.onToggle(entity.name, field) : undefined} />
 							)
 						})}
 					</g>

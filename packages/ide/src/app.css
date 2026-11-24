@@ -6,6 +6,15 @@ html, body { margin: 0; font: 14px/1.5 system-ui, -apple-system, "Segoe UI", san
 .dg-app button { cursor: pointer; }
 .dg-app button:disabled { opacity: .5; cursor: progress; }
 .dg-app .dg-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+/* the states of the controls of the app's own pages (the workspace has those of the library) */
+.dg-app button, .dg-app select, .dg-app input { transition: background-color .12s, border-color .12s, box-shadow .12s; }
+.dg-app button:where(:not(:disabled):not(.lw-link):not(.dg-primary):not(.dg-selected):not(.lw-primary):not(.lw-danger):not(.lw-active):not([role="tab"]):not([aria-pressed="true"])):hover { background: color-mix(in srgb, var(--fg) 7%, var(--panel)); border-color: color-mix(in srgb, var(--fg) 24%, var(--border)); }
+.dark .dg-primary, .dark .dg-pill.dg-selected, .dark .dg-avatar { color: #0b1220 !important; }
+.dg-app .dg-primary:not(:disabled):hover { background: color-mix(in srgb, var(--accent) 86%, #000); border-color: color-mix(in srgb, var(--accent) 86%, #000); }
+.dg-app input:not([type="checkbox"]):not([type="radio"]):focus, .dg-app select:focus, .dg-app textarea:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent); }
+.dg-app button:focus-visible, .dg-app a:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent) 70%, transparent); outline-offset: 1px; }
+.dg-app input[type="checkbox"], .dg-app input[type="radio"] { accent-color: var(--accent); }
+.dg-app { scrollbar-width: thin; scrollbar-color: color-mix(in srgb, var(--fg) 22%, transparent) transparent; }
 .dg-big { padding: 8px 20px !important; font-size: 15px !important; }
 .dg-header { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--border); }
 .dg-brand { font-weight: 700; font-size: 17px; color: var(--fg); text-decoration: none; }
@@ -45,11 +54,11 @@ div.dg-error { border: 1px solid var(--bad); border-radius: 6px; padding: 6px 10
 .dg-account { position: relative; display: inline-flex; }
 .dg-app .dg-account-button { display: inline-flex; align-items: center; gap: 6px; border-radius: 18px; padding: 4px 10px 4px 6px; }
 .dg-account-name { font-size: 13px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.dg-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 60; min-width: 190px; display: flex; flex-direction: column; padding: 4px 0; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 8px 24px rgba(0, 0, 0, .18); }
-.dg-app .dg-menu button { display: flex; align-items: center; gap: 8px; border: 0; border-radius: 0; background: none; text-align: left; padding: 7px 14px; }
+.dg-menu { position: absolute; right: 0; top: calc(100% + 4px); z-index: 60; min-width: 190px; display: flex; flex-direction: column; padding: 4px; background: var(--bg); border: 1px solid var(--border); border-radius: 8px; box-shadow: 0 6px 20px rgba(15, 23, 42, .16), 0 1px 3px rgba(15, 23, 42, .08); }
+.dg-app .dg-menu button { display: flex; align-items: center; gap: 8px; border: 0; border-radius: 4px; background: none; text-align: left; padding: 7px 12px; }
 .dg-app .dg-menu button:hover, .dg-app .dg-menu button:focus-visible { background: var(--panel); }
-.dg-dialog-back { position: fixed; inset: 0; z-index: 70; background: rgba(0, 0, 0, .35); display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; }
-.dg-dialog { width: min(460px, calc(100vw - 32px)); background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; box-shadow: 0 12px 40px rgba(0, 0, 0, .3); }
+.dg-dialog-back { position: fixed; inset: 0; z-index: 70; background: rgba(15, 23, 42, .42); backdrop-filter: blur(1.5px); display: flex; align-items: flex-start; justify-content: center; padding-top: 12vh; }
+.dg-dialog { width: min(460px, calc(100vw - 32px)); background: var(--bg); color: var(--fg); border: 1px solid var(--border); border-radius: 10px; padding: 18px 20px; box-shadow: 0 20px 60px rgba(15, 23, 42, .30), 0 2px 8px rgba(15, 23, 42, .10); }
 .dg-dialog h2 { margin: 0 0 14px; font-size: 17px; }
 .dg-dialog-actions { display: flex; justify-content: flex-end; margin-top: 16px; }
 .dg-facts { display: grid; grid-template-columns: max-content 1fr; gap: 8px 16px; margin: 0; }
@@ -152,3 +161,40 @@ div.dg-error { border: 1px solid var(--bad); border-radius: 6px; padding: 6px 10
 .dg-sections { display: flex; gap: 2px; border-bottom: 1px solid var(--border); flex-wrap: wrap; }
 .dg-app .dg-sections button { border: 0; border-bottom: 2px solid transparent; border-radius: 0; background: none; padding: 6px 12px; color: var(--muted); }
 .dg-app .dg-sections button.dg-section-active { color: var(--fg); border-bottom-color: var(--accent); font-weight: 600; }
+/* the layout of the IDE: the whole window, the header on top and the workspace below; the explorer and the open tab
+   scroll each on their own, the tab bar stays; no strip of another color under them */
+.dg-page { height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+.dg-page > .dg-header { flex: none; }
+.dg-page > .lw-space { flex: 1; min-height: 0; height: auto; }
+.dg-page > .lw-space > .lw-space-side { max-height: none; height: auto; position: static; }
+.dg-page > .lw-space > .lw-space-main { display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.dg-page > .lw-space > .lw-space-main > .lw-tabs { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.dg-page > .lw-space > .lw-space-main > .lw-tabs > .lw-tabbar { flex: none; }
+.dg-page > .lw-space > .lw-space-main > .lw-tabs > [role="tabpanel"], .dg-page > .lw-space > .lw-space-main > .lw-tabs > .lw-workbench { flex: 1 1 auto; min-height: 0; overflow: auto; }
+.dg-page > .lw-space > .lw-space-main > .lw-tabs > .lw-notice { flex: none; }
+/* the theme of the app reaches the whole workspace (its explorer and tabs too), not only the workbenches */
+.dg-app[data-theme] .lw-space, .dg-app[data-theme] .lw-tabs { --lw-bg: var(--bg); --lw-fg: var(--fg); --lw-muted: var(--muted); --lw-border: var(--border); --lw-accent: var(--accent); --lw-panel: var(--panel); }
+/* the open tab sits on the color of the app; the explorer, the tab bar and the header on its surface */
+.dg-app[data-theme] .lw-tabs { background: var(--panel); }
+.dg-app[data-theme] .lw-tabbar { background: var(--bg); }
+.dg-app[data-theme] .lw-tab.lw-active, .dg-app[data-theme] .lw-tab:hover { background: var(--panel); }
+.dg-app[data-theme] .lw-tab-add:hover { background: var(--panel); }
+/* the buttons of the workspace keep their own look: the general style of the buttons of the app (a box) is not for them */
+.dg-app .lw-tab button { background: none; border: 0; border-radius: 0; padding: 0; }
+.dg-app .lw-tab button[role="tab"] { padding: 0 6px 0 12px; }
+.dg-app .lw-tab .lw-tab-close { border-radius: 4px; padding: 0; }
+.dg-app .lw-tab-add, .dg-app .lw-icon-button { background: none; border: 1px solid transparent; border-radius: 4px; padding: 3px; }
+.dg-app .lw-tab-add { padding: 0; }
+.dg-app .lw-icon-button:hover, .dg-app .lw-icon-button:focus-visible, .dg-app .lw-tab-add:hover, .dg-app .lw-tab-add:focus-visible { border-color: var(--border); background: var(--panel); }
+.dg-app .lw-tabbar .lw-icon-button:hover, .dg-app .lw-tabbar .lw-tab-add:hover { background: var(--panel); }
+/* the content of a tab fills its height: a workbench or a diagram doesn't stop where its content does */
+.dg-page > .lw-space > .lw-space-main > .lw-tabs > [role="tabpanel"] > .lw-workbench { min-height: 100%; box-sizing: border-box; }
+/* the controls of the workspace keep the size of the library (the general padding of the app is for its own pages) */
+.dg-app .lw-space button { padding: 4px 10px; border-radius: 6px; }
+.dg-app .lw-space select, .dg-app .lw-space input:not([type="checkbox"]):not([type="radio"]) { padding: 4px 8px; border-radius: 6px; }
+.dg-app .lw-space .lw-header .lw-tool, .dg-app .lw-space button.lw-icon { padding: 0; }
+.dg-app .lw-space .dg-pane button { padding: 5px 12px; }
+/* a diagram fills its tab: the canvas takes the height its bar and hint leave */
+.dg-page .lw-tabs > [role="tabpanel"] > .lw-diagram-tab { height: 100%; display: flex; flex-direction: column; }
+.dg-page .lw-diagram-tab > .lw-diagram { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.dg-page .lw-diagram-tab .lw-diagram-view { flex: 1 1 auto; min-height: 320px; height: auto !important; }

@@ -27,6 +27,9 @@ export interface QueryApiPort {
 	typings (schema: string): Promise<string>
 	/** The entities, their properties and relations (GET /{schema}/domain), for the diagram; optional for other adapters */
 	domain? (schema: string): Promise<DomainInfo>
+	/** The names of the stages and of the views of a schema (GET /{schema}/stages, /views): the choices of the options */
+	stages? (schema: string): Promise<string[]>
+	views? (schema: string): Promise<string[]>
 	plan (schema: string, query: string, options?: Options): Promise<unknown>
 	metadata (schema: string, query: string): Promise<unknown>
 	model (schema: string, query: string): Promise<unknown>

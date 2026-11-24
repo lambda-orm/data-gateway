@@ -1,6 +1,6 @@
 # Changelog
 
-### 1.0.0 (unreleased)
+### 1.0.0 (2026-11-23)
 
 **The desktop app** (`packages/ide-desktop`, Electron): the IDE for Linux (AppImage, deb), Windows (installer) and
 macOS (dmg, zip), x64 and arm64, from the releases `ide-v<version>` of this repository. The app is served at
@@ -29,3 +29,10 @@ databases.
 - From a connection, with its credential and through the backend, in tabs: its REST API (Swagger), its WebSocket (its
   methods, a JSON-RPC console) and its MCP (its tools, called) — where they are from `GET /transports` of its
   management, or the URLs the connection fixes.
+- **The query wizard:** the tables as in a diagram with a check on each field, the + of a table adding its related
+  ones (each relation an include of its own), a filter on the entity it starts from with its suggestions, the order
+  and the page; it writes the query in a new tab and stays with it and with the saved query, to be opened again.
+- The options of a query as a form (the stages and views of its schema to choose), in one line with an edit; the data
+  folds while it is empty.
+- The window as a whole: the explorer and the open tab scroll each on their own, a flat tab bar, one height for the
+  controls of each bar; a visual pass (one palette and scale, hover and focus states, dialogs, menus and tables).

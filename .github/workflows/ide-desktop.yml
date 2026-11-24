@@ -119,7 +119,8 @@ jobs:
         include:
           - { name: linux arm64, os: linux, runner: ubuntu-24.04-arm }
           - { name: windows arm64, os: win, runner: windows-11-arm }
-          - { name: macOS x64, os: mac, runner: macos-13 }
+          # the Intel runner (macos-13 is retired)
+          - { name: macOS x64, os: mac, runner: macos-15-intel }
     runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/download-artifact@v4
@@ -137,10 +138,18 @@ jobs:
               # no FUSE on the runner: the AppImage runs extracted
               APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run -a "./$app" --smoke-test --no-sandbox ;;
             win)
-              installer=$(ls *-win-arm64.exe 2>/dev/null || ls *.exe | head -1)
+              installer=$(ls *-win-arm64.exe)
               "./$installer" /S
-              sleep 20
-              "$LOCALAPPDATA/Programs/Data Gateway IDE/Data Gateway IDE.exe" --smoke-test ;;
+              # a silent install for the user: wherever electron-builder puts it, its executable shows up
+              exe=""
+              for i in $(seq 1 60); do
+                exe=$(find "$LOCALAPPDATA/Programs" -name "Data Gateway IDE.exe" 2>/dev/null | head -1)
+                [ -n "$exe" ] && break
+                sleep 1
+              done
+              [ -n "$exe" ] || { echo "::error::the installer left no Data Gateway IDE.exe"; ls -R "$LOCALAPPDATA/Programs" | head -50; exit 1; }
+              echo "installed at $exe"
+              "$exe" --smoke-test ;;
             mac)
               unzip -q "$(ls *-mac-x64.zip)" -d x64
               "./x64/Data Gateway IDE.app/Contents/MacOS/Data Gateway IDE" --smoke-test ;;
