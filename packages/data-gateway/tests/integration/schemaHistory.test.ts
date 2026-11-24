@@ -80,6 +80,11 @@ test('a patch from the IDE: its schema.patch, with who, before, after and the di
 	expect(change.diff).toEqual([{ op: current.length === undefined ? 'add' : 'replace', path: expect.stringMatching(/^\/domain\/entities\/\d+\/properties\/\d+\/length$/), value: 120 }])
 	expect(change.version.before).toBe(read.version.slice(0, 16))
 	expect(change.version.after).toBe(changed.body.version.slice(0, 16))
+	// a form that still has the element as it was: 412, saying who changed it
+	const stale = await call(base, schemaUrl, { method: 'PATCH', body: { op: 'set', at, value: { ...current, length: 10 }, expected: current }, headers: MODELER })
+	expect(stale.status).toBe(412)
+	expect(JSON.stringify(stale.body)).toContain('"changedBy"')
+	expect(stale.body.details?.changedBy ?? stale.body.changedBy).toMatchObject({ credential: 'modeler', client: 'data-gateway-ide 2.1.0', kind: 'schema.patch', target: at.join('/'), time: change.time })
 	// λORM will not take it for a change from outside
 	expect(fs.readFileSync(path.join(root, 'iot/v1/logs/schema.hash'), 'utf8')).toBe(change.version.after)
 })

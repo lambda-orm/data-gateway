@@ -2,6 +2,20 @@ import { format, Locale } from './i18n'
 
 /** The texts of the administration of the workspaces (the schema in YAML, new and removed schemas); {name} is replaced */
 export interface AdminMessages {
+	history: string
+	historyEmpty: string
+	historyUnavailable: string
+	historyMore: string
+	historyWhen: string
+	historyWho: string
+	historyWhat: string
+	historyBefore: string
+	historyAfter: string
+	historyChanges: string
+	changedBy: string
+	remoteChange: string
+	refreshNow: string
+	viewTraces: string
 	schemaFile: string
 	save: string
 	saving: string
@@ -172,6 +186,20 @@ export interface AdminMessages {
 type Row = [keyof AdminMessages, ...string[]]
 
 const ROWS: Row[] = [
+	['history', 'History', 'Historial', 'Histórico', 'Historique', 'Cronologia', 'Verlauf', 'Geschiedenis', 'Historial', 'Historial', 'Historia'],
+	['historyEmpty', 'No changes recorded yet', 'Todavía no hay cambios registrados', 'Ainda não há alterações registradas', 'Aucune modification enregistrée pour l’instant', 'Nessuna modifica registrata finora', 'Noch keine Änderungen aufgezeichnet', 'Nog geen wijzigingen vastgelegd', 'Encara no hi ha canvis registrats', 'Aínda non hai cambios rexistrados', 'Oraindik ez dago aldaketarik erregistratuta'],
+	['historyUnavailable', 'This gateway does not keep the history of the schema', 'Esta gateway no guarda el historial del esquema', 'Esta gateway não guarda o histórico do esquema', 'Cette passerelle ne conserve pas l’historique du schéma', 'Questo gateway non conserva la cronologia dello schema', 'Dieses Gateway speichert den Verlauf des Schemas nicht', 'Deze gateway bewaart de geschiedenis van het schema niet', 'Aquesta passarel·la no desa l’historial de l’esquema', 'Esta pasarela non garda o historial do esquema', 'Pasabide honek ez du eskemaren historia gordetzen'],
+	['historyMore', 'Older changes', 'Cambios anteriores', 'Alterações anteriores', 'Modifications plus anciennes', 'Modifiche precedenti', 'Ältere Änderungen', 'Oudere wijzigingen', 'Canvis anteriors', 'Cambios anteriores', 'Aldaketa zaharragoak'],
+	['historyWhen', 'When', 'Cuándo', 'Quando', 'Quand', 'Quando', 'Wann', 'Wanneer', 'Quan', 'Cando', 'Noiz'],
+	['historyWho', 'Who', 'Quién', 'Quem', 'Qui', 'Chi', 'Wer', 'Wie', 'Qui', 'Quen', 'Nork'],
+	['historyWhat', 'What', 'Qué', 'O quê', 'Quoi', 'Cosa', 'Was', 'Wat', 'Què', 'Que', 'Zer'],
+	['historyBefore', 'Before', 'Antes', 'Antes', 'Avant', 'Prima', 'Vorher', 'Voor', 'Abans', 'Antes', 'Lehen'],
+	['historyAfter', 'After', 'Después', 'Depois', 'Après', 'Dopo', 'Nachher', 'Na', 'Després', 'Despois', 'Ondoren'],
+	['historyChanges', 'Changes', 'Cambios', 'Alterações', 'Modifications', 'Modifiche', 'Änderungen', 'Wijzigingen', 'Canvis', 'Cambios', 'Aldaketak'],
+	['changedBy', '{name} changed it at {time}: this is what it has now', '{name} lo cambió a las {time}: esto es lo que tiene ahora', '{name} alterou às {time}: isto é o que tem agora', '{name} l’a modifié à {time} : voici ce qu’il contient', '{name} l’ha cambiato alle {time}: ecco cosa contiene ora', '{name} hat es um {time} geändert: das ist der aktuelle Stand', '{name} heeft het om {time} gewijzigd: dit is wat het nu bevat', '{name} l’ha canviat a les {time}: això és el que té ara', '{name} cambiouno ás {time}: isto é o que ten agora', '{name}(e)k aldatu du {time}(e)tan: hau da orain duena'],
+	['remoteChange', '{name} changed {target} in {schema}', '{name} cambió {target} en {schema}', '{name} alterou {target} em {schema}', '{name} a modifié {target} dans {schema}', '{name} ha cambiato {target} in {schema}', '{name} hat {target} in {schema} geändert', '{name} heeft {target} in {schema} gewijzigd', '{name} ha canviat {target} a {schema}', '{name} cambiou {target} en {schema}', '{name}(e)k {target} aldatu du {schema} eskeman'],
+	['refreshNow', 'Refresh', 'Actualizar', 'Atualizar', 'Actualiser', 'Aggiorna', 'Aktualisieren', 'Vernieuwen', 'Actualitza', 'Actualizar', 'Freskatu'],
+	['viewTraces', 'View traces', 'Ver trazas', 'Ver rastreamentos', 'Voir les traces', 'Vedi le tracce', 'Traces anzeigen', 'Traces bekijken', 'Veure traces', 'Ver trazas', 'Ikusi arrastoak'],
 	['schemaFile', 'Schema (lambdaORM.yaml)', 'Esquema (lambdaORM.yaml)', 'Esquema (lambdaORM.yaml)', 'Schéma (lambdaORM.yaml)', 'Schema (lambdaORM.yaml)', 'Schema (lambdaORM.yaml)', 'Schema (lambdaORM.yaml)', 'Esquema (lambdaORM.yaml)', 'Esquema (lambdaORM.yaml)', 'Eskema (lambdaORM.yaml)'],
 	['save', 'Save', 'Guardar', 'Salvar', 'Enregistrer', 'Salva', 'Speichern', 'Opslaan', 'Desa', 'Gardar', 'Gorde'],
 	['saving', 'Saving…', 'Guardando…', 'Salvando…', 'Enregistrement…', 'Salvataggio…', 'Wird gespeichert…', 'Opslaan…', 'Desant…', 'Gardando…', 'Gordetzen…'],

@@ -23,6 +23,8 @@ Needs `@lambdaorm/base` and `@lambdaorm/lib` with observability (lambda-orm/core
   the JSON Patch, in `logs/changes.jsonl` of the workspace and in OpenTelemetry; `GET
   /admin/workspaces/{schema}/history`. `workspace.changed` says who and what. The audit also goes as an OpenTelemetry
   LogRecord.
+- **The 412 of a form or of the YAML says who changed it:** `details.changedBy` (credential, client, time, kind,
+  target), from the history.
 
 ### 4.0.0 (2026-11-23)
 

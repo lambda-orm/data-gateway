@@ -1,4 +1,4 @@
-import { AdminApiPort, AdminCapabilities, CommandName, CommandPreview, CommandsSummary, ExpressionCheck, ExpressionLanguage, Job, SchemaIssue, SchemaPatch, SchemaVariable, StageRouting, WorkbenchProblem, CodeParts } from '../application/ports'
+import { AdminApiPort, AdminCapabilities, SchemaChange, SchemaHistoryQuery, CommandName, CommandPreview, CommandsSummary, ExpressionCheck, ExpressionLanguage, Job, SchemaIssue, SchemaPatch, SchemaVariable, StageRouting, WorkbenchProblem, CodeParts } from '../application/ports'
 import { SavedItem } from '../domain/savedItems'
 import { GatewayRequestError, HeadersProvider } from './restQueryApi'
 
@@ -44,6 +44,13 @@ export class RestAdminApi implements AdminApiPort {
 
 	public async readSchema (schema: string) {
 		return (await this.request(`/workspaces/${schemaSegment(schema)}/schema`)).body as { text: string, version: string }
+	}
+
+	public async history (schema: string, query: SchemaHistoryQuery = {}) {
+		const params = new URLSearchParams()
+		for (const [key, value] of Object.entries(query)) if (value !== undefined && value !== '') params.set(key, String(value))
+		const search = params.toString()
+		return (await this.request(`/workspaces/${schemaSegment(schema)}/history${search ? `?${search}` : ''}`)).body as { items: SchemaChange[], nextCursor?: string }
 	}
 
 	public async writeSchema (schema: string, text: string, version: string) {

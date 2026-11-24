@@ -134,11 +134,74 @@ export interface StageRouting {
 /** What the build of the code generates: the model, the repositories (both by default) */
 export interface CodeParts { model?: boolean, repositories?: boolean }
 
+/** Who made a change or a request, as the gateway knows it (never an email) */
+export interface ChangeActor {
+	credential?: string
+	session?: string
+	/** the program: data-gateway-ide 2.1.0, lambdaorm-cli 1.7.0 */
+	client?: string
+	ip?: string
+	user?: string
+}
+
+/** One operation of a JSON Patch (RFC 6902) */
+export interface JsonPatchOperation {
+	op: 'add' | 'remove' | 'replace' | 'move' | 'copy' | 'test'
+	path: string
+	value?: unknown
+	from?: string
+}
+
+/** A change of a schema (schema.change): of the IDE, the CLI or the gateway (docs/OBSERVABILITY.md §5.2 of core) */
+export interface SchemaChange {
+	id: string
+	time: string
+	schema: string
+	stage?: string
+	/** schema.patch, schema.write, schema.file, stage.push, stage.pull, code.build, env.set… */
+	kind: string
+	/** domain/entities/Customers */
+	target?: string
+	op?: 'add' | 'set' | 'remove' | 'rename'
+	/** as written in the file (variables unsolved) */
+	before?: unknown
+	after?: unknown
+	diff?: JsonPatchOperation[]
+	ddl?: { source: string, file: string, sentences: number }[]
+	version?: { before?: string, after?: string }
+	actor?: ChangeActor
+	result?: 'ok' | 'error'
+	error?: string
+}
+
+/**
+ * What the gateway says changed (workspace.changed, schema.statusChanged); a change of the administration says who and
+ * what (change), and the session it came from (to tell one's own from another's)
+ */
+export interface WorkspaceChangeEvent {
+	path?: string
+	kind?: string
+	change?: { id: string, kind: string, target?: string, actor?: ChangeActor, time: string }
+}
+
+export interface SchemaHistoryQuery {
+	since?: string
+	target?: string
+	kind?: string
+	limit?: number
+	cursor?: string
+}
+
 export interface AdminApiPort {
 	/** undefined when the gateway has no administration (admin off) */
 	capabilities (): Promise<AdminCapabilities | undefined>
 	readSchema (schema: string): Promise<{ text: string, version: string }>
-	/** one change of one element (a form): 412 when that element changed since it was read (details.current) */
+	/** the history of a schema, the newest first (a gateway that keeps it: 4.1.0) */
+	history? (schema: string, query?: SchemaHistoryQuery): Promise<{ items: SchemaChange[], nextCursor?: string }>
+	/**
+	 * one change of one element (a form): 412 when that element changed since it was read (details.current, and
+	 * details.changedBy: who changed it, when the gateway keeps the history)
+	 */
 	patchSchema (schema: string, patch: SchemaPatch): Promise<{ version: string, references: string[], added: number, removed: number }>
 	/** the variables of the connections (.env): which are defined and where they are used, never their value */
 	variables (schema: string): Promise<{ variables: SchemaVariable[] }>

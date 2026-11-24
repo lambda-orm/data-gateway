@@ -1,3 +1,4 @@
+import { changedByText } from '../domain/changedBy'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AdminApiPort, SchemaVariable } from '../application/ports'
 import { adminMessagesOf, format } from '../domain/adminI18n'
@@ -249,7 +250,7 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, theme, schema, 
 			if (e?.status === 412 && e.details?.current) {
 				setRead(e.details.current)
 				setDraft(JSON.parse(JSON.stringify(e.details.current)))
-				setError(m.changedMeanwhile)
+				setError(changedByText(e.details.changedBy, locale, m.changedMeanwhile))
 				await load()
 			} else setError(e?.details?.issues ? e.details.issues.map((i: Json) => i.message).join('; ') : e?.message ?? String(e))
 		} finally { setBusy(false) }

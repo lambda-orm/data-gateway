@@ -1,5 +1,17 @@
 # Changelog
 
+### Unreleased
+
+Needs a data-gateway with the history of the schema (4.1.0, lambda-orm/core #203).
+
+- **History:** the changes of a schema (who, when, what, the diff and the element before and after) in the view of the
+  schema and in the tab History of an entity.
+- **A change of another session** (another IDE, the administration of another person) is announced with who changed
+  what and a Refresh; a form that meets a change says who made it.
+- **Traces:** every request carries a W3C `traceparent` (the requests of one action share a trace), so the gateway and
+  λORM continue it; a connection can say where its Grafana is (and its Tempo datasource), and an entity links to its
+  traces.
+
 ### 1.0.0 (2026-11-23)
 
 **The desktop app** (`packages/ide-desktop`, Electron): the IDE for Linux (AppImage, deb), Windows (installer) and
