@@ -10,6 +10,7 @@ import { applyPatch, PatchError, referencesOf, SchemaPatch } from '../../domain/
 import { lineDiff } from '../../domain/admin/lineDiff'
 import { dotEnvNames, editDotEnv, schemaVariables, VARIABLE_NAME } from '../../domain/admin/dotEnv'
 import { EXPRESSION_CONTEXTS, ExpressionVariable } from '../../domain/admin/expressions'
+import { StageRouting, stageRoutingOf } from '../../domain/admin/stageRouting'
 import { CodeGeneratorPort, ExpressionLanguage, ExpressionLanguagePort, SchemaIssue, SessionStatePort, SchemaValidatorPort, VersionConflict, WorkspaceStorePort, YamlPort } from '../ports/output/adminPorts'
 import { ClockPort, LoggerPort } from '../ports/output/supportPorts'
 
@@ -126,6 +127,21 @@ export class AdminService {
 		const known = new Set(variables.map(v => v.name))
 		const unknown = checked.variables.filter(v => !known.has(v))
 		return { valid: !checked.error && unknown.length === 0, ...checked, unknown }
+	}
+
+	/**
+	 * Where the entities of a stage go: each source of the stage, in order, with its condition and the entities that
+	 * live in it (their table by its mapping), evaluated as λORM routes a sentence (the stage diagram of the UI)
+	 */
+	public async stageRouting (principal: Principal, path: string, stage: string): Promise<StageRouting> {
+		this.require(principal, 'schemaRead')
+		if (!this.expressions) throw notFound('the expressions are not available')
+		const file = await this.store.read(this.workspaceOf(path), SCHEMA_FILE)
+		if (!file) throw notFound(`schema "${path}" has no ${SCHEMA_FILE}`)
+		const expressions = this.expressions
+		const routing = stageRoutingOf(this.yaml.parse(file.text), stage, (expression, data) => expressions.evaluate(expression, { ...data }))
+		if (!routing) throw notFound(`schema "${path}" has no stage "${stage}"`)
+		return routing
 	}
 
 	// ─── permissions ─────────────────────────────────────────────────────────
@@ -325,7 +341,8 @@ export class AdminService {
 		const file = await this.store.read(workspace, SCHEMA_FILE)
 		let paths: any = {}
 		try { paths = (this.yaml.parse(file?.text ?? '') as any)?.infrastructure?.paths ?? {} } catch { /* the defaults */ }
-		const base = `${paths.src || 'src'}/${paths.domain || 'domain'}`.replace(/\/+/g, '/')
+		// each language in a folder of its own under src/: node, client-node, and the ones to come
+		const base = `${paths.src || 'src'}/${language}/${paths.domain || 'domain'}`.replace(/\/+/g, '/')
 		const generated = this.code.files(language, domain, { model: request.model !== false, repositories: request.repositories !== false })
 		const files: { path: string, content: string, written?: 'created' | 'updated' | 'kept' }[] = generated.map(g => ({ path: `${base}/${g.file}`, content: g.content }))
 		if (request.write === true) {
@@ -377,6 +394,40 @@ export class AdminService {
 	}
 
 	/** The text of a file of data/ or src/ (an export, a script, the code of build) */
+	/**
+	 * The files of a folder of data/ or src/, as they are in the workspace (the code of a language, with its repositories
+	 * as edited): its name and its files, relative to the folder, to be zipped
+	 */
+	public async folderFiles (principal: Principal, path: string, dir: unknown): Promise<{ name: string, files: { path: string, content: string }[] }> {
+		this.require(principal, 'schemaRead')
+		const workspace = this.workspaceOf(path)
+		const folder = await this.readable(workspace, dir)
+		const listed = (await this.store.list(workspace, folder)).filter(f => !f.dir)
+		const files: { path: string, content: string }[] = []
+		for (const f of listed) {
+			const file = await this.store.read(workspace, f.path)
+			if (file) files.push({ path: f.path.slice(folder.length + 1), content: file.text })
+		}
+		return { name: folder.split('/').pop() || folder, files }
+	}
+
+	/**
+	 * A folder of the source code taken out of the workspace (the code of a language under src/, with its repositories):
+	 * nothing else can be removed so
+	 */
+	public async removeCode (principal: Principal, path: string, dir: unknown): Promise<{ removed: string }> {
+		this.require(principal, 'build')
+		const workspace = this.workspaceOf(path)
+		const roots = await this.fileRoots(workspace)
+		const folder = await this.readable(workspace, dir)
+		if (!folder.startsWith(`${roots.src}/`)) throw new GatewayError(403, 'ForbiddenError', `only a folder of ${roots.src}/ can be removed here`)
+		const listed = await this.store.list(workspace, folder)
+		if (!listed.length) throw notFound(`"${folder}" is not in the workspace of "${path}"`)
+		await this.store.withLock(workspace, () => this.store.remove(workspace, folder))
+		this.audit(principal, `removed the code ${folder} of`, path)
+		return { removed: folder }
+	}
+
 	public async fileContent (principal: Principal, path: string, file: unknown): Promise<{ path: string, text: string, version: string, modified: string }> {
 		this.require(principal, 'schemaRead')
 		const workspace = this.workspaceOf(path)

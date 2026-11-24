@@ -45,6 +45,9 @@ export interface SavedDiagram extends SavedBase {
 	detail?: DiagramDetail
 	/** The names of the relations on their lines */
 	relationNames?: boolean
+	/** A diagram of a stage (its sources and where each entity goes), not of entities: the stage, and how it is shown */
+	stage?: string
+	stageView?: { orientation?: 'top' | 'left', detail?: 'tables' | 'names', positions?: Record<string, { x: number, y: number }> }
 }
 
 export type SavedItem = SavedFolder | SavedQuery | SavedDiagram
@@ -142,7 +145,7 @@ export const parseExport = (text: string): SavedItem[] | undefined => {
 			})
 		} else {
 			if (!Array.isArray(raw.entities) || !raw.entities.every(isString)) return undefined
-			items.push({ ...base, kind: 'diagram', entities: raw.entities, positions: raw.positions && typeof raw.positions === 'object' ? raw.positions : undefined, bends: raw.bends && typeof raw.bends === 'object' ? raw.bends : undefined, compact: raw.compact === true, detail: DIAGRAM_DETAILS.includes(raw.detail) ? raw.detail : undefined, relationNames: raw.relationNames === true })
+			items.push({ ...base, kind: 'diagram', entities: raw.entities, positions: raw.positions && typeof raw.positions === 'object' ? raw.positions : undefined, bends: raw.bends && typeof raw.bends === 'object' ? raw.bends : undefined, compact: raw.compact === true, detail: DIAGRAM_DETAILS.includes(raw.detail) ? raw.detail : undefined, relationNames: raw.relationNames === true, ...(isString(raw.stage) && raw.stage ? { stage: raw.stage, stageView: raw.stageView && typeof raw.stageView === 'object' && !Array.isArray(raw.stageView) ? raw.stageView : {} } : {}) })
 		}
 	}
 	// an item whose folder isn't in the file goes to the top of its schema

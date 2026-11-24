@@ -55,12 +55,31 @@ export const QueryWizard: React.FC<QueryWizardProps> = ({ api, schema, domain, i
 		const valid = new Set(columnsOf(next, domain).map(c => c.alias))
 		return { ...next, sort: next.sort.filter(s => valid.has(s.column)) }
 	}
+	const propertiesOf = (entity: string) => domain.entities.find(e => e.name === entity)?.properties?.map(p => p.name) ?? []
+	/**
+	 * A field ticked or unticked. No field chosen means every field (no map), all of them ticked: unticking one leaves
+	 * the others; ticking them all again is no map. The last field ticked stays (a table without fields reads nothing).
+	 */
 	const toggle = (entity: string, field: string) => setState(s => {
-		const chosen = s.fields[entity] ?? []
-		const order = domain.entities.find(e => e.name === entity)?.properties?.map(p => p.name) ?? []
+		const order = propertiesOf(entity)
+		const chosen = s.fields[entity]?.length ? s.fields[entity] : order
 		const next = chosen.includes(field) ? chosen.filter(f => f !== field) : order.filter(f => f === field || chosen.includes(f))
+		if (!next.length) return s
 		const fields = { ...s.fields, [entity]: next }
-		if (!next.length) delete fields[entity]
+		if (next.length === order.length) delete fields[entity]
+		return tidy({ ...s, fields })
+	})
+	/** The check of the title: every field (no map), or else only its primary key (its first field without one) */
+	const toggleAll = (entity: string) => setState(s => {
+		const fields = { ...s.fields }
+		if (s.fields[entity]?.length) delete fields[entity]
+		else {
+			const order = propertiesOf(entity)
+			const keys = (domain.entities.find(e => e.name === entity)?.primaryKey ?? []).filter(k => order.includes(k))
+			const only = keys.length ? keys : order.slice(0, 1)
+			if (!only.length || only.length === order.length) return s
+			fields[entity] = only
+		}
 		return tidy({ ...s, fields })
 	})
 	const addEntities = (entities: string[], from?: string) => {
@@ -106,17 +125,13 @@ export const QueryWizard: React.FC<QueryWizardProps> = ({ api, schema, domain, i
 					</label>
 					<span className="lw-hint">{m.tablesHint}</span>
 				</div>
-				<div className="lw-form-actions">
-					<button type="button" onClick={onClose}>{m.cancel}</button>
-					<button type="button" className="lw-primary" disabled={!state.root} onClick={() => onAccept(state, query)}>{initial ? m.update : m.create}</button>
-				</div>
 			</div>
 			<div className="lw-wizard">
 				<div className="lw-wizard-diagram">
 					{state.root && (
 						<DomainDiagram key={state.root} api={api} schema={schema} theme={theme} locale={locale as Locale | undefined} entities={entities} keep={state.root}
 							positions={state.positions} onPositionsChange={positions => setState(s => ({ ...s, positions }))}
-							fieldSelection={{ chosen: state.fields, onToggle: toggle }} onAddEntities={addEntities} onRemoveEntity={remove} onRemoveEntities={removeAll} detail="all" height="100%" layout={layout} />
+							fieldSelection={{ chosen: state.fields, onToggle: toggle, onToggleAll: toggleAll }} onAddEntities={addEntities} onRemoveEntity={remove} onRemoveEntities={removeAll} detail="all" height="100%" layout={layout} />
 					)}
 					{notice && <div className="lw-hint lw-error-text" role="status">{notice}</div>}
 				</div>
@@ -169,6 +184,10 @@ export const QueryWizard: React.FC<QueryWizardProps> = ({ api, schema, domain, i
 						<div className="lw-hint">{m.pageHint}</div>
 					</div>
 				</div>
+			</div>
+			<div className="lw-form-actions lw-wizard-actions">
+				<button type="button" onClick={onClose}>{m.cancel}</button>
+				<button type="button" className="lw-primary" disabled={!state.root} onClick={() => onAccept(state, query)}>{initial ? m.update : m.create}</button>
 			</div>
 		</Modal>
 	)

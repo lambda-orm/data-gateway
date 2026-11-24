@@ -113,6 +113,27 @@ export interface ExpressionCheck {
 	unknown: string[]
 }
 
+/** Where the entities of a stage go: each source in its order, its condition and the entities that live in it */
+export interface StageRouting {
+	stage: string
+	sources: {
+		name: string
+		dialect?: string
+		mapping?: string
+		/** none: it takes what reaches it */
+		condition?: string
+		/** the condition doesn't evaluate (it is taken as false) */
+		error?: string
+		/** its table by the mapping of the source; read, write: the source its reads or writes go to, when another one */
+		entities: { entity: string, table: string, view?: boolean, read?: string, write?: string }[]
+	}[]
+	/** the entities no source takes */
+	unrouted: string[]
+}
+
+/** What the build of the code generates: the model, the repositories (both by default) */
+export interface CodeParts { model?: boolean, repositories?: boolean }
+
 export interface AdminApiPort {
 	/** undefined when the gateway has no administration (admin off) */
 	capabilities (): Promise<AdminCapabilities | undefined>
@@ -123,9 +144,14 @@ export interface AdminApiPort {
 	variables (schema: string): Promise<{ variables: SchemaVariable[] }>
 	setVariables (schema: string, change: { set?: Record<string, string>, remove?: string[] }): Promise<{ variables: SchemaVariable[] }>
 	/** the code of the domain written in src/ of the workspace */
-	build (schema: string, language: 'node' | 'client-node'): Promise<{ language: string, files: { path: string, written?: string, bytes: number }[] }>
+	/** parts: only the model, or only the repositories (as -m and -r of the CLI); by default both */
+	build (schema: string, language: 'node' | 'client-node', parts?: CodeParts): Promise<{ language: string, files: { path: string, written?: string, bytes: number }[] }>
 	/** the same code as a zip, without writing anything */
-	buildZip (schema: string, language: 'node' | 'client-node'): Promise<Blob>
+	buildZip (schema: string, language: 'node' | 'client-node', parts?: CodeParts): Promise<Blob>
+	/** a folder of data/ or src/ as a zip, as it is in the workspace (a gateway before 4.1.0 doesn't have it) */
+	folderZip? (schema: string, dir: string): Promise<Blob>
+	/** a folder of the source code taken out (the code of a language, under src/) */
+	removeCode? (schema: string, dir: string): Promise<{ removed: string }>
 	/** the files of data/ or src/ of a workspace (recursive), and where its data, code and model folders are */
 	files (schema: string, dir?: string): Promise<{ roots: { data: string, src: string, model: string }, files: { path: string, dir: boolean, modified: string }[] }>
 	/** the text of a file of data/ or src/ */
@@ -137,6 +163,8 @@ export interface AdminApiPort {
 	/** the language of the expressions (a gateway before 3.3.0 doesn't have it: a plain input then) */
 	expressionLanguage? (): Promise<ExpressionLanguage>
 	checkExpression? (expression: string, context?: string): Promise<ExpressionCheck>
+	/** where the entities of a stage go (a gateway before 4.1.0 doesn't have it) */
+	stageRouting? (schema: string, stage: string): Promise<StageRouting>
 	/** a new schema; its name and description go on top of its lambdaORM.yaml */
 	createWorkspace (path: string, copyOf?: string, about?: { name?: string, description?: string }): Promise<{ path: string, version: string }>
 	removeWorkspace (path: string): Promise<{ trash: string }>

@@ -17,7 +17,7 @@ const KEYS: Record<string, string[]> = {
 	'': ['domain', 'infrastructure', 'application'],
 	domain: ['entities', 'enums'],
 	'domain.entities.*': ['name', 'extends', 'abstract', 'view', 'singular', 'primaryKey', 'uniqueKey', 'properties', 'relations', 'indexes', 'constraints'],
-	'domain.entities.*.properties.*': ['name', 'type', 'length', 'required', 'autoIncrement', 'default', 'enum', 'readExp', 'writeExp', 'view'],
+	'domain.entities.*.properties.*': ['name', 'type', 'length', 'required', 'autoIncrement', 'default', 'enum', 'readExp', 'writeExp', 'readValue', 'writeValue', 'view'],
 	'domain.entities.*.relations.*': ['name', 'type', 'from', 'entity', 'to', 'target', 'weak'],
 	'domain.entities.*.indexes.*': ['name', 'fields'],
 	'domain.entities.*.constraints.*': ['message', 'condition'],

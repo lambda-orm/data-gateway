@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { BrowserSessionStore, Workspace } from '@lambdaorm/ui'
-import { Cable, Menu as MenuIcon, Pencil, Plus, Settings, Trash2 } from 'lucide-react'
-import { ConnectionPage, ConnectionTools, Credential, CredentialFields, getJson, Header, HeaderMenu, headersOf, Kind, OUT, PreferencesPage, usePrefs, Who, wikiUrl } from './shared'
+import { Cable, Plus, Settings } from 'lucide-react'
+import { ConnectionPage, ConnectionTools, Credential, CredentialFields, getJson, headersOf, Kind, PreferencesPage, usePrefs, Who } from './shared'
+import { AppMenu } from './appMenu'
 import { ManagementClient, ManagementState, testConnection } from './management'
 import { SessionsPanel } from './sessions'
 import { endpointsOf, McpTab, SwaggerTab, useTransports, WebSocketTab } from './tools'
@@ -146,11 +147,28 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 	const [openPage, setOpenPage] = useState<{ key: string, at: number }>(() => ({ key: read<IdeConnection[]>(local, CONNECTIONS, []).length ? '' : 'connection:new', at: Date.now() }))
 	const openOf = (key: string) => setOpenPage({ key, at: Date.now() })
 	// the connection about to be removed (its confirmation)
-	const [removing, setRemoving] = useState<IdeConnection>()
 	useEffect(() => { write(local, CONNECTIONS, connections) }, [connections])
 	useEffect(() => { write(tab, SECRETS, secrets) }, [secrets])
 	// a client of the management of each connection: its session, who it is, its events (docs/DATA_GATEWAY_SESSIONS_PLAN.md §8)
 	const clients = useRef(new Map<string, { client: ManagementClient, signature: string }>())
+	// the fetch of each connection, stable and from its first render: it waits for the client of its session (made in an
+	// effect, after that render) and goes through it, so no request leaves without the session ("management needs a
+	// session") and the workspace keeps one api per connection
+	const waiting = useRef(new Map<string, ((client: ManagementClient) => void)[]>())
+	const clientOf = (id: string): Promise<ManagementClient> => {
+		const client = clients.current.get(id)?.client
+		if (client) return Promise.resolve(client)
+		return new Promise(resolve => waiting.current.set(id, [...(waiting.current.get(id) ?? []), resolve]))
+	}
+	const fetches = useRef(new Map<string, typeof fetch>())
+	const fetchOf = (id: string): typeof fetch => {
+		let f = fetches.current.get(id)
+		if (!f) {
+			f = (async (input: RequestInfo | URL, init?: RequestInit) => (await clientOf(id)).fetch(input, init)) as typeof fetch
+			fetches.current.set(id, f)
+		}
+		return f
+	}
 	const [states, setStates] = useState<Record<string, ManagementState>>({})
 	const now = useRef({ connections, secrets })
 	now.current = { connections, secrets }
@@ -176,6 +194,8 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 			const client = new ManagementClient(c.id, urlOf(c), credential, { invalid: t.invalid, unreachable: t.unreachable, needsKey: t.needsKey, sessionEnded: t.sessionEnded })
 			client.subscribe(state => setStates(all => ({ ...all, [c.id]: state })))
 			clients.current.set(c.id, { client, signature })
+			for (const resolve of waiting.current.get(c.id) ?? []) resolve(client)
+			waiting.current.delete(c.id)
 			;(existing ? client.reconnect() : client.start()).catch(() => undefined)
 		}
 		for (const [id, { client }] of clients.current) {
@@ -183,6 +203,7 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 			client.logout().catch(() => undefined)
 			client.close()
 			clients.current.delete(id)
+			fetches.current.delete(id)
 		}
 	}, [connections, secrets, t])
 	useEffect(() => () => { for (const { client } of clients.current.values()) client.close() }, [])
@@ -201,26 +222,21 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 		setSecrets(s => { const n = { ...s }; delete n[id]; return n })
 	}
 	const specs = useMemo(() => connections.map(c => {
-		const client = clients.current.get(c.id)?.client
 		return {
 			id: c.id,
 			name: c.name,
 			description: urlOf(c),
 			baseUrl: apiOf(c),
 			// its session in every request (the credential only in its login), and a new login when it expires
-			fetch: client?.fetch,
+			fetch: fetchOf(c.id),
 			// the gateway says what changed: read at once; the polling, slower while its events come
-			changes: client?.changes,
+			changes: clients.current.get(c.id)?.client.changes,
 			refreshMs: states[c.id]?.live ? 60000 : undefined,
 			// what is saved without the gateway's workspaces: per gateway and per user of the credential
 			workspaceKey: `${urlOf(c)}|${whos[c.id]?.name ?? c.user ?? ''}`,
 			problem: problems[c.id],
-			actions: (
-				<>
-					<button type="button" className="lw-icon-button" aria-label={`${t.editConnection} ${c.name}`} title={t.editConnection} onClick={() => openOf(`connection:${c.id}`)}><Pencil size={14} aria-hidden="true" /></button>
-					<button type="button" className="lw-icon-button" aria-label={`${t.removeConnection} ${c.name}`} title={t.removeConnection} onClick={() => setRemoving(c)}><Trash2 size={14} aria-hidden="true" /></button>
-				</>
-			)
+			// its page (edit, test, remove): a click on its name
+			onOpen: () => openOf(`connection:${c.id}`)
 		}
 	}), [connections, states, problems, whos, t])
 	const pages = useMemo(() => ({
@@ -255,31 +271,12 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 	}, [])
 	return (
 		<div className="dg-page">
-			<Header brand="Data Gateway IDE" version={__APP_VERSION__}
-				menu={<HeaderMenu label={t.menu} icon={<MenuIcon size={20} strokeWidth={1.75} aria-hidden="true" />} items={[
-					{ label: t.newConnection, icon: <Plus size={16} aria-hidden="true" />, onClick: () => openOf('connection:new') },
-					{ label: t.preferences, icon: <Settings size={16} aria-hidden="true" />, onClick: () => openOf('preferences') }
-				]} />}>
-				<a className="dg-link" href={wikiUrl(locale)} {...OUT}>{t.documentation}</a>
-			</Header>
 			<Workspace connections={specs} theme={dark ? 'dark' : 'light'} locale={locale} culture={culture} pages={pages} openPage={openPage} session={session}
 				connectionsHeading={{
 					title: t.connections,
+					lead: <AppMenu onPreferences={() => openOf('preferences')} />,
 					actions: <button type="button" className="lw-icon-button" aria-label={t.newConnection} title={t.newConnection} onClick={() => openOf('connection:new')}><Plus size={14} aria-hidden="true" /></button>
 				}} />
-			{removing && (
-				<div className="dg-dialog-back" onMouseDown={e => { if (e.target === e.currentTarget) setRemoving(undefined) }}>
-					<div className="dg-dialog" role="dialog" aria-modal="true" aria-label={`${t.removeConnection} ${removing.name}`}>
-						<h2>{t.removeConnection}: {removing.name}</h2>
-						<p><code>{urlOf(removing)}</code></p>
-						<p className="dg-muted">{t.confirmRemove}</p>
-						<div className="dg-dialog-actions dg-form-actions">
-							<button type="button" onClick={() => setRemoving(undefined)} autoFocus>{t.cancel}</button>
-							<button type="button" className="dg-danger" onClick={() => { remove(removing.id); setRemoving(undefined) }}>{t.removeConnection}</button>
-						</div>
-					</div>
-				</div>
-			)}
 		</div>
 	)
 }

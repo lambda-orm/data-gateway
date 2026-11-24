@@ -219,30 +219,54 @@ describe('admin over REST (inline)', () => {
 		fs.writeFileSync(path.join(root, 'iot/v1/lambdaORM.yaml'), text)
 	})
 
-		test('build: the model and the repositories in src/domain; a repository written once is the user\'s; also as a zip', async () => {
+		test('build: the model and the repositories in src/<language>/domain; a repository written once is the user\'s; also as a zip, the folder of a language as it is, and removed', async () => {
 		const url = '/admin/workspaces/iot%2Fv1/build'
 		expect((await call(base, url, { body: {}, headers: READER })).status).toBe(403)
 		const built = await call(base, url, { body: { language: 'node', write: true }, headers: ADMIN })
 		expect(built.status).toBe(200)
 		expect(built.body.files).toEqual(expect.arrayContaining([
-			expect.objectContaining({ path: 'src/domain/model.ts', written: 'created' }),
-			expect.objectContaining({ path: 'src/domain/repositoryProduct.ts', written: 'created' })
+			expect.objectContaining({ path: 'src/node/domain/model.ts', written: 'created' }),
+			expect.objectContaining({ path: 'src/node/domain/repositoryProduct.ts', written: 'created' })
 		]))
-		const model = fs.readFileSync(path.join(root, 'iot/v1/src/domain/model.ts'), 'utf8')
+		const model = fs.readFileSync(path.join(root, 'iot/v1/src/node/domain/model.ts'), 'utf8')
 		expect(model).toContain('export class Product')
 		expect(model).toContain("from '@lambdaorm/lib'")
-		fs.writeFileSync(path.join(root, 'iot/v1/src/domain/repositoryProduct.ts'), '// mine\n')
+		fs.writeFileSync(path.join(root, 'iot/v1/src/node/domain/repositoryProduct.ts'), '// mine\n')
 		const again = await call(base, url, { body: { write: true }, headers: ADMIN })
 		expect(again.body.files.find((f: any) => f.path.endsWith('repositoryProduct.ts')).written).toBe('kept')
 		expect(again.body.files.find((f: any) => f.path.endsWith('model.ts')).written).toBe('updated')
-		expect(fs.readFileSync(path.join(root, 'iot/v1/src/domain/repositoryProduct.ts'), 'utf8')).toBe('// mine\n')
+		expect(fs.readFileSync(path.join(root, 'iot/v1/src/node/domain/repositoryProduct.ts'), 'utf8')).toBe('// mine\n')
 		const response = await fetch(`${base}${url}.zip?language=client-node`, { headers: ADMIN })
 		expect(response.headers.get('content-type')).toBe('application/zip')
 		const zip = Buffer.from(await response.arrayBuffer())
 		expect(zip.readUInt32LE(0)).toBe(0x04034b50)
-		expect(zip.toString('latin1')).toContain('src/domain/model.ts')
+		expect(zip.toString('latin1')).toContain('src/client-node/domain/model.ts')
 		expect(zip.toString('utf8')).toContain("from '@lambdaorm/client'")
 		fs.writeFileSync(path.join(os.tmpdir(), 'data-gateway-build-test.zip'), zip)
+		// only the model, or only the repositories (as -m and -r of the CLI)
+		const onlyModel = await call(base, url, { body: { language: 'client-node', write: true, repositories: false }, headers: ADMIN })
+		expect(onlyModel.body.files.map((f: any) => f.path)).toEqual(['src/client-node/domain/model.ts'])
+		const repositories = Buffer.from(await (await fetch(`${base}${url}.zip?language=node&model=false`, { headers: ADMIN })).arrayBuffer()).toString('latin1')
+		expect(repositories).toContain('repositoryProduct.ts')
+		expect(repositories).not.toContain('model.ts')
+		// the folder of a language as it is in the workspace: its repository as the user left it
+		const folder = await fetch(`${base}/admin/workspaces/iot%2Fv1/files.zip?dir=src/node`, { headers: ADMIN })
+		expect(folder.status).toBe(200)
+		expect(folder.headers.get('content-disposition')).toContain('iot_v1-node.zip')
+		const zipped = Buffer.from(await folder.arrayBuffer()).toString('latin1')
+		expect(zipped).toContain('domain/repositoryProduct.ts')
+		expect(zipped).toContain('// mine')
+		expect((await fetch(`${base}/admin/workspaces/iot%2Fv1/files.zip?dir=orm_state`, { headers: ADMIN })).status).toBe(403)
+		// the code of a language removed: only a folder of src/, with build
+		const remove = (dir: string, headers = ADMIN) => fetch(`${base}/admin/workspaces/iot%2Fv1/files?dir=${dir}`, { method: 'DELETE', headers })
+		expect((await remove('src/node', READER)).status).toBe(403)
+		expect((await remove('data')).status).toBe(403)
+		expect((await remove('src')).status).toBe(403)
+		expect((await remove('src/kotlin')).status).toBe(404)
+		const removed = await remove('src/node')
+		expect(removed.status).toBe(200)
+		expect(await removed.json()).toEqual({ removed: 'src/node' })
+		expect(fs.existsSync(path.join(root, 'iot/v1/src/node'))).toBe(false)
 	})
 
 		test('the files of data/ and src/ are listed and read; the .env, the state and what is outside them are not', async () => {
@@ -306,6 +330,18 @@ describe('admin over REST (inline)', () => {
 		const stage = 'domain: { entities: [] }\ninfrastructure:\n  sources:\n    - { name: a, dialect: PostgreSQL }\n  stages:\n    - name: default\n      sources:\n        - name: a\n          condition: entity.in(["A"\n'
 		const checked = await call(base, '/admin/validate', { body: { text: stage }, headers: ADMIN })
 		expect(checked.body).toMatchObject({ valid: false, issues: [expect.objectContaining({ severity: 'error', line: 9, message: expect.stringContaining('default.a: the condition incomplete') })] })
+	})
+
+	test('the routing of a stage: its sources in order, the entities living in each one; a stage not there', async () => {
+		const routing = await call(base, '/admin/workspaces/iot%2Fv1/stages/default/routing', { method: 'GET', headers: ADMIN })
+		expect(routing.status).toBe(200)
+		expect(routing.body).toMatchObject({ stage: 'default', unrouted: [] })
+		expect(routing.body.sources.map((s: any) => s.name)).toEqual(['main'])
+		expect(routing.body.sources[0].entities).toEqual(expect.arrayContaining([expect.objectContaining({ entity: 'Orders', table: expect.any(String) })]))
+		const missing = await call(base, '/admin/workspaces/iot%2Fv1/stages/nowhere/routing', { method: 'GET', headers: ADMIN })
+		expect(missing.status).toBe(404)
+		const reader = await call(base, '/admin/workspaces/iot%2Fv1/stages/default/routing', { method: 'GET', headers: READER })
+		expect(reader.status).toBe(403)
 	})
 
 	test('workspaces created and removed (to .trash); bad routes and the ones taken refused', async () => {

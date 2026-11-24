@@ -1,3 +1,4 @@
+import { expressionTokens } from './expressionTokens'
 /** The domain of a schema as GET /{schema}/domain gives it (the part the diagram draws) */
 export interface DomainInfo {
 	entities: EntityInfo[]
@@ -26,9 +27,23 @@ export interface PropertyInfo {
 	enum?: string
 	default?: string
 	view?: boolean
+	/** the expression of the column when it is read (SQL) */
 	readExp?: string
+	/** the expression of the column when it is written (SQL) */
 	writeExp?: string
+	/** what λORM does with the value after reading it (in the gateway, e.g. decrypt) */
+	readValue?: string
+	/** what λORM does with the value before writing it (in the gateway, e.g. encrypt) */
+	writeValue?: string
 }
+
+/** The expressions of a property, in the order they are shown */
+export const PROPERTY_EXPRESSIONS = ['readExp', 'writeExp', 'readValue', 'writeValue'] as const
+export type PropertyExpression = typeof PROPERTY_EXPRESSIONS[number]
+
+/** The expressions a property has, in that order */
+export const expressionsOf = (property: Partial<Record<PropertyExpression, unknown>>): PropertyExpression[] =>
+	PROPERTY_EXPRESSIONS.filter(k => typeof property[k] === 'string' && (property[k] as string).trim() !== '')
 
 export interface RelationInfo {
 	name: string
@@ -128,9 +143,9 @@ export const ROW = 18
 export const HEADER = 26
 const CHAR = 7.2
 
-/** The size of an entity's box: its name and, unless compact, a row per property */
-export const boxSize = (entity: EntityInfo, compact: boolean): { width: number, height: number } => {
-	const title = (entity.name.length + (entity.extends ? entity.extends.length + 3 : 0)) * 8 + 24
+/** The size of an entity's box: its name and, unless compact, a row per property; check: a check before the name (the wizard) */
+export const boxSize = (entity: EntityInfo, compact: boolean, check = false): { width: number, height: number } => {
+	const title = (entity.name.length + (entity.extends ? entity.extends.length + 3 : 0)) * 8 + 24 + (check ? 18 : 0)
 	const rows = compact ? [] : (entity.properties ?? []).map(p => (p.name.length + 2 + typeText(p).length) * CHAR + 44)
 	return { width: Math.ceil(Math.max(140, title, ...rows)), height: HEADER + (compact ? 0 : Math.max(1, entity.properties?.length ?? 0) * ROW + 6) }
 }
@@ -190,4 +205,19 @@ export const routeOrthogonal = (edges: DiagramEdge[], boxes: Map<string, Placed>
 		}
 	}
 	return routes
+}
+
+/** The properties of the entity a condition uses (its variables), in the order they appear */
+export const propertiesIn = (condition: string, properties: string[]): string[] =>
+	[...new Set(expressionTokens(condition, properties).filter(t => t.kind === 'variable' && properties.includes(t.text)).map(t => t.text))]
+
+/** The constraints (validations) of an entity whose condition uses a property */
+export const constraintsOf = (entity: Pick<EntityInfo, 'properties' | 'constraints'>, property: string): { message: string, condition: string }[] => {
+	const names = (entity.properties ?? []).map(p => p.name)
+	return (entity.constraints ?? []).filter(c => typeof c.condition === 'string' && propertiesIn(c.condition, names).includes(property))
+}
+
+/** The message that explains each expression of a property (helpReadExp…), by its key */
+export const EXPRESSION_HELP: Record<PropertyExpression, 'helpReadExp' | 'helpWriteExp' | 'helpReadValue' | 'helpWriteValue'> = {
+	readExp: 'helpReadExp', writeExp: 'helpWriteExp', readValue: 'helpReadValue', writeValue: 'helpWriteValue'
 }

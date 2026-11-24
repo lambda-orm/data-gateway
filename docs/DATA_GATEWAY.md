@@ -985,14 +985,17 @@ Un workspace se nombra por su ruta en **un** segmento, codificada: `iot%2Fv1` (`
 | `POST` | `/admin/workspaces/{ruta}/references` | `{ at }` → quién usa ese elemento (antes de eliminarlo) | `schemaRead` |
 | `GET` | `/admin/workspaces/{ruta}/variables` | las variables de las conexiones (§11.5): cuáles define el `.env` y quién las usa; **nunca su valor** | `schemaRead` |
 | `PUT` | `/admin/workspaces/{ruta}/variables` | `{ set?: { NOMBRE: valor }, remove?: [NOMBRE] }` en el `.env`, conservando el resto | `schemaAdmin` |
-| `POST` | `/admin/workspaces/{ruta}/build` | `{ language: node \| client-node, write? }`: el modelo y los repositorios (§11.5) | `build` (+ `read`) |
-| `GET` | `/admin/workspaces/{ruta}/build.zip?language=` | lo mismo como `.zip`, sin escribir nada | `build` (+ `read`) |
+| `POST` | `/admin/workspaces/{ruta}/build` | `{ language: node \| client-node, write?, model?, repositories? }`: el modelo y los repositorios (§11.5; `model: false` o `repositories: false`, solo el otro, como `-m` y `-r` de la CLI), cada lenguaje en su carpeta: `src/{language}/domain/…` (desde 4.1.0; antes, `src/domain/…`) | `build` (+ `read`) |
+| `GET` | `/admin/workspaces/{ruta}/build.zip?language=[&model=false][&repositories=false]` | lo mismo como `.zip`, sin escribir nada | `build` (+ `read`) |
 | `GET` | `/admin/workspaces/{ruta}/files?dir=` / `…/files/content?path=` | los archivos de `data/` y de `src/` (recursivo) / el texto de uno; nunca el `.env`, `orm_state/` ni un oculto | `schemaRead` |
+| `GET` | `/admin/workspaces/{ruta}/files.zip?dir=` | una carpeta de `data/` o de `src/` como `.zip`, tal como está en el workspace (el código de un lenguaje con sus repositorios editados): `{ruta}-{carpeta}.zip` | `schemaRead` |
+| `DELETE` | `/admin/workspaces/{ruta}/files?dir=src/…` | quita una carpeta del código fuente (el código de un lenguaje, con sus repositorios): `{ removed }`; solo carpetas de `src/` | `build` |
 | `POST` | `/admin/validate` | `{ text }` → `{ valid, issues: [{ severity, message, line?, column? }] }` | `schemaRead` |
 | `GET` | `/admin/session` | el estado de la UI de la credencial que pregunta: `{ state, updatedAt }` o `{ state: null }` (§11.8) | autenticado |
 | `PUT` | `/admin/session` | `{ state }` lo guarda (un objeto, hasta 2 MB); `{ state: null }` lo olvida | autenticado |
 | `GET` | `/admin/expressions` | el lenguaje de las expresiones (3xpr): `{ functions, operators, constants, contexts }`; `contexts.stageSource` son las variables de la condición de un source de un stage (`entity`, `action`, `category`, `type`, `read`, `write`, `dml`, `ddl`) | `schemaRead` |
 | `POST` | `/admin/expressions/check` | `{ expression, context? }` → `{ valid, error?, variables, unknown }`: si parsea y si usa solo las variables de su contexto | `schemaRead` |
+| `GET` | `/admin/workspaces/{ruta}/stages/{stage}/routing` | a dónde va cada entidad del stage, evaluado como rutea λORM (el primer source cuya condición es verdadera; uno sin condición toma el resto): `{ stage, sources: [{ name, dialect, mapping, condition?, error?, entities: [{ entity, table, view?, read?, write? }] }], unrouted }`; `table` por el mapping del source, `read`/`write` cuando sus lecturas o escrituras van a otro source; el diagrama del stage del IDE | `schemaRead` |
 | `GET` | `/admin/workbench[?schema={ruta}]` | lo guardado en los workspaces (§11.1), `ETag`; con `If-None-Match` igual, `304` | `read` o `workbenchWrite` |
 | `PUT` | `/admin/workbench` | `{ items }`: guarda, mueve o renombra; cada uno que existía dice su `version` | `workbenchWrite` |
 | `POST` | `/admin/workbench/remove` | `{ ids }`: elimina (una carpeta con lo que tiene) | `workbenchWrite` |

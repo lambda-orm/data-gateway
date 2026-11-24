@@ -219,8 +219,30 @@
 .lw-forms-element .lw-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .lw-form-field { display: grid; grid-template-columns: 120px minmax(0, 360px); gap: 8px; align-items: center; margin: 4px 0; }
 .lw-form-group { border: 1px solid var(--lw-border); border-radius: 6px; margin: 8px 0; padding: 6px; overflow-x: auto; }
-.lw-form-rows input:not([type=checkbox]) { width: 100%; min-width: 60px; }
-.lw-form-rows td, .lw-form-rows th { padding: 2px 4px; }
+.lw-form-rows { width: 100%; table-layout: auto; }
+.lw-form-rows td, .lw-form-rows th { padding: 3px 4px; vertical-align: middle; }
+.lw-form-rows th { white-space: nowrap; }
+.lw-form-rows input:not([type=checkbox]), .lw-form-rows select { box-sizing: border-box; width: 100%; min-width: 0; margin: 0; }
+.lw-form-rows .lw-col-text { min-width: 140px; }
+.lw-form-rows .lw-col-select { min-width: 120px; }
+.lw-form-rows .lw-col-fields { min-width: 140px; }
+.lw-form-rows .lw-col-number { width: 72px; }
+.lw-form-rows .lw-col-check, .lw-form-rows .lw-col-expressions, .lw-form-rows .lw-col-remove { width: 1%; text-align: center; white-space: nowrap; }
+.lw-form-rows .lw-col-check input { margin: 0; vertical-align: middle; }
+.lw-form-rows select:disabled, .lw-form-rows input[readonly] { color: var(--lw-fg); opacity: 1; }
+.lw-form-rows tbody tr.lw-active > td { background: var(--lw-selected); }
+.lw-expression-toggle { font: inherit; font-family: var(--lw-mono, monospace); color: var(--lw-muted); white-space: nowrap; }
+.lw-expression-toggle.lw-has { color: var(--lw-accent); }
+.lw-workbench button.lw-expression-toggle[aria-pressed=true] { border-color: var(--lw-accent); color: var(--lw-accent); }
+.lw-form-table tbody tr.lw-active > td { background: var(--lw-selected); }
+/* the expressions of a property, under its table */
+.lw-expression-detail { border: 1px solid var(--lw-border); border-left: 3px solid var(--lw-accent); border-radius: 6px; padding: 8px 10px; margin: 8px 0; min-width: 0; }
+.lw-expression-detail h4 { margin: 0 0 6px; }
+.lw-expression-detail dl { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 6px 12px; margin: 6px 0 0; align-items: start; }
+.lw-expression-detail dt { color: var(--lw-muted); font-family: var(--lw-mono, monospace); padding-top: 3px; }
+.lw-expression-detail dd { margin: 0; min-width: 0; }
+.lw-expression-detail .lw-expression-view { display: block; white-space: pre-wrap; overflow-wrap: anywhere; padding: 4px 6px; background: var(--lw-panel); border-radius: 4px; }
+.lw-sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .lw-element-form { display: flex; flex-direction: column; align-items: stretch; }
 .lw-element-form .lw-form-field > span { color: var(--lw-muted); }
 .lw-schema-forms.lw-focused { grid-template-columns: 1fr; }
@@ -382,7 +404,7 @@
 .lw-wizard-diagram { display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 0; }
 .lw-wizard-diagram > :not(.lw-hint):not(.lw-wizard-start) { flex: 1 1 auto; min-height: 280px; }
 .lw-wizard-top { display: flex; align-items: center; gap: 16px; margin-bottom: 10px; }
-.lw-wizard-top > .lw-form-actions { margin: 0 0 0 auto; flex: none; }
+.lw-wizard-actions { margin-top: 12px; flex: none; justify-content: flex-end; }
 .lw-wizard-start { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; flex: 1 1 auto; min-width: 0; }
 .lw-wizard-start > .lw-wizard-field { flex-direction: row; align-items: center; gap: 8px; }
 .lw-wizard-start > .lw-hint { flex: 1 1 260px; }
@@ -405,3 +427,47 @@
 .lw-workbench.lw-dark button.lw-primary, .lw-workbench.lw-dark .lw-modes > button.lw-active, .lw-dark .lw-workbench button.lw-primary, .lw-dark .lw-workbench .lw-modes > button.lw-active { color: #0b1220; }
 /* the diagram of the wizard: its bar in one line (how many tables it has is in sight) */
 .lw-wizard .lw-diagram > .lw-header .lw-who { display: none; }
+
+/* the diagram of a stage: the drawing scrolls, the condition of the source chosen stays below */
+.lw-stage-diagram { display: flex; flex-direction: column; gap: var(--lw-space-2); height: 100%; min-height: 0; }
+.lw-stage-canvas { position: relative; flex: 1 1 auto; height: 62vh; min-height: 240px; overflow: hidden; border: 1px solid var(--lw-border); border-radius: var(--lw-radius); touch-action: none; cursor: default; outline: none; user-select: none; -webkit-user-select: none; }
+.lw-stage-canvas.lw-tool-move, .lw-stage-canvas.lw-tool-move .lw-movable { cursor: grab; }
+.lw-stage-canvas .lw-movable { cursor: move; }
+.lw-stage-diagram > .lw-header { flex-wrap: wrap; }
+.lw-stage-arrow { cursor: pointer; outline: none; }
+.lw-stage-arrow:focus-visible path:nth-child(2) { stroke-width: 3; }
+.lw-stage-condition-panel { flex: none; min-height: 88px; max-height: 30vh; overflow: auto; padding: var(--lw-space-3); border: 1px solid var(--lw-border); border-radius: var(--lw-radius); background: var(--lw-panel); }
+.lw-stage-condition-title { margin-bottom: var(--lw-space-2); }
+.lw-stage-condition-code .lw-expression-view { display: block; white-space: pre-wrap; font-size: var(--lw-text-md); }
+
+/* the outline of a diagram: all of it small, in a corner of the view, with a frame on what the view shows */
+.lw-outline { position: absolute; top: 8px; right: 8px; bottom: 8px; z-index: 2; border: 1px solid; border-radius: var(--lw-radius); box-shadow: var(--lw-shadow-pop, 0 4px 12px rgb(0 0 0 / 15%)); overflow: hidden; cursor: crosshair; touch-action: none; }
+.lw-outline svg { display: block; width: 100%; height: 100%; }
+
+/* what the build generates: a check, its name and what it is, on one line each */
+.lw-build-parts { display: flex; flex-direction: column; align-items: flex-start; gap: var(--lw-space-2); text-align: left; }
+.lw-form .lw-build-part, .lw-build-part { display: flex; flex-direction: row; align-items: center; gap: var(--lw-space-2); margin: 0; }
+.lw-build-part > input { margin: 0; }
+
+/* the root of the connections: its title shrinks before the row overflows the explorer */
+.lw-connections-root { min-width: 0; }
+.lw-connections-title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.lw-connections-toggle { min-width: 0; border: 0; background: none; padding: 2px 4px; cursor: pointer; color: inherit; }
+/* the validations (constraints) of an entity: their tab, and those of a property under its expressions */
+.lw-expression-detail h5 { margin: 10px 0 4px; color: var(--lw-muted); font-size: var(--lw-text-sm); text-transform: uppercase; letter-spacing: .03em; }
+.lw-form-table td.lw-condition { min-width: 280px; }
+.lw-form-table td.lw-condition .lw-expression-view { white-space: pre-wrap; overflow-wrap: anywhere; }
+.lw-uses { display: inline-block; margin: 1px 4px 1px 0; padding: 0 6px; border: 1px solid var(--lw-border); border-radius: 10px; background: var(--lw-panel); font-size: 12px; }
+/* each expression of a property: "name: what it does", and under it its editor (or the expression in colors) */
+.lw-expression-item { margin: 8px 0 12px; min-width: 0; }
+.lw-expression-label { margin: 0 0 4px; color: var(--lw-muted); font-size: var(--lw-text-sm); line-height: 1.4; }
+.lw-expression-label code { color: var(--lw-fg); font-weight: 600; }
+.lw-constraint-message { margin: 0 0 3px; font-size: var(--lw-text-sm); }
+.lw-expression-detail .lw-validations { border-top: 1px solid var(--lw-border); margin-top: 10px; padding-top: 8px; }
+/* checks on one line (abstract, view): the first one under the labels of the others */
+.lw-form-inline { display: flex; align-items: center; gap: 24px; }
+.lw-form-inline .lw-form-field { grid-template-columns: 120px auto; }
+.lw-form-inline .lw-form-field + .lw-form-field { grid-template-columns: auto auto; }
+/* the name of a connection opens its page */
+.lw-workbench button.lw-connection-open { background: none; border: 0; padding: 0; text-align: left; cursor: pointer; color: inherit; font: inherit; }
+.lw-workbench button.lw-connection-open:hover strong { text-decoration: underline; }
