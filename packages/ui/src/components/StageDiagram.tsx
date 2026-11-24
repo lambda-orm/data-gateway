@@ -24,6 +24,8 @@ export interface StageDiagramProps {
 	/** how it was left (kept with its tab), and each change of it */
 	view?: StageView
 	onViewChange?: (view: StageView) => void
+	/** what goes first in its toolbar (the IDE: save it) */
+	toolbar?: React.ReactNode
 }
 
 /** The colours are in the drawing, as in the diagram of the domain */
@@ -111,7 +113,7 @@ const bezier = (p: Point[], t: number): Point => {
  * it shows its condition below, in the colours of the editor. Its toolbar zooms, selects or moves the view, shows the
  * tables or only the names of the sources, and turns it; the boxes are put where one wants by dragging them.
  */
-export const StageDiagram: React.FC<StageDiagramProps> = ({ admin, schema, stage, theme = 'light', locale, revision, view: kept, onViewChange }) => {
+export const StageDiagram: React.FC<StageDiagramProps> = ({ admin, schema, stage, theme = 'light', locale, revision, view: kept, onViewChange, toolbar }) => {
 	const m = adminMessagesOf(locale)
 	const d = messagesOf(locale)
 	const colors = PALETTES[theme]
@@ -283,6 +285,7 @@ export const StageDiagram: React.FC<StageDiagramProps> = ({ admin, schema, stage
 	return (
 		<div className={`lw-stage-diagram lw-diagram lw-workbench lw-${theme}`}>
 			<div className="lw-header">
+				{toolbar}
 				<span className="lw-tool-group" role="group" aria-label={d.toolSelect}>
 					<button className="lw-tool" aria-label={d.toolSelect} title={d.toolSelect} aria-pressed={tool === 'select'} onClick={() => setTool('select')}><Icons.pointer size={18} /></button>
 					<button className="lw-tool" aria-label={d.toolMove} title={d.toolMove} aria-pressed={tool === 'move'} onClick={() => setTool('move')}><Icons.hand size={18} /></button>

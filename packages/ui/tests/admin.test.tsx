@@ -39,6 +39,10 @@ class FakeAdmin implements AdminApiPort {
 			contexts: { stageSource: [{ name: 'entity', type: 'string', description: '' }, { name: 'read', type: 'boolean', description: '' }] } }
 	}
 
+	async stageRouting (_schema: string, stage: string) {
+		return { stage, sources: [{ name: 'main', dialect: 'PostgreSQL', entities: [{ entity: 'Products', table: 'Products' }] }], unrouted: [] }
+	}
+
 	async checkExpression (expression: string) {
 		return expression.includes('foo') ? { valid: false, variables: ['entity', 'foo'], unknown: ['foo'] } : { valid: true, variables: ['entity'], unknown: [] }
 	}
@@ -512,6 +516,39 @@ describe('the schema as forms', () => {
 		await screen.findByText('domain/entities/Products/properties/state')
 		fireEvent.click(screen.getAllByRole('button', { name: 'Remove' }).at(-1)!)
 		await waitFor(() => expect(admin.patches.at(-1)).toMatchObject({ op: 'remove', at: ['domain', 'enums', 'States'] }))
+	})
+})
+
+describe('the diagram of a stage', () => {
+	const SCHEMA = 'domain:\n  entities:\n    - name: Products\n      primaryKey: [id]\n      properties:\n        - { name: id, type: integer }\ninfrastructure:\n  sources:\n    - { name: main, dialect: PostgreSQL }\n  stages:\n    - name: default\n      sources: [{ name: main }]\n'
+	const shown = (name: string) => screen.getAllByRole('button', { name }).find(b => !b.closest('[hidden]'))!
+
+	test('opened from its stage, turned and saved with a name in a project; its stage opens the one saved, as it was left', async () => {
+		const admin = new FakeAdmin()
+		admin.text = SCHEMA
+		render(<Workspace api={new FakeApi()} admin={admin} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" refreshMs={0} />)
+		await waitFor(() => expect(row('infrastructure')).toBeTruthy())
+		fireEvent.click(row('infrastructure'))
+		fireEvent.click(await rowSoon('Stages'))
+		fireEvent.click(within(await rowSoon('default')).getByRole('button', { name: 'Diagram of the stage: default' }))
+		expect(await screen.findByRole('img', { name: 'Stage default' })).toBeTruthy()
+		// not saved yet, and not changed: no mark
+		expect(screen.getByRole('tab', { name: /Stage default/ }).textContent).not.toContain('•')
+		fireEvent.click(shown('the gateway on the left, the sources on the right'))
+		await waitFor(() => expect(screen.getByRole('tab', { name: /Stage default/ }).textContent).toContain('•'))
+		fireEvent.click(shown('Save'))
+		const dialog = await screen.findByRole('dialog', { name: 'Diagram of the stage' })
+		expect((within(dialog).getByRole('textbox', { name: 'name' }) as HTMLInputElement).value).toBe('Stage default')
+		fireEvent.click(within(dialog).getByRole('button', { name: 'Save' }))
+		await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+		await waitFor(() => expect(screen.getByRole('tab', { name: /Stage default/ }).textContent).not.toContain('•'))
+		expect(screen.getAllByText('saved').length).toBeGreaterThan(0)
+		// closed, and opened again from its stage: the one saved, turned as it was left
+		fireEvent.click(screen.getByRole('button', { name: 'close Stage default' }))
+		await waitFor(() => expect(screen.queryByRole('img', { name: 'Stage default' })).toBeNull())
+		fireEvent.click(within(row('default')!).getByRole('button', { name: 'Diagram of the stage: default' }))
+		await screen.findByRole('img', { name: 'Stage default' })
+		expect(shown('the gateway on the left, the sources on the right').getAttribute('aria-pressed')).toBe('true')
 	})
 })
 

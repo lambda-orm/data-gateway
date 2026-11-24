@@ -40,6 +40,9 @@ export interface WorkbenchItem {
 	/** what each box shows: all its properties, the keys (PK and FK), the primary key, or its name */
 	detail?: 'all' | 'keys' | 'pk' | 'name'
 	relationNames?: boolean
+	/** a diagram of a stage (the IDE): the stage, and how it is shown (kept as it comes) */
+	stage?: string
+	stageView?: Record<string, unknown>
 }
 
 export const WORKBENCH = 'workbench'
@@ -91,7 +94,7 @@ export const workbenchContent = (item: WorkbenchItem): Record<string, unknown> =
 	}
 	if (item.kind === 'diagram') {
 		content.entities = item.entities ?? []
-		for (const key of ['positions', 'bends', 'compact', 'detail', 'relationNames'] as const) {
+		for (const key of ['positions', 'bends', 'compact', 'detail', 'relationNames', 'stage', 'stageView'] as const) {
 			if (item[key] !== undefined) content[key] = item[key]
 		}
 	}
@@ -135,6 +138,10 @@ export const workbenchItemOf = (
 		item.entities = Array.isArray(c.entities) ? c.entities.filter((e: unknown) => typeof e === 'string') : []
 		for (const key of ['positions', 'bends', 'compact', 'detail', 'relationNames'] as const) {
 			if (c[key] !== undefined) (item as any)[key] = c[key]
+		}
+		if (typeof c.stage === 'string' && c.stage) {
+			item.stage = c.stage
+			item.stageView = c.stageView && typeof c.stageView === 'object' && !Array.isArray(c.stageView) ? c.stageView : {}
 		}
 	}
 	return item

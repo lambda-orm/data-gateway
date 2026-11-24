@@ -141,6 +141,9 @@ interface Tab {
 	rev?: number
 }
 
+/** How a diagram of a stage is shown, as compared: what is not set is the default */
+const viewKey = (v: StageView | undefined) => ({ orientation: v?.orientation ?? 'top', detail: v?.detail ?? 'tables', positions: v?.positions ?? {} })
+
 const SAME = (a: SavedQueryContent, b: SavedQueryContent) => a.mode === b.mode && a.query === b.query && a.script === b.script && a.data === b.data && a.options === b.options
 const contentOf = (q: SavedQuery): SavedQueryContent => ({ mode: q.mode, query: q.query, script: q.script, data: q.data, options: q.options })
 const draftOf = (d: SavedDiagram): DiagramDraft => ({ entities: d.entities, positions: d.positions, bends: d.bends, compact: d.compact ?? false, detail: d.detail ?? (d.compact ? 'name' : 'all'), relationNames: d.relationNames ?? false })
@@ -524,6 +527,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 		const saved = savedOf(tab)
 		if (tab.kind === 'diagram') return saved?.kind === 'diagram' && !!tab.draft && !sameDraft(tab.draft, draftOf(saved))
 		if (tab.kind === 'schemaFile') return dirtySchemas.has(tab.id)
+		// not saved yet: changed once it is turned, shown otherwise or a box moved
+		if (tab.kind === 'stageDiagram') return saved?.kind !== 'diagram' ? !!tab.stageView : JSON.stringify(viewKey(tab.stageView)) !== JSON.stringify(viewKey(saved.stageView))
 		if (tab.kind !== 'query') return false
 		const content = contents.current.get(tab.id)
 		if (!content) return false
@@ -579,6 +584,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 	const openSaved = (conn: string, item: SavedItem) => {
 		if (item.kind === 'folder' || reuse(t => same(conn, t) && t.savedId === item.id)) return
 		if (item.kind === 'query') add({ kind: 'query', title: item.name, schema: item.schema, savedId: item.id, initial: contentOf(item), wizard: item.wizard, connection: conn })
+		else if (item.stage) add({ kind: 'stageDiagram', title: item.name, schema: item.schema, stage: item.stage, stageView: item.stageView, savedId: item.id, connection: conn })
 		else add({ kind: 'diagram', title: item.name, schema: item.schema, savedId: item.id, draft: draftOf(item), connection: conn })
 	}
 	const newQuery = (conn: string, schema: string, parentId?: string, initial?: Partial<SavedQueryContent>, title?: string) =>
@@ -612,6 +618,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 		if (!reuse(t => same(conn, t) && t.kind === 'file' && t.schema === schema && t.file === file)) add({ kind: 'file', title: file.split('/').pop() ?? file, schema, file, connection: conn })
 	}
 	const openStageDiagram = (conn: string, schema: string, stage: string) => {
+		const kept = rt(conn)?.state.items.find(i => i.kind === 'diagram' && i.schema === schema && i.stage === stage)
+		if (kept) { openSaved(conn, kept); return }
 		if (!reuse(t => same(conn, t) && t.kind === 'stageDiagram' && t.schema === schema && t.stage === stage)) add({ kind: 'stageDiagram', title: format(a.stageDiagramOf, { name: stage }), schema, stage, connection: conn })
 	}
 	const openDomain = (conn: string, schema: string) => {
@@ -646,6 +654,15 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 		const saved = savedOf(tab)
 		const controller = rt(connOf(tab))?.controller
 		if (!controller) return
+		// a diagram of a stage: how it is shown, in place; the first time (or as another one), its name and folder
+		if (tab.kind === 'stageDiagram') {
+			if (saved?.kind === 'diagram' && !as) {
+				try { await controller.update(saved.id, { stageView: tab.stageView ?? {} }) } catch (e) { setNotice(problemText(e, x)) }
+				return
+			}
+			setSaving({ tab, as })
+			return
+		}
 		if (tab.kind === 'diagram') {
 			if (saved?.kind !== 'diagram' || !tab.draft) return
 			try { await controller.update(saved.id, { entities: tab.draft.entities, positions: tab.draft.positions, bends: tab.draft.bends, compact: tab.draft.compact, detail: tab.draft.detail, relationNames: tab.draft.relationNames }) } catch (e) { setNotice(problemText(e, x)) }
@@ -817,7 +834,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 						const can = r?.can
 						return (
 							<div key={tab.id} role="tabpanel" aria-label={saved?.name ?? tab.title} hidden={tab.id !== active}
-								onKeyDownCapture={tab.kind === 'query' || tab.kind === 'diagram' ? saveKeys(tab) : undefined}>
+								onKeyDownCapture={tab.kind === 'query' || tab.kind === 'diagram' || tab.kind === 'stageDiagram' ? saveKeys(tab) : undefined}>
 								{tab.kind === 'page' && pages?.[tab.page ?? ''] && <div className="lw-page">{pages[tab.page!].render()}</div>}
 								{tab.kind !== 'page' && !r && <div className={`lw-workbench lw-${theme}`}><p className="lw-muted">{x.loading}</p></div>}
 								{r && tab.kind === 'element' && adminApi && tab.focus && (
@@ -835,7 +852,14 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 								)}
 								{r && tab.kind === 'stageDiagram' && adminApi && tab.stage && (
 									<StageDiagram admin={adminApi} schema={tab.schema ?? ''} stage={tab.stage} theme={theme} locale={workbench.locale} revision={sinceOf(conn, tab.schema)}
-										view={tab.stageView} onViewChange={stageView => setTabs(all => all.map(t => t.id === tab.id ? { ...t, stageView } : t))} />
+										view={tab.stageView} onViewChange={stageView => setTabs(all => all.map(t => t.id === tab.id ? { ...t, stageView } : t))}
+										toolbar={(
+											<span className="lw-save">
+												<button onClick={() => save(tab)} disabled={!!saved && !dirty(tab)} title="Ctrl+S">{x.save}</button>
+												{saved && <button onClick={() => save(tab, true)}>{x.saveAs}</button>}
+												{saved && !dirty(tab) && <span className="lw-muted">{x.saved}</span>}
+											</span>
+										)} />
 								)}
 								{r && tab.kind === 'file' && adminApi && tab.file && (
 									<FileView admin={adminApi} schema={tab.schema ?? ''} path={tab.file} theme={theme} revision={sinceOf(conn, tab.schema)} />
@@ -888,11 +912,18 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 			</div>
 
 			{saving && savingRt && (
-				<ItemDialog title={x.saveQuery} submit={x.save} texts={x} theme={theme}
+				<ItemDialog title={saving.tab.kind === 'stageDiagram' ? a.stageDiagram : x.saveQuery} submit={x.save} texts={x} theme={theme}
 					initial={{ name: saving.as ? '' : (savedOf(saving.tab)?.name ?? (saving.tab.title.startsWith(m.tabNamed) ? '' : saving.tab.title)), parentId: saving.tab.parentId }}
-					folders={folderPaths(savingRt.state.items, contents.current.get(saving.tab.id)?.schema ?? '')}
+					folders={folderPaths(savingRt.state.items, saving.tab.kind === 'stageDiagram' ? saving.tab.schema ?? '' : contents.current.get(saving.tab.id)?.schema ?? '')}
 					onClose={() => setSaving(undefined)}
 					onSubmit={async v => {
+						if (saving.tab.kind === 'stageDiagram') {
+							try {
+								const diagram = await savingRt.controller.createDiagram({ schema: saving.tab.schema ?? '', ...v }, { entities: [], stage: saving.tab.stage, stageView: saving.tab.stageView ?? {} })
+								setTabs(t => t.map(tab => tab.id === saving.tab.id ? { ...tab, savedId: diagram.id, title: diagram.name, parentId: diagram.parentId } : tab))
+							} catch (e) { return problemText(e, x) }
+							return
+						}
 						const content = contents.current.get(saving.tab.id)
 						if (!content || content.schema === undefined) return
 						try {

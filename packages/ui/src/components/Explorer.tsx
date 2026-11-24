@@ -279,7 +279,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 			)
 			const row = (
 				<Row key={item.id} level={level} label={item.name} title={item.description ? `${item.name}\n${item.description}` : item.name}
-					icon={isFolder ? <Icons.folder /> : item.kind === 'diagram' ? <Icons.diagram /> : <Icons.query />}
+					icon={isFolder ? <Icons.folder /> : item.kind === 'diagram' ? (item.stage ? <Icons.stages /> : <Icons.diagram />) : <Icons.query />}
 					expanded={isFolder ? expanded.has(key) : undefined} active={item.id === activeId}
 					onToggle={isFolder ? () => toggle(key) : undefined} onOpen={isFolder ? undefined : () => onOpen(item)}
 					drag={item.id} dropTarget={isFolder ? { onDrop: id => { if (id !== item.id) { move(id, item.id); open(key) } } } : undefined}
