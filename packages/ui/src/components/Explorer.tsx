@@ -45,6 +45,8 @@ export interface ExplorerAdmin {
 	onOpenElement?: (schema: string, focus: FormFocus) => void
 	/** a file of data/ or src/ */
 	onOpenFile?: (schema: string, path: string) => void
+	/** the diagram of a stage: its sources, the tables of each one, their conditions */
+	onOpenStageDiagram?: (schema: string, stage: string) => void
 	/** the lambdaORM.yaml as an object (the lists of infrastructure) */
 	loadSchemaDoc?: (schema: string) => Promise<any>
 	/** the files under a folder of data/ or src/ */
@@ -159,7 +161,10 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 		? [<Row key={`${section}-none`} level={level} label={a.empty} icon={null} muted />]
 		: names.map(name => (
 			<Row key={`${section}:${name}`} level={level} label={name} icon={section === 'enums' ? <Icons.enums /> : section === 'mappings' ? <Icons.mappings /> : section === 'sources' ? <Icons.sources /> : <Icons.stages />}
-				onOpen={admin?.onOpenElement ? () => admin.onOpenElement!(schema, { section, name }) : undefined} />
+				onOpen={admin?.onOpenElement ? () => admin.onOpenElement!(schema, { section, name }) : undefined}
+				actions={section === 'stages' && admin?.onOpenStageDiagram
+					? <Action label={`${a.stageDiagram}: ${name}`} onClick={() => admin.onOpenStageDiagram!(schema, name)}><Icons.diagram /></Action>
+					: undefined} />
 		))
 	const fileRows = (schema: string, which: 'data' | 'model', level: number) => {
 		const list = files[`${schema}\0${which}`]

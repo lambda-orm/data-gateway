@@ -21,6 +21,7 @@ import { CommandsPanel } from './CommandsPanel'
 import { FormFocus, SchemaForms } from './SchemaForms'
 import { FileView } from './FileView'
 import { QueryWizard } from './QueryWizard'
+import { StageDiagram } from './StageDiagram'
 import { queryOf, WizardReading, WizardState, wizardFromQuery } from '../domain/queryWizard'
 import { wizardMessagesOf } from '../domain/wizardI18n'
 import { fromYaml } from '../domain/results'
@@ -104,7 +105,7 @@ const writeFlag = (key: string): void => { try { globalThis.localStorage?.setIte
 /** What tells that the schemas changed: their routes, states and the version each serves */
 const revisionOf = (schemas: SchemaInfo[]): string => schemas.map(s => `${s.path}|${s.status}|${s.since ?? ''}|${s.pending ?? ''}|${s.reason ?? ''}`).join('\n')
 
-type TabKind = 'query' | 'domain' | 'entity' | 'diagram' | 'schemaFile' | 'schema' | 'element' | 'file' | 'page'
+type TabKind = 'query' | 'domain' | 'entity' | 'diagram' | 'schemaFile' | 'schema' | 'element' | 'file' | 'page' | 'stageDiagram'
 
 interface DiagramDraft { entities: string[], positions?: Record<string, { x: number, y: number }>, bends?: Record<string, number>, compact: boolean, detail?: DiagramDetail, relationNames: boolean }
 
@@ -127,6 +128,8 @@ interface Tab {
 	focus?: FormFocus
 	/** The file of a file tab (data/…, src/…) */
 	file?: string
+	/** The stage of a diagram of a stage */
+	stage?: string
 	/** The page of the application of a page tab (account, preferences) */
 	page?: string
 	/** The connection it belongs to (by default the first) */
@@ -200,6 +203,7 @@ interface Openers {
 	schema: (conn: string, schema: string) => void
 	element: (conn: string, schema: string, focus: FormFocus) => void
 	file: (conn: string, schema: string, file: string) => void
+	stageDiagram: (conn: string, schema: string, stage: string) => void
 	newSchema: (conn: string) => void
 	removeSchema: (conn: string, schema: string) => void
 }
@@ -364,6 +368,7 @@ const ConnectionSection: React.FC<{
 							onOpenSchema: schema => open.schema(id, schema),
 							onOpenElement: (schema, focus) => open.element(id, schema, focus),
 							onOpenFile: (schema, file) => open.file(id, schema, file),
+							onOpenStageDiagram: (schema, stage) => open.stageDiagram(id, schema, stage),
 							loadSchemaDoc,
 							loadFiles,
 							onNewSchema: () => open.newSchema(id),
@@ -605,6 +610,9 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 	const openFile = (conn: string, schema: string, file: string) => {
 		if (!reuse(t => same(conn, t) && t.kind === 'file' && t.schema === schema && t.file === file)) add({ kind: 'file', title: file.split('/').pop() ?? file, schema, file, connection: conn })
 	}
+	const openStageDiagram = (conn: string, schema: string, stage: string) => {
+		if (!reuse(t => same(conn, t) && t.kind === 'stageDiagram' && t.schema === schema && t.stage === stage)) add({ kind: 'stageDiagram', title: format(a.stageDiagramOf, { name: stage }), schema, stage, connection: conn })
+	}
 	const openDomain = (conn: string, schema: string) => {
 		if (!reuse(t => same(conn, t) && t.kind === 'domain' && t.schema === schema)) add({ kind: 'domain', title: `${x.domainYaml} ${schema || '/'}`, schema, connection: conn })
 	}
@@ -618,6 +626,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 		schema: openSchema,
 		element: openElement,
 		file: openFile,
+		stageDiagram: openStageDiagram,
 		newSchema: conn => setNewSchema(conn),
 		removeSchema: (conn, schema) => setRemoving({ conn, schema })
 	}
@@ -715,7 +724,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 		if (e.key === 'Enter') { e.preventDefault(); fitWidth() }
 	}
 
-	const iconOf = (tab: Tab) => tab.kind === 'page' ? pages?.[tab.page ?? '']?.icon ?? null : tab.kind === 'element' ? <Icons.edit /> : tab.kind === 'schema' ? <Icons.terminal /> : tab.kind === 'file' ? <Icons.query /> : tab.kind === 'domain' || tab.kind === 'schemaFile' ? <Icons.yaml /> : tab.kind === 'entity' ? <Icons.entity /> : tab.kind === 'diagram' ? <Icons.diagram /> : savedOf(tab) ? <Icons.query /> : null
+	const iconOf = (tab: Tab) => tab.kind === 'page' ? pages?.[tab.page ?? '']?.icon ?? null : tab.kind === 'element' ? <Icons.edit /> : tab.kind === 'stageDiagram' ? <Icons.stages /> : tab.kind === 'schema' ? <Icons.terminal /> : tab.kind === 'file' ? <Icons.query /> : tab.kind === 'domain' || tab.kind === 'schemaFile' ? <Icons.yaml /> : tab.kind === 'entity' ? <Icons.entity /> : tab.kind === 'diagram' ? <Icons.diagram /> : savedOf(tab) ? <Icons.query /> : null
 	const activeTab = tabs.find(t => t.id === active)
 	const saveKeys = (tab: Tab) => (e: React.KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(tab) } }
 	const texts = { ...x, entities: x.entities }
@@ -822,6 +831,9 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 												focus={{ section: 'about' }} />
 										)}
 									</CommandsPanel>
+								)}
+								{r && tab.kind === 'stageDiagram' && adminApi && tab.stage && (
+									<StageDiagram admin={adminApi} schema={tab.schema ?? ''} stage={tab.stage} theme={theme} locale={workbench.locale} revision={sinceOf(conn, tab.schema)} />
 								)}
 								{r && tab.kind === 'file' && adminApi && tab.file && (
 									<FileView admin={adminApi} schema={tab.schema ?? ''} path={tab.file} theme={theme} revision={sinceOf(conn, tab.schema)} />

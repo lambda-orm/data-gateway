@@ -10,6 +10,7 @@ import { applyPatch, PatchError, referencesOf, SchemaPatch } from '../../domain/
 import { lineDiff } from '../../domain/admin/lineDiff'
 import { dotEnvNames, editDotEnv, schemaVariables, VARIABLE_NAME } from '../../domain/admin/dotEnv'
 import { EXPRESSION_CONTEXTS, ExpressionVariable } from '../../domain/admin/expressions'
+import { StageRouting, stageRoutingOf } from '../../domain/admin/stageRouting'
 import { CodeGeneratorPort, ExpressionLanguage, ExpressionLanguagePort, SchemaIssue, SessionStatePort, SchemaValidatorPort, VersionConflict, WorkspaceStorePort, YamlPort } from '../ports/output/adminPorts'
 import { ClockPort, LoggerPort } from '../ports/output/supportPorts'
 
@@ -126,6 +127,21 @@ export class AdminService {
 		const known = new Set(variables.map(v => v.name))
 		const unknown = checked.variables.filter(v => !known.has(v))
 		return { valid: !checked.error && unknown.length === 0, ...checked, unknown }
+	}
+
+	/**
+	 * Where the entities of a stage go: each source of the stage, in order, with its condition and the entities that
+	 * live in it (their table by its mapping), evaluated as λORM routes a sentence (the stage diagram of the UI)
+	 */
+	public async stageRouting (principal: Principal, path: string, stage: string): Promise<StageRouting> {
+		this.require(principal, 'schemaRead')
+		if (!this.expressions) throw notFound('the expressions are not available')
+		const file = await this.store.read(this.workspaceOf(path), SCHEMA_FILE)
+		if (!file) throw notFound(`schema "${path}" has no ${SCHEMA_FILE}`)
+		const expressions = this.expressions
+		const routing = stageRoutingOf(this.yaml.parse(file.text), stage, (expression, data) => expressions.evaluate(expression, { ...data }))
+		if (!routing) throw notFound(`schema "${path}" has no stage "${stage}"`)
+		return routing
 	}
 
 	// ─── permissions ─────────────────────────────────────────────────────────

@@ -18,6 +18,7 @@ export interface SessionTab {
 	focus?: unknown
 	file?: string
 	page?: string
+	stage?: string
 }
 
 export interface WorkspaceSession {
@@ -29,7 +30,7 @@ export interface WorkspaceSession {
 	collapsed: boolean
 }
 
-const KINDS = ['query', 'domain', 'entity', 'diagram', 'schemaFile', 'schema', 'element', 'file', 'page']
+const KINDS = ['query', 'domain', 'entity', 'diagram', 'schemaFile', 'schema', 'element', 'file', 'page', 'stageDiagram']
 
 /** A session read back, kept only in what it can be: tabs of known kinds, an active one among them */
 export const readSession = (value: unknown): WorkspaceSession | undefined => {

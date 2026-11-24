@@ -58,7 +58,7 @@ export type { SchemaFormsProps } from './components/SchemaForms'
 export type { SchemaPatch, SchemaVariable } from './application/ports'
 
 // where the workspace was (its tabs, what is unfolded): kept by the gateway for the credential, or in the browser
-export type { SessionStorePort, ExpressionLanguage, ExpressionCheck, ExpressionSign } from './application/ports'
+export type { SessionStorePort, ExpressionLanguage, ExpressionCheck, ExpressionSign, StageRouting } from './application/ports'
 export type { WorkspaceSession, SessionTab } from './domain/session'
 export { readSession } from './domain/session'
 export { GatewaySessionStore, BrowserSessionStore, FallbackSessionStore } from './infrastructure/sessionStores'
@@ -66,4 +66,5 @@ export { ExpressionInput } from './components/ExpressionInput'
 export type { ExpressionInputProps } from './components/ExpressionInput'
 // the numbers and dates of a result in the format of a culture
 export { formatValue, culturePreview, validCulture } from './domain/culture'
-
+export { StageDiagram } from './components/StageDiagram'
+export type { StageDiagramProps } from './components/StageDiagram'

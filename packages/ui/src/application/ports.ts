@@ -113,6 +113,24 @@ export interface ExpressionCheck {
 	unknown: string[]
 }
 
+/** Where the entities of a stage go: each source in its order, its condition and the entities that live in it */
+export interface StageRouting {
+	stage: string
+	sources: {
+		name: string
+		dialect?: string
+		mapping?: string
+		/** none: it takes what reaches it */
+		condition?: string
+		/** the condition doesn't evaluate (it is taken as false) */
+		error?: string
+		/** its table by the mapping of the source; read, write: the source its reads or writes go to, when another one */
+		entities: { entity: string, table: string, view?: boolean, read?: string, write?: string }[]
+	}[]
+	/** the entities no source takes */
+	unrouted: string[]
+}
+
 export interface AdminApiPort {
 	/** undefined when the gateway has no administration (admin off) */
 	capabilities (): Promise<AdminCapabilities | undefined>
@@ -137,6 +155,8 @@ export interface AdminApiPort {
 	/** the language of the expressions (a gateway before 3.3.0 doesn't have it: a plain input then) */
 	expressionLanguage? (): Promise<ExpressionLanguage>
 	checkExpression? (expression: string, context?: string): Promise<ExpressionCheck>
+	/** where the entities of a stage go (a gateway before 4.1.0 doesn't have it) */
+	stageRouting? (schema: string, stage: string): Promise<StageRouting>
 	/** a new schema; its name and description go on top of its lambdaORM.yaml */
 	createWorkspace (path: string, copyOf?: string, about?: { name?: string, description?: string }): Promise<{ path: string, version: string }>
 	removeWorkspace (path: string): Promise<{ trash: string }>

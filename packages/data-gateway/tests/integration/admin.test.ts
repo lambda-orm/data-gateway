@@ -308,6 +308,18 @@ describe('admin over REST (inline)', () => {
 		expect(checked.body).toMatchObject({ valid: false, issues: [expect.objectContaining({ severity: 'error', line: 9, message: expect.stringContaining('default.a: the condition incomplete') })] })
 	})
 
+	test('the routing of a stage: its sources in order, the entities living in each one; a stage not there', async () => {
+		const routing = await call(base, '/admin/workspaces/iot%2Fv1/stages/default/routing', { method: 'GET', headers: ADMIN })
+		expect(routing.status).toBe(200)
+		expect(routing.body).toMatchObject({ stage: 'default', unrouted: [] })
+		expect(routing.body.sources.map((s: any) => s.name)).toEqual(['main'])
+		expect(routing.body.sources[0].entities).toEqual(expect.arrayContaining([expect.objectContaining({ entity: 'Orders', table: expect.any(String) })]))
+		const missing = await call(base, '/admin/workspaces/iot%2Fv1/stages/nowhere/routing', { method: 'GET', headers: ADMIN })
+		expect(missing.status).toBe(404)
+		const reader = await call(base, '/admin/workspaces/iot%2Fv1/stages/default/routing', { method: 'GET', headers: READER })
+		expect(reader.status).toBe(403)
+	})
+
 	test('workspaces created and removed (to .trash); bad routes and the ones taken refused', async () => {
 		const created = await call(base, '/admin/workspaces', { body: { path: 'sales/v1' }, headers: ADMIN })
 		expect(created).toMatchObject({ status: 201, body: { path: 'sales/v1', version: expect.any(String) } })

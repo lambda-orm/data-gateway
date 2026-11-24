@@ -993,6 +993,7 @@ Un workspace se nombra por su ruta en **un** segmento, codificada: `iot%2Fv1` (`
 | `PUT` | `/admin/session` | `{ state }` lo guarda (un objeto, hasta 2 MB); `{ state: null }` lo olvida | autenticado |
 | `GET` | `/admin/expressions` | el lenguaje de las expresiones (3xpr): `{ functions, operators, constants, contexts }`; `contexts.stageSource` son las variables de la condición de un source de un stage (`entity`, `action`, `category`, `type`, `read`, `write`, `dml`, `ddl`) | `schemaRead` |
 | `POST` | `/admin/expressions/check` | `{ expression, context? }` → `{ valid, error?, variables, unknown }`: si parsea y si usa solo las variables de su contexto | `schemaRead` |
+| `GET` | `/admin/workspaces/{ruta}/stages/{stage}/routing` | a dónde va cada entidad del stage, evaluado como rutea λORM (el primer source cuya condición es verdadera; uno sin condición toma el resto): `{ stage, sources: [{ name, dialect, mapping, condition?, error?, entities: [{ entity, table, view?, read?, write? }] }], unrouted }`; `table` por el mapping del source, `read`/`write` cuando sus lecturas o escrituras van a otro source; el diagrama del stage del IDE | `schemaRead` |
 | `GET` | `/admin/workbench[?schema={ruta}]` | lo guardado en los workspaces (§11.1), `ETag`; con `If-None-Match` igual, `304` | `read` o `workbenchWrite` |
 | `PUT` | `/admin/workbench` | `{ items }`: guarda, mueve o renombra; cada uno que existía dice su `version` | `workbenchWrite` |
 | `POST` | `/admin/workbench/remove` | `{ ids }`: elimina (una carpeta con lo que tiene) | `workbenchWrite` |

@@ -24,6 +24,10 @@ export class ThreeExprLanguage implements ExpressionLanguagePort {
 		return this.described
 	}
 
+	public evaluate (expression: string, data: Record<string, unknown>): unknown {
+		return expressions.eval(expression, data)
+	}
+
 	public check (expression: string): { error?: string, variables: string[] } {
 		try {
 			expressions.build(expression)

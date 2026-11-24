@@ -131,6 +131,19 @@ export interface AdminMessages {
 	newProject: string
 	empty: string
 	commandsOf: string
+	stageDiagram: string
+	stageDiagramOf: string
+	stageGateway: string
+	stageTables: string
+	stageUnrouted: string
+	stageConditionError: string
+	stageChoose: string
+	stageReads: string
+	stageWrites: string
+	stageNoRouting: string
+	stageReadsHere: string
+	stageWritesHere: string
+	stageLivesIn: string
 }
 
 type Row = [keyof AdminMessages, ...string[]]
@@ -251,6 +264,19 @@ ROWS.push(
 	['closeOthers', 'Close others', 'Cerrar los demás', 'Fechar os outros', 'Fermer les autres', 'Chiudi gli altri', 'Andere schließen', 'Andere sluiten', 'Tanca els altres', 'Pechar os demais', 'Besteak itxi'],
 	['closeAll', 'Close all', 'Cerrar todos', 'Fechar todos', 'Tout fermer', 'Chiudi tutti', 'Alle schließen', 'Alles sluiten', 'Tanca-ho tot', 'Pechar todos', 'Denak itxi'],
 	['stageSourcesNote', 'In order: the first source whose condition is true takes the sentence; a last one without condition takes the rest.', 'En orden: el primer source cuya condición es verdadera toma la sentencia; uno último sin condición toma el resto.', 'Em ordem: o primeiro source cuja condição é verdadeira fica com a sentença; um último sem condição fica com o resto.', 'Dans l’ordre : la première source dont la condition est vraie prend la phrase ; une dernière sans condition prend le reste.', 'In ordine: la prima source la cui condizione è vera prende la frase; un’ultima senza condizione prende il resto.', 'Der Reihe nach: die erste Source, deren Bedingung wahr ist, nimmt den Satz; eine letzte ohne Bedingung nimmt den Rest.', 'Op volgorde: de eerste source waarvan de voorwaarde waar is neemt de zin; een laatste zonder voorwaarde neemt de rest.', 'En ordre: el primer source amb la condició certa pren la sentència; un últim sense condició pren la resta.', 'En orde: o primeiro source coa condición certa toma a sentenza; un último sen condición toma o resto.', 'Ordenean: baldintza egiazkoa duen lehen source-ak hartzen du sententzia; baldintzarik gabeko azken batek gainerakoa.'],
+	['stageDiagram', 'Diagram of the stage', 'Diagrama del stage', 'Diagrama do stage', 'Diagramme du stage', 'Diagramma dello stage', 'Diagramm des Stage', 'Diagram van de stage', 'Diagrama de l’stage', 'Diagrama do stage', 'Stage-aren diagrama'],
+	['stageDiagramOf', 'Stage {name}', 'Stage {name}', 'Stage {name}', 'Stage {name}', 'Stage {name}', 'Stage {name}', 'Stage {name}', 'Stage {name}', 'Stage {name}', '{name} stage-a'],
+	['stageGateway', 'Data Gateway', 'Data Gateway', 'Data Gateway', 'Data Gateway', 'Data Gateway', 'Data Gateway', 'Data Gateway', 'Data Gateway', 'Data Gateway', 'Data Gateway'],
+	['stageTables', '{n} tables', '{n} tablas', '{n} tabelas', '{n} tables', '{n} tabelle', '{n} Tabellen', '{n} tabellen', '{n} taules', '{n} táboas', '{n} taula'],
+	['stageUnrouted', 'No source of the stage takes: {names}', 'Ningún source del stage toma: {names}', 'Nenhum source do stage fica com: {names}', 'Aucune source du stage ne prend : {names}', 'Nessuna source dello stage prende: {names}', 'Keine Source des Stage nimmt: {names}', 'Geen source van de stage neemt: {names}', 'Cap source de l’stage pren: {names}', 'Ningún source do stage toma: {names}', 'Stage-aren source batek ere ez du hartzen: {names}'],
+	['stageConditionError', 'The condition does not evaluate (it is taken as false): {error}', 'La condición no se puede evaluar (se toma como falsa): {error}', 'A condição não pode ser avaliada (é tomada como falsa): {error}', 'La condition ne s’évalue pas (elle est prise comme fausse) : {error}', 'La condizione non si valuta (è presa come falsa): {error}', 'Die Bedingung lässt sich nicht auswerten (sie gilt als falsch): {error}', 'De voorwaarde valt niet te evalueren (ze geldt als onwaar): {error}', 'La condició no s’avalua (es pren com a falsa): {error}', 'A condición non se avalía (tómase como falsa): {error}', 'Baldintza ezin da ebaluatu (faltsutzat hartzen da): {error}'],
+	['stageChoose', 'Click the arrow of a source to see its condition.', 'Hacé clic en la flecha de un source para ver su condición.', 'Clique na seta de um source para ver a sua condição.', 'Cliquez sur la flèche d’une source pour voir sa condition.', 'Fai clic sulla freccia di una source per vederne la condizione.', 'Klicke auf den Pfeil einer Source, um ihre Bedingung zu sehen.', 'Klik op de pijl van een source om de voorwaarde te zien.', 'Fes clic a la fletxa d’un source per veure’n la condició.', 'Fai clic na frecha dun source para ver a súa condición.', 'Egin klik source baten geziaren gainean bere baldintza ikusteko.'],
+	['stageReads', 'reads: {source}', 'lecturas: {source}', 'leituras: {source}', 'lectures : {source}', 'letture: {source}', 'Lesen: {source}', 'lezen: {source}', 'lectures: {source}', 'lecturas: {source}', 'irakurketak: {source}'],
+	['stageWrites', 'writes: {source}', 'escrituras: {source}', 'escritas: {source}', 'écritures : {source}', 'scritture: {source}', 'Schreiben: {source}', 'schrijven: {source}', 'escriptures: {source}', 'escrituras: {source}', 'idazketak: {source}'],
+	['stageNoRouting', 'This gateway can’t tell where the entities of a stage go (data-gateway 4.1.0 or later).', 'Este gateway no puede decir a dónde va cada entidad de un stage (data-gateway 4.1.0 o posterior).', 'Este gateway não pode dizer para onde vai cada entidade de um stage (data-gateway 4.1.0 ou posterior).', 'Ce gateway ne peut pas dire où vont les entités d’un stage (data-gateway 4.1.0 ou plus récent).', 'Questo gateway non può dire dove vanno le entità di uno stage (data-gateway 4.1.0 o successivo).', 'Dieses Gateway kann nicht sagen, wohin die Entitäten eines Stage gehen (data-gateway 4.1.0 oder neuer).', 'Deze gateway kan niet zeggen waar de entiteiten van een stage heen gaan (data-gateway 4.1.0 of later).', 'Aquest gateway no pot dir on va cada entitat d’un stage (data-gateway 4.1.0 o posterior).', 'Este gateway non pode dicir a onde vai cada entidade dun stage (data-gateway 4.1.0 ou posterior).', 'Gateway honek ezin du esan stage baten entitateak nora doazen (data-gateway 4.1.0 edo berriagoa).'],
+	['stageReadsHere', 'its reads', 'sus lecturas', 'as suas leituras', 'ses lectures', 'le sue letture', 'ihr Lesen', 'het lezen', 'les seves lectures', 'as súas lecturas', 'bere irakurketak'],
+	['stageWritesHere', 'its writes', 'sus escrituras', 'as suas escritas', 'ses écritures', 'le sue scritture', 'ihr Schreiben', 'het schrijven', 'les seves escriptures', 'as súas escrituras', 'bere idazketak'],
+	['stageLivesIn', 'lives in {source}', 'vive en {source}', 'vive em {source}', 'vit dans {source}', 'vive in {source}', 'liegt in {source}', 'woont in {source}', 'viu a {source}', 'vive en {source}', '{source}-n bizi da'],
 	['condition', 'Condition', 'Condición', 'Condição', 'Condition', 'Condizione', 'Bedingung', 'Voorwaarde', 'Condició', 'Condición', 'Baldintza'],
 	['conditionHint', 'An expression, e.g. entity.in(["Products","Orders"]) && read — empty: the rest', 'Una expresión, p. ej. entity.in(["Products","Orders"]) && read — vacía: el resto', 'Uma expressão, p. ex. entity.in(["Products","Orders"]) && read — vazia: o resto', 'Une expression, p. ex. entity.in(["Products","Orders"]) && read — vide : le reste', 'Un’espressione, es. entity.in(["Products","Orders"]) && read — vuota: il resto', 'Ein Ausdruck, z. B. entity.in(["Products","Orders"]) && read — leer: der Rest', 'Een expressie, bv. entity.in(["Products","Orders"]) && read — leeg: de rest', 'Una expressió, p. ex. entity.in(["Products","Orders"]) && read — buida: la resta', 'Unha expresión, p. ex. entity.in(["Products","Orders"]) && read — baleira: o resto', 'Adierazpen bat, adib. entity.in(["Products","Orders"]) && read — hutsik: gainerakoa'],
 	['addSource', 'Add source', 'Agregar source', 'Adicionar source', 'Ajouter une source', 'Aggiungi source', 'Source hinzufügen', 'Source toevoegen', 'Afegeix source', 'Engadir source', 'Gehitu source'],

@@ -405,3 +405,12 @@
 .lw-workbench.lw-dark button.lw-primary, .lw-workbench.lw-dark .lw-modes > button.lw-active, .lw-dark .lw-workbench button.lw-primary, .lw-dark .lw-workbench .lw-modes > button.lw-active { color: #0b1220; }
 /* the diagram of the wizard: its bar in one line (how many tables it has is in sight) */
 .lw-wizard .lw-diagram > .lw-header .lw-who { display: none; }
+
+/* the diagram of a stage: the drawing scrolls, the condition of the source chosen stays below */
+.lw-stage-diagram { display: flex; flex-direction: column; gap: var(--lw-space-2); height: 100%; min-height: 0; }
+.lw-stage-canvas { flex: 1 1 auto; min-height: 240px; overflow: auto; border: 1px solid var(--lw-border); border-radius: var(--lw-radius); }
+.lw-stage-arrow { cursor: pointer; outline: none; }
+.lw-stage-arrow:focus-visible path:nth-child(2) { stroke-width: 3; }
+.lw-stage-condition-panel { flex: none; min-height: 88px; max-height: 30vh; overflow: auto; padding: var(--lw-space-3); border: 1px solid var(--lw-border); border-radius: var(--lw-radius); background: var(--lw-panel); }
+.lw-stage-condition-title { margin-bottom: var(--lw-space-2); }
+.lw-stage-condition-code .lw-expression-view { display: block; white-space: pre-wrap; font-size: var(--lw-text-md); }

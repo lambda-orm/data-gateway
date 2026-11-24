@@ -84,6 +84,8 @@ export interface ExpressionLanguagePort {
 	language (): ExpressionLanguage
 	/** the problem of an expression that doesn't parse, or the variables it uses */
 	check (expression: string): { error?: string, variables: string[] }
+	/** its value with these variables (it throws when it doesn't parse or evaluate) */
+	evaluate (expression: string, data: Record<string, unknown>): unknown
 }
 
 /** Where the UI of each credential was: its tabs, their drafts, what is unfolded (kept by the gateway, docs/DATA_GATEWAY.md §11.8) */

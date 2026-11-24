@@ -1,4 +1,4 @@
-import { AdminApiPort, AdminCapabilities, CommandName, CommandPreview, CommandsSummary, ExpressionCheck, ExpressionLanguage, Job, SchemaIssue, SchemaPatch, SchemaVariable, WorkbenchProblem } from '../application/ports'
+import { AdminApiPort, AdminCapabilities, CommandName, CommandPreview, CommandsSummary, ExpressionCheck, ExpressionLanguage, Job, SchemaIssue, SchemaPatch, SchemaVariable, StageRouting, WorkbenchProblem } from '../application/ports'
 import { SavedItem } from '../domain/savedItems'
 import { GatewayRequestError, HeadersProvider } from './restQueryApi'
 
@@ -95,6 +95,10 @@ export class RestAdminApi implements AdminApiPort {
 
 	public async checkExpression (expression: string, context = 'stageSource') {
 		return (await this.request('/expressions/check', { body: { expression, context } })).body as ExpressionCheck
+	}
+
+	public async stageRouting (schema: string, stage: string) {
+		return (await this.request(`/workspaces/${schemaSegment(schema)}/stages/${encodeURIComponent(stage)}/routing`)).body as StageRouting
 	}
 
 	public async createWorkspace (path: string, copyOf?: string, about: { name?: string, description?: string } = {}) {
