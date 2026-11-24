@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { ArrowDownToLine, ArrowUpToLine, Boxes, Braces, ChartNetwork, ChevronRight, Code, Database, DatabasePlus, Download, Ellipsis, Eraser, FileCode, FileCog, FilePlus, FileSpreadsheet, FileText, Folder, FolderCode, FolderDown, FolderInput, FolderKanban, FolderOutput, FolderPlus, GitCompareArrows, HardDriveDownload, HardDriveUpload, Info, KeyRound, Layers, ListTree, Merge, PanelLeft, Pencil, Plug, Plus, Route, ScanSearch, Server, Settings2, SquareArrowOutUpRight, SquareTerminal, Table2, Trash2, Upload, Workflow, X, Cable, Copy, Hand, Library, MousePointer2, Network, TriangleAlert, WandSparkles, ListIndentIncrease, ZoomIn, ZoomOut, PanelTop, Map as MapIcon, type LucideIcon } from 'lucide-react'
+import { ArrowDownToLine, ArrowUpToLine, Boxes, Braces, ChartNetwork, ChevronRight, Code, Database, DatabasePlus, Download, Ellipsis, Eraser, FileCode, FileCog, FilePlus, FileSpreadsheet, FileText, Folder, FolderCode, FolderDown, FolderInput, FolderKanban, FolderOutput, FolderPlus, GitCompareArrows, HardDriveDownload, HardDriveUpload, Info, KeyRound, Layers, ListTree, Merge, PanelLeft, Pencil, Plug, Plus, Route, ScanSearch, Server, Settings2, SquareArrowOutUpRight, SquareTerminal, Table2, Trash2, Upload, Workflow, X, Cable, Copy, Hand, Library, MousePointer2, Network, TriangleAlert, WandSparkles, ListIndentIncrease, ZoomIn, ZoomOut, PanelTop, Map as MapIcon, HardDrive, type LucideIcon } from 'lucide-react'
 import { createPortal } from 'react-dom'
 
 /** A modal: the page behind can't be used; Escape or Cancel closes it. On the body: no panel clips it or covers it */
@@ -154,6 +154,8 @@ export const Icons = {
 	stages: icon(Layers),
 	variables: icon(KeyRound),
 	data: icon(FileSpreadsheet),
+	/** what a schema keeps besides its metadata: its data */
+	state: icon(HardDrive),
 	src: icon(FolderCode),
 	model: icon(Braces),
 	projects: icon(FolderKanban),

@@ -69,7 +69,13 @@ class FakeAdmin implements AdminApiPort {
 	async build () { return { language: 'node', files: [{ path: 'src/domain/model.ts', written: 'created', bytes: 10 }, { path: 'src/domain/repositoryProduct.ts', written: 'kept', bytes: 5 }] } }
 	async buildZip () { return new Blob(['zip']) }
 
-	async files () { return { roots: { data: 'data', src: 'src', model: 'src/domain' }, files: [{ path: 'data/seed.sql', dir: false, modified: 'now' }] } }
+	async files (_schema: string, dir?: string) {
+		const roots = { data: 'data', src: 'src', model: 'src/domain' }
+		// the code of two languages, each in its folder of src/
+		if (dir === 'src') return { roots, files: [{ path: 'src/kotlin', dir: true, modified: 'now' }, { path: 'src/kotlin/Model.kt', dir: false, modified: 'now' }, { path: 'src/node', dir: true, modified: 'now' }, { path: 'src/node/domain', dir: true, modified: 'now' }, { path: 'src/node/domain/model.ts', dir: false, modified: 'now' }] }
+		return { roots, files: [{ path: 'data/seed.sql', dir: false, modified: 'now' }] }
+	}
+	async folderZip (schema: string, dir: string) { this.calls.push(`zip ${schema} ${dir}`); return new Blob(['zip']) }
 	async fileContent (_schema: string, path: string) { return { path, text: 'INSERT INTO x VALUES (1);', version: 'f1' } }
 
 	async references (_schema: string, at: string[]) { return { references: at.includes('States') ? ['domain/entities/Products/properties/state'] : [] } }
@@ -582,22 +588,36 @@ describe('the variables of the connections and the code of the domain', () => {
 })
 
 describe('the explorer as the workspace is', () => {
-	test('data and src show their files; a file opens read only; application as YAML; the schema opens its commands', async () => {
-		const admin = new FakeAdmin()
+	test('the state (its data) and the source code (a folder for each language, its zip) by the metadata; a file opens read only; application as YAML; the schema opens its commands', async () => {
+		const admin = new FakeAdmin({ ...ALL, build: true })
 		admin.text = 'domain: {}\napplication:\n  start: []\n'
+		globalThis.URL.createObjectURL ??= (() => 'blob:zip') as any
+		globalThis.URL.revokeObjectURL ??= (() => undefined) as any
 		render(<Workspace api={new FakeApi()} admin={admin} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" refreshMs={0} />)
-		await waitFor(() => expect(row('data')).toBeTruthy())
+		await waitFor(() => expect(row('State')).toBeTruthy())
 		const level = (n: number) => screen.getAllByRole('treeitem').filter(r => r.getAttribute('aria-level') === String(n)).map(r => r.querySelector('.lw-tree-label')?.textContent)
-		// the schema: its metadata (the files of its workspace) and its projects
-		expect(level(2)).toEqual(['Metadata', 'projects'])
-		expect(level(3)).toEqual(['config', 'domain', 'application', 'infrastructure', 'data', 'src'])
-		fireEvent.click(row('data'))
+		// the schema: its metadata, its state, its source code and its projects
+		expect(level(2)).toEqual(['Metadata', 'State', 'Source code', 'projects'])
+		if (!row('config')) fireEvent.click(row('Metadata'))
+		await waitFor(() => expect(level(3)).toEqual(['config', 'domain', 'application', 'infrastructure']))
+		fireEvent.click(row('State'))
+		fireEvent.click(await rowSoon('data'))
 		fireEvent.click(await rowSoon('seed.sql'))
 		const file = await screen.findByLabelText('data/seed.sql', { selector: 'textarea' }) as HTMLTextAreaElement
 		expect(file.value).toBe('INSERT INTO x VALUES (1);')
 		expect(file.readOnly).toBe(true)
-		fireEvent.click(row('src'))
-		expect(row('model')).toBeTruthy()
+		// the source code: a node for each language, named so; its files; its zip
+		fireEvent.click(row('Source code'))
+		await rowSoon('node')
+		expect(row('kotlin')).toBeTruthy()
+		fireEvent.click(row('node'))
+		expect(await rowSoon('domain/model.ts')).toBeTruthy()
+		fireEvent.click(within(row('kotlin')!).getByRole('button', { name: 'Download kotlin as .zip' }))
+		await waitFor(() => expect(admin.calls).toContain('zip northwind/v1 src/kotlin'))
+		// its build, from the source code too
+		fireEvent.click(within(row('Source code')!).getByRole('button', { name: 'Code (build): northwind/v1' }))
+		expect(await screen.findByRole('dialog', { name: 'Code (build)' })).toBeTruthy()
+		fireEvent.click(within(screen.getByRole('dialog', { name: 'Code (build)' })).getByRole('button', { name: 'Cancel' }))
 		fireEvent.click(row('application'))
 		const app = await screen.findByLabelText('application', { selector: 'textarea' }) as HTMLTextAreaElement
 		expect(app.value).toContain('start: []')

@@ -149,6 +149,9 @@ export interface AdminMessages {
 	stageShowNames: string
 	stageGatewayTop: string
 	stageGatewayLeft: string
+	state: string
+	sourceCode: string
+	downloadZip: string
 }
 
 type Row = [keyof AdminMessages, ...string[]]
@@ -287,6 +290,9 @@ ROWS.push(
 	['stageShowNames', 'the name of each source only', 'solo el nombre de cada source', 'só o nome de cada source', 'le nom de chaque source seulement', 'solo il nome di ogni source', 'nur den Namen jeder Source', 'alleen de naam van elke source', 'només el nom de cada source', 'só o nome de cada source', 'source bakoitzaren izena soilik'],
 	['stageGatewayTop', 'the gateway on top, the sources below', 'el gateway arriba, los sources debajo', 'o gateway em cima, os sources embaixo', 'le gateway en haut, les sources en dessous', 'il gateway in alto, le source sotto', 'das Gateway oben, die Sources darunter', 'de gateway boven, de sources eronder', 'el gateway a dalt, els sources a sota', 'o gateway arriba, os sources debaixo', 'gateway-a goian, source-ak behean'],
 	['stageGatewayLeft', 'the gateway on the left, the sources on the right', 'el gateway a la izquierda, los sources a la derecha', 'o gateway à esquerda, os sources à direita', 'le gateway à gauche, les sources à droite', 'il gateway a sinistra, le source a destra', 'das Gateway links, die Sources rechts', 'de gateway links, de sources rechts', 'el gateway a l’esquerra, els sources a la dreta', 'o gateway á esquerda, os sources á dereita', 'gateway-a ezkerrean, source-ak eskuinean'],
+	['state', 'State', 'Estado', 'Estado', 'État', 'Stato', 'Zustand', 'Status', 'Estat', 'Estado', 'Egoera'],
+	['sourceCode', 'Source code', 'Código fuente', 'Código-fonte', 'Code source', 'Codice sorgente', 'Quellcode', 'Broncode', 'Codi font', 'Código fonte', 'Iturburu-kodea'],
+	['downloadZip', 'Download {name} as .zip', 'Descargar {name} como .zip', 'Baixar {name} como .zip', 'Télécharger {name} en .zip', 'Scarica {name} come .zip', '{name} als .zip herunterladen', '{name} als .zip downloaden', 'Baixa {name} com a .zip', 'Descargar {name} como .zip', 'Deskargatu {name} .zip gisa'],
 	['condition', 'Condition', 'Condición', 'Condição', 'Condition', 'Condizione', 'Bedingung', 'Voorwaarde', 'Condició', 'Condición', 'Baldintza'],
 	['conditionHint', 'An expression, e.g. entity.in(["Products","Orders"]) && read — empty: the rest', 'Una expresión, p. ej. entity.in(["Products","Orders"]) && read — vacía: el resto', 'Uma expressão, p. ex. entity.in(["Products","Orders"]) && read — vazia: o resto', 'Une expression, p. ex. entity.in(["Products","Orders"]) && read — vide : le reste', 'Un’espressione, es. entity.in(["Products","Orders"]) && read — vuota: il resto', 'Ein Ausdruck, z. B. entity.in(["Products","Orders"]) && read — leer: der Rest', 'Een expressie, bv. entity.in(["Products","Orders"]) && read — leeg: de rest', 'Una expressió, p. ex. entity.in(["Products","Orders"]) && read — buida: la resta', 'Unha expresión, p. ex. entity.in(["Products","Orders"]) && read — baleira: o resto', 'Adierazpen bat, adib. entity.in(["Products","Orders"]) && read — hutsik: gainerakoa'],
 	['addSource', 'Add source', 'Agregar source', 'Adicionar source', 'Ajouter une source', 'Aggiungi source', 'Source hinzufügen', 'Source toevoegen', 'Afegeix source', 'Engadir source', 'Gehitu source'],

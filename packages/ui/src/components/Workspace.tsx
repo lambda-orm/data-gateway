@@ -373,6 +373,7 @@ const ConnectionSection: React.FC<{
 							onOpenElement: (schema, focus) => open.element(id, schema, focus),
 							onOpenFile: (schema, file) => open.file(id, schema, file),
 							onOpenStageDiagram: (schema, stage) => open.stageDiagram(id, schema, stage),
+							api: adminApi,
 							loadSchemaDoc,
 							loadFiles,
 							onNewSchema: () => open.newSchema(id),

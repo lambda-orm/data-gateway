@@ -9,7 +9,8 @@ import { childrenOf, folderPaths, SavedItem, subtreeOf } from '../domain/savedIt
 import { ConfirmDialog, Icons, ItemDialog, MenuButton, Modal } from './dialogs'
 import { adminMessagesOf } from '../domain/adminI18n'
 import { FormFocus } from './SchemaForms'
-import { AdminCapabilities } from '../application/ports'
+import { AdminApiPort, AdminCapabilities } from '../application/ports'
+import { BuildDialog, downloadBlob } from './BuildDialog'
 
 export interface ExplorerProps {
 	schemas: SchemaInfo[]
@@ -47,6 +48,8 @@ export interface ExplorerAdmin {
 	onOpenFile?: (schema: string, path: string) => void
 	/** the diagram of a stage: its sources, the tables of each one, their conditions */
 	onOpenStageDiagram?: (schema: string, stage: string) => void
+	/** the administration itself: the code of the domain built (build), a folder of the code downloaded as a zip */
+	api?: AdminApiPort
 	/** the lambdaORM.yaml as an object (the lists of infrastructure) */
 	loadSchemaDoc?: (schema: string) => Promise<any>
 	/** the files under a folder of data/ or src/ */
@@ -126,11 +129,13 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 	const [docs, setDocs] = useState<Record<string, any>>({})
 	const [files, setFiles] = useState<Record<string, { path: string, dir: boolean }[] | string>>({})
 	const [roots, setRoots] = useState<Record<string, { data: string, src: string, model: string }>>({})
+	// the schema whose code is being built (its dialog)
+	const [building, setBuilding] = useState<string>()
 	const loadDoc = (schema: string) => {
 		if (!admin?.loadSchemaDoc) return
 		admin.loadSchemaDoc(schema).then(doc => setDocs(d => ({ ...d, [schema]: doc ?? {} })), () => setDocs(d => ({ ...d, [schema]: {} })))
 	}
-	const loadFolder = (schema: string, which: 'data' | 'model') => {
+	const loadFolder = (schema: string, which: 'data' | 'src') => {
 		if (!admin?.loadFiles) return
 		const known = roots[schema]
 		const id = `${schema}\0${which}`
@@ -150,7 +155,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 			sinceSeen.current[s.path] = s.since
 			if (before === undefined || before === s.since) continue
 			if (docs[s.path] !== undefined) loadDoc(s.path)
-			for (const which of ['data', 'model'] as const) if (files[`${s.path}\0${which}`] !== undefined) loadFolder(s.path, which)
+			for (const which of ['data', 'src'] as const) if (files[`${s.path}\0${which}`] !== undefined) loadFolder(s.path, which)
 		}
 	}, [schemas])
 	const canWrite = !!admin?.can.schemaWrite && !!admin.onOpenElement
@@ -166,7 +171,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 					? <Action label={`${a.stageDiagram}: ${name}`} onClick={() => admin.onOpenStageDiagram!(schema, name)}><Icons.diagram /></Action>
 					: undefined} />
 		))
-	const fileRows = (schema: string, which: 'data' | 'model', level: number) => {
+	const fileRows = (schema: string, which: 'data' | 'src', level: number) => {
 		const list = files[`${schema}\0${which}`]
 		if (list === undefined) return [<Row key={`${which}-loading`} level={level} label={m.loading} icon={null} muted />]
 		if (typeof list === 'string') return [<Row key={`${which}-error`} level={level} label={list} icon={null} muted />]
@@ -177,6 +182,30 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 			<Row key={f.path} level={level} label={f.path.slice(root.length + 1)} icon={<Icons.query />} title={f.path}
 				onOpen={admin?.onOpenFile ? () => admin.onOpenFile!(schema, f.path) : undefined} />
 		))
+	}
+	// the source code: a folder of src/ for each language built (node, client-node…), with its files and its zip
+	const codeRows = (schema: string, level: number, k: (part: string) => string, unfold: (part: string) => () => void) => {
+		const list = files[`${schema}\0src`]
+		if (list === undefined) return [<Row key="code-loading" level={level} label={m.loading} icon={null} muted />]
+		if (typeof list === 'string') return [<Row key="code-error" level={level} label={list} icon={null} muted />]
+		const root = roots[schema]?.src ?? 'src'
+		const codes = [...new Set(list.filter(f => f.path.startsWith(`${root}/`)).map(f => f.path.slice(root.length + 1).split('/')[0]).filter(Boolean))].sort()
+		if (codes.length === 0) return [<Row key="code-none" level={level} label={a.empty} icon={null} muted />]
+		return codes.flatMap(name => {
+			const dir = `${root}/${name}`
+			const inside = list.filter(f => !f.dir && f.path.startsWith(`${dir}/`))
+			const download = admin?.api?.folderZip
+				? <Action label={format(a.downloadZip, { name })} onClick={() => { admin.api!.folderZip!(schema, dir).then(blob => downloadBlob(blob, `${schema.replace(/\//g, '_') || 'root'}-${name}.zip`), e => setMessage(e?.message ?? String(e))) }}><Icons.download /></Action>
+				: undefined
+			return [
+				<Row key={`code:${name}`} level={level} label={name} icon={<Icons.code />} title={dir} expanded={expanded.has(k(`code:${name}`))} onToggle={unfold(`code:${name}`)} actions={download} />,
+				...(expanded.has(k(`code:${name}`))
+					? inside.length
+						? inside.map(f => <Row key={f.path} level={level + 1} label={f.path.slice(dir.length + 1)} icon={<Icons.query />} title={f.path} onOpen={admin?.onOpenFile ? () => admin.onOpenFile!(schema, f.path) : undefined} />)
+						: [<Row key={`code:${name}-none`} level={level + 1} label={a.empty} icon={null} muted />]
+					: [])
+			]
+		})
 	}
 	const namesIn = (list: unknown): string[] => Array.isArray(list) ? list.map((e: any) => e?.name).filter((n: unknown): n is string => typeof n === 'string') : []
 	const removeSchema = (schema: string) => admin?.can.schemaAdmin
@@ -211,7 +240,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 			if (has('d') || has('e') || has('n')) loadDomain(s.path)
 			if (has('i') || has('mappings') || has('sources') || has('stages')) once(`doc:${s.path}`, () => loadDoc(s.path))
 			if (has('da')) once(`data:${s.path}`, () => loadFolder(s.path, 'data'))
-			if (has('mo')) once(`model:${s.path}`, () => loadFolder(s.path, 'model'))
+			if (has('sc')) once(`src:${s.path}`, () => loadFolder(s.path, 'src'))
 		}
 	}, [expanded, schemas])
 
@@ -427,15 +456,16 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 													)}
 												</>
 											)}
-											{admin?.can.schemaRead && admin.loadFiles && (
-												<>
-													<Row level={3} label={a.data} icon={<Icons.data />} expanded={expanded.has(k('da'))} onToggle={unfold('da', () => loadFolder(s.path, 'data'))} />
-													{expanded.has(k('da')) && fileRows(s.path, 'data', 4)}
-													<Row level={3} label={a.src} icon={<Icons.src />} expanded={expanded.has(k('sr'))} onToggle={unfold('sr')} />
-													{expanded.has(k('sr')) && <Row level={4} label={a.model} icon={<Icons.model />} expanded={expanded.has(k('mo'))} onToggle={unfold('mo', () => loadFolder(s.path, 'model'))} />}
-													{expanded.has(k('sr')) && expanded.has(k('mo')) && fileRows(s.path, 'model', 5)}
-												</>
-											)}
+										</>
+									)}
+									{admin?.can.schemaRead && admin.loadFiles && (
+										<>
+											<Row level={2} label={a.state} icon={<Icons.state />} expanded={expanded.has(k('st'))} onToggle={unfold('st')} />
+											{expanded.has(k('st')) && <Row level={3} label={a.data} icon={<Icons.data />} expanded={expanded.has(k('da'))} onToggle={unfold('da', () => loadFolder(s.path, 'data'))} />}
+											{expanded.has(k('st')) && expanded.has(k('da')) && fileRows(s.path, 'data', 4)}
+											<Row level={2} label={a.sourceCode} icon={<Icons.src />} expanded={expanded.has(k('sc'))} onToggle={unfold('sc', () => loadFolder(s.path, 'src'))}
+												actions={admin.can.build && admin.api ? <Action label={`${a.build}: ${s.path || '/'}`} onClick={() => setBuilding(s.path)}><Icons.code /></Action> : null} />
+											{expanded.has(k('sc')) && codeRows(s.path, 3, k, unfold)}
 										</>
 									)}
 									<Row level={2} label={a.projects} icon={<Icons.projects />} expanded={expanded.has(k('p'))} onToggle={unfold('p')}
@@ -449,6 +479,10 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 				})}
 			</div>
 
+			{building !== undefined && admin?.api && (
+				<BuildDialog admin={admin.api} schema={building} locale={locale} theme={theme} onClose={() => setBuilding(undefined)}
+					onBuilt={() => { const schema = building; loadFolder(schema, 'src'); setExpanded(e => new Set([...e, `sc:${schema}`])) }} />
+			)}
 			{dialog?.kind === 'folder' && (
 				<ItemDialog title={m.newFolder} submit={m.create} texts={m} theme={theme} initial={{ parentId: dialog.parentId }} folders={folders(dialog.schema)}
 					onClose={() => setDialog(undefined)}

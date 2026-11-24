@@ -63,8 +63,17 @@ export class RestAdminApi implements AdminApiPort {
 		return (await this.request(`/workspaces/${schemaSegment(schema)}/build`, { body: { language, write: true } })).body as { language: string, files: { path: string, written?: string, bytes: number }[] }
 	}
 
+	public async folderZip (schema: string, dir: string) {
+		return await this.blob(`${this.baseUrl}/admin/workspaces/${schemaSegment(schema)}/files.zip?dir=${encodeURIComponent(dir)}`)
+	}
+
 	public async buildZip (schema: string, language: 'node' | 'client-node') {
-		const response = await this.fetcher(`${this.baseUrl}/admin/workspaces/${schemaSegment(schema)}/build.zip?language=${language}`, { headers: { ...(await this.headers()) } })
+		return await this.blob(`${this.baseUrl}/admin/workspaces/${schemaSegment(schema)}/build.zip?language=${language}`)
+	}
+
+	/** a file to download (a zip): the error of the gateway when it isn't one */
+	private async blob (url: string) {
+		const response = await this.fetcher(url, { headers: { ...(await this.headers()) } })
 		if (!response.ok) {
 			let body: any
 			try { body = await response.json() } catch { body = undefined }

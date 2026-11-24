@@ -69,6 +69,12 @@ export const adminRouter = (admin: AdminService, authenticate: express.RequestHa
 		res.send(zipOf(result.files.map(f => ({ path: f.path, content: f.content }))))
 		return undefined
 	}))
+	router.get('/workspaces/:schema/files.zip', handle(async (req, res) => {
+		const folder = await admin.folderFiles(principal(res), schemaParam(req.params.schema), req.query.dir)
+		res.status(200).type('application/zip').setHeader('Content-Disposition', `attachment; filename="${(schemaParam(req.params.schema) || 'root').replace(/\//g, '_')}-${folder.name}.zip"`)
+		res.send(zipOf(folder.files))
+		return undefined
+	}))
 	router.get('/workspaces/:schema/files', handle(async (req, res) => admin.files(principal(res), schemaParam(req.params.schema), req.query.dir)))
 	router.get('/workspaces/:schema/files/content', handle(async (req, res) => admin.fileContent(principal(res), schemaParam(req.params.schema), req.query.path)))
 	router.get('/workspaces/:schema/stages/:stage/routing', handle(async (req, res) => admin.stageRouting(principal(res), schemaParam(req.params.schema), String(req.params.stage))))

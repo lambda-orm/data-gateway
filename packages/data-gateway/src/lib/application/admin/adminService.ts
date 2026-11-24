@@ -341,7 +341,8 @@ export class AdminService {
 		const file = await this.store.read(workspace, SCHEMA_FILE)
 		let paths: any = {}
 		try { paths = (this.yaml.parse(file?.text ?? '') as any)?.infrastructure?.paths ?? {} } catch { /* the defaults */ }
-		const base = `${paths.src || 'src'}/${paths.domain || 'domain'}`.replace(/\/+/g, '/')
+		// each language in a folder of its own under src/: node, client-node, and the ones to come
+		const base = `${paths.src || 'src'}/${language}/${paths.domain || 'domain'}`.replace(/\/+/g, '/')
 		const generated = this.code.files(language, domain, { model: request.model !== false, repositories: request.repositories !== false })
 		const files: { path: string, content: string, written?: 'created' | 'updated' | 'kept' }[] = generated.map(g => ({ path: `${base}/${g.file}`, content: g.content }))
 		if (request.write === true) {
@@ -393,6 +394,23 @@ export class AdminService {
 	}
 
 	/** The text of a file of data/ or src/ (an export, a script, the code of build) */
+	/**
+	 * The files of a folder of data/ or src/, as they are in the workspace (the code of a language, with its repositories
+	 * as edited): its name and its files, relative to the folder, to be zipped
+	 */
+	public async folderFiles (principal: Principal, path: string, dir: unknown): Promise<{ name: string, files: { path: string, content: string }[] }> {
+		this.require(principal, 'schemaRead')
+		const workspace = this.workspaceOf(path)
+		const folder = await this.readable(workspace, dir)
+		const listed = (await this.store.list(workspace, folder)).filter(f => !f.dir)
+		const files: { path: string, content: string }[] = []
+		for (const f of listed) {
+			const file = await this.store.read(workspace, f.path)
+			if (file) files.push({ path: f.path.slice(folder.length + 1), content: file.text })
+		}
+		return { name: folder.split('/').pop() || folder, files }
+	}
+
 	public async fileContent (principal: Principal, path: string, file: unknown): Promise<{ path: string, text: string, version: string, modified: string }> {
 		this.require(principal, 'schemaRead')
 		const workspace = this.workspaceOf(path)

@@ -144,6 +144,8 @@ export interface AdminApiPort {
 	build (schema: string, language: 'node' | 'client-node'): Promise<{ language: string, files: { path: string, written?: string, bytes: number }[] }>
 	/** the same code as a zip, without writing anything */
 	buildZip (schema: string, language: 'node' | 'client-node'): Promise<Blob>
+	/** a folder of data/ or src/ as a zip, as it is in the workspace (a gateway before 4.1.0 doesn't have it) */
+	folderZip? (schema: string, dir: string): Promise<Blob>
 	/** the files of data/ or src/ of a workspace (recursive), and where its data, code and model folders are */
 	files (schema: string, dir?: string): Promise<{ roots: { data: string, src: string, model: string }, files: { path: string, dir: boolean, modified: string }[] }>
 	/** the text of a file of data/ or src/ */

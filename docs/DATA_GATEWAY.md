@@ -985,9 +985,10 @@ Un workspace se nombra por su ruta en **un** segmento, codificada: `iot%2Fv1` (`
 | `POST` | `/admin/workspaces/{ruta}/references` | `{ at }` → quién usa ese elemento (antes de eliminarlo) | `schemaRead` |
 | `GET` | `/admin/workspaces/{ruta}/variables` | las variables de las conexiones (§11.5): cuáles define el `.env` y quién las usa; **nunca su valor** | `schemaRead` |
 | `PUT` | `/admin/workspaces/{ruta}/variables` | `{ set?: { NOMBRE: valor }, remove?: [NOMBRE] }` en el `.env`, conservando el resto | `schemaAdmin` |
-| `POST` | `/admin/workspaces/{ruta}/build` | `{ language: node \| client-node, write? }`: el modelo y los repositorios (§11.5) | `build` (+ `read`) |
+| `POST` | `/admin/workspaces/{ruta}/build` | `{ language: node \| client-node, write? }`: el modelo y los repositorios (§11.5), cada lenguaje en su carpeta: `src/{language}/domain/…` (desde 4.1.0; antes, `src/domain/…`) | `build` (+ `read`) |
 | `GET` | `/admin/workspaces/{ruta}/build.zip?language=` | lo mismo como `.zip`, sin escribir nada | `build` (+ `read`) |
 | `GET` | `/admin/workspaces/{ruta}/files?dir=` / `…/files/content?path=` | los archivos de `data/` y de `src/` (recursivo) / el texto de uno; nunca el `.env`, `orm_state/` ni un oculto | `schemaRead` |
+| `GET` | `/admin/workspaces/{ruta}/files.zip?dir=` | una carpeta de `data/` o de `src/` como `.zip`, tal como está en el workspace (el código de un lenguaje con sus repositorios editados): `{ruta}-{carpeta}.zip` | `schemaRead` |
 | `POST` | `/admin/validate` | `{ text }` → `{ valid, issues: [{ severity, message, line?, column? }] }` | `schemaRead` |
 | `GET` | `/admin/session` | el estado de la UI de la credencial que pregunta: `{ state, updatedAt }` o `{ state: null }` (§11.8) | autenticado |
 | `PUT` | `/admin/session` | `{ state }` lo guarda (un objeto, hasta 2 MB); `{ state: null }` lo olvida | autenticado |

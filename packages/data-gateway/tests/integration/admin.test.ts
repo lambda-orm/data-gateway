@@ -219,30 +219,38 @@ describe('admin over REST (inline)', () => {
 		fs.writeFileSync(path.join(root, 'iot/v1/lambdaORM.yaml'), text)
 	})
 
-		test('build: the model and the repositories in src/domain; a repository written once is the user\'s; also as a zip', async () => {
+		test('build: the model and the repositories in src/<language>/domain; a repository written once is the user\'s; also as a zip, and the folder of a language as it is', async () => {
 		const url = '/admin/workspaces/iot%2Fv1/build'
 		expect((await call(base, url, { body: {}, headers: READER })).status).toBe(403)
 		const built = await call(base, url, { body: { language: 'node', write: true }, headers: ADMIN })
 		expect(built.status).toBe(200)
 		expect(built.body.files).toEqual(expect.arrayContaining([
-			expect.objectContaining({ path: 'src/domain/model.ts', written: 'created' }),
-			expect.objectContaining({ path: 'src/domain/repositoryProduct.ts', written: 'created' })
+			expect.objectContaining({ path: 'src/node/domain/model.ts', written: 'created' }),
+			expect.objectContaining({ path: 'src/node/domain/repositoryProduct.ts', written: 'created' })
 		]))
-		const model = fs.readFileSync(path.join(root, 'iot/v1/src/domain/model.ts'), 'utf8')
+		const model = fs.readFileSync(path.join(root, 'iot/v1/src/node/domain/model.ts'), 'utf8')
 		expect(model).toContain('export class Product')
 		expect(model).toContain("from '@lambdaorm/lib'")
-		fs.writeFileSync(path.join(root, 'iot/v1/src/domain/repositoryProduct.ts'), '// mine\n')
+		fs.writeFileSync(path.join(root, 'iot/v1/src/node/domain/repositoryProduct.ts'), '// mine\n')
 		const again = await call(base, url, { body: { write: true }, headers: ADMIN })
 		expect(again.body.files.find((f: any) => f.path.endsWith('repositoryProduct.ts')).written).toBe('kept')
 		expect(again.body.files.find((f: any) => f.path.endsWith('model.ts')).written).toBe('updated')
-		expect(fs.readFileSync(path.join(root, 'iot/v1/src/domain/repositoryProduct.ts'), 'utf8')).toBe('// mine\n')
+		expect(fs.readFileSync(path.join(root, 'iot/v1/src/node/domain/repositoryProduct.ts'), 'utf8')).toBe('// mine\n')
 		const response = await fetch(`${base}${url}.zip?language=client-node`, { headers: ADMIN })
 		expect(response.headers.get('content-type')).toBe('application/zip')
 		const zip = Buffer.from(await response.arrayBuffer())
 		expect(zip.readUInt32LE(0)).toBe(0x04034b50)
-		expect(zip.toString('latin1')).toContain('src/domain/model.ts')
+		expect(zip.toString('latin1')).toContain('src/client-node/domain/model.ts')
 		expect(zip.toString('utf8')).toContain("from '@lambdaorm/client'")
 		fs.writeFileSync(path.join(os.tmpdir(), 'data-gateway-build-test.zip'), zip)
+		// the folder of a language as it is in the workspace: its repository as the user left it
+		const folder = await fetch(`${base}/admin/workspaces/iot%2Fv1/files.zip?dir=src/node`, { headers: ADMIN })
+		expect(folder.status).toBe(200)
+		expect(folder.headers.get('content-disposition')).toContain('iot_v1-node.zip')
+		const zipped = Buffer.from(await folder.arrayBuffer()).toString('latin1')
+		expect(zipped).toContain('domain/repositoryProduct.ts')
+		expect(zipped).toContain('// mine')
+		expect((await fetch(`${base}/admin/workspaces/iot%2Fv1/files.zip?dir=orm_state`, { headers: ADMIN })).status).toBe(403)
 	})
 
 		test('the files of data/ and src/ are listed and read; the .env, the state and what is outside them are not', async () => {

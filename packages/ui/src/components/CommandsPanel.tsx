@@ -3,6 +3,7 @@ import { AdminApiPort, CommandName, CommandPreview, CommandsSummary, Job } from 
 import { adminMessagesOf, format } from '../domain/adminI18n'
 import { toYaml } from '../domain/results'
 import { Icons, Modal } from './dialogs'
+import { BuildDialog } from './BuildDialog'
 
 export interface CommandsPanelProps {
 	admin: AdminApiPort
@@ -46,7 +47,6 @@ const download = (name: string, value: unknown) => {
  * exactly that. The last jobs, with their result.
  */
 export const CommandsPanel: React.FC<CommandsPanelProps> = ({ admin, schema, canSave = false, locale, pollMs = 1000, canBuild = false, title, children }) => {
-	const [language, setLanguage] = useState<'node' | 'client-node'>('node')
 	// the form of a command that needs a file (import, introspect, incorporate) or a choice (build)
 	const [form, setForm] = useState<'import' | 'introspect' | 'incorporate' | 'build'>()
 	const [built, setBuilt] = useState<{ path: string, written?: string }[]>()
@@ -129,18 +129,7 @@ export const CommandsPanel: React.FC<CommandsPanelProps> = ({ admin, schema, can
 	const tool = (command: string, label: string, icon: React.ReactNode, enabled: boolean, onClick: () => void) => (
 		<button type="button" className="lw-tool" aria-label={label} title={`${label} — ${(m as any)[`cmd_${command}`] ?? ''}`} disabled={!enabled} onClick={onClick}>{icon}</button>
 	)
-	const downloadZip = () => attempt(async () => {
-		const blob = await admin.buildZip(schema, language)
-		const url = URL.createObjectURL(blob)
-		const link = document.createElement('a')
-		link.href = url
-		link.download = `${schema.replace(/\//g, '_') || 'root'}-${language}.zip`
-		document.body.appendChild(link)
-		link.click()
-		link.remove()
-		setTimeout(() => URL.revokeObjectURL(url), 1000)
-		setForm(undefined)
-	})
+
 
 	return (
 		<section className="lw-commands" aria-label={`${m.commands} — ${schema || '/'}`}>
@@ -172,8 +161,9 @@ export const CommandsPanel: React.FC<CommandsPanelProps> = ({ admin, schema, can
 				</span>
 			</div>
 			{children}
-			{form && (
-				<Modal title={form === 'build' ? m.build : `${form}…`} onClose={() => setForm(undefined)}>
+			{form === 'build' && <BuildDialog admin={admin} schema={schema} locale={locale} onClose={() => setForm(undefined)} onBuilt={setBuilt} />}
+			{form && form !== 'build' && (
+				<Modal title={`${form}…`} onClose={() => setForm(undefined)}>
 					<div className="lw-form">
 						{form === 'import' && (
 							<label>{m.chooseExport}<input type="file" accept="application/json,.json" aria-label={m.chooseExport} onChange={chooseFile} /></label>
@@ -185,28 +175,11 @@ export const CommandsPanel: React.FC<CommandsPanelProps> = ({ admin, schema, can
 								{form === 'incorporate' && <small className="lw-type">{m.incorporateNote}</small>}
 							</>
 						)}
-						{form === 'build' && (
-							<label>language
-								<select aria-label="language" value={language} onChange={e => setLanguage(e.target.value as 'node' | 'client-node')}>
-									<option value="node">node (@lambdaorm/lib)</option>
-									<option value="client-node">client-node (@lambdaorm/client)</option>
-								</select>
-							</label>
-						)}
 						<div className="lw-form-actions">
 							<button type="button" onClick={() => setForm(undefined)}>{m.cancel}</button>
-							{form === 'build'
-								? (
-									<>
-										<button type="button" disabled={busy} onClick={downloadZip}>{m.buildZip}</button>
-										<button type="button" className="lw-primary" disabled={busy} onClick={() => attempt(async () => { setBuilt((await admin.build(schema, language)).files); setForm(undefined) })}>{m.buildWrite}</button>
-									</>
-									)
-								: (
-									<button type="button" className="lw-primary"
-										disabled={busy || (form === 'import' ? data === undefined : source === undefined || !entity.trim())}
-										onClick={() => { const command = form; setForm(undefined); ask(command) }}>{m.preview}</button>
-									)}
+							<button type="button" className="lw-primary"
+								disabled={busy || (form === 'import' ? data === undefined : source === undefined || !entity.trim())}
+								onClick={() => { const command = form; setForm(undefined); ask(command) }}>{m.preview}</button>
 						</div>
 					</div>
 				</Modal>
