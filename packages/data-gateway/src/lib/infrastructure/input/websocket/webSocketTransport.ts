@@ -1,3 +1,4 @@
+import { requestTracer } from '../telemetry/requestTracer'
 import http from 'http'
 import path from 'path'
 import fs from 'fs'
@@ -8,7 +9,7 @@ import { RequestContext } from '../../../application/ports/input/dataGatewayPort
 import { SchemaDirectoryPort, ServedSchema } from '../../../application/ports/input/schemaDirectoryPort'
 import { AuthenticatorPort, LoggerPort } from '../../../application/ports/output/supportPorts'
 import { RpcDispatcher } from '../../../application/rpc/rpcDispatcher'
-import { Principal } from '../../../domain/auth/principal'
+import { Principal, withActor } from '../../../domain/auth/principal'
 import { RpcCallError } from '../../../domain/errors/gatewayError'
 import { toHttpError } from '../http/httpErrors'
 import { Transport } from '../transport'
@@ -169,7 +170,7 @@ export class WebSocketTransport implements Transport {
 			this.deps.logger.error(error as Error)
 			return this.reject(socket, 500, 'authentication failed')
 		}
-		this.wss.handleUpgrade(req, socket, head, ws => this.connection(ws, { principal, transport: TRANSPORT_NAME }, schema))
+		this.wss.handleUpgrade(req, socket, head, ws => this.connection(ws, { principal: withActor(principal, { ip: req.socket.remoteAddress }), transport: TRANSPORT_NAME }, schema))
 	}
 
 	/** One connection: its requests, and the notifications it asked for */
@@ -214,7 +215,13 @@ export class WebSocketTransport implements Transport {
 			const id: Id = message.id ?? null
 			const isNotification = !('id' in message)
 			try {
-				const result = await this.call(ctx, schema, message.method, message.params)
+				// a span per message (JSON-RPC over WebSocket), child of the traceparent of its _meta if it brings one
+				const result = await requestTracer.call(String(message.method), {
+					'rpc.system': 'jsonrpc',
+					'rpc.method': String(message.method),
+					'network.transport': 'tcp',
+					'enduser.id': ctx.principal.name
+				}, message.params?._meta, () => this.call(ctx, schema, message.method, message.params))
 				const queueId = message.method === 'query.executeQueued' && message.params?.notify ? (result as any)?.queueId : undefined
 				if (queueId) {
 					const ended = recent.get(queueId)

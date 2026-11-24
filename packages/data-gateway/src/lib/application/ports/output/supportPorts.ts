@@ -50,6 +50,22 @@ export interface AuthenticatorPort {
 	scheme? (): CredentialScheme
 }
 
+/**
+ * The trace of a request across the channel to a schema worker, as a W3C Trace Context carrier (traceparent,
+ * tracestate). Without tracing it carries nothing.
+ */
+export interface TracingPort {
+	/** the carrier of the active span, for a request to a worker */
+	carrier (): Record<string, string> | undefined
+	/** runs fn with the trace of a carrier as its parent */
+	within<T> (carrier: Record<string, string> | undefined, fn: () => Promise<T>): Promise<T>
+}
+
+export const NO_TRACING: TracingPort = {
+	carrier: () => undefined,
+	within: (_carrier, fn) => fn()
+}
+
 export interface LoggerPort {
 	info (message: string): void
 	warn (message: string): void
@@ -71,7 +87,7 @@ export type GaugeReader = () => { labels: Record<string, string>, value: number 
 
 export interface MetricsPort {
 	readonly enabled: boolean
-	/** Starts measuring an HTTP request; the returned function ends it with its labels */
+	/** Starts measuring an HTTP request; the returned function ends it with its labels (template: its route template) */
 	startTimer (): (labels: Record<string, string | number>) => void
 	operation (sample: OperationSample): void
 	forbidden (credential: string, permission: string): void

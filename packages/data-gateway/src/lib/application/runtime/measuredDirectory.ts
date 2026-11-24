@@ -34,6 +34,7 @@ export class MeasuredSchemaDirectory implements SchemaDirectoryPort {
 	public onStateChange (listener: (state: SchemaState) => void) { return this.directory.onStateChange(listener) }
 	public onSchemasChange (listener: () => void) { return this.directory.onSchemasChange(listener) }
 	public onWorkspaceChange (listener: (change: WorkspaceChange) => void) { return this.directory.onWorkspaceChange(listener) }
+	public workspaceChanged (change: WorkspaceChange) { this.directory.workspaceChanged?.(change) }
 
 	private measure (schema: ServedSchema): ServedSchema {
 		const wrap = (target: any, operations: readonly string[], prefix: string) => {

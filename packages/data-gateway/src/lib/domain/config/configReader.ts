@@ -1,3 +1,4 @@
+import { ObservabilityConfig } from '@lambdaorm/base'
 import { ALL_PERMISSIONS, isPermission, KNOWN_PERMISSIONS, Permission } from '../auth/permission'
 import {
 	AuthenticationConfig, AuthenticationType, ConfigReading, CredentialConfig, DataGatewayConfig, LoggerConfig, McpConfig,
@@ -10,7 +11,7 @@ import { parseSize } from './sizes'
 /** Transports of the design that this version does not serve yet (docs/DATA_GATEWAY_PLAN.md). */
 const LATER_TRANSPORTS: string[] = []
 const TRANSPORTS = ['http', 'mcpHttp', 'mcpWebSocket', 'webSocket', 'management']
-const KNOWN_SECTIONS = ['orm', 'admin', 'server', 'logger', 'metrics', 'audit', 'authentication', 'rateLimit', 'scripts', 'mcp', 'runtime', 'transports']
+const KNOWN_SECTIONS = ['orm', 'admin', 'server', 'logger', 'metrics', 'observability', 'audit', 'authentication', 'rateLimit', 'scripts', 'mcp', 'runtime', 'transports']
 const SCHEMA_KEYS = ['path', 'workspace', 'transports', 'authentication', 'env', 'scripts', 'mcp', 'server', 'runtime']
 /** The tools of docs/DATA_GATEWAY.md §5.1: mcp.tools.include / exclude must name them */
 export const TOOL_NAMES = [
@@ -61,6 +62,7 @@ export class ConfigReader {
 			},
 			logger: this.logger(raw.logger),
 			metrics: { enabled: this.bool(raw.metrics?.enabled, true, 'metrics.enabled') },
+			observability: this.observability(raw.observability),
 			audit: {
 				enabled: this.bool(raw.audit?.enabled, true, 'audit.enabled'),
 				includeData: this.bool(raw.audit?.includeData, false, 'audit.includeData')
@@ -240,6 +242,19 @@ export class ConfigReader {
 				passthrough: Array.isArray(passthrough) ? passthrough.map(String) : []
 			}
 		}
+	}
+
+	/** checked in full (with its trace rules) when the gateway starts, where 3xpr is: here only its form */
+	private observability (raw: unknown): ObservabilityConfig | undefined {
+		if (raw === undefined || raw === null) return undefined
+		if (typeof raw !== 'object' || Array.isArray(raw)) {
+			this.issues.push('observability must be an object (the same shape as infrastructure.observability of a lambdaORM.yaml)')
+			return undefined
+		}
+		if ((raw as any).exporter?.headers !== undefined) {
+			this.issues.push('observability.exporter.headers is not allowed: the headers carry tokens; use OTEL_EXPORTER_OTLP_HEADERS')
+		}
+		return raw as ObservabilityConfig
 	}
 
 	private logger (raw: Raw | undefined): LoggerConfig {

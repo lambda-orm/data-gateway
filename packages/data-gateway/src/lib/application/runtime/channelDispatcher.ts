@@ -5,7 +5,7 @@ import {
 } from '../../domain/runtime/channelProtocol'
 import { DataGatewayPort, RequestContext } from '../ports/input/dataGatewayPort'
 import { McpServerPort } from '../ports/input/mcpServerPort'
-import { LoggerPort } from '../ports/output/supportPorts'
+import { LoggerPort, NO_TRACING, TracingPort } from '../ports/output/supportPorts'
 
 export const responseTooLarge = (bytes: number, max: number): GatewayError =>
 	new GatewayError(413, 'ResponseTooLargeError', `the result has ${bytes} bytes, more than server.maxResponseBytes (${max}): use .page(1, n), aggregate in the query or filter more`)
@@ -27,13 +27,15 @@ export class ChannelDispatcher {
 		/** runtime.metrics: this worker's metrics, for the edge to aggregate */
 		private readonly metrics?: () => Promise<unknown>,
 		/** the commands of the workspace (admin) */
-		private readonly commands?: { run (ctx: RequestContext, op: CommandOperation, args: unknown[]): Promise<unknown> }
+		private readonly commands?: { run (ctx: RequestContext, op: CommandOperation, args: unknown[]): Promise<unknown> },
+		/** the trace of the edge: what the worker does is part of it */
+		private readonly tracing: TracingPort = NO_TRACING
 	) {}
 
 	public async dispatch (request: ChannelRequest): Promise<ChannelResponse | undefined> {
 		if (Date.now() > request.deadline) return undefined
 		try {
-			const result = await this.run(request)
+			const result = await this.tracing.within(request.trace, () => this.run(request))
 			if (result === undefined) return { type: 'response', id: request.id }
 			const json = encoder.encode(JSON.stringify(result))
 			if (this.maxResponseBytes > 0 && json.byteLength > this.maxResponseBytes) throw responseTooLarge(json.byteLength, this.maxResponseBytes)
@@ -62,7 +64,7 @@ export class ChannelDispatcher {
 
 	private run (request: ChannelRequest): Promise<unknown> {
 		const ctx: RequestContext | undefined = request.principal
-			? { principal: principal(request.principal.name, request.principal.permissions), transport: request.transport }
+			? { principal: principal(request.principal.name, request.principal.permissions, request.principal.actor), transport: request.transport }
 			: undefined
 		if (request.target === 'gateway' && (GATEWAY_OPERATIONS as readonly string[]).includes(request.op)) {
 			const method = (this.gateway as any)[request.op] as (...args: unknown[]) => Promise<unknown>

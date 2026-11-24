@@ -14,6 +14,7 @@ import { SchemaDescriptor, SchemaSettings } from '../../domain/runtime/schemas'
 import { ConsoleLogger } from '../output/logger/loggers'
 import { YamlFileConfigSource } from '../output/config/yamlFileConfigSource'
 import { EdgeWorkerRuntime, SchemaWorkerRuntime } from '../output/runtime/workerRuntimes'
+import { resolveObservability, withPrometheus } from './observability'
 import { buildLogger, DataGatewayBuilder, maskSecrets, packageVersion, resolveConfiguredSchemas, RunningGateway } from './dataGatewayBuilder'
 
 export interface MainOptions {
@@ -66,7 +67,8 @@ export const startSupervisor = async (options: MainOptions = {}): Promise<Superv
 	})
 	const specs = schemas.map(specOf)
 	const version = packageVersion()
-	const runtimeSettings = { config, version, logger }
+	const observability = withPrometheus(resolveObservability(config.observability, gatewayEnv), config.metrics.enabled)
+	const runtimeSettings = { config, version, logger, observability }
 	const supervisor = new Supervisor(
 		specs,
 		new SchemaWorkerRuntime(runtimeSettings),

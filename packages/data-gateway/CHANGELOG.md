@@ -4,6 +4,26 @@ All notable changes to this project will be documented in this file.
 
 ## Versions
 
+### Unreleased
+
+Needs `@lambdaorm/base` and `@lambdaorm/lib` with observability (lambda-orm/core #203).
+
+**Features** (`DATA_GATEWAY.md` §8.2):
+
+- **OpenTelemetry:** the section `observability` of `data-gateway.config.yaml` (the shape of the one of a
+  `lambdaORM.yaml`; the `OTEL_*` variables override it) starts the SDK in the edge and in every schema worker, before
+  λORM, which uses it. A `SERVER` span per HTTP request (by its route template), WebSocket message and MCP call, child
+  of the caller's `traceparent`; the trace goes on in the worker and in λORM's spans.
+- **The actor** of each request (credential; session, IDE and IP on `management`) reaches λORM; one sent by a client
+  is replaced.
+- **λORM's metrics in `/metrics`**, with the names of the OpenTelemetry → Prometheus compatibility
+  (`db_client_operation_duration_seconds`…), and `http_server_request_duration_seconds` with the labels of the
+  conventions.
+- **The history of a schema:** every change of the administration is a `schema.change` with who, before, after and
+  the JSON Patch, in `logs/changes.jsonl` of the workspace and in OpenTelemetry; `GET
+  /admin/workspaces/{schema}/history`. `workspace.changed` says who and what. The audit also goes as an OpenTelemetry
+  LogRecord.
+
 ### 4.0.0 (2026-11-23)
 
 **Breaking changes** (`DATA_GATEWAY.md` §12):

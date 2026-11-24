@@ -1,9 +1,11 @@
+import { Actor } from '@lambdaorm/base'
 import { Permission } from '../auth/permission'
 
 /** Who asks, as it crosses the channel (a Set doesn't) */
 export interface WirePrincipal {
 	name: string
 	permissions: Permission[]
+	actor?: Actor
 }
 
 /** edge → schema worker: one operation of DataGatewayPort ('gateway') or McpServerPort ('mcp') */
@@ -18,6 +20,8 @@ export interface ChannelRequest {
 	transport: string
 	/** epoch ms after which the edge stopped waiting: the worker may skip it */
 	deadline: number
+	/** W3C Trace Context of the request in the edge (traceparent, tracestate): the spans of the worker are its children */
+	trace?: Record<string, string>
 }
 
 /**
