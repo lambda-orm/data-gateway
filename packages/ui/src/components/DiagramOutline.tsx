@@ -18,18 +18,16 @@ export interface DiagramOutlineProps {
 }
 
 const WIDTH = 220
-const MAX_HEIGHT = 180
 const PAD = 16
 
 /**
- * The outline of a diagram: the whole drawing small, in a corner of the view, with a frame on what the view shows. A
- * click or a drag on it moves the view there.
+ * The outline of a diagram: the whole drawing small, on the right of the view and as high as it, with a thin frame on
+ * what the view shows. A click or a drag on it moves the view there.
  */
 export const DiagramOutline: React.FC<DiagramOutlineProps> = ({ bounds, view, viewport, colors, label, onCenter, children }) => {
 	const svg = useRef<SVGSVGElement>(null)
 	const dragging = useRef(false)
 	const box = { x: bounds.x - PAD, y: bounds.y - PAD, width: Math.max(1, bounds.width + 2 * PAD), height: Math.max(1, bounds.height + 2 * PAD) }
-	const height = Math.min(MAX_HEIGHT, Math.max(60, WIDTH * box.height / box.width))
 	// the frame: what the view shows, in the units of the drawing
 	const frame = { x: -view.x / view.k, y: -view.y / view.k, width: viewport.width / view.k, height: viewport.height / view.k }
 
@@ -46,7 +44,7 @@ export const DiagramOutline: React.FC<DiagramOutlineProps> = ({ bounds, view, vi
 	const move = (e: React.PointerEvent) => { const at = toDrawing(e); if (at) onCenter(at) }
 
 	return (
-		<div className="lw-outline" role="group" aria-label={label} style={{ width: WIDTH, height, background: colors.canvas, borderColor: colors.border }}
+		<div className="lw-outline" role="group" aria-label={label} style={{ width: WIDTH, background: colors.canvas, borderColor: colors.border }}
 			onPointerDown={e => {
 				e.stopPropagation()
 				if (e.button !== 0) return
@@ -61,7 +59,7 @@ export const DiagramOutline: React.FC<DiagramOutlineProps> = ({ bounds, view, vi
 			<svg ref={svg} width="100%" height="100%" viewBox={`${box.x} ${box.y} ${box.width} ${box.height}`} preserveAspectRatio="xMidYMid meet" aria-hidden="true">
 				<g pointerEvents="none">{children}</g>
 				<rect className="lw-outline-frame" x={frame.x} y={frame.y} width={frame.width} height={frame.height}
-					fill={colors.accent} fillOpacity={0.12} stroke={colors.accent} strokeWidth={Math.max(1, box.width / WIDTH) * 1.5} vectorEffect="non-scaling-stroke" />
+					fill={colors.accent} fillOpacity={0.08} stroke={colors.accent} strokeWidth={1.5} vectorEffect="non-scaling-stroke" />
 			</svg>
 		</div>
 	)
