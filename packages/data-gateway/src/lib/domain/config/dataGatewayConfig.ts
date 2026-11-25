@@ -69,6 +69,8 @@ export interface SchemaOverrides {
 	env?: Record<string, string>
 	scripts?: Partial<ScriptsConfig>
 	mcp?: { maxRows?: number, tools?: { include: string[], exclude: string[] }, freeQueries?: boolean }
+	/** its cache: replaces the global one */
+	cache?: CacheConfig
 	/** the limits of its named queries, by name */
 	queries?: Record<string, NamedQueryLimitsConfig>
 	server?: { timeout?: number, maxConcurrent?: number, maxResponseBytes?: number }
@@ -225,6 +227,16 @@ export interface McpConfig {
 	freeQueries: boolean
 }
 
+/** The cache of the results of the reads (docs/RESULT_CACHE.md) */
+export interface CacheConfig {
+	enabled: boolean
+	ttlMs: number
+	maxEntries: number
+	/** a result larger than this (its JSON) is not kept */
+	maxBytes: number
+	entities: Record<string, { enabled?: boolean, ttlMs?: number }>
+}
+
 /** The limits of a query of application.queries (docs/NAMED_QUERIES.md §4) */
 export interface NamedQueryLimitsConfig {
 	maxRows?: number
@@ -264,6 +276,7 @@ export interface DataGatewayConfig {
 	rateLimit: RateLimitConfig
 	scripts: ScriptsConfig
 	mcp: McpConfig
+	cache: CacheConfig
 	runtime: RuntimeConfig
 	/** Only the transports with a port (docs/DATA_GATEWAY.md §2.1) */
 	transports: TransportsConfig

@@ -1,7 +1,7 @@
 import { ObservabilityConfig } from '@lambdaorm/base'
 import { ALL_PERMISSIONS, isPermission, KNOWN_PERMISSIONS, Permission } from '../auth/permission'
 import {
-	AuthenticationConfig, AuthenticationType, ConfigReading, CredentialConfig, DataGatewayConfig, JwtConfig, RoleConfig, LoggerConfig, McpConfig,
+	AuthenticationConfig, AuthenticationType, ConfigReading, CredentialConfig, DataGatewayConfig, JwtConfig, RoleConfig, CacheConfig, LoggerConfig, McpConfig,
 	OrmConfig, RuntimeConfig, RuntimeMode, SchemaConfig, SessionsConfig, TransportConfig, TransportName, TransportsConfig, WatchConfig
 } from './dataGatewayConfig'
 import { parseDuration } from './durations'
@@ -11,8 +11,8 @@ import { parseSize } from './sizes'
 /** Transports of the design that this version does not serve yet (docs/DATA_GATEWAY_PLAN.md). */
 const LATER_TRANSPORTS: string[] = []
 const TRANSPORTS = ['http', 'mcpHttp', 'mcpWebSocket', 'webSocket', 'management']
-const KNOWN_SECTIONS = ['orm', 'admin', 'server', 'logger', 'metrics', 'observability', 'audit', 'authentication', 'rateLimit', 'scripts', 'mcp', 'runtime', 'transports']
-const SCHEMA_KEYS = ['path', 'workspace', 'transports', 'authentication', 'env', 'scripts', 'mcp', 'server', 'runtime']
+const KNOWN_SECTIONS = ['orm', 'admin', 'server', 'logger', 'metrics', 'observability', 'audit', 'authentication', 'rateLimit', 'scripts', 'mcp', 'runtime', 'transports', 'cache']
+const SCHEMA_KEYS = ['path', 'workspace', 'transports', 'authentication', 'env', 'scripts', 'mcp', 'server', 'runtime', 'view', 'queries', 'cache']
 /** The tools of docs/DATA_GATEWAY.md §5.1: mcp.tools.include / exclude must name them */
 export const TOOL_NAMES = [
 	'orm_execute', 'orm_execute_script', 'orm_execute_queued', 'orm_plan', 'orm_metadata', 'orm_model', 'orm_parameters',
@@ -79,6 +79,7 @@ export class ConfigReader {
 				maxIterations: this.int(raw.scripts?.maxIterations, 100000, 'scripts.maxIterations', 1)
 			},
 			mcp: this.mcp(raw.mcp),
+			cache: this.cache(raw.cache, 'cache'),
 			runtime: this.runtime(raw.runtime),
 			transports: this.transports(raw.transports)
 		}
@@ -160,6 +161,7 @@ export class ConfigReader {
 			const view = this.viewName(entry.view, `${key}.view`)
 			if (view) schema.view = view
 		}
+		if (entry.cache !== undefined) schema.cache = this.cache(entry.cache, `${key}.cache`)
 		if (entry.queries !== undefined) {
 			if (!isObject(entry.queries)) this.issues.push(`${key}.queries must be an object (the name of a query: its limits)`)
 			else {
@@ -595,6 +597,37 @@ export class ConfigReader {
 		}
 		if (this.issues.length > before || !issuer) return undefined
 		return { issuer, audience, ...(jwksUri ? { jwksUri } : {}), ...(secret ? { secret } : {}), algorithms, clockToleranceSec, principal: { name, ...(permissions ? { permissions } : {}) }, context }
+	}
+
+	/** cache (docs/RESULT_CACHE.md §2): off unless enabled; ttl, maxEntries, maxRowBytes and its entities */
+	private cache (raw: unknown, key: string): CacheConfig {
+		const off: CacheConfig = { enabled: false, ttlMs: 60000, maxEntries: 10000, maxBytes: 1024 * 1024, entities: {} }
+		if (raw === undefined) return off
+		if (!isObject(raw)) {
+			this.issues.push(`${key} must be an object`)
+			return off
+		}
+		if (raw.store !== undefined && raw.store !== 'memory') this.issues.push(`${key}.store "${raw.store}" is not memory (redis comes later)`)
+		const entities: CacheConfig['entities'] = {}
+		if (raw.entities !== undefined) {
+			if (!isObject(raw.entities)) this.issues.push(`${key}.entities must be an object (an entity: { enabled, ttl })`)
+			else {
+				for (const [entity, value] of Object.entries(raw.entities)) {
+					if (!isObject(value)) { this.issues.push(`${key}.entities.${entity} must be { enabled, ttl }`); continue }
+					entities[entity] = {
+						...(value.enabled !== undefined ? { enabled: this.bool(value.enabled, true, `${key}.entities.${entity}.enabled`) } : {}),
+						...(value.ttl !== undefined ? { ttlMs: this.duration(value.ttl, off.ttlMs, `${key}.entities.${entity}.ttl`) } : {})
+					}
+				}
+			}
+		}
+		return {
+			enabled: this.bool(raw.enabled, false, `${key}.enabled`),
+			ttlMs: this.duration(raw.ttl, off.ttlMs, `${key}.ttl`),
+			maxEntries: this.int(raw.maxEntries, off.maxEntries, `${key}.maxEntries`, 1),
+			maxBytes: this.size(raw.maxRowBytes, off.maxBytes, `${key}.maxRowBytes`),
+			entities
+		}
 	}
 
 	/** the name of a view of λORM (it is checked against the schema when it loads) */

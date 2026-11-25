@@ -160,6 +160,11 @@ recomendación, tests por transporte y la conformidad.
 
 ### G3. Caché de resultados (brecha 2.1)
 
+> **Estado (2026-11-25): fases 1 a 3 hechas** en `feature/result-cache` ([`RESULT_CACHE.md`](RESULT_CACHE.md),
+> decisiones cerradas): caché en memoria (LRU, TTL, por entidad), clave con la vista y el contexto, invalidación por
+> `orm.onDataChange`, `ETag`/`304` en REST, métricas. **Falta:** Redis (varias réplicas) y la wiki. De paso: `view`,
+> `queries` y `cache` de un schema ya no dan el aviso *unknown key* (falso en 4.1.0).
+
 - Por schema o entidad, en memoria o Redis, con `ETag`/`Cache-Control` en REST.
 - La clave incluye la consulta, los datos, la vista y el contexto (dos identidades no comparten un resultado).
 - La invalidan los eventos de escritura (C4, `orm.onDataChange`): las entidades que la consulta lee, incluidas las de
