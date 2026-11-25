@@ -122,12 +122,20 @@ export class JwtAuthenticator implements AuthenticatorPort {
 			return { valid: false, reason: `the token is not valid: ${reason}`, challenge: `Bearer error="invalid_token", error_description="${reason}"` }
 		}
 		const permissions = new Set<Permission>()
+		const views = new Set<string>()
 		const mapping = this.config.principal.permissions
 		if (mapping) {
 			const value = claimOf(claims, mapping.claim)
 			const roles = Array.isArray(value) ? value.map(String) : typeof value === 'string' ? value.split(/\s+/).filter(Boolean) : []
-			for (const role of roles) for (const permission of mapping.roles[role] ?? []) permissions.add(permission)
+			for (const role of roles) {
+				const config = mapping.roles[role]
+				if (!config) continue
+				for (const permission of config.permissions) permissions.add(permission)
+				if (config.view) views.add(config.view)
+			}
 		}
+		// one view per request, never guessed (docs/VIEWS_BY_IDENTITY.md, decision 2)
+		if (views.size > 1) return { valid: false, status: 403, reason: `the roles of the token give several views (${[...views].join(', ')}): it must have one` }
 		const context: Record<string, unknown> = {}
 		for (const [variable, path] of Object.entries(this.config.context)) {
 			const value = claimOf(claims, path)
@@ -139,6 +147,7 @@ export class JwtAuthenticator implements AuthenticatorPort {
 			principal: {
 				...who,
 				...(Object.keys(context).length ? { context } : {}),
+				...(views.size ? { view: [...views][0] } : {}),
 				...(typeof payload.exp === 'number' ? { expiresAt: payload.exp * 1000 } : {})
 			}
 		}

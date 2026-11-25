@@ -199,3 +199,13 @@ describe('copy', () => {
 		await screen.findByRole('button', { name: 'copied' })
 	})
 })
+
+describe('who calls, with its view', () => {
+	test('the workbench says the view of the credential (gateway 4.1.0)', async () => {
+		const { QueryWorkbench } = await import('../src/components/QueryWorkbench')
+		const api = new FakeApi()
+		api.who = { ...api.who, name: 'ann', permissions: ['read'], view: 'support' }
+		render(<QueryWorkbench api={api} history={false} />)
+		expect((await screen.findByText(/ann · read/)).textContent).toBe('ann · read · view support')
+	})
+})

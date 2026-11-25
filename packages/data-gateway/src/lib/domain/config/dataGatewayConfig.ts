@@ -8,6 +8,14 @@ export interface CredentialConfig {
 	username?: string
 	password?: string
 	permissions: Permission[]
+	/** the view of λORM of its requests (docs/VIEWS_BY_IDENTITY.md); none, the one of the schema */
+	view?: string
+}
+
+/** A role of the tokens of an issuer: its permissions, and the view of λORM of who has it */
+export interface RoleConfig {
+	permissions: Permission[]
+	view?: string
 }
 
 export type AuthenticationType = 'bearer' | 'apikey' | 'basic'
@@ -29,8 +37,8 @@ export interface JwtConfig {
 		permissions?: {
 			/** the claim of the roles: a list, or a text separated by spaces (as scope) */
 			claim: string
-			/** role → permissions */
-			roles: Record<string, Permission[]>
+			/** role → its permissions and its view */
+			roles: Record<string, RoleConfig>
 		}
 	}
 	/** variable of the context of λORM → the claim it takes (a path with dots) */
@@ -55,6 +63,8 @@ export interface SchemaOverrides {
 	/** Transports that expose it (default: all exposed) */
 	transports?: TransportName[]
 	authentication?: AuthenticationConfig
+	/** the view of λORM of a caller without one (docs/VIEWS_BY_IDENTITY.md); none, default (the domain) */
+	view?: string
 	/** Variables its worker receives on top of its .env and the base variables */
 	env?: Record<string, string>
 	scripts?: Partial<ScriptsConfig>

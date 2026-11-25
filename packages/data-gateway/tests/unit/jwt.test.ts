@@ -32,7 +32,7 @@ describe('configuration', () => {
 				audience: ['data-gateway'],
 				algorithms: ['RS256', 'ES256', 'PS256'],
 				clockToleranceSec: 30,
-				principal: { name: 'preferred_username', permissions: { claim: 'realm_access.roles', roles: { reader: ['read'], backend: ['read', 'write'] } } },
+				principal: { name: 'preferred_username', permissions: { claim: 'realm_access.roles', roles: { reader: { permissions: ['read'] }, backend: { permissions: ['read', 'write'] } } } },
 				context: { tenant: 'tenant_id' }
 			}
 		})
@@ -129,7 +129,7 @@ describe('the tokens of an issuer', () => {
 			audience: ['data-gateway'],
 			algorithms: ['RS256', 'ES256'],
 			clockToleranceSec: 0,
-			principal: { name: 'preferred_username', permissions: { claim: 'realm_access.roles', roles: { reader: ['read'], backend: ['read', 'write', 'script'] } } },
+			principal: { name: 'preferred_username', permissions: { claim: 'realm_access.roles', roles: { reader: { permissions: ['read'] }, backend: { permissions: ['read', 'write', 'script'] } } } },
 			context: { tenant: 'tenant_id', region: 'address.region' }
 		}
 	})

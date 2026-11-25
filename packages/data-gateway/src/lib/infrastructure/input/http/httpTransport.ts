@@ -225,6 +225,8 @@ export class HttpTransport implements Transport {
 			router.get('/whoami', this.handle(async (_req, ctx) => ({
 				name: ctx.principal.name,
 				permissions: [...ctx.principal.permissions],
+				// the view of λORM of the credential (its key, its roles); without one, the schema's or the domain
+				...(ctx.principal.view ? { view: ctx.principal.view } : {}),
 				schema: schema.path,
 				scripts: schema.features.scripts
 			})))

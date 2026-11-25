@@ -15,6 +15,8 @@ export interface Principal {
 	 * read. From the identity (the claims of a token), never from the request.
 	 */
 	readonly context?: Record<string, unknown>
+	/** The view of λORM it sees (docs/VIEWS_BY_IDENTITY.md): of its key or its roles; none, the one of the schema */
+	readonly view?: string
 	/** When its credential ends (the exp of a token, epoch ms): a session or a connection doesn't outlive it */
 	readonly expiresAt?: number
 }

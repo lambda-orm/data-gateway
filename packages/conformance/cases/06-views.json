@@ -1,0 +1,39 @@
+[
+	{
+		"name": "view: the rows of the country of the token (the filter of the view, with its context)",
+		"credential": "jwtSales",
+		"operation": "execute",
+		"args": { "query": "Customers.map(p => ({ customers: count(1) }))" },
+		"expect": { "result": [ { "customers": 11 } ] }
+	},
+	{
+		"name": "view: a context or a view sent by the client changes nothing",
+		"credential": "jwtSales",
+		"operation": "execute",
+		"args": { "query": "Customers.map(p => ({ customers: count(1) }))", "options": { "context": { "country": "France" }, "view": "default" } },
+		"expect": { "result": [ { "customers": 11 } ] }
+	},
+	{
+		"name": "view: what it masks comes masked",
+		"credential": "jwtSales",
+		"operation": "execute",
+		"args": { "query": "Customers.filter(p => p.id == id).map(p => p.city)", "data": { "id": "ALFKI" } },
+		"expect": { "result": [ { "city": "Be***" } ] }
+	},
+	{
+		"name": "view: an entity it excludes is forbidden, and not in its domain",
+		"credential": "jwtSales",
+		"steps": [
+			{ "operation": "execute", "args": { "query": "Categories.map(p => p.name)" }, "expect": { "error": { "code": "forbidden", "name": "ViewError" } } },
+			{ "operation": "entity", "args": { "entity": "Categories" }, "expect": { "error": { "code": "not_found" } } },
+			{ "operation": "views", "expect": { "result": [ "sales" ] } }
+		]
+	},
+	{
+		"name": "view: a credential without one sees every row",
+		"credential": "jwtReader",
+		"operation": "execute",
+		"args": { "query": "Customers.map(p => ({ customers: count(1) }))" },
+		"expect": { "result": [ { "customers": 93 } ] }
+	}
+]

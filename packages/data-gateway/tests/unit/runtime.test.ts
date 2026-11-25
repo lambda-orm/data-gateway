@@ -70,7 +70,8 @@ describe('schemas and their settings', () => {
 			scripts: { enabled: true, maxLength: 20000, timeoutMs: 30000, maxIterations: 100000 },
 			mcp: { maxRows: 500, tools: { include: [], exclude: ['orm_execute_script'] } },
 			server: { timeout: 5000, maxConcurrent: 4, maxResponseBytes: 268435456 },
-			runtime: { mode: 'thread', maxMemoryMb: 512, checkConnections: true }
+			runtime: { mode: 'thread', maxMemoryMb: 512, checkConnections: true },
+			namedViews: []
 		})
 		expect(effectiveSettings(c, iot2).transports).toEqual(['http', 'mcpHttp'])
 		expect(effectiveSettings(c, accounts).runtime).toEqual({ mode: 'process', maxMemoryMb: 256, checkConnections: true })

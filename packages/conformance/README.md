@@ -51,8 +51,9 @@ credential:
 }
 ```
 
-- `credential`: `reader` (default) or `backend` (API keys), or `jwtReader`, `jwtBackend`, `jwtExpired`: a token of a
-  user with that role (or already expired), signed by the runner with the secret of the suite (HS256,
+- `credential`: `reader` (default) or `backend` (API keys), or `jwtReader`, `jwtBackend`, `jwtExpired`, `jwtSales`: a
+  token of a user with that role (or already expired; `jwtSales` has the view `sales` and the claim `country:
+  Germany`), signed by the runner with the secret of the suite (HS256,
   `data-gateway.config.yaml`); a client's runner takes them from `credentialOf` of `runner/index.mjs`.
 - `transports`: only on these (default: the five: `http`, `ws`, `mcp+http`, `mcp+sse`, `mcp+ws`).
 - A case of one step can leave out `steps` and have `operation`, `args`, `expect` (and `mcp`) itself.

@@ -1,7 +1,7 @@
 import { ObservabilityConfig } from '@lambdaorm/base'
 import { ALL_PERMISSIONS, isPermission, KNOWN_PERMISSIONS, Permission } from '../auth/permission'
 import {
-	AuthenticationConfig, AuthenticationType, ConfigReading, CredentialConfig, DataGatewayConfig, JwtConfig, LoggerConfig, McpConfig,
+	AuthenticationConfig, AuthenticationType, ConfigReading, CredentialConfig, DataGatewayConfig, JwtConfig, RoleConfig, LoggerConfig, McpConfig,
 	OrmConfig, RuntimeConfig, RuntimeMode, SchemaConfig, SessionsConfig, TransportConfig, TransportName, TransportsConfig, WatchConfig
 } from './dataGatewayConfig'
 import { parseDuration } from './durations'
@@ -156,6 +156,10 @@ export class ConfigReader {
 		}
 		const authentication = this.authentication(entry.authentication, `${key}.authentication`)
 		if (authentication) schema.authentication = authentication
+		if (entry.view !== undefined) {
+			const view = this.viewName(entry.view, `${key}.view`)
+			if (view) schema.view = view
+		}
 		if (entry.env !== undefined) {
 			if (!isObject(entry.env)) {
 				this.issues.push(`${key}.env must be an object`)
@@ -548,11 +552,14 @@ export class ConfigReader {
 			if (!isObject(p.permissions) || !this.str(p.permissions.claim, '') || !isObject(p.permissions.roles)) {
 				this.issues.push(`${at} needs claim (where the roles are) and roles (role → permissions)`)
 			} else {
-				const roles: Record<string, Permission[]> = {}
-				for (const [role, list] of Object.entries(p.permissions.roles)) {
-					// a role says its permissions: one without them must not end up with all
-					if (!Array.isArray(list)) { this.issues.push(`${at}.roles.${role} must be a list of permissions`); continue }
-					roles[role] = this.permissions(list, `${at}.roles.${role}`)
+				const roles: Record<string, RoleConfig> = {}
+				for (const [role, value] of Object.entries(p.permissions.roles)) {
+					// a role says its permissions (a list, or { permissions, view }): one without them must not end up with all
+					const list = isObject(value) ? value.permissions : value
+					if (!Array.isArray(list)) { this.issues.push(`${at}.roles.${role} must be a list of permissions, or { permissions, view }`); continue }
+					const view = isObject(value) && value.view !== undefined ? this.viewName(value.view, `${at}.roles.${role}.view`) : undefined
+					roles[role] = { permissions: this.permissions(list, `${at}.roles.${role}`), ...(view ? { view } : {}) }
+					if (view) this.stageWithView(roles[role].permissions, `${at}.roles.${role}`)
 				}
 				permissions = { claim: String(p.permissions.claim), roles }
 			}
@@ -572,6 +579,21 @@ export class ConfigReader {
 		return { issuer, audience, ...(jwksUri ? { jwksUri } : {}), ...(secret ? { secret } : {}), algorithms, clockToleranceSec, principal: { name, ...(permissions ? { permissions } : {}) }, context }
 	}
 
+	/** the name of a view of λORM (it is checked against the schema when it loads) */
+	private viewName (value: unknown, key: string): string | undefined {
+		if (typeof value !== 'string' || !/^[A-Za-z_][A-Za-z0-9_-]*$/.test(value)) {
+			this.issues.push(`${key} must be the name of a view of the schema`)
+			return undefined
+		}
+		return value
+	}
+
+	/** the commands of stage see the whole schema, whatever the view (docs/VIEWS_BY_IDENTITY.md §4): said, not stopped */
+	private stageWithView (permissions: Permission[], key: string): void {
+		const whole = permissions.filter(p => p === 'stageImport' || p === 'ddl')
+		if (whole.length) this.warnings.push(`${key} has a view and ${whole.join(', ')}: the commands of stage see the whole schema, not the view`)
+	}
+
 	private credential (type: AuthenticationType, entry: Raw, at: string, name: string, listed: boolean): CredentialConfig | undefined {
 		const secret = type === 'bearer' ? (entry.token ?? entry.value) : type === 'apikey' ? entry.value : entry.password
 		const secretKey = type === 'bearer' ? (listed ? 'value' : 'token') : type === 'apikey' ? 'value' : 'password'
@@ -585,6 +607,13 @@ export class ConfigReader {
 		}
 		const permissions = this.permissions(entry.permissions, `${at}.permissions`)
 		const credential: CredentialConfig = { name, permissions }
+		if (entry.view !== undefined) {
+			const view = this.viewName(entry.view, `${at}.view`)
+			if (view) {
+				credential.view = view
+				this.stageWithView(permissions, at)
+			}
+		}
 		if (type === 'basic') {
 			credential.username = String(entry.username)
 			credential.password = String(secret)

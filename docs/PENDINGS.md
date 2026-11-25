@@ -145,6 +145,11 @@ recomendación, tests por transporte y la conformidad.
 
 ### G2. La vista por identidad (brecha 1.2 y 1.3)
 
+> **Estado (2026-11-25): fases 1 a 5 hechas** en `feature/views-by-identity` ([`VIEWS_BY_IDENTITY.md`](VIEWS_BY_IDENTITY.md),
+> decisiones cerradas): la vista de la clave o del rol (o la del schema), en las consultas, sus metadatos, el dominio,
+> los typings, los mappings, MCP y `/whoami`; dos vistas de un token, 403; una vista que el schema no tiene, aviso al
+> cargar y 403. Con G1, el contexto del token filtra las filas (probado en la conformidad). **Falta:** la wiki.
+
 - La gateway elige la vista de λORM (`QueryOptions.view`) por credencial, rol o claim:
   `authorization.views: [{ when: 'claims.role == "support"', view: support }, …]`, o la vista en cada credencial.
 - El cliente nunca la elige (R2). `model`, `metadata`, `parameters`, el dominio de `/schema`, las herramientas de MCP

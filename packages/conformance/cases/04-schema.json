@@ -31,7 +31,7 @@
 			{ "operation": "source", "args": { "source": "Northwind" }, "expect": { "result": { "name": "Northwind", "dialect": "PostgreSQL" } } },
 			{ "operation": "stages", "expect": { "result": [ { "name": "default", "sources": [ { "name": "Northwind" } ] } ] } },
 			{ "operation": "stage", "args": { "stage": "default" }, "expect": { "result": { "name": "default", "sources": [ { "name": "Northwind" } ] } } },
-			{ "operation": "views", "expect": { "result": [ "default" ] } },
+			{ "operation": "views", "expect": { "result": [ "default", "sales" ] } },
 			{ "operation": "enums", "expect": { "result": [] } }
 		]
 	},
