@@ -3,7 +3,7 @@ info:
   contact:
     email: flaviolrita@hotmail.com
     name: 'Flavio Lionel Rita'
-  description: 'Data Gateway: the schemas of this instance through [λORM](https://lambda-orm.github.io/wiki/) queries (lambda expressions over the domain). Every request but /ping, /health, /metrics and /schemas needs a credential, as configured in data-gateway.config.yaml (bearer token, API key or basic).'
+  description: 'Data Gateway: the schemas of this instance through [λORM](https://lambda-orm.github.io/wiki/) queries (lambda expressions over the domain). Every request needs a credential, as configured in data-gateway.config.yaml (bearer token, API key or basic), but /ping, /health, /version and /metrics (of the gateway and of each schema), /schemas, /transports and this documentation (/doc, /openapi.json).'
   license:
     name: MIT
     url: https://opensource.org/license/mit/
@@ -59,6 +59,7 @@ paths:
     get:
       operationId: version
       parameters: []
+      security: []
       responses:
         "200":
           content:

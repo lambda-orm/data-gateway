@@ -6,6 +6,13 @@ All notable changes to this project will be documented in this file.
 
 ### Unreleased
 
+**Fixes** (seen reviewing the wiki):
+
+- `GET /transports` gives `schemaPath: "/{schema}/mcp"` for `mcpWebSocket`, where its upgrade is (it said `/{schema}`).
+- The OpenAPI document lists every route open without a credential (also `/version`, `/transports` and the
+  documentation), and `/version` is marked open as the gateway serves it.
+- The Northwind data of the configuration keeps its letters (`München`, `Köln`, `México D.F.`).
+
 Needs `@lambdaorm/base` and `@lambdaorm/lib` with observability (lambda-orm/core #203).
 
 **Features** (`DATA_GATEWAY.md` §8.2):

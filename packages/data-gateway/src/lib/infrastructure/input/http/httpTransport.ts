@@ -43,7 +43,7 @@ export interface TransportInfo {
 	basePath: string
 	/** where its document is, relative to its base path: openapi.json (http), asyncapi.json (webSocket, mcpWebSocket) */
 	docs?: string
-	/** how a schema is reached: {basePath}/{schema} (webSocket, mcpWebSocket), {basePath}/{schema}/mcp (mcpHttp) */
+	/** how a schema is reached: {basePath}/{schema} (webSocket), {basePath}/{schema}/mcp (mcpHttp, mcpWebSocket) */
 	schemaPath?: string
 }
 
