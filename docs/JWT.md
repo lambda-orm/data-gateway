@@ -1,7 +1,8 @@
 # JWT / OIDC (G1)
 
-> **Estado (2026-11-25): decisiones de §8 cerradas (las recomendadas, el usuario); fases 1 y 2 hechas** (rama
-> `feature/jwt`).
+> **Estado (2026-11-25): decisiones de §8 cerradas (las recomendadas, el usuario); fases 1 a 5 hechas** (rama
+> `feature/jwt`); falta la wiki (fase 6). La conformidad usa HS256 con un secreto de la suite; el criterio de un IdP
+> real (Keycloak) queda para el lab.
 > G1 de [`PENDINGS.md`](PENDINGS.md) §3 (brecha 1.1 del
 > análisis de core). Sigue a R2: hoy la gateway **borra** `view` y `context` de lo que manda el cliente y λORM corre sin
 > ellos; con G1 el contexto sale de la identidad (y con G2, la vista).

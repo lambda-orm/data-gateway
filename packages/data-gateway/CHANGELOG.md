@@ -8,6 +8,24 @@ All notable changes to this project will be documented in this file.
 
 Needs `@lambdaorm/base` 3.11.1 and `@lambdaorm/lib` 3.15.0.
 
+**JWT / OIDC** (`docs/JWT.md`, G1):
+
+- **`authentication.adapter: jwt`:** the tokens of an identity provider, checked with its keys (its JWKS, discovered
+  from `issuer` when `jwksUri` is not given, cached; a token of a new `kid` reads it again) or a shared `secret` (HS256,
+  for development); `issuer`, `audience`, `algorithms` (never `none`), `clockTolerance`.
+- **Who it is, from its claims:** `principal.name` (default `sub`), the permissions of its roles
+  (`principal.permissions.claim` and `roles`: role → permissions; a role must list them), and `context` (variable →
+  claim), the context of λORM of its requests: it reaches the row filters of the views, the defaults and the
+  conditions; one sent by the client is still dropped.
+- **`authentication.methods`:** several in order (a JWT for the users, the API keys of the services); the first that
+  recognizes the credential decides.
+- **A refused token says why:** 401 with `the token is not valid: expired` (`issuer`, `audience`, `signature`,
+  `algorithm`, `unknown key`…) and `WWW-Authenticate: Bearer error="invalid_token"`; an issuer that can't be reached,
+  503. The token is never written anywhere.
+- **Nothing outlives its token:** a session of `management` ends at its `exp`; a WebSocket or MCP WebSocket connection
+  is closed with 4401.
+- The image needs Node ≥ 22.12 (`jose` is ESM; the image runs 24).
+
 **λORM 3.15** (`docs/PENDINGS.md` R3):
 
 - **Its errors have their status:** `ContextError` 400 (a value of the context a filter needs), `ViewError` 403 (an
