@@ -55,6 +55,20 @@ export interface SchemaSettings {
 	mcp: { maxRows: number, tools: { include: string[], exclude: string[] } }
 	server: { timeout: number, maxConcurrent: number, maxResponseBytes: number }
 	runtime: { mode: RuntimeMode, maxMemoryMb: number, checkConnections: boolean }
+	/** the view of a caller without one (orm.schemas[].view) */
+	view?: string
+	/** the views the credentials that reach it name (their keys, their roles): checked when it loads */
+	namedViews: string[]
+}
+
+/** The views an authentication names: of its keys, of the roles of its tokens, of its methods */
+export const viewsOf = (authentication: AuthenticationConfig | undefined): string[] => {
+	if (!authentication) return []
+	return [
+		...authentication.credentials.map(c => c.view),
+		...Object.values(authentication.jwt?.principal.permissions?.roles ?? {}).map(r => r.view),
+		...(authentication.methods ?? []).flatMap(viewsOf)
+	].filter((v): v is string => typeof v === 'string')
 }
 
 /** The most specific value replaces (they are not merged): a schema's tools replace the global tools */
@@ -75,7 +89,12 @@ export const effectiveSettings = (config: DataGatewayConfig, schema: SchemaDescr
 			mode: o.runtime?.mode ?? config.runtime.schemas,
 			maxMemoryMb: o.runtime?.maxMemoryMb ?? config.runtime.maxMemoryMb,
 			checkConnections: o.runtime?.checkConnections ?? config.runtime.checkConnections
-		}
+		},
+		...(o.view ? { view: o.view } : {}),
+		namedViews: [...new Set([
+			...viewsOf(o.authentication ?? config.authentication),
+			...Object.values(config.transports).flatMap(t => viewsOf((t as { authentication?: AuthenticationConfig } | undefined)?.authentication))
+		])]
 	}
 }
 

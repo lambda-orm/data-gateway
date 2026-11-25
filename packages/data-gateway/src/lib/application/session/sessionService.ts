@@ -95,6 +95,7 @@ export class SessionService {
 			// not beyond the credential it logged in with (the exp of a token)
 			expiresAt: new Date(Math.min(now.getTime() + this.settings.maxLifetimeMs, principal.expiresAt ?? Infinity)).toISOString(),
 			...(principal.context ? { context: principal.context } : {}),
+			...(principal.view ? { view: principal.view } : {}),
 			...(ip ? { ip } : {}),
 			...(client && Object.keys(client).length ? { client } : {})
 		}
@@ -124,7 +125,7 @@ export class SessionService {
 			if (ip) session.ip = ip
 		}
 		const who = principalOf(session.credential, session.permissions)
-		return { principal: session.context ? { ...who, context: session.context } : who, session }
+		return { principal: { ...who, ...(session.context ? { context: session.context } : {}), ...(session.view ? { view: session.view } : {}) }, session }
 	}
 
 	/** Why a session can't be used now (and, the first time it is seen expired, its audit line), or undefined */

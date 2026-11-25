@@ -8,6 +8,19 @@ All notable changes to this project will be documented in this file.
 
 Needs `@lambdaorm/base` 3.11.1 and `@lambdaorm/lib` 3.15.0.
 
+**The view by identity** (`docs/VIEWS_BY_IDENTITY.md`, G2):
+
+- **The gateway chooses the view of λORM of each request:** of the key (`keys[].view`), of the role of the token
+  (`roles: { support: { permissions: [read], view: support } }`), else of the schema (`orm.schemas[].view`), else
+  none (the domain). The client's is still dropped.
+- **Everything is in that view:** the queries (masked, without what it excludes, their rows filtered with the context
+  of the token), their `metadata`, `model`, `parameters` and `constraints`, the domain (`/schema`, `/domain`,
+  `/entities`, `/typings`, the search), the entities of the mappings, the views listed, the descriptions and resources
+  of MCP, and `/whoami` (`view`).
+- **Never guessed:** a token whose roles give two views is 403; a view the schema doesn't have is said when it loads
+  and its requests are 403; a credential with a view and `stageImport` or `ddl` is warned (the commands of stage see the
+  whole schema).
+
 **JWT / OIDC** (`docs/JWT.md`, G1):
 
 - **`authentication.adapter: jwt`:** the tokens of an identity provider, checked with its keys (its JWKS, discovered

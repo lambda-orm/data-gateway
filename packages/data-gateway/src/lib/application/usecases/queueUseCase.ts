@@ -18,7 +18,7 @@ export class QueueUseCase {
 
 	public async execute (ctx: RequestContext, request: QueuedRequest): Promise<{ queueId: string }> {
 		const query = requireQuery(request.query)
-		const classification = await this.queries.classify(query)
+		const classification = await this.queries.classify(query, ctx)
 		authorize(ctx.principal, 'executeQueued', classification.writes)
 		if (!this.queue || !this.queue.available) {
 			throw unavailable('QueueUnavailableError', 'this schema has no queue (infrastructure.queue)')
@@ -39,7 +39,7 @@ export class QueueUseCase {
 				query,
 				data: request.data,
 				chunk: request.chunk,
-				options: requestOptions(request.options, ctx),
+				options: requestOptions(request.options, ctx, this.queries.viewOf(ctx)),
 				onDone: outcome => this.events?.completed(outcome)
 			})
 		}))

@@ -17,6 +17,8 @@ export interface Session {
 	expiresAt: string
 	/** the context of λORM of its credential (the claims of its token, docs/JWT.md): its requests carry it */
 	context?: Record<string, unknown>
+	/** the view of λORM of its credential */
+	view?: string
 	ip?: string
 	client?: SessionClient
 	activity?: { schema?: string, tab?: string }

@@ -50,8 +50,8 @@ export class FakeOrm implements OrmQueryPort, OrmScriptPort, OrmSchemaPort, OrmS
 		return { entity: query.split('.')[0], dialect: 'PostgreSQL', source: 'main', sentence: 'SELECT 1' }
 	}
 
-	public async metadata (query: string) { return fakeMetadata(query) }
-	public async model () { return [{ name: 'id', type: 'integer' }] as any }
+	public async metadata (query: string, _options?: unknown) { return fakeMetadata(query) }
+	public async model (_query?: string, _options?: unknown) { return [{ name: 'id', type: 'integer' }] as any }
 	public async parameters () { return [{ name: 'id', type: 'integer' }] as any }
 	public async constraints () { return { entity: 'Products', constraints: [] } as any }
 	public async executeScript (script: string, data?: unknown, options?: unknown) {
@@ -61,10 +61,10 @@ export class FakeOrm implements OrmQueryPort, OrmScriptPort, OrmSchemaPort, OrmS
 
 	public check () {}
 	public version () { return { version: '1.0.0' } }
-	public domain () { return { entities: [{ name: 'Products' }], enums: [] } as any }
+	public domain (_view?: string) { return { entities: [{ name: 'Products' }], enums: [] } as any }
 	public sources () { return [{ name: 'main', dialect: 'PostgreSQL' }] }
 	public source (name: string) { return name === 'main' ? { name: 'main', dialect: 'PostgreSQL' } : undefined }
-	public entities () { return [{ name: 'Products' }] as any }
+	public entities (_view?: string) { return [{ name: 'Products' }] as any }
 	public entity (name: string) { return name === 'Products' ? { name } as any : undefined }
 	public enums () { return [] }
 	public enum () { return undefined }

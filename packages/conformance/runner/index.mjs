@@ -27,16 +27,18 @@ export const CREDENTIALS = { reader: 'conformance-reader-key', backend: 'conform
 export const JWT = { secret: 'conformance-jwt-secret-of-32-bytes!!', issuer: 'https://conformance.lambdaorm', audience: 'data-gateway' }
 const base64url = (value) => Buffer.from(typeof value === 'string' ? value : JSON.stringify(value)).toString('base64url')
 /** a token of the suite: its subject, its roles and when it ends (seconds from now; negative, already expired) */
-export const jwt = (sub, roles, expiresIn = 600) => {
+export const jwt = (sub, roles, expiresIn = 600, claims = {}) => {
 	const now = Math.floor(Date.now() / 1000)
-	const unsigned = `${base64url({ alg: 'HS256', typ: 'JWT' })}.${base64url({ iss: JWT.issuer, aud: JWT.audience, sub, roles, tenant: 'conformance', iat: now, exp: now + expiresIn })}`
+	const unsigned = `${base64url({ alg: 'HS256', typ: 'JWT' })}.${base64url({ iss: JWT.issuer, aud: JWT.audience, sub, roles, tenant: 'conformance', ...claims, iat: now, exp: now + expiresIn })}`
 	return `${unsigned}.${createHmac('sha256', JWT.secret).update(unsigned).digest('base64url')}`
 }
 /** the tokens of the cases: a credential of a case is a key of CREDENTIALS or of TOKENS */
 export const TOKENS = {
 	jwtReader: () => jwt('jwt-reader', ['reader']),
 	jwtBackend: () => jwt('jwt-backend', ['backend']),
-	jwtExpired: () => jwt('jwt-reader', ['reader'], -120)
+	jwtExpired: () => jwt('jwt-reader', ['reader'], -120),
+	// the view sales (docs/VIEWS_BY_IDENTITY.md): the customers of Germany
+	jwtSales: () => jwt('jwt-sales', ['sales'], 600, { country: 'Germany' })
 }
 /** how a credential of a case is sent: an API key, or a token */
 export const credentialOf = (name) => TOKENS[name] ? { token: TOKENS[name]() } : { apiKey: CREDENTIALS[name] }

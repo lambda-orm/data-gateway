@@ -228,7 +228,7 @@ describe('http transport with JWT (docs/JWT.md)', () => {
 		fixture = fakeGateway()
 		const jwt = new JwtAuthenticator({
 			issuer: ISSUER, audience: ['data-gateway'], secret: SECRET, algorithms: ['HS256'], clockToleranceSec: 0,
-			principal: { name: 'sub', permissions: { claim: 'roles', roles: { reader: ['read'] } } },
+			principal: { name: 'sub', permissions: { claim: 'roles', roles: { reader: { permissions: ['read'] } } } },
 			context: { tenant: 'tenant_id' }
 		})
 		;({ transport, base } = await start(fixture, { authenticator: new MethodsAuthenticator([jwt, new ApiKeyAuthenticator([{ name: 'svc', value: 'svc-key', permissions: ['read'] }])]) }))
