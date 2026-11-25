@@ -69,7 +69,9 @@ que un `view`/`context` del cliente no llega a λORM.
 > versiones probadas** (el `dist` sin rangos: la 4.0.0 se probó con `lib` 3.9 y su imagen instalaba 3.15). `check` y
 > `clients` (también contra la imagen) en verde.
 >
-> **Pendiente en core** (visto al subir):
+> **Arreglado en core** (`bugfix/gateway-findings`, PR a `develop` pendiente; sale en `lib` y `base` *patch*). Cuando
+> se publique: subir la versión acá, quitar el cast de `observeWith` en `lambdaOrmAdapter` y volver el caso de Ilusor a
+> `Areas.map(p => p.areaType.nme)` (entre fuentes). Lo que se arregló:
 > - Desde `lib` 3.13, un `map` sobre una relación a **otra fuente** se resuelve en memoria y **no valida sus campos**:
 >   `Areas.map(p => p.areaType.nme)` no da error (antes: *did you mean name?*). El test de Ilusor usa ahora una
 >   relación de la misma fuente.
