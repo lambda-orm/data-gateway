@@ -4,7 +4,7 @@ import { GatewayError, badRequest } from '../../domain/errors/gatewayError'
 import { RequestContext, ScriptRequest } from '../ports/input/dataGatewayPort'
 import { OrmScriptPort } from '../ports/output/ormPorts'
 import { Auditor } from './auditor'
-import { withActor } from './actor'
+import { requestOptions } from './requestOptions'
 
 export interface ScriptSettings {
 	enabled: boolean
@@ -36,7 +36,7 @@ export class ScriptUseCase {
 		if (script.length > this.settings.maxLength) {
 			throw new GatewayError(413, 'ScriptTooLongError', `script longer than ${this.settings.maxLength} characters (scripts.maxLength)`)
 		}
-		const options: ScriptOptions = withActor(request.options, ctx)
+		const options: ScriptOptions = requestOptions(request.options, ctx)
 		options.timeout = lower(options.timeout, this.settings.timeoutMs)
 		options.maxIterations = lower(options.maxIterations, this.settings.maxIterations)
 		return this.auditor.track(ctx, { operation: 'executeScript', query: script, data: request.data }, async () => {

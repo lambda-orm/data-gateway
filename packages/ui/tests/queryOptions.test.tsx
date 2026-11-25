@@ -1,5 +1,5 @@
 // The options of a query as a form: the JSON stays what is kept (read and written by domain/queryOptions), the form
-// offers the stages and views of the schema, says what is valid, keeps what it doesn't know, and can be written as JSON.
+// offers the stages of the schema (not its views: the gateway decides the view), says what is valid, keeps what it doesn't know, and can be written as JSON.
 import React, { useState } from 'react'
 import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
@@ -17,8 +17,10 @@ afterEach(cleanup)
 describe('the options as fields', () => {
 	test('read: the known ones as fields, the others kept; an invalid text says so', () => {
 		const read = optionsFieldsOf('{"stage":"test","chunkSize":500,"tryAllCan":true,"headers":[["tenant","a"]],"timeout":2000,"other":{"x":1}}')
-		expect(read.fields).toEqual({ stage: 'test', view: '', chunkSize: '500', tryAllCan: 'true', headers: [['tenant', 'a']], timeout: '2000', maxIterations: '' })
+		expect(read.fields).toEqual({ stage: 'test', chunkSize: '500', tryAllCan: 'true', headers: [['tenant', 'a']], timeout: '2000', maxIterations: '' })
 		expect(read.extra).toEqual({ other: { x: 1 } })
+		// a view of a query saved before is not a field (the gateway drops it): just kept
+		expect(optionsFieldsOf('{"view":"public"}').extra).toEqual({ view: 'public' })
 		expect(optionsFieldsOf('').fields).toEqual(EMPTY_OPTIONS)
 		expect(optionsFieldsOf('{ nope').error).toBe('invalid')
 		expect(optionsFieldsOf('[1]').error).toBe('invalid')
@@ -40,7 +42,6 @@ describe('the options as fields', () => {
 
 class ChoicesApi extends FakeApi {
 	async stages () { return ['default', 'test'] }
-	async views () { return ['default', 'public'] }
 }
 
 /** The form with its JSON in a state, as the workbench keeps it */
@@ -52,14 +53,14 @@ const Harness: React.FC<{ initial: string, mode?: 'query' | 'script', onText?: (
 }
 
 describe('OptionsForm', () => {
-	test('stage and view offer those of the schema; each field says what is valid; an empty one is no option', async () => {
+	test('stage offers those of the schema, and there is no view; each field says what is valid; an empty one is no option', async () => {
 		const texts: string[] = []
 		render(<Harness initial="{}" onText={t => texts.push(t)} />)
 		// a text field until the stages arrive, then their combo
 		await waitFor(() => expect((screen.getByLabelText('options · stage') as HTMLElement).tagName).toBe('SELECT'))
 		const stage = screen.getByLabelText('options · stage') as HTMLSelectElement
 		expect([...stage.options].map(o => o.value)).toEqual(['', 'default', 'test'])
-		expect([...(screen.getByLabelText('options · view') as HTMLSelectElement).options].map(o => o.value)).toEqual(['', 'default', 'public'])
+		expect(screen.queryByLabelText('options · view')).toBeNull()
 		expect(screen.getByText(/where it runs: a stage of the schema/)).toBeTruthy()
 		fireEvent.change(stage, { target: { value: 'test' } })
 		expect(JSON.parse(texts.at(-1)!)).toEqual({ stage: 'test' })
