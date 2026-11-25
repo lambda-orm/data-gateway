@@ -6,7 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ### Unreleased
 
-Needs `@lambdaorm/base` 3.11.1 and `@lambdaorm/lib` 3.15.0.
+### 4.1.0 (2026-11-25)
+
+With `@lambdaorm/base` 3.11.1 and `@lambdaorm/lib` 3.15.0, the exact versions the image installs.
 
 **Named queries** (`docs/NAMED_QUERIES.md`, G7):
 
@@ -75,7 +77,7 @@ Needs `@lambdaorm/base` 3.11.1 and `@lambdaorm/lib` 3.15.0.
   documentation), and `/version` is marked open as the gateway serves it.
 - The Northwind data of the configuration keeps its letters (`München`, `Köln`, `México D.F.`).
 
-**Features** (`DATA_GATEWAY.md` §8.2):
+**Observability** (`DATA_GATEWAY.md` §8.2):
 
 - **OpenTelemetry:** the section `observability` of `data-gateway.config.yaml` (the shape of the one of a
   `lambdaORM.yaml`; the `OTEL_*` variables override it) starts the SDK in the edge and in every schema worker, before
@@ -99,8 +101,8 @@ Needs `@lambdaorm/base` 3.11.1 and `@lambdaorm/lib` 3.15.0.
   from what a client sends on every transport (REST, WebSocket, MCP, `script`, `execute-queued`) before reaching λORM,
   and `plan` now takes the actor and goes through the same filter as `execute`. A client with `read` could ask for any
   view (or none, the whole domain) and skip what a view hides or masks, and with λORM ≥ 3.10 send a context of another
-  tenant to the row filters of the views. Until the gateway takes them from the identity (JWT/OIDC, the view per
-  credential), λORM runs without view and without context.
+  tenant to the row filters of the views. The gateway takes them from the identity (JWT / OIDC and the view by
+  identity, above).
 
 ### 4.0.0 (2026-11-23)
 
