@@ -100,8 +100,8 @@
 	{
 		"name": "model and parameters of a query",
 		"steps": [
-			{ "operation": "model", "args": { "query": "Categories.filter(p => p.id == id).map(p => p.name)" }, "expect": { "result": [ { "name": "name", "type": "string" } ] } },
-			{ "operation": "parameters", "args": { "query": "Categories.filter(p => p.id == id).map(p => p.name)" }, "expect": { "result": [ { "name": "id", "type": "integer" } ] } }
+			{ "operation": "model", "args": { "query": "Categories.filter(p => p.id == id).map(p => p.name)" }, "expect": { "match": [ { "name": "name", "type": "string" } ] } },
+			{ "operation": "parameters", "args": { "query": "Categories.filter(p => p.id == id).map(p => p.name)" }, "expect": { "match": [ { "name": "id", "type": "integer" } ] } }
 		]
 	},
 	{
