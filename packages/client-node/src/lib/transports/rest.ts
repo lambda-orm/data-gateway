@@ -1,4 +1,4 @@
-import { ConnectionTarget } from '../connection'
+import { ConnectionTarget, headersOf } from '../connection'
 import { gatewayError, GatewayError, transportError, unsupported } from '../errors'
 import { Args, clean, Operation, REST, WHERE } from '../operations'
 import { Transport } from './transport'
@@ -20,7 +20,7 @@ export class RestTransport implements Transport {
 		try {
 			response = await fetch(this.target.url + path, {
 				method,
-				headers: { ...this.target.headers, ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+				headers: { ...await headersOf(this.target), ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
 				body: body !== undefined ? JSON.stringify(clean(body)) : undefined,
 				signal: AbortSignal.timeout(this.target.timeout)
 			})
