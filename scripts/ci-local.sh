@@ -83,6 +83,8 @@ clients () {
 	fi
 	step 'Conformance suite: the reference runner (runner/index.mjs)'
 	node "$suite/runner/index.mjs"
+	step 'Conformance suite: the subscriptions (runner/subscriptions.mjs)'
+	node "$suite/runner/subscriptions.mjs"
 	step 'Conformance suite: the Node client (@lambdaorm/data-gateway-client)'
 	(cd "$ROOT/packages/client-node" && npx tsx conformance/run.ts)
 	ok 'conformance suite passed'

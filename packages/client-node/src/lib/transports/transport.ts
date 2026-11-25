@@ -1,7 +1,7 @@
 import { TransportName } from '../errors'
 import { Args, Operation } from '../operations'
 
-export type NotificationEvent = 'queue.completed' | 'queue.failed' | 'schema.statusChanged'
+export type NotificationEvent = 'queue.completed' | 'queue.failed' | 'schema.statusChanged' | 'data.changed' | 'query.changed' | 'subscription.failed'
 export type NotificationListener = (params: any) => void
 
 /** One of the five transports: an operation of the common API in, its result (or a GatewayError) out */

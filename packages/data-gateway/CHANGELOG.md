@@ -6,6 +6,17 @@ All notable changes to this project will be documented in this file.
 
 ### Unreleased
 
+**Subscriptions** (`docs/SUBSCRIPTIONS.md`, G4):
+
+- **Over WebSocket:** `subscribe.entity { entity }` (each write of it: `data.changed` with its action, the keys its view
+  sees and its count, never the data), `subscribe.query { query, data }` or `{ name, data }` (its result now, and
+  `query.changed` with the new one when something it reads is written, only if it changed, at most once in 200 ms) and
+  `unsubscribe`. Up to 100 a connection; they end with it.
+- **Over SSE:** `GET /subscribe?entity=…`, `?query=…&data=…` or `?name=…` on `http`: the same events.
+- **With the identity of who subscribes:** its permissions, its view and its context; with a view, a write of rows it
+  can't see doesn't reach it (its keys are read in its view).
+- The writes of this replica (across replicas, later).
+
 **The cache of the reads** (`docs/RESULT_CACHE.md`, G3):
 
 - **`cache`** (global or by schema, off by default): the result of an `execute` that only reads (and of a named query

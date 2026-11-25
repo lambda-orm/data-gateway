@@ -102,6 +102,32 @@ export class DataGatewayClient {
 		return this.call('query', { name, data, options: this.options(options) })
 	}
 
+	/**
+	 * A subscription to the writes of the schema (ws only, gateway 4.2.0, docs/SUBSCRIPTIONS.md): to an entity (each
+	 * write of it: action, keys its view sees, count) or to a query, a named one too (its result now, and again when it
+	 * changes). The listener gets the events of this subscription only; `unsubscribe()` ends it.
+	 */
+	public async subscribe (
+		target: { entity: string } | { query: Query, data?: any } | { name: string, data?: any },
+		listener: (event: { type: 'data.changed' | 'query.changed' | 'subscription.failed', [key: string]: any }) => void
+	): Promise<{ subscription: string, result?: unknown, unsubscribe: () => Promise<void> }> {
+		if (!this.transport.on) throw new Error('subscriptions need a ws(s):// connection (or the SSE of GET /subscribe)')
+		const started: { subscription: string, result?: unknown } = 'entity' in target
+			? await this.call('subscribeEntity', { entity: target.entity })
+			: 'name' in target
+				? await this.call('subscribeQuery', { name: target.name, data: target.data ?? {} })
+				: await this.call('subscribeQuery', { query: queryText(target.query), data: target.data ?? {} })
+		const offs = (['data.changed', 'query.changed', 'subscription.failed'] as const).map(type =>
+			this.transport.on!(type, params => { if (params?.subscription === started.subscription) listener({ type, ...params }) }))
+		return {
+			...started,
+			unsubscribe: async () => {
+				for (const off of offs) off()
+				await this.call('unsubscribe', { subscription: started.subscription })
+			}
+		}
+	}
+
 	/** who the credential is and what it can do (REST only) */
 	public whoami (): Promise<Whoami> { return this.call('whoami') }
 

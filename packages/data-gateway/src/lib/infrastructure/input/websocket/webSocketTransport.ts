@@ -11,6 +11,12 @@ import { AuthenticatorPort, LoggerPort } from '../../../application/ports/output
 import { RpcDispatcher } from '../../../application/rpc/rpcDispatcher'
 import { Principal, refusalOf, withActor } from '../../../domain/auth/principal'
 import { closeWhenExpired } from './credentialExpiry'
+import { ConnectionSubscriptions } from '../../../application/subscriptions/subscriptions'
+
+/** the methods of the subscriptions of a connection (docs/SUBSCRIPTIONS.md) */
+const SUBSCRIPTION_METHODS = ['subscribe.entity', 'subscribe.query', 'unsubscribe']
+/** a subscribed query is run again at most once in this time */
+const SUBSCRIPTION_DEBOUNCE_MS = 200
 import { RpcCallError } from '../../../domain/errors/gatewayError'
 import { toHttpError } from '../http/httpErrors'
 import { Transport } from '../transport'
@@ -24,6 +30,8 @@ export interface WebSocketTransportOptions {
 	maxConnections: number
 	maxPayload: number
 	asyncapiEnabled: boolean
+	/** subscriptions at a time on one connection (docs/SUBSCRIPTIONS.md); default 100 */
+	maxSubscriptions?: number
 }
 
 export interface WebSocketTransportDeps {
@@ -185,6 +193,11 @@ export class WebSocketTransport implements Transport {
 		const recent = new Map<string, { queueId: string, ok: boolean }>()
 		const done = (outcome: { queueId: string, ok: boolean }) => notify(outcome.ok ? 'queue.completed' : 'queue.failed', outcome)
 		const unsubscribe: (() => void)[] = []
+		// its subscriptions to the writes of its schema, with its identity (docs/SUBSCRIPTIONS.md)
+		const subscriptions = schema
+			? new ConnectionSubscriptions(schema.gateway, ctx, listener => schema.onDataChange(listener), notify, { max: this.options.maxSubscriptions ?? 100, debounceMs: SUBSCRIPTION_DEBOUNCE_MS })
+			: undefined
+		if (subscriptions) unsubscribe.push(() => subscriptions.close())
 		this.schemaOf.set(ws, schema?.path)
 		unsubscribe.push(() => this.schemaOf.delete(ws))
 		// what changed in its workspace (a connection to the root: in every workspace)
@@ -224,7 +237,9 @@ export class WebSocketTransport implements Transport {
 					'rpc.method': String(message.method),
 					'network.transport': 'tcp',
 					'enduser.id': ctx.principal.name
-				}, message.params?._meta, () => this.call(ctx, schema, message.method, message.params))
+				}, message.params?._meta, () => subscriptions && SUBSCRIPTION_METHODS.includes(message.method)
+					? this.subscribe(subscriptions, message.method, message.params ?? {})
+					: this.call(ctx, schema, message.method, message.params))
 				const queueId = message.method === 'query.executeQueued' && message.params?.notify ? (result as any)?.queueId : undefined
 				if (queueId) {
 					const ended = recent.get(queueId)
@@ -240,6 +255,13 @@ export class WebSocketTransport implements Transport {
 				if (!isNotification) send({ jsonrpc: '2.0', id, error: toRpcError(error) })
 			}
 		})
+	}
+
+	/** subscribe.entity, subscribe.query (or a named one), unsubscribe: of this connection */
+	private subscribe (subscriptions: ConnectionSubscriptions, method: string, params: Record<string, unknown>): Promise<unknown> {
+		if (method === 'subscribe.entity') return subscriptions.entity(params.entity)
+		if (method === 'subscribe.query') return subscriptions.query(params)
+		return Promise.resolve(subscriptions.unsubscribe(params.subscription))
 	}
 
 	private async call (ctx: RequestContext, schema: ServedSchema | undefined, method: string, params: unknown): Promise<unknown> {

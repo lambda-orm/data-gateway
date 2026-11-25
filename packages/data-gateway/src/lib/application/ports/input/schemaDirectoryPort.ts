@@ -3,7 +3,7 @@ import { SchemaState } from '../../../domain/runtime/policies'
 import { WorkspaceChange } from '../../../domain/runtime/workspaces'
 import { AuthenticatorPort, QueueOutcome } from '../output/supportPorts'
 import { DataGatewayPort, RequestContext } from './dataGatewayPort'
-import { CommandOperation } from '../../../domain/runtime/channelProtocol'
+import { CommandOperation, DataChangeSummary } from '../../../domain/runtime/channelProtocol'
 import { McpServerPort } from './mcpServerPort'
 
 /** One schema as a transport sees it: its route, its ports and who may call it there */
@@ -23,6 +23,8 @@ export interface ServedSchema {
 	features: { scripts: boolean }
 	/** The ends of its background executions (executeQueued) */
 	onQueueOutcome (listener: (outcome: QueueOutcome) => void): () => void
+	/** Its writes through λORM, a commit at a time (docs/SUBSCRIPTIONS.md) */
+	onDataChange (listener: (changes: DataChangeSummary[]) => void): () => void
 }
 
 export interface GatewayHealth {

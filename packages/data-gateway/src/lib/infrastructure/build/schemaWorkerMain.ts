@@ -68,6 +68,7 @@ const run = async (): Promise<void> => {
 			audit: new StdoutAuditAdapter(),
 			clock: new SystemClock(),
 			queueEvents: { completed: outcome => broadcast({ type: 'event', event: 'queue', outcome }) },
+			dataEvents: changes => broadcast({ type: 'event', event: 'data', changes }),
 			metrics
 		})
 	} catch (error: any) {

@@ -173,6 +173,11 @@ recomendación, tests por transporte y la conformidad.
 
 ### G4. Suscripciones (brecha 2.2)
 
+> **Estado (2026-11-25): fases 1 a 4 hechas** en `feature/subscriptions` ([`SUBSCRIPTIONS.md`](SUBSCRIPTIONS.md),
+> decisiones cerradas): `subscribe.entity`, `subscribe.query` (también una consulta con nombre) y `unsubscribe` por
+> WebSocket, `GET /subscribe` (SSE), con la identidad de quien se suscribe (una vista con filtro de fila: solo las
+> claves que ve); el cliente Node (`client.subscribe`). **Falta:** entre réplicas (Redis) y la wiki.
+
 - `subscribe`/`unsubscribe` por WebSocket (JSON-RPC) y SSE: a una entidad (sus cambios) o a una consulta (se vuelve a
   correr cuando cambia una entidad que lee).
 - Con los permisos, la vista y el contexto de la credencial: un cambio que el suscriptor no puede ver no le llega.

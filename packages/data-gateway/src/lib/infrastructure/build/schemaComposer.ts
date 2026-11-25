@@ -1,3 +1,4 @@
+import { DataChangeSummary } from '../../domain/runtime/channelProtocol'
 import { createHash } from 'crypto'
 import { ResolvedObservability } from '@lambdaorm/base'
 import fs from 'fs'
@@ -62,7 +63,7 @@ export const workspaceFile = (workspace: string): string =>
  * One schema, in the thread that calls it: λORM on its workspace, its queue, its use cases, facade and MCP server. The
  * schema worker runs one; the inline runtime (tests, one process) runs them all.
  */
-export const composeSchema = async (input: SchemaCompositionInput, deps: { logger: LoggerPort, audit: AuditPort, clock: ClockPort, queueEvents?: QueueEventsPort, metrics?: MetricsPort }): Promise<ComposedSchema> => {
+export const composeSchema = async (input: SchemaCompositionInput, deps: { logger: LoggerPort, audit: AuditPort, clock: ClockPort, queueEvents?: QueueEventsPort, metrics?: MetricsPort, dataEvents?: (changes: DataChangeSummary[]) => void }): Promise<ComposedSchema> => {
 	const { logger } = deps
 	const file = workspaceFile(input.workspace)
 	if (!fs.existsSync(file)) throw new ConfigError([`schema "${input.path || '/'}": ${file} not found (the workspace must have its lambdaORM.yaml)`])
@@ -92,8 +93,18 @@ export const composeSchema = async (input: SchemaCompositionInput, deps: { logge
 	const missing = views.missing(settings.namedViews ?? [])
 	if (missing.length) logger.warn(`schema "${input.path || '/'}": the views ${missing.join(', ')} of the configuration are not in its lambdaORM.yaml: a request with one is refused (403)`)
 	const queries = new QueryUseCases(orm, auditor, views, readsCache(input, orm, deps.metrics))
+	// its writes, to the subscriptions of the edge (docs/SUBSCRIPTIONS.md): what changed, never the data
+	if (deps.dataEvents) {
+		const tell = deps.dataEvents
+		orm.onDataChange(changes => tell(changes.map((c: any) => ({
+			entity: c.entity,
+			action: c.action,
+			...(c.keys ? { keys: c.keys } : {}),
+			...(c.count !== undefined ? { count: c.count } : {})
+		}))))
+	}
 	// the queries of application.queries with their limits (docs/NAMED_QUERIES.md)
-	const named = new NamedQueryUseCases(orm, queries, settings.queries ?? {})
+	const named = new NamedQueryUseCases(orm, queries, settings.queries ?? {}, () => orm.entities() as any)
 	const unknownLimits = Object.keys(settings.queries ?? {}).filter(name => !orm.namedQueries().some(q => q.name === name))
 	if (unknownLimits.length) logger.warn(`schema "${input.path || '/'}": orm.schemas[].queries names ${unknownLimits.join(', ')}, not in its application.queries`)
 	const gateway = new DataGateway({
