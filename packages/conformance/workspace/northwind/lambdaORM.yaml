@@ -109,6 +109,17 @@ domain:
 infrastructure:
   views:
   - name: default  
+  # the view of the role sales of the tokens of the suite (docs/VIEWS_BY_IDENTITY.md): the customers of its country
+  # (the claim country, in the context), their city masked, and no categories
+  - name: sales
+    entities:
+    - name: Customers
+      filter: 'country == context.country'
+      properties:
+      - name: city
+        readExp: 'concat(substring(city, 1, 2), "***")'
+    - name: Categories
+      exclude: true
   mappings:
   - name: default
     entities:

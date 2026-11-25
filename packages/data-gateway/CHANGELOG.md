@@ -8,6 +8,37 @@ All notable changes to this project will be documented in this file.
 
 Needs `@lambdaorm/base` 3.11.1 and `@lambdaorm/lib` 3.15.0.
 
+**The view by identity** (`docs/VIEWS_BY_IDENTITY.md`, G2):
+
+- **The gateway chooses the view of λORM of each request:** of the key (`keys[].view`), of the role of the token
+  (`roles: { support: { permissions: [read], view: support } }`), else of the schema (`orm.schemas[].view`), else
+  none (the domain). The client's is still dropped.
+- **Everything is in that view:** the queries (masked, without what it excludes, their rows filtered with the context
+  of the token), their `metadata`, `model`, `parameters` and `constraints`, the domain (`/schema`, `/domain`,
+  `/entities`, `/typings`, the search), the entities of the mappings, the views listed, the descriptions and resources
+  of MCP, and `/whoami` (`view`).
+- **Never guessed:** a token whose roles give two views is 403; a view the schema doesn't have is said when it loads
+  and its requests are 403; a credential with a view and `stageImport` or `ddl` is warned (the commands of stage see the
+  whole schema).
+
+**JWT / OIDC** (`docs/JWT.md`, G1):
+
+- **`authentication.adapter: jwt`:** the tokens of an identity provider, checked with its keys (its JWKS, discovered
+  from `issuer` when `jwksUri` is not given, cached; a token of a new `kid` reads it again) or a shared `secret` (HS256,
+  for development); `issuer`, `audience`, `algorithms` (never `none`), `clockTolerance`.
+- **Who it is, from its claims:** `principal.name` (default `sub`), the permissions of its roles
+  (`principal.permissions.claim` and `roles`: role → permissions; a role must list them), and `context` (variable →
+  claim), the context of λORM of its requests: it reaches the row filters of the views, the defaults and the
+  conditions; one sent by the client is still dropped.
+- **`authentication.methods`:** several in order (a JWT for the users, the API keys of the services); the first that
+  recognizes the credential decides.
+- **A refused token says why:** 401 with `the token is not valid: expired` (`issuer`, `audience`, `signature`,
+  `algorithm`, `unknown key`…) and `WWW-Authenticate: Bearer error="invalid_token"`; an issuer that can't be reached,
+  503. The token is never written anywhere.
+- **Nothing outlives its token:** a session of `management` ends at its `exp`; a WebSocket or MCP WebSocket connection
+  is closed with 4401.
+- The image needs Node ≥ 22.12 (`jose` is ESM; the image runs 24).
+
 **λORM 3.15** (`docs/PENDINGS.md` R3):
 
 - **Its errors have their status:** `ContextError` 400 (a value of the context a filter needs), `ViewError` 403 (an

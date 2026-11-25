@@ -175,7 +175,7 @@ export const QueryWorkbench: React.FC<QueryWorkbenchProps> = props => {
 					{copied && <span className="lw-type" role="status">{m.copiedQuery}</span>}
 				</span>
 				{props.toolbar}
-				{s.whoami && props.showWho !== false && <span className="lw-who">{s.whoami.name} · {s.whoami.permissions.join(', ')}</span>}
+				{s.whoami && props.showWho !== false && <span className="lw-who">{s.whoami.name} · {s.whoami.permissions.join(', ')}{s.whoami.view ? ` · view ${s.whoami.view}` : ''}</span>}
 			</div>
 			{s.notice && <div className="lw-notice" role="alert">{localize(s.notice, m)}</div>}
 			{s.mode === 'query'

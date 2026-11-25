@@ -210,3 +210,46 @@ describe('http transport options', () => {
 		}
 	})
 })
+
+describe('http transport with JWT (docs/JWT.md)', () => {
+	const SECRET = 'a-secret-of-at-least-32-bytes-long!'
+	const ISSUER = 'https://auth.example.com'
+	let fixture: GatewayFixture
+	let transport: HttpTransport
+	let base: string
+	const token = async (claims: Record<string, unknown>, exp: string | number = '5m') => {
+		const { SignJWT } = await import('jose')
+		return new SignJWT(claims).setProtectedHeader({ alg: 'HS256' }).setIssuer(ISSUER).setAudience('data-gateway').setExpirationTime(exp).sign(new TextEncoder().encode(SECRET))
+	}
+
+	beforeAll(async () => {
+		const { JwtAuthenticator } = await import('../../src/lib/infrastructure/output/auth/jwtAuthenticator')
+		const { MethodsAuthenticator } = await import('../../src/lib/infrastructure/output/auth/authenticators')
+		fixture = fakeGateway()
+		const jwt = new JwtAuthenticator({
+			issuer: ISSUER, audience: ['data-gateway'], secret: SECRET, algorithms: ['HS256'], clockToleranceSec: 0,
+			principal: { name: 'sub', permissions: { claim: 'roles', roles: { reader: { permissions: ['read'] } } } },
+			context: { tenant: 'tenant_id' }
+		})
+		;({ transport, base } = await start(fixture, { authenticator: new MethodsAuthenticator([jwt, new ApiKeyAuthenticator([{ name: 'svc', value: 'svc-key', permissions: ['read'] }])]) }))
+	})
+	afterAll(() => transport.stop())
+
+	test('a valid token: its roles and its context reach λORM; the context sent by the client never', async () => {
+		const res = await call(base, '/execute', { body: { query: 'Products', options: { context: { tenant: 'other' } } }, headers: { Authorization: `Bearer ${await token({ sub: 'ann', roles: ['reader'], tenant_id: 't1' })}` } })
+		expect(res.status).toBe(200)
+		expect(fixture.orm.executed.at(-1)!.options).toMatchObject({ context: { tenant: 't1' }, actor: { credential: 'ann' } })
+		// a write: its roles don't allow it
+		expect((await call(base, '/execute', { body: { query: 'Products.insert()', data: {} }, headers: { Authorization: `Bearer ${await token({ sub: 'ann', roles: ['reader'] })}` } })).status).toBe(403)
+	})
+
+	test('an expired token: 401 with why and WWW-Authenticate; a service with its API key, next to it', async () => {
+		const expired = await call(base, '/execute', { body: { query: 'Products' }, headers: { Authorization: `Bearer ${await token({ sub: 'ann' }, Math.floor(Date.now() / 1000) - 60)}` } })
+		expect(expired).toMatchObject({ status: 401, body: { message: 'the token is not valid: expired' } })
+		expect(expired.headers.get('www-authenticate')).toBe('Bearer error="invalid_token", error_description="expired"')
+		const service = await call(base, '/execute', { body: { query: 'Products' }, headers: { 'X-Api-Key': 'svc-key' } })
+		expect(service.status).toBe(200)
+		expect(fixture.orm.executed.at(-1)!.options).not.toHaveProperty('context')
+		expect((await call(base, '/execute', { body: { query: 'Products' } })).headers.get('www-authenticate')).toBe('Bearer')
+	})
+})

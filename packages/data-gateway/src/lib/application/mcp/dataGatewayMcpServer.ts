@@ -7,6 +7,7 @@ import { McpServerInfo, McpServerPort } from '../ports/input/mcpServerPort'
 import { OrmSchemaPort } from '../ports/output/ormPorts'
 import { validateArguments } from './argumentValidator'
 import { describeDomain } from './domainDescription'
+import { NO_VIEWS, ViewResolver } from '../usecases/viewResolver'
 import { EXPRESSIONS_GUIDE } from './expressionsGuide'
 import { limitRows, toolError, toolSuccess } from './resultSerializer'
 import { ToolCatalog } from './toolCatalog'
@@ -45,13 +46,15 @@ const paginate = <T>(items: T[], pageSize: number, cursor?: string): Page<T> => 
  * Tools listed per credential, results cut at mcp.maxRows, errors of execution as isError for the model to correct.
  */
 export class DataGatewayMcpServer implements McpServerPort {
-	private domainText: string | undefined
+	/** the description of the domain of each view ('' the domain): what an agent believes exists */
+	private readonly domainTexts = new Map<string, string>()
 
 	// eslint-disable-next-line no-useless-constructor
 	constructor (
 		private readonly catalog: ToolCatalog,
 		private readonly schema: OrmSchemaPort,
-		private readonly settings: McpServerSettings
+		private readonly settings: McpServerSettings,
+		private readonly views: ViewResolver = NO_VIEWS
 	) {}
 
 	public info (): McpServerInfo {
@@ -64,14 +67,24 @@ export class DataGatewayMcpServer implements McpServerPort {
 		}
 	}
 
-	/** Described once: the schema doesn't change while running */
-	private get domain (): string {
-		if (this.domainText === undefined) this.domainText = describeDomain(this.schema.domain())
-		return this.domainText
+	/**
+	 * The domain of who calls, described once per view (the schema doesn't change while running): an agent with a view
+	 * is told only of its entities (docs/VIEWS_BY_IDENTITY.md)
+	 */
+	private domainOf (ctx: RequestContext): string {
+		const view = this.views.of(ctx.principal)
+		const key = view ?? ''
+		let text = this.domainTexts.get(key)
+		if (text === undefined) {
+			text = describeDomain(this.schema.domain(view))
+			this.domainTexts.set(key, text)
+		}
+		return text
 	}
 
 	public async listTools (ctx: RequestContext, cursor?: string): Promise<Page<ToolDefinition>> {
-		const definitions = this.catalog.visible(ctx.principal).map(tool => tool.definition(ctx.principal, { domain: this.domain }))
+		const domain = this.domainOf(ctx)
+		const definitions = this.catalog.visible(ctx.principal).map(tool => tool.definition(ctx.principal, { domain }))
 		return paginate(definitions, this.settings.pageSize, cursor)
 	}
 
@@ -100,10 +113,11 @@ export class DataGatewayMcpServer implements McpServerPort {
 	public async readResource (ctx: RequestContext, uri: string): Promise<ResourceContent> {
 		authorize(ctx.principal, 'schema')
 		if (uri === 'lambdaorm://guide/expressions') return { uri, mimeType: 'text/markdown', text: EXPRESSIONS_GUIDE }
-		if (uri === 'lambdaorm://schema/domain') return { uri, mimeType: 'application/json', text: JSON.stringify(this.schema.domain()) }
+		const view = this.views.of(ctx.principal)
+		if (uri === 'lambdaorm://schema/domain') return { uri, mimeType: 'application/json', text: JSON.stringify(this.schema.domain(view)) }
 		const match = ENTITY_URI.exec(uri)
 		if (match) {
-			const entity = this.schema.entity(decodeURIComponent(match[1]))
+			const entity = this.schema.entity(decodeURIComponent(match[1]), view)
 			if (entity) return { uri, mimeType: 'application/json', text: JSON.stringify(entity) }
 		}
 		throw new McpRequestError(`unknown resource "${uri}"`)

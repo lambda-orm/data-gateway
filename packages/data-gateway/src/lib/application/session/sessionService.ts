@@ -37,7 +37,7 @@ const sessionError = (end: SessionEnd): GatewayError => {
 	case 'idle':
 		return new GatewayError(401, 'SessionExpiredError', `the session expired at ${end.at}: no request within sessions.idleTimeout; log in again`)
 	default:
-		return new GatewayError(401, 'SessionExpiredError', `the session expired at ${end.at}: sessions.maxLifetime; log in again`)
+		return new GatewayError(401, 'SessionExpiredError', `the session expired at ${end.at}: sessions.maxLifetime, or the token it logged in with; log in again`)
 	}
 }
 
@@ -92,7 +92,10 @@ export class SessionService {
 			permissions: [...principal.permissions],
 			createdAt: at,
 			lastSeenAt: at,
-			expiresAt: new Date(now.getTime() + this.settings.maxLifetimeMs).toISOString(),
+			// not beyond the credential it logged in with (the exp of a token)
+			expiresAt: new Date(Math.min(now.getTime() + this.settings.maxLifetimeMs, principal.expiresAt ?? Infinity)).toISOString(),
+			...(principal.context ? { context: principal.context } : {}),
+			...(principal.view ? { view: principal.view } : {}),
 			...(ip ? { ip } : {}),
 			...(client && Object.keys(client).length ? { client } : {})
 		}
@@ -121,7 +124,8 @@ export class SessionService {
 			session.lastSeenAt = at
 			if (ip) session.ip = ip
 		}
-		return { principal: principalOf(session.credential, session.permissions), session }
+		const who = principalOf(session.credential, session.permissions)
+		return { principal: { ...who, ...(session.context ? { context: session.context } : {}), ...(session.view ? { view: session.view } : {}) }, session }
 	}
 
 	/** Why a session can't be used now (and, the first time it is seen expired, its audit line), or undefined */

@@ -6,6 +6,10 @@ export interface WirePrincipal {
 	name: string
 	permissions: Permission[]
 	actor?: Actor
+	/** the context of λORM of who calls (from its identity: the claims of its token) */
+	context?: Record<string, unknown>
+	/** the view of λORM of who calls (its key or its roles) */
+	view?: string
 }
 
 /** edge → schema worker: one operation of DataGatewayPort ('gateway') or McpServerPort ('mcp') */

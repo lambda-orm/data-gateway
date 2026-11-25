@@ -30,6 +30,15 @@ describe('REST', () => {
 		expect((requests[0].init.headers as Record<string, string>)['X-Api-Key']).toBe('k')
 	})
 
+	test('a token given by a function: asked for on every request (the token of an identity provider, refreshed)', async () => {
+		let n = 0
+		const transport = new RestTransport(parseConnection('http://gw/northwind', { token: async () => `jwt-${++n}` }, {}))
+		fakeFetch(answer(200, []), answer(200, []))
+		await transport.call('execute', { query: 'Products' })
+		await transport.call('execute', { query: 'Products' })
+		expect(requests.map(r => (r.init.headers as Record<string, string>).Authorization)).toEqual(['Bearer jwt-1', 'Bearer jwt-2'])
+	})
+
 	test('an error: its status, name and the database code give the code', async () => {
 		fakeFetch(answer(409, { error: 'ExecutionError', code: '23505', message: 'duplicate key' }))
 		expect(await error(rest().call('execute', { query: 'Categories.insert()' })))

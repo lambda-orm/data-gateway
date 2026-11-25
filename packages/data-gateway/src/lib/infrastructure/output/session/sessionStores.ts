@@ -34,8 +34,14 @@ export class SqliteSessionStore implements SessionStorePort {
 				client TEXT,
 				activity TEXT,
 				revoked_at TEXT,
-				revoked_by TEXT
+				revoked_by TEXT,
+				context TEXT,
+				view TEXT
 			)`)
+			// a store of before the context of a token (docs/JWT.md): its column added
+			const columns = (this.db.prepare('PRAGMA table_info(sessions)').all() as { name: string }[]).map(c => c.name)
+			if (!columns.includes('context')) this.db.exec('ALTER TABLE sessions ADD COLUMN context TEXT')
+			if (!columns.includes('view')) this.db.exec('ALTER TABLE sessions ADD COLUMN view TEXT')
 			this.db.exec('CREATE INDEX IF NOT EXISTS sessions_credential ON sessions (credential)')
 			// the WebSocket of events of each session, by replica: a session is connected if a replica saw it lately
 			this.db.exec('CREATE TABLE IF NOT EXISTS session_connections (session_id TEXT NOT NULL, replica TEXT NOT NULL, seen_at TEXT NOT NULL, PRIMARY KEY (session_id, replica))')
@@ -44,10 +50,11 @@ export class SqliteSessionStore implements SessionStorePort {
 	}
 
 	public create (session: Session, tokenHash: string): void {
-		this.open().prepare(`INSERT INTO sessions (id, token_hash, credential, permissions, created_at, last_seen_at, expires_at, ip, client, activity)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(session.id, tokenHash, session.credential, JSON.stringify(session.permissions),
+		this.open().prepare(`INSERT INTO sessions (id, token_hash, credential, permissions, created_at, last_seen_at, expires_at, ip, client, activity, context, view)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(session.id, tokenHash, session.credential, JSON.stringify(session.permissions),
 			session.createdAt, session.lastSeenAt, session.expiresAt, session.ip ?? null,
-			session.client ? JSON.stringify(session.client) : null, session.activity ? JSON.stringify(session.activity) : null)
+			session.client ? JSON.stringify(session.client) : null, session.activity ? JSON.stringify(session.activity) : null,
+			session.context ? JSON.stringify(session.context) : null, session.view ?? null)
 	}
 
 	public byTokenHash (tokenHash: string): Session | undefined {
@@ -122,6 +129,8 @@ export class SqliteSessionStore implements SessionStorePort {
 		if (r.ip) session.ip = r.ip
 		if (r.client) session.client = JSON.parse(r.client)
 		if (r.activity) session.activity = JSON.parse(r.activity)
+		if (r.context) session.context = JSON.parse(r.context)
+		if (r.view) session.view = r.view
 		if (r.revoked_at) session.revokedAt = r.revoked_at
 		if (r.revoked_by) session.revokedBy = r.revoked_by
 		return session

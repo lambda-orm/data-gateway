@@ -9,7 +9,7 @@ import swaggerUi from 'swagger-ui-express'
 import { DataGatewayPort, RequestContext } from '../../../application/ports/input/dataGatewayPort'
 import { SchemaDirectoryPort, ServedSchema } from '../../../application/ports/input/schemaDirectoryPort'
 import { AuthenticatorPort, CredentialScheme, LoggerPort, MetricsPort } from '../../../application/ports/output/supportPorts'
-import { Principal, withActor } from '../../../domain/auth/principal'
+import { Principal, refusalOf, withActor } from '../../../domain/auth/principal'
 import { Transport } from '../transport'
 import { toHttpError } from './httpErrors'
 import { closestNames } from '@lambdaorm/base'
@@ -225,6 +225,8 @@ export class HttpTransport implements Transport {
 			router.get('/whoami', this.handle(async (_req, ctx) => ({
 				name: ctx.principal.name,
 				permissions: [...ctx.principal.permissions],
+				// the view of λORM of the credential (its key, its roles); without one, the schema's or the domain
+				...(ctx.principal.view ? { view: ctx.principal.view } : {}),
 				schema: schema.path,
 				scripts: schema.features.scripts
 			})))
@@ -283,7 +285,9 @@ export class HttpTransport implements Transport {
 		try {
 			const result = await authenticator.authenticate(req.headers)
 			if (!result.valid || !result.principal) {
-				res.status(401).json({ error: 'Unauthorized', message: result.reason ?? 'a valid credential is required' })
+				const refusal = refusalOf(result)
+				if (refusal.challenge) res.setHeader('WWW-Authenticate', refusal.challenge)
+				res.status(refusal.status).json({ error: refusal.status === 401 ? 'Unauthorized' : 'Unavailable', message: refusal.message })
 				return
 			}
 			res.locals.principal = withActor(result.principal, { ip: req.socket.remoteAddress })

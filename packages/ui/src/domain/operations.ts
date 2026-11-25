@@ -13,6 +13,8 @@ export interface WhoAmI {
 	schema: string
 	/** scripts.enabled of the schema */
 	scripts: boolean
+	/** the view of λORM of the credential (gateway 4.1.0): what of the domain it sees */
+	view?: string
 }
 
 export interface Availability {

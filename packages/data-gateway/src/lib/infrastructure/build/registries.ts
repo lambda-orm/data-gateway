@@ -4,7 +4,8 @@ import { AuthenticatorPort, LoggerPort, MetricsPort } from '../../application/po
 import { SchemaDirectoryPort } from '../../application/ports/input/schemaDirectoryPort'
 import { AuthenticationConfig, DataGatewayConfig, TransportName } from '../../domain/config/dataGatewayConfig'
 import { parseSize } from '../../domain/config/sizes'
-import { ApiKeyAuthenticator, BasicAuthenticator, BearerAuthenticator, NoneAuthenticator } from '../output/auth/authenticators'
+import { ApiKeyAuthenticator, BasicAuthenticator, BearerAuthenticator, MethodsAuthenticator, NoneAuthenticator } from '../output/auth/authenticators'
+import { JwtAuthenticator } from '../output/auth/jwtAuthenticator'
 import { HttpTransport } from '../input/http/httpTransport'
 import { McpHttpTransport } from '../input/mcp/mcpHttpTransport'
 import { McpWebSocketTransport } from '../input/mcp/mcpWebSocketTransport'
@@ -39,6 +40,8 @@ export class AuthenticatorRegistry {
 		this.register('local:bearer', c => new BearerAuthenticator(c.credentials))
 		this.register('local:apikey', c => new ApiKeyAuthenticator(c.credentials, c.header))
 		this.register('local:basic', c => new BasicAuthenticator(c.credentials))
+		this.register('jwt', c => new JwtAuthenticator(c.jwt!))
+		this.register('methods', c => new MethodsAuthenticator((c.methods ?? []).map(m => this.build(m))))
 	}
 
 	public register (key: string, factory: AuthenticatorFactory): void {
@@ -46,7 +49,7 @@ export class AuthenticatorRegistry {
 	}
 
 	public build (config: AuthenticationConfig): AuthenticatorPort {
-		const key = config.adapter === 'none' ? 'none' : `${config.adapter}:${config.type}`
+		const key = config.adapter === 'local' ? `local:${config.type}` : config.adapter
 		const factory = this.factories.get(key)
 		if (!factory) throw new Error(`no authenticator registered for ${key}`)
 		return factory(config)

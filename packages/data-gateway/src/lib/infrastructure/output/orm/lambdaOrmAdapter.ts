@@ -71,10 +71,10 @@ export class LambdaOrmAdapter implements OrmQueryPort, OrmScriptPort, OrmSchemaP
 
 	public execute (query: string, data?: unknown, options?: QueryOptions) { return this.orm.execute(query, data, options) }
 	public async plan (query: string, options?: QueryOptions) { return this.orm.plan(query, options) }
-	public async metadata (query: string) { return this.orm.metadata(query) }
-	public async model (query: string) { return this.orm.model(query) }
-	public async parameters (query: string) { return this.orm.parameters(query) }
-	public async constraints (query: string) { return this.orm.constraints(query) }
+	public async metadata (query: string, options?: QueryOptions) { return this.orm.metadata(query, options) }
+	public async model (query: string, options?: QueryOptions) { return this.orm.model(query, options) }
+	public async parameters (query: string, options?: QueryOptions) { return this.orm.parameters(query, options) }
+	public async constraints (query: string, options?: QueryOptions) { return this.orm.constraints(query, options) }
 	public executeScript (script: string, data?: unknown, options?: ScriptOptions) { return this.orm.executeScript(script, data, options) }
 
 	// ─── schema ──────────────────────────────────────────────────────────────
@@ -87,12 +87,12 @@ export class LambdaOrmAdapter implements OrmQueryPort, OrmScriptPort, OrmSchemaP
 	}
 
 	public version () { return this.orm.state.getSchemaVersion() }
-	public domain () { return this.orm.state.getSchemaDomain() }
+	public domain (view?: string) { return this.orm.state.getSchemaDomain(view) }
 	public sources () { return this.orm.state.getSchemaSources() }
 	// only a source of the schema (getSchemaSource answers { name, dialect: 'unknown' } for any other name)
 	public source (name: string) { return this.orm.state.getSchemaSources()?.find(source => source.name === name) }
-	public entities () { return this.orm.state.getSchemaEntities() }
-	public entity (name: string) { return this.orm.state.getSchemaEntity(name) }
+	public entities (view?: string) { return this.orm.state.getSchemaEntities(view) }
+	public entity (name: string, view?: string) { return this.orm.state.getSchemaEntity(name, view) }
 	public enums () { return this.orm.state.getSchemaEnums() }
 	public enum (name: string) { return this.orm.state.getSchemaEnum(name) }
 	public mappings () { return this.orm.state.getSchemaMappings() }

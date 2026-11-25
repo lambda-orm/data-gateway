@@ -1,4 +1,4 @@
-import { ConnectionTarget } from '../connection'
+import { ConnectionTarget, headersOf } from '../connection'
 import { gatewayError, GatewayError, transportError, unsupported, TransportName } from '../errors'
 import { Args, clean, MCP, Operation, WHERE } from '../operations'
 import { RpcMessage, RpcSocket } from './rpcSocket'
@@ -82,7 +82,7 @@ export class McpHttpTransport extends McpTransport {
 			response = await fetch(this.endpoint, {
 				method: 'POST',
 				headers: {
-					...this.target.headers,
+					...await headersOf(this.target),
 					'Content-Type': 'application/json',
 					Accept: 'application/json, text/event-stream',
 					...(this.session ? { 'Mcp-Session-Id': this.session } : {})
@@ -117,7 +117,7 @@ export class McpHttpTransport extends McpTransport {
 	public async close (): Promise<void> {
 		if (!this.session) return
 		// a stateful server keeps a session: end it
-		await fetch(this.endpoint, { method: 'DELETE', headers: { ...this.target.headers, 'Mcp-Session-Id': this.session } }).catch(() => undefined)
+		await fetch(this.endpoint, { method: 'DELETE', headers: { ...await headersOf(this.target), 'Mcp-Session-Id': this.session } }).catch(() => undefined)
 	}
 }
 
@@ -135,7 +135,7 @@ export class McpSseTransport extends McpTransport {
 		this.abort = new AbortController()
 		let response: Response
 		try {
-			response = await fetch(url, { headers: { ...this.target.headers, Accept: 'text/event-stream' }, signal: this.abort.signal })
+			response = await fetch(url, { headers: { ...await headersOf(this.target), Accept: 'text/event-stream' }, signal: this.abort.signal })
 		} catch (error: any) {
 			throw transportError(this.name, `GET ${url}: ${error?.cause?.message ?? error?.message ?? error}`)
 		}
@@ -188,7 +188,7 @@ export class McpSseTransport extends McpTransport {
 	private async post (body: Record<string, any>): Promise<void> {
 		let response: Response
 		try {
-			response = await fetch(this.messages!, { method: 'POST', headers: { ...this.target.headers, 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+			response = await fetch(this.messages!, { method: 'POST', headers: { ...await headersOf(this.target), 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
 		} catch (error: any) {
 			throw transportError(this.name, `POST ${this.messages}: ${error?.cause?.message ?? error?.message ?? error}`)
 		}
@@ -216,7 +216,7 @@ export class McpWebSocketTransport extends McpTransport {
 
 	constructor (target: ConnectionTarget) {
 		super(target)
-		this.socket = new RpcSocket(target.url + '/mcp', target.headers)
+		this.socket = new RpcSocket(target.url + '/mcp', () => headersOf(target))
 	}
 
 	public async open (): Promise<void> {

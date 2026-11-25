@@ -9,6 +9,7 @@ import { DataGatewayPort } from '../../application/ports/input/dataGatewayPort'
 import { McpServerPort } from '../../application/ports/input/mcpServerPort'
 import { AuditPort, ClockPort, LoggerPort, QueueEventsPort } from '../../application/ports/output/supportPorts'
 import { Auditor } from '../../application/usecases/auditor'
+import { ViewResolver } from '../../application/usecases/viewResolver'
 import { QueryUseCases } from '../../application/usecases/queryUseCases'
 import { QueueUseCase } from '../../application/usecases/queueUseCase'
 import { SchemaUseCases, StageUseCases } from '../../application/usecases/schemaUseCases'
@@ -80,12 +81,16 @@ export const composeSchema = async (input: SchemaCompositionInput, deps: { logge
 	}
 	const { settings } = input
 	const auditor = new Auditor(deps.audit, deps.clock, input.path, input.audit)
-	const queries = new QueryUseCases(orm, auditor)
+	// the view of each caller (docs/VIEWS_BY_IDENTITY.md); one the schema doesn't have is said now and refused later
+	const views = new ViewResolver(() => orm.views(), settings.view)
+	const missing = views.missing(settings.namedViews ?? [])
+	if (missing.length) logger.warn(`schema "${input.path || '/'}": the views ${missing.join(', ')} of the configuration are not in its lambdaORM.yaml: a request with one is refused (403)`)
+	const queries = new QueryUseCases(orm, auditor, views)
 	const gateway = new DataGateway({
 		queries,
-		script: new ScriptUseCase(orm, settings.scripts, auditor),
+		script: new ScriptUseCase(orm, settings.scripts, auditor, views),
 		queue: new QueueUseCase(queue, queries, auditor, deps.queueEvents),
-		schema: new SchemaUseCases(orm),
+		schema: new SchemaUseCases(orm, views),
 		stages: new StageUseCases(orm, auditor)
 	}, orm, deps.clock, input.version, settings.server.timeout)
 	const commands = new CommandUseCases(orm, auditor)
@@ -95,7 +100,7 @@ export const composeSchema = async (input: SchemaCompositionInput, deps: { logge
 		version: input.version,
 		pageSize: input.pageSize,
 		maxRows: settings.mcp.maxRows
-	})
+	}, views)
 	return {
 		gateway,
 		mcp,
