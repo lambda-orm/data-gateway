@@ -10,10 +10,12 @@ import { ClockPort, LoggerPort } from '../ports/output/supportPorts'
 import { SCHEMA_FILE } from './adminService'
 
 /** The commands of the CLI the gateway runs (docs/DATA_GATEWAY_ADMIN_PLAN.md §4); build comes later */
-export type CommandName = 'version' | 'fetch' | 'export' | 'push' | 'drop' | 'import' | 'pull' | 'introspect' | 'incorporate'
+export type CommandName = 'version' | 'fetch' | 'export' | 'push' | 'drop' | 'import' | 'pull' | 'introspect' | 'incorporate' | 'migrations' | 'migrate' | 'seed'
+
+const COMMANDS: CommandName[] = ['version', 'fetch', 'export', 'push', 'drop', 'import', 'pull', 'introspect', 'incorporate', 'migrations', 'migrate', 'seed']
 
 /** The ones that change the databases or the schema: they run only the preview they were shown */
-const PREVIEWED: CommandName[] = ['push', 'drop', 'import', 'pull', 'introspect', 'incorporate']
+const PREVIEWED: CommandName[] = ['push', 'drop', 'import', 'pull', 'introspect', 'incorporate', 'migrate', 'seed']
 
 /** The ones that change the lambdaORM.yaml: their preview is its diff */
 const CHANGE_THE_SCHEMA: CommandName[] = ['pull', 'introspect', 'incorporate']
@@ -27,7 +29,10 @@ const PERMISSION: Record<CommandName, Permission> = {
 	import: 'stageImport',
 	pull: 'schemaWrite',
 	introspect: 'schemaWrite',
-	incorporate: 'schemaWrite'
+	incorporate: 'schemaWrite',
+	migrations: 'read',
+	migrate: 'ddl',
+	seed: 'stageImport'
 }
 
 /** What else a command needs: incorporate changes the schema, pushes it and imports */
@@ -59,6 +64,8 @@ interface Preview {
 	data?: unknown
 	/** the lambdaORM.yaml it will write (pull, introspect, incorporate) */
 	text?: string
+	/** the version migrate goes back to */
+	version?: string
 	expires: number
 }
 
@@ -79,7 +86,11 @@ export interface CommandOptions {
 	since: (path: string) => string | undefined
 }
 
-const isCommand = (value: string): value is CommandName => ['version', 'fetch', 'export', 'push', 'drop', 'import', 'pull', 'introspect', 'incorporate'].includes(value)
+const isCommand = (value: string): value is CommandName => (COMMANDS as string[]).includes(value)
+
+/** The sentences that can lose data, of all the sources (push, migrate): what has to be allowed to run them */
+const destructiveOf = (bySource: unknown): { source: string, sentence: string, reason: string }[] =>
+	(Array.isArray(bySource) ? bySource : []).flatMap((s: any) => (s?.destructive ?? []).map((d: any) => ({ source: s.source, sentence: d.sentence, reason: d.reason })))
 
 /** The rows of each entity in an export (what an import is going to write) */
 export const rowsPerEntity = (data: unknown): Record<string, number> => {
@@ -161,7 +172,7 @@ export class CommandService {
 	}
 
 	/** What a command that changes the databases would do, and the id to run exactly that */
-	public async preview (principal: Principal, path: string, command: string, request: { stage?: unknown, data?: unknown, name?: unknown }): Promise<Record<string, unknown>> {
+	public async preview (principal: Principal, path: string, command: string, request: { stage?: unknown, data?: unknown, name?: unknown, version?: unknown }): Promise<Record<string, unknown>> {
 		if (!isCommand(command) || !PREVIEWED.includes(command)) throw badRequest('ValidationError', `${command} has no preview (${PREVIEWED.join(', ')})`)
 		this.requireCommand(principal, command)
 		const stages = await this.call(path, principal, 'read', 'stages', []) as string[]
@@ -170,6 +181,7 @@ export class CommandService {
 		let shown: Record<string, unknown>
 		let text: string | undefined
 		let data: unknown
+		let version: string | undefined
 		if (CHANGE_THE_SCHEMA.includes(command)) {
 			const current = await this.store.read(this.served(path).workspace, SCHEMA_FILE)
 			if (!current) throw notFound(`schema "${path}" has no ${SCHEMA_FILE}`)
@@ -184,7 +196,20 @@ export class CommandService {
 			}
 			text = this.yaml.merge(current.text, schema)
 			shown = { diff: lineDiff(current.text, text), ...(data !== undefined ? { rows: rowsPerEntity(data) } : {}) }
-		} else if (command === 'push') shown = { sentences: await this.call(path, principal, 'read', 'pushSentences', [stage]) }
+		} else if (command === 'push') {
+			const sentences = await this.call(path, principal, 'read', 'pushSentences', [stage])
+			shown = { sentences, destructive: destructiveOf(sentences) }
+		} else if (command === 'migrate') {
+			if (typeof request.version !== 'string' || !request.version) throw badRequest('ValidationError', 'version is the one to go back to (yyMMddHHmmss, as the command migrations lists them)')
+			version = request.version
+			const sentences = await this.call(path, principal, 'read', 'migrateSentences', [stage, version])
+			shown = { version, sentences, destructive: destructiveOf(sentences) }
+		} else if (command === 'seed') {
+			// relative to the workspace, as stages[].seed has them (λORM gives them absolute: not the paths of the server)
+			const workspace = this.served(path).workspace.replace(/[\\/]+$/, '')
+			const files = await this.call(path, principal, 'read', 'seedFiles', [stage]) as string[]
+			shown = { files: files.map(file => file.startsWith(`${workspace}/`) || file.startsWith(`${workspace}\\`) ? file.slice(workspace.length + 1) : file) }
+		}
 		else if (command === 'drop') shown = { sentences: await this.call(path, principal, 'read', 'dropSentences', [stage]) }
 		else {
 			if (!request.data || typeof request.data !== 'object') throw badRequest('ValidationError', 'data is an export of a stage ({ entities: [{ entity, rows }] })')
@@ -199,6 +224,7 @@ export class CommandService {
 			schemaVersion: await this.schemaVersion(path),
 			data: command === 'import' ? request.data : data,
 			text,
+			version,
 			expires: this.clock.now().getTime() + this.options.previewTtlMs
 		}
 		this.previews.set(preview.id, preview)
@@ -214,8 +240,8 @@ export class CommandService {
 	 * Starts a command: version answers at once; the others are a job (its id, to ask for it). A command that changes
 	 * the databases runs the preview it names, if the schema didn't change since.
 	 */
-	public async run (principal: Principal, path: string, command: string, request: { stage?: unknown, previewId?: unknown, force?: unknown, save?: unknown }): Promise<Job | Record<string, unknown>> {
-		if (!isCommand(command)) throw notFound(`no command "${command}" (version, fetch, export, push, drop, import, pull, introspect, incorporate)`)
+	public async run (principal: Principal, path: string, command: string, request: { stage?: unknown, previewId?: unknown, force?: unknown, save?: unknown, allowDestructive?: unknown }): Promise<Job | Record<string, unknown>> {
+		if (!isCommand(command)) throw notFound(`no command "${command}" (${COMMANDS.join(', ')})`)
 		this.requireCommand(principal, command)
 		const schema = this.served(path)
 		if (command === 'version') return { ...await schema.gateway.version() as object, schema: path }
@@ -225,6 +251,7 @@ export class CommandService {
 		let data: unknown
 		let text: string | undefined
 		let expected: string | undefined
+		let version: string | undefined
 		if (PREVIEWED.includes(command)) {
 			const preview = typeof request.previewId === 'string' ? this.previews.get(request.previewId) : undefined
 			if (!preview || preview.schema !== path || preview.command !== command || preview.expires < this.clock.now().getTime()) {
@@ -238,6 +265,7 @@ export class CommandService {
 			stage = preview.stage
 			data = preview.data
 			text = preview.text
+			version = preview.version
 			expected = preview.schemaVersion
 		}
 		const save = request.save === true
@@ -255,9 +283,14 @@ export class CommandService {
 		this.jobs.splice(this.options.keepJobs)
 		this.logger.info(`[data-gateway] admin: "${principal.name}" runs ${command}${stage ? ` ${stage}` : ''} on ${path || '/'} (${job.id})`)
 		const force = request.force === true
+		// what can lose data (a narrower type, a shorter length) runs only when it is allowed: else λORM refuses it (409)
+		const allowDestructive = request.allowDestructive === true
+		const args = command === 'import'
+			? [stage, data]
+			: command === 'migrate' ? [stage, version, allowDestructive] : command === 'push' ? [stage, force, allowDestructive] : [stage, force]
 		const work = CHANGE_THE_SCHEMA.includes(command)
 			? this.changeTheSchema(principal, schema, command, stage!, text!, expected!, data)
-			: this.call(path, principal, PERMISSION[command], command as CommandOperation, command === 'import' ? [stage, data] : [stage, force])
+			: this.call(path, principal, PERMISSION[command], command as CommandOperation, args)
 		work
 			.then(async result => {
 				job.result = result

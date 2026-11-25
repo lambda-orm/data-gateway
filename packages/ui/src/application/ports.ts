@@ -237,13 +237,23 @@ export interface AdminApiPort {
 	removeItems (ids: string[]): Promise<{ removed: string[] }>
 	/** the commands of a workspace (§4): the stages and what may be run */
 	commands (schema: string): Promise<CommandsSummary>
-	previewCommand (schema: string, command: CommandName, body: { stage?: string, data?: unknown, name?: string }): Promise<CommandPreview>
-	runCommand (schema: string, command: CommandName, body: { stage?: string, previewId?: string, force?: boolean, save?: boolean }): Promise<Job | Record<string, unknown>>
+	previewCommand (schema: string, command: CommandName, body: { stage?: string, data?: unknown, name?: string, version?: string }): Promise<CommandPreview>
+	runCommand (schema: string, command: CommandName, body: { stage?: string, previewId?: string, force?: boolean, save?: boolean, allowDestructive?: boolean }): Promise<Job | Record<string, unknown>>
 	jobs (schema: string): Promise<Job[]>
 	job (schema: string, id: string): Promise<Job>
 }
 
-export type CommandName = 'version' | 'fetch' | 'export' | 'push' | 'drop' | 'import' | 'pull' | 'introspect' | 'incorporate'
+export type CommandName = 'version' | 'fetch' | 'export' | 'push' | 'drop' | 'import' | 'pull' | 'introspect' | 'incorporate' | 'migrations' | 'migrate' | 'seed'
+
+/** A migration of the history of a stage (infrastructure.migrations): what a push did on a source */
+export interface Migration {
+	version: string
+	source: string
+	status: 'applied' | 'undone'
+	time: string
+	file?: string
+	actor?: { credential?: string }
+}
 
 export interface Job {
 	id: string
@@ -271,8 +281,14 @@ export interface CommandPreview {
 	command: CommandName
 	stage: string
 	expiresAt: string
-	/** push: by source; drop: the sentences */
+	/** push: by source; migrate: by source and migration; drop: the sentences */
 	sentences?: unknown[]
+	/** push, migrate: the sentences that can lose data, and why (they run only with allowDestructive) */
+	destructive?: { source: string, sentence: string, reason: string }[]
+	/** migrate: the version it goes back to */
+	version?: string
+	/** seed: its files, in order */
+	files?: string[]
 	/** import, introspect, incorporate: the rows of each entity */
 	rows?: Record<string, number>
 	/** pull, introspect, incorporate: what changes in the lambdaORM.yaml */

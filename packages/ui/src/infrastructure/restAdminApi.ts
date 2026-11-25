@@ -150,11 +150,11 @@ export class RestAdminApi implements AdminApiPort {
 		return (await this.request(`/workspaces/${schemaSegment(schema)}/commands`)).body as CommandsSummary
 	}
 
-	public async previewCommand (schema: string, command: CommandName, body: { stage?: string, data?: unknown, name?: string }) {
+	public async previewCommand (schema: string, command: CommandName, body: { stage?: string, data?: unknown, name?: string, version?: string }) {
 		return (await this.request(`/workspaces/${schemaSegment(schema)}/commands/${command}/preview`, { body })).body as CommandPreview
 	}
 
-	public async runCommand (schema: string, command: CommandName, body: { stage?: string, previewId?: string, force?: boolean, save?: boolean }) {
+	public async runCommand (schema: string, command: CommandName, body: { stage?: string, previewId?: string, force?: boolean, save?: boolean, allowDestructive?: boolean }) {
 		return (await this.request(`/workspaces/${schemaSegment(schema)}/commands/${command}`, { body })).body as Job | Record<string, unknown>
 	}
 

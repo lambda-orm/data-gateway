@@ -23,6 +23,19 @@ const DB_CODES: { [code: string]: number } = {
 /** λORM errors caused by the request (a query, a model or values the gateway can't use) */
 const CLIENT_ERRORS = ['ValidationError', 'SchemaError', 'SintaxisError', 'LanguageError']
 
+/**
+ * λORM errors with a status of their own (λORM ≥ 3.10), and what of them a client can use (details): ContextError, a
+ * value of the context that a filter needs and the request doesn't bring; ViewError, an entity the view excludes or a
+ * write out of the filter of its view; CrossSourceError, a query across sources too big (or not supported) in memory;
+ * DestructiveChangeError, a push that can lose data and is not allowed.
+ */
+const LAMBDAORM_ERRORS: { [name: string]: { status: number, details: string[] } } = {
+	ContextError: { status: 400, details: ['variable', 'where'] },
+	ViewError: { status: 403, details: ['view', 'entity'] },
+	CrossSourceError: { status: 422, details: [] },
+	DestructiveChangeError: { status: 409, details: ['changes'] }
+}
+
 export const toHttpError = (error: any): HttpError => {
 	// a script can choose the answer: throw { status: 404, message: "quote not found" } (3xpr keeps it in error.value)
 	const thrown = error && error.value && typeof error.value === 'object' ? error.value : undefined
@@ -40,6 +53,8 @@ export const toHttpError = (error: any): HttpError => {
 		status = 400 // Postgres data_exception class (invalid text, value too long, …)
 	} else if (CLIENT_ERRORS.includes(name)) {
 		status = 400
+	} else if (LAMBDAORM_ERRORS[name]) {
+		status = LAMBDAORM_ERRORS[name].status
 	}
 	// a source the gateway can't reach or whose connection is not set (λORM L43): the service is unavailable, not the
 	// request wrong
@@ -48,5 +63,7 @@ export const toHttpError = (error: any): HttpError => {
 	if (Array.isArray(error?.suggestions) && error.suggestions.length > 0) body.suggestions = error.suggestions
 	// what the caller needs to go on: the issues of an invalid schema, what there is now after a conflict (admin)
 	if (error?.details !== undefined && Number.isInteger(error?.status)) body.details = error.details
+	const known = LAMBDAORM_ERRORS[name]?.details.filter(key => error?.[key] !== undefined)
+	if (known?.length && body.details === undefined) body.details = Object.fromEntries(known.map(key => [key, error[key]]))
 	return { status, body }
 }

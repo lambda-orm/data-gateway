@@ -59,6 +59,23 @@ Use \`include\` to return nested data; use dots in \`filter\` / \`map\` to join 
 - Numbers: \`round(x, decimals)\`, \`abs\`, \`ceil\`, \`floor\`, \`trunc\`, \`toNumber\`.
 - Nulls: \`nvl(value, default)\`, \`isNull\`, \`isNotNull\`.
 
+## JSON, vectors and places (where the model has them)
+
+\`\`\`js
+Customers.filter(p => p.meta.city == 'Madrid' && p.meta.age > 30).map(p => ({ name: p.name, zip: p.meta.address.zip }))
+Customers.filter(p => p.meta.tags.includes('vip') && jsonHas(p.meta, 'address.zip'))
+Customers.update(p => ({ meta: jsonSet(p.meta, 'address.city', city) })).filter(p => p.id == id)
+Documents.sort(p => cosineDistance(p.embedding, query)).page(1, 5)          // "query": [0.12, 0.5, …]
+Stores.filter(p => distance(p.location, here) < 5000).map(p => ({ name: p.name, meters: distance(p.location, here) }))
+Stores.filter(p => within(p.location, -58.5, -34.7, -58.3, -34.5))          // a rectangle: min lng, lat, max lng, lat
+Stores.filter(p => inside(p.location, area))                               // "area": a GeoJSON Polygon
+\`\`\`
+
+- A property of type \`json\`: a path with dots (\`p.meta.address.zip\`), compared as the constant it meets.
+- Vectors (type \`vector\`): \`cosineDistance\`, \`l2Distance\`, \`innerProduct\`; the vector to compare goes in data.
+- Points (type \`point\`): \`point(lng, lat)\`, \`distance\` in meters, \`within\`, \`inside\`; a point in data is GeoJSON
+  (\`{ "type": "Point", "coordinates": [lng, lat] }\`). Not every database has them: the error says so.
+
 ## Writes (need the write permission)
 
 \`\`\`js

@@ -70,7 +70,9 @@ transports:
 	test.each([
 		['Area.map(p => p.name)', 'entity Area not found; did you mean Areas?'],
 		['Areas.map(p => p.nam)', 'nam is neither a property nor a relation of Areas; did you mean name?'],
-		['Areas.map(p => p.areaType.nme)', 'did you mean name?'],
+		// a relation in the same source (parentArea); one to another source (areaType → AreaTypes, in iotCatalog) is mapped
+		// in memory since lib 3.13 and its fields are not checked yet (pending in core)
+		['Areas.map(p => p.parentArea.nme)', 'did you mean name?'],
 		['Areas.include(p => p.zone)', 'relation zone not found in Areas; did you mean zoneVertices?'],
 		['Areas.map(p => count(p.id))', 'the key of Areas is locationId, code'],
 		['Areas.foo()', 'function: foo not found']

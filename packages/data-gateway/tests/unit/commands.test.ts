@@ -28,7 +28,11 @@ const setup = () => {
 		commands: async (ctx: any, op: string, args: unknown[]) => {
 			calls.push(`${op} ${JSON.stringify(args)} as ${ctx.principal.name}:${[...ctx.principal.permissions].join(',')}`)
 			if (op === 'stages') return ['default', 'test']
-			if (op === 'pushSentences') return [{ source: 'main', sentences: ['CREATE TABLE A (id INT)'] }]
+			if (op === 'pushSentences') {
+				return [{ source: 'main', sentences: ['CREATE TABLE A (id INT)', 'ALTER TABLE B ALTER COLUMN name TYPE VARCHAR(40)'], destructive: [{ sentence: 'ALTER TABLE B ALTER COLUMN name TYPE VARCHAR(40)', reason: 'B.name: length 80 → 40' }] }]
+			}
+			if (op === 'migrateSentences') return [{ source: 'main', version: '261125100000', sentences: ['DROP TABLE A'], destructive: [{ sentence: 'DROP TABLE A', reason: 'drops A' }] }]
+			if (op === 'seedFiles') return ['data/countries.json']
 			if (op === 'push') await new Promise<void>(resolve => { release = resolve })
 			if (op === 'export') return { entities: [{ entity: 'A', rows: [{ id: 1 }] }] }
 			const withB = { domain: { entities: [{ name: 'A', properties: [{ name: 'id' }] }, { name: 'B', properties: [{ name: 'id' }] }] } }
@@ -56,16 +60,49 @@ describe('commands as jobs', () => {
 		await expect(service.run(admin, 'shop', 'push', {})).rejects.toMatchObject({ status: 409, name: 'PreviewRequiredError' })
 		await expect(service.preview(reader, 'shop', 'push', {})).rejects.toMatchObject({ status: 403 })
 		const preview = await service.preview(admin, 'shop', 'push', { stage: 'test' })
-		expect(preview).toMatchObject({ stage: 'test', sentences: [{ source: 'main', sentences: ['CREATE TABLE A (id INT)'] }] })
+		expect(preview).toMatchObject({ stage: 'test', sentences: [{ source: 'main', sentences: ['CREATE TABLE A (id INT)', expect.any(String)] }] })
 		const job = await service.run(admin, 'shop', 'push', { previewId: preview.previewId, force: true }) as any
 		expect(job).toMatchObject({ command: 'push', stage: 'test', status: 'running', credential: 'admin' })
-		expect(calls.at(-1)).toBe('push ["test",true] as admin:read,ddl,stageImport,workbenchWrite')
+		expect(calls.at(-1)).toBe('push ["test",true,false] as admin:read,ddl,stageImport,workbenchWrite')
 		await expect(service.run(admin, 'shop', 'fetch', {})).rejects.toMatchObject({ status: 409, name: 'BusyError' })
 		release()
 		await tick()
 		await tick()
 		expect(service.job(admin, 'shop', job.id)).toMatchObject({ status: 'done', finishedAt: expect.any(String) })
 		await expect(service.run(admin, 'shop', 'push', { previewId: preview.previewId })).rejects.toMatchObject({ name: 'PreviewRequiredError' })
+	})
+
+	test('push: its preview says what can lose data; it runs that only with allowDestructive', async () => {
+		const { service, calls, release } = setup()
+		const preview = await service.preview(admin, 'shop', 'push', {})
+		expect(preview.destructive).toEqual([{ source: 'main', sentence: 'ALTER TABLE B ALTER COLUMN name TYPE VARCHAR(40)', reason: 'B.name: length 80 → 40' }])
+		const job = await service.run(admin, 'shop', 'push', { previewId: preview.previewId, allowDestructive: true }) as any
+		expect(calls.at(-1)).toMatch(/^push \["default",false,true\]/)
+		release()
+		await ended(service, admin, job.id)
+		const again = await service.preview(admin, 'shop', 'push', {})
+		await service.run(admin, 'shop', 'push', { previewId: again.previewId })
+		expect(calls.at(-1)).toMatch(/^push \["default",false,false\]/)
+		release()
+	})
+
+	test('migrations lists; migrate goes back to the version of its preview, with its undo; seed shows its files', async () => {
+		const { service, calls } = setup()
+		const list = await service.run(reader, 'shop', 'migrations', {}) as any
+		expect(calls.at(-1)).toMatch(/^migrations \[null,false\] as reader/)
+		await ended(service, reader, list.id)
+		await expect(service.preview(admin, 'shop', 'migrate', {})).rejects.toMatchObject({ status: 400 })
+		await expect(service.preview(reader, 'shop', 'migrate', { version: '261125100000' })).rejects.toMatchObject({ status: 403 })
+		const migrate = await service.preview(admin, 'shop', 'migrate', { version: '261124090000' })
+		expect(migrate).toMatchObject({ version: '261124090000', destructive: [{ source: 'main', sentence: 'DROP TABLE A', reason: 'drops A' }] })
+		const job = await service.run(admin, 'shop', 'migrate', { previewId: migrate.previewId, version: '000000000000', allowDestructive: true } as any) as any
+		// the version is the one of the preview, not one sent after it
+		expect(calls.at(-1)).toMatch(/^migrate \["default","261124090000",true\]/)
+		await ended(service, admin, job.id)
+		const seed = await service.preview(admin, 'shop', 'seed', { stage: 'test' })
+		expect(seed).toMatchObject({ stage: 'test', files: ['data/countries.json'] })
+		await service.run(admin, 'shop', 'seed', { previewId: seed.previewId })
+		expect(calls.at(-1)).toMatch(/^seed \["test",false\]/)
 	})
 
 	test('a preview of another lambdaORM.yaml is not run', async () => {

@@ -254,3 +254,128 @@ transports:
 		expect(names.body).toEqual([{ name: 'Acme' }, { name: 'Initech' }])
 	}, 60000)
 })
+
+;(POSTGRES ? describe : describe.skip)('migrations, migrate, seed and what can lose data (PostgreSQL)', () => {
+	let supervisor: Supervisor
+	let base: string
+	let root: string
+	const commands = '/admin/workspaces/shop/commands'
+
+	const schemaOf = (length: number, connection: unknown) => `# the shop, with the history of its migrations
+domain:
+  entities:
+    - name: Categories
+      primaryKey: [id]
+      properties:
+        - { name: id, type: integer, required: true }
+        - { name: name, type: string, length: ${length}, required: true }
+infrastructure:
+  migrations: {}
+  mappings:
+    - name: default
+  sources:
+    - { name: main, dialect: PostgreSQL, mapping: default, connection: '${JSON.stringify(connection)}' }
+  stages:
+    - name: default
+      sources:
+        - name: main
+      seed: [data/categories.json]
+`
+
+	const finished = async (id: string) => {
+		for (let i = 0; i < 200; i++) {
+			const job = (await call(base, `/admin/workspaces/shop/jobs/${id}`, { headers: ADMIN })).body
+			if (job.status !== 'running') return job
+			await sleep(100)
+		}
+		throw new Error(`job ${id} did not end`)
+	}
+	/** a preview, and the job of running it with these options */
+	const run = async (command: string, body: Record<string, unknown> = {}, options: Record<string, unknown> = {}) => {
+		const preview = await call(base, `${commands}/${command}/preview`, { body, headers: ADMIN })
+		expect(preview.status).toBe(200)
+		const started = await call(base, `${commands}/${command}`, { body: { previewId: preview.body.previewId, ...options }, headers: ADMIN })
+		return { preview: preview.body, job: await finished(started.body.id) }
+	}
+	/** migrations only reads: a job without preview */
+	const migrations = async () => finished((await call(base, `${commands}/migrations`, { body: {}, headers: ADMIN })).body.id)
+	/** the schema served is the one just written (the monitor reloads it) */
+	const reloaded = async (length: number) => {
+		for (let i = 0; i < 100; i++) {
+			const preview = await call(base, `${commands}/push/preview`, { body: {}, headers: ADMIN })
+			if (JSON.stringify(preview.body).includes(`VARCHAR(${length})`)) return
+			await sleep(200)
+		}
+		throw new Error(`the schema with length ${length} was not reloaded`)
+	}
+
+	beforeAll(async () => {
+		root = fs.mkdtempSync(path.join(os.tmpdir(), 'data-gateway-migrations-'))
+		const connection = { ...JSON.parse(POSTGRES!), database: 'shop3' }
+		const server = new Client(JSON.parse(POSTGRES!))
+		await server.connect()
+		try {
+			await server.query('DROP DATABASE IF EXISTS shop3 WITH (FORCE)')
+			await server.query('CREATE DATABASE shop3')
+		} finally { await server.end() }
+		fs.mkdirSync(path.join(root, 'shop/data'), { recursive: true })
+		fs.writeFileSync(path.join(root, 'shop/data/categories.json'), JSON.stringify({ entities: [{ entity: 'Categories', rows: [{ id: 1, name: 'Beverages' }, { id: 2, name: 'Condiments' }] }] }))
+		fs.writeFileSync(path.join(root, 'shop/lambdaORM.yaml'), schemaOf(80, connection))
+		const port = await freePort()
+		const file = path.join(root, 'data-gateway.config.yaml')
+		fs.writeFileSync(file, `
+orm: { workspacePath: ${root}, watch: { intervalMs: 300, debounceMs: 100 } }
+logger: { level: error }
+audit: { enabled: false }
+rateLimit: { max: 0 }
+runtime: { checkConnections: false, heartbeat: { intervalMs: 200, timeoutMs: 3000 }, restart: { initialDelayMs: 200, maxDelayMs: 1000 } }
+authentication:
+  adapter: local
+  type: apikey
+  keys:
+    - { name: admin, value: admin-key, permissions: [ read, write, stageImport, ddl, schemaRead, schemaWrite ] }
+transports:
+  management: { port: ${port}, host: 127.0.0.1 }
+`)
+		supervisor = await startSupervisor({ source: new YamlFileConfigSource(file, process.env), bootLogger: new ConsoleLogger('error') })
+		base = `http://127.0.0.1:${port}`
+		for (let i = 0; i < 100; i++) {
+			const states = await call(base, '/schemas').then(r => r.body).catch(() => [])
+			if (Array.isArray(states) && states[0]?.status === 'ready') break
+			await sleep(100)
+		}
+		Object.assign(ADMIN, await login(base, ADMIN_KEY))
+	}, 60000)
+	afterAll(() => supervisor?.stop(), 30000)
+
+	test('push, seed twice, a push that can lose data only when allowed, migrate back to the first version', async () => {
+		const first = await run('push')
+		expect(first.preview.destructive).toEqual([])
+		expect(first.job).toMatchObject({ status: 'done' })
+		const v1 = (await migrations()).result
+		expect(v1).toMatchObject([{ stage: 'default', source: 'main', status: 'applied', version: expect.stringMatching(/^\d{12}$/) }])
+
+		const seed = await run('seed')
+		expect(seed.preview.files).toEqual(['data/categories.json'])
+		expect(seed.job).toMatchObject({ status: 'done', result: [{ entities: [{ entity: 'Categories', inserted: 2, skipped: 0 }] }] })
+		expect((await run('seed')).job.result).toMatchObject([{ entities: [{ entity: 'Categories', inserted: 0, skipped: 2 }] }])
+
+		// a version of another second (the version is yyMMddHHmmss)
+		await sleep(1100)
+		fs.writeFileSync(path.join(root, 'shop/lambdaORM.yaml'), schemaOf(40, { ...JSON.parse(POSTGRES!), database: 'shop3' }))
+		await reloaded(40)
+		const refused = await run('push')
+		expect(refused.preview.destructive).toEqual([{ source: 'main', sentence: expect.stringMatching(/VARCHAR\(40\)/), reason: expect.any(String) }])
+		expect(refused.job).toMatchObject({ status: 'failed', error: { name: 'DestructiveChangeError' } })
+		expect((await run('push', {}, { allowDestructive: true })).job).toMatchObject({ status: 'done' })
+		const v2 = (await migrations()).result
+		expect(v2).toHaveLength(2)
+
+		const back = await run('migrate', { version: v1[0].version })
+		expect(back.preview).toMatchObject({ version: v1[0].version, sentences: [{ source: 'main', version: v2[0].version, sentences: [expect.stringMatching(/VARCHAR\(80\)/)] }] })
+		expect(back.job).toMatchObject({ status: 'done' })
+		expect((await migrations()).result).toMatchObject([{ version: v2[0].version, status: 'undone' }, { version: v1[0].version, status: 'applied' }])
+		// the rows are still there
+		expect((await call(base, '/shop/execute', { body: { query: 'Categories.map(p => p.name).sort(p => p.name)' }, headers: ADMIN })).body).toEqual([{ name: 'Beverages' }, { name: 'Condiments' }])
+	}, 120000)
+})

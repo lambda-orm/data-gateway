@@ -6,7 +6,23 @@ All notable changes to this project will be documented in this file.
 
 ### Unreleased
 
-Needs `@lambdaorm/base` and `@lambdaorm/lib` with observability (lambda-orm/core #203).
+Needs `@lambdaorm/base` 3.11.1 and `@lambdaorm/lib` 3.15.0.
+
+**λORM 3.15** (`docs/PENDINGS.md` R3):
+
+- **Its errors have their status:** `ContextError` 400 (a value of the context a filter needs), `ViewError` 403 (an
+  entity the view excludes, a write out of the filter of its view), `CrossSourceError` 422 (a query across sources too
+  big for memory), `DestructiveChangeError` 409; each with what a client can use of it in `details` (`variable` and
+  `where`, `view` and `entity`, `changes`).
+- **`push` says what can lose data:** its preview brings `destructive` (source, sentence and why: a narrower type, a
+  shorter length), and the command runs those only with `allowDestructive: true`; without it the job fails with
+  `DestructiveChangeError`.
+- **Migrations** (`infrastructure.migrations`): the command `migrations` lists the history of the stage (version,
+  source, applied or undone) and `migrate` goes back to a `version`: its preview shows the undo of each later migration
+  (and what of it can lose data), and it runs with `allowDestructive` when it has to.
+- **Seed** (`stages[].seed`): the command `seed` inserts the rows of its files that are not in the database yet; its
+  preview lists the files.
+- The observability of a schema without its own goes through `orm.observeWith`.
 
 **Features** (`DATA_GATEWAY.md` §8.2):
 

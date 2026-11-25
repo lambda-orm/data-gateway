@@ -62,6 +62,28 @@ que un `view`/`context` del cliente no llega a λORM.
 
 ### R3. Subir a la λORM actual
 
+> **Estado (2026-11-25):** en `feature/lambdaorm-current` (desde `develop`), **falta el PR**. Hecho: `base` 3.11.1,
+> `lib` 3.15.0, `client` 0.10.13; los cuatro errores nuevos con su status y `details`; `push` muestra lo destructivo y
+> lo corre solo con `allowDestructive`; comandos `migrations`, `migrate` y `seed` en la administración y en el IDE
+> (probados contra PostgreSQL); `observeWith`; JSON, vectores y puntos en la guía de MCP; **la imagen fija las
+> versiones probadas** (el `dist` sin rangos: la 4.0.0 se probó con `lib` 3.9 y su imagen instalaba 3.15). `check` y
+> `clients` (también contra la imagen) en verde.
+>
+> **Arreglado en core** (`bugfix/gateway-findings`, PR a `develop` pendiente; sale en `lib` y `base` *patch*). Cuando
+> se publique: subir la versión acá, quitar el cast de `observeWith` en `lambdaOrmAdapter` y volver el caso de Ilusor a
+> `Areas.map(p => p.areaType.nme)` (entre fuentes). Lo que se arregló:
+> - Desde `lib` 3.13, un `map` sobre una relación a **otra fuente** se resuelve en memoria y **no valida sus campos**:
+>   `Areas.map(p => p.areaType.nme)` no da error (antes: *did you mean name?*). El test de Ilusor usa ahora una
+>   relación de la misma fuente.
+> - `observeWith` está en `Orm` pero no en `IOrm` (la gateway castea).
+> - `cosineDistance`, `l2Distance`, `innerProduct`, `distance`, `within`, `inside`, `jsonSet` no están en el
+>   `queryable.d.ts` de `base`: el autocompletado del IDE no los conoce hasta que core los declare.
+>
+> **Sin hacer de esta tabla:** formularios del IDE para `vector` y `point`; SQLite (sql.js) para el gateway de
+> desarrollo; lo que depende de G1–G7 (consultas con nombre, eventos, outbox, `forward` con la identidad, límites por
+> credencial). **Fuera de este repo:** el lab falla en *model ilusor*, que lee el modelo real de Ilusor
+> (`~/ilusor/…`): 8 relaciones compuestas que no emparejan `locationId` (aviso para Ilusor, no de λORM).
+
 Subir `@lambdaorm/base`, `lib` y `client` (y el `cli` que instala la imagen) a lo último, y adaptar:
 
 | Qué trae core | Qué hace la gateway |

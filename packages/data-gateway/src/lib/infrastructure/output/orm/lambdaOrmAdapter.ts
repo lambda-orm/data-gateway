@@ -1,6 +1,6 @@
 import { IOrm, Orm } from '@lambdaorm/lib'
 import { Actor, QueryOptions, ResolvedObservability, ScriptOptions } from '@lambdaorm/base'
-import { OrmCommandPort, OrmQueryPort, OrmSchemaPort, OrmScriptPort, OrmStagePort } from '../../../application/ports/output/ormPorts'
+import { OrmCommandPort, OrmQueryPort, OrmSchemaPort, OrmScriptPort, OrmStagePort, SourceSentences } from '../../../application/ports/output/ormPorts'
 
 /** λORM (@lambdaorm/lib) behind the ports of the application: one instance per schema. */
 export class LambdaOrmAdapter implements OrmQueryPort, OrmScriptPort, OrmSchemaPort, OrmStagePort, OrmCommandPort {
@@ -58,10 +58,13 @@ export class LambdaOrmAdapter implements OrmQueryPort, OrmScriptPort, OrmSchemaP
 		return this.orm.state?.schema?.infrastructure
 	}
 
-	/** λORM's spans and metrics with this configuration (the gateway's, for a schema without its own) */
+	/**
+	 * λORM's spans and metrics with this configuration (the gateway's, for a schema without its own); the trace conditions
+	 * of the entities of the schema still decide for them
+	 */
 	public observe (config: ResolvedObservability): void {
-		const helper = (this.orm as any).helper
-		helper.telemetry.configure(config, this.orm.state.schema?.name || '', this.orm.exp, (message: string) => helper.logger.log(message))
+		// observeWith is in Orm and not yet in IOrm (pending in core)
+		(this.orm as Orm).observeWith(config)
 	}
 
 	// ─── queries ─────────────────────────────────────────────────────────────
@@ -109,8 +112,38 @@ export class LambdaOrmAdapter implements OrmQueryPort, OrmScriptPort, OrmSchemaP
 
 	public stageNames (): string[] { return (this.orm.state.getSchemaStages() ?? []).map((s: { name: string }) => s.name) }
 	public fetch (stage: string) { return this.orm.stage.fetch({ stage }) as Promise<unknown[]> }
-	public pushSentences (stage: string) { return this.orm.stage.push({ stage }).sentencesBySource() }
-	public push (stage: string, force: boolean, actor?: Actor) { return this.orm.stage.push({ stage, tryAllCan: force, actor }).execute() as Promise<unknown[]> }
+	public async pushSentences (stage: string): Promise<SourceSentences[]> {
+		const bySource = new Map<string, SourceSentences>()
+		for (const query of await this.orm.stage.push({ stage }).queries()) {
+			const source = bySource.get(query.source) ?? bySource.set(query.source, { source: query.source, sentences: [] }).get(query.source)!
+			source.sentences.push(query.sentence)
+			if (query.destructive) (source.destructive ??= []).push({ sentence: query.sentence, reason: query.destructive })
+		}
+		return [...bySource.values()]
+	}
+
+	public push (stage: string, force: boolean, actor?: Actor, allowDestructive?: boolean) {
+		return this.orm.stage.push({ stage, tryAllCan: force, actor, ...(allowDestructive ? { allowDestructive } : {}) }).execute() as Promise<unknown[]>
+	}
+
+	public migrations (stage: string) { return this.orm.stage.migrations.list({ stage }) as Promise<unknown[]> }
+
+	/** as λORM's migrate does it: the applied migrations after the version, the newest first, and their undo */
+	public async migrateSentences (stage: string, version: string): Promise<SourceSentences[]> {
+		const later = (await this.orm.stage.migrations.list({ stage })).filter(m => m.status === 'applied' && m.version > version)
+		return later.map(m => {
+			const undo = m.undo ?? []
+			const destructive = undo.filter(u => u.destructive).map(u => ({ sentence: u.sentence, reason: u.destructive! }))
+			return { source: m.source, version: m.version, sentences: undo.map(u => u.sentence), ...(destructive.length ? { destructive } : {}) }
+		})
+	}
+
+	public migrate (stage: string, version: string, actor?: Actor, allowDestructive?: boolean) {
+		return this.orm.stage.migrate(version, { stage, actor, ...(allowDestructive ? { allowDestructive } : {}) }) as Promise<unknown[]>
+	}
+
+	public seedFiles (stage: string) { return this.orm.stage.seed({ stage }).files() }
+	public seed (stage: string, actor?: Actor) { return this.orm.stage.seed({ stage, actor }).execute() as Promise<unknown[]> }
 	public dropSentences (stage: string) { return this.orm.stage.drop({ stage }).sentence() as Promise<unknown[]> }
 	public drop (stage: string, force: boolean, actor?: Actor) { return this.orm.stage.drop({ stage, tryAllCan: force, actor }).execute() as Promise<unknown[]> }
 
