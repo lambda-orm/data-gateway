@@ -88,6 +88,10 @@ export interface AdminMessages {
 	nothingSelected: string
 	variables: string
 	defined: string
+	varName: string
+	varState: string
+	varUsedIn: string
+	varValue: string
 	notDefined: string
 	newValue: string
 	setValue: string
@@ -248,6 +252,10 @@ ROWS.push(
 	['commandsOf', 'Schema {name}', 'Esquema {name}', 'Esquema {name}', 'Schéma {name}', 'Schema {name}', 'Schema {name}', 'Schema {name}', 'Esquema {name}', 'Esquema {name}', '{name} eskema'],
 	['variables', 'Variables (.env)', 'Variables (.env)', 'Variáveis (.env)', 'Variables (.env)', 'Variabili (.env)', 'Variablen (.env)', 'Variabelen (.env)', 'Variables (.env)', 'Variables (.env)', 'Aldagaiak (.env)'],
 	['defined', 'defined', 'definida', 'definida', 'définie', 'definita', 'definiert', 'gedefinieerd', 'definida', 'definida', 'definituta'],
+	['varName', 'variable', 'variable', 'variável', 'variable', 'variabile', 'Variable', 'variabele', 'variable', 'variable', 'aldagaia'],
+	['varState', 'state', 'estado', 'estado', 'état', 'stato', 'Zustand', 'status', 'estat', 'estado', 'egoera'],
+	['varUsedIn', 'used in', 'se usa en', 'usada em', 'utilisée dans', 'usata in', 'verwendet in', 'gebruikt in', 's’usa a', 'úsase en', 'non erabilia'],
+	['varValue', 'value', 'valor', 'valor', 'valeur', 'valore', 'Wert', 'waarde', 'valor', 'valor', 'balioa'],
 	['notDefined', 'not in .env', 'no está en .env', 'não está no .env', 'absente de .env', 'non in .env', 'nicht in .env', 'niet in .env', 'no és a .env', 'non está en .env', 'ez dago .env-n'],
 	['newValue', 'New value (not shown again)', 'Valor nuevo (no se vuelve a mostrar)', 'Valor novo (não é mostrado de novo)', 'Nouvelle valeur (plus affichée ensuite)', 'Nuovo valore (non verrà più mostrato)', 'Neuer Wert (wird nicht wieder angezeigt)', 'Nieuwe waarde (wordt niet meer getoond)', 'Valor nou (no es torna a mostrar)', 'Valor novo (non se volve mostrar)', 'Balio berria (ez da berriz erakutsiko)'],
 	['setValue', 'Set', 'Definir', 'Definir', 'Définir', 'Imposta', 'Setzen', 'Instellen', 'Defineix', 'Definir', 'Ezarri'],

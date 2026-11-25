@@ -67,7 +67,7 @@ export interface ExplorerAdmin {
 const BUILD_FOLDERS = ['node', 'client-node']
 
 type Dialog =
-	| { kind: 'folder', schema: string, parentId?: string }
+	| { kind: 'folder', schema: string, parentId?: string, project?: boolean }
 	| { kind: 'edit', item: SavedItem }
 	| { kind: 'delete', item: SavedItem }
 	| { kind: 'import', text: string }
@@ -334,7 +334,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, sc
 
 	const creators = (schema: string, parentId?: string, top = false) => (
 		<MenuButton label={m.add} icon={<Icons.plus />} items={[
-			{ label: top ? a.newProject : m.newFolder, icon: <Icons.folderPlus />, onClick: () => setDialog({ kind: 'folder', schema, parentId }) },
+			{ label: top ? a.newProject : m.newFolder, icon: <Icons.folderPlus />, onClick: () => setDialog({ kind: 'folder', schema, parentId, project: top }) },
 			{ label: m.newQuery, icon: <Icons.queryPlus />, onClick: () => onNewQuery(schema, parentId) },
 			...(onNewDiagram ? [{ label: m.newDiagram, icon: <Icons.diagramPlus />, onClick: () => onNewDiagram(schema, parentId) }] : [])
 		]} />
@@ -535,7 +535,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, sc
 					}} />
 			)}
 			{dialog?.kind === 'folder' && (
-				<ItemDialog title={m.newFolder} submit={m.create} texts={m} theme={theme} initial={{ parentId: dialog.parentId }} folders={folders(dialog.schema)}
+				<ItemDialog title={dialog.project ? a.newProject : m.newFolder} submit={m.create} texts={m} theme={theme} initial={{ parentId: dialog.parentId }} folders={folders(dialog.schema)}
 					onClose={() => setDialog(undefined)}
 					onSubmit={async v => {
 						try { const f = await controller.createFolder({ schema: dialog.schema, ...v }); open(v.parentId ? `f:${v.parentId}` : `s:${dialog.schema}`); open(`f:${f.id}`) } catch (e) { return problemText(e, m) }

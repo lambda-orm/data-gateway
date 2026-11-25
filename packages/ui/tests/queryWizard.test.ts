@@ -1,7 +1,7 @@
 // The query wizard as logic: the tables joined by their relations (to one: columns; to many: include), the fields,
 // the filter, the order and the page; what is empty is not applied.
 import { describe, expect, test } from 'vitest'
-import { columnsOf, emptyWizard, joinOf, queryOf, WizardState, wizardFromQuery, wizardOf, withoutTable } from '../src/domain/queryWizard'
+import { columnsOf, emptyWizard, filterExample, joinOf, queryOf, WizardState, wizardFromQuery, wizardOf, withoutTable } from '../src/domain/queryWizard'
 import { DomainInfo } from '../src/domain/diagram'
 
 // λORM names a relation to one oneToMany (this entity has the key) and a relation to many manyToOne
@@ -26,6 +26,15 @@ const add = (state: WizardState, entity: string): WizardState => {
 }
 
 describe('the query wizard', () => {
+	test('the example of a filter is of the entity: its fields and the text of a relation', () => {
+		expect(filterExample(domain, 'Products')).toBe('p.category.name == name')
+		expect(filterExample(domain, 'Orders')).toBe('p.customer.name == name')
+		expect(filterExample(domain, 'Customers')).toBe('p.name == name')
+		const priced: DomainInfo = { entities: [{ name: 'Items', primaryKey: ['code'], properties: [{ name: 'code' }, { name: 'price', type: 'decimal' }, { name: 'title' }] }] }
+		expect(filterExample(priced, 'Items')).toBe('p.price > 10 && p.title == title')
+		expect(filterExample(domain, 'Nope')).toBeUndefined()
+	})
+
 	test('only the entity: the query reads it all; what is empty is not applied', () => {
 		expect(queryOf(emptyWizard('Orders'), domain)).toBe('Orders')
 		expect(queryOf({ ...emptyWizard('Orders'), filter: '  ', page: { number: '2', size: '' } }, domain)).toBe('Orders')

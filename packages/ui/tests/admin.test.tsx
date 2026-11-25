@@ -300,6 +300,8 @@ describe('what is saved, in the workspaces of the gateway', () => {
 		await waitFor(() => expect(row('shared reports')).toBeTruthy())
 		fireEvent.click(within(row('Workbench')).getByRole('button', { name: 'Add' }))
 		fireEvent.click(screen.getByRole('menuitem', { name: /New project/ }))
+		// its dialog says what it creates: a project, not a folder
+		expect(screen.getByRole('dialog', { name: 'New project' })).toBeTruthy()
 		fireEvent.change(screen.getByLabelText('name'), { target: { value: 'mine' } })
 		fireEvent.click(screen.getByRole('button', { name: 'Create' }))
 		await waitFor(() => expect(admin.puts.some(p => p[0].name === 'mine' && p[0].version === undefined)).toBe(true))
@@ -434,7 +436,7 @@ describe('the schema as forms', () => {
 		expect(within(form).getByRole('button', { name: 'Save' })).toBeTruthy()
 		expect(within(form).queryByRole('button', { name: 'Edit' })).toBeNull()
 		// its parts in tabs
-		expect(within(form).getAllByRole('tab').map(t => t.textContent)).toEqual(['Properties (1)', 'Relations (0)', 'Indexes (0)', 'Constraints (0)'])
+		expect(within(form).getAllByRole('tab').map(t => t.textContent)).toEqual(['Properties (1)', 'Relations (0)', 'Keys and indexes', 'Constraints (0)'])
 		expect(screen.getAllByRole('tab').filter(t => t.textContent?.trim() === 'Products')).toHaveLength(2)
 	})
 
@@ -527,6 +529,8 @@ describe('the schema as forms', () => {
 		await waitFor(() => expect(within(activeView()).getByRole('tablist', { name: 'Products' })).toBeTruthy())
 		expect(document.querySelectorAll('.lw-schema-forms')).toHaveLength(0)
 		await edit()
+		// the keys are with the indexes, as in the view of the entity
+		fireEvent.click(within(activeView()).getByRole('tab', { name: 'Keys and indexes' }))
 		fireEvent.change(within(activeView()).getByLabelText('primaryKey'), { target: { value: 'id, code' } })
 		fireEvent.click(within(activeView()).getByRole('button', { name: 'Save' }))
 		await waitFor(() => expect(admin.patches).toHaveLength(1))
@@ -592,10 +596,12 @@ describe('the schema as forms', () => {
 		const admin = new FakeAdmin()
 		await openForms(admin)
 		await editEntity('Products')
+		fireEvent.click(await screen.findByRole('tab', { name: 'Keys and indexes' }))
 		fireEvent.change(await screen.findByLabelText('primaryKey'), { target: { value: 'id, code' } })
 		admin.conflictOnce = true
 		fireEvent.click(screen.getByRole('button', { name: 'Save' }))
 		await screen.findByText('Someone else changed it meanwhile: this is what it has now')
+		fireEvent.click(screen.getByRole('tab', { name: /^Properties/ }))
 		expect((screen.getByLabelText('price name') as HTMLInputElement).value).toBe('price')
 	})
 
@@ -708,6 +714,8 @@ describe('the variables of the connections and the code of the domain', () => {
 		fireEvent.click(row('infrastructure'))
 		fireEvent.click(await rowSoon('Variables (.env)'))
 		await screen.findByText('not in .env')
+		// each column says what it is
+		expect(screen.getAllByRole('columnheader').map(h => h.textContent)).toEqual(['variable', 'state', 'used in', 'value', ''])
 		fireEvent.change(screen.getByLabelText('SHOP_CNX New value (not shown again)'), { target: { value: '{"host":"db"}' } })
 		fireEvent.click(screen.getByRole('button', { name: 'Set' }))
 		await screen.findByText('defined')
