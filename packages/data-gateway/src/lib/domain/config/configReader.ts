@@ -1,7 +1,7 @@
 import { ObservabilityConfig } from '@lambdaorm/base'
 import { ALL_PERMISSIONS, isPermission, KNOWN_PERMISSIONS, Permission } from '../auth/permission'
 import {
-	AuthenticationConfig, AuthenticationType, ConfigReading, CredentialConfig, DataGatewayConfig, JwtConfig, RoleConfig, CacheConfig, LoggerConfig, McpConfig,
+	AuthenticationConfig, AuthenticationType, ConfigReading, CredentialConfig, DataGatewayConfig, JwtConfig, RoleConfig, CacheConfig, OutboxConfig, OutboxDestinationConfig, LoggerConfig, McpConfig,
 	OrmConfig, RuntimeConfig, RuntimeMode, SchemaConfig, SessionsConfig, TransportConfig, TransportName, TransportsConfig, WatchConfig
 } from './dataGatewayConfig'
 import { parseDuration } from './durations'
@@ -11,8 +11,8 @@ import { parseSize } from './sizes'
 /** Transports of the design that this version does not serve yet (docs/DATA_GATEWAY_PLAN.md). */
 const LATER_TRANSPORTS: string[] = []
 const TRANSPORTS = ['http', 'mcpHttp', 'mcpWebSocket', 'webSocket', 'management']
-const KNOWN_SECTIONS = ['orm', 'admin', 'server', 'logger', 'metrics', 'observability', 'audit', 'authentication', 'rateLimit', 'scripts', 'mcp', 'runtime', 'transports', 'cache']
-const SCHEMA_KEYS = ['path', 'workspace', 'transports', 'authentication', 'env', 'scripts', 'mcp', 'server', 'runtime', 'view', 'queries', 'cache']
+const KNOWN_SECTIONS = ['orm', 'admin', 'server', 'logger', 'metrics', 'observability', 'audit', 'authentication', 'rateLimit', 'scripts', 'mcp', 'runtime', 'transports', 'cache', 'outbox']
+const SCHEMA_KEYS = ['path', 'workspace', 'transports', 'authentication', 'env', 'scripts', 'mcp', 'server', 'runtime', 'view', 'queries', 'cache', 'outbox']
 /** The tools of docs/DATA_GATEWAY.md §5.1: mcp.tools.include / exclude must name them */
 export const TOOL_NAMES = [
 	'orm_execute', 'orm_execute_script', 'orm_execute_queued', 'orm_plan', 'orm_metadata', 'orm_model', 'orm_parameters',
@@ -80,6 +80,7 @@ export class ConfigReader {
 			},
 			mcp: this.mcp(raw.mcp),
 			cache: this.cache(raw.cache, 'cache'),
+			outbox: this.outbox(raw.outbox, 'outbox'),
 			runtime: this.runtime(raw.runtime),
 			transports: this.transports(raw.transports)
 		}
@@ -162,6 +163,7 @@ export class ConfigReader {
 			if (view) schema.view = view
 		}
 		if (entry.cache !== undefined) schema.cache = this.cache(entry.cache, `${key}.cache`)
+		if (entry.outbox !== undefined) schema.outbox = this.outbox(entry.outbox, `${key}.outbox`)
 		if (entry.queries !== undefined) {
 			if (!isObject(entry.queries)) this.issues.push(`${key}.queries must be an object (the name of a query: its limits)`)
 			else {
@@ -597,6 +599,44 @@ export class ConfigReader {
 		}
 		if (this.issues.length > before || !issuer) return undefined
 		return { issuer, audience, ...(jwksUri ? { jwksUri } : {}), ...(secret ? { secret } : {}), algorithms, clockToleranceSec, principal: { name, ...(permissions ? { permissions } : {}) }, context }
+	}
+
+	/** outbox (docs/OUTBOX_DISPATCHER.md §2): its destinations; without them, nothing is dispatched */
+	private outbox (raw: unknown, key: string): OutboxConfig {
+		const none: OutboxConfig = { dispatch: true, intervalMs: 1000, batch: 100, destinations: [] }
+		if (raw === undefined) return none
+		if (!isObject(raw)) {
+			this.issues.push(`${key} must be an object`)
+			return none
+		}
+		const destinations: OutboxDestinationConfig[] = []
+		if (raw.destinations !== undefined && !Array.isArray(raw.destinations)) this.issues.push(`${key}.destinations must be a list`)
+		;(Array.isArray(raw.destinations) ? raw.destinations : []).forEach((entry: unknown, i: number) => {
+			const at = `${key}.destinations[${i}]`
+			if (!isObject(entry)) { this.issues.push(`${at} must be an object`); return }
+			const entities = entry.entities === undefined ? undefined : (Array.isArray(entry.entities) ? entry.entities.map(String) : (this.issues.push(`${at}.entities must be a list`), undefined))
+			if (entry.type === 'webhook') {
+				let url = ''
+				try {
+					const parsed = new URL(String(entry.url))
+					if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') throw new Error(parsed.protocol)
+					url = String(entry.url)
+				} catch { this.issues.push(`${at}.url "${entry.url}" is not an http(s) URL`); return }
+				if (entry.secret !== undefined && !String(entry.secret)) this.issues.push(`${at}.secret is empty (a variable not given?)`)
+				destinations.push({ type: 'webhook', url, ...(entry.secret ? { secret: String(entry.secret) } : {}), timeoutMs: this.duration(entry.timeout, 5000, `${at}.timeout`), ...(entities ? { entities } : {}) })
+			} else if (entry.type === 'kafka') {
+				if (!this.str(entry.topic, '')) { this.issues.push(`${at}.topic is required`); return }
+				destinations.push({ type: 'kafka', topic: String(entry.topic), ...(entities ? { entities } : {}) })
+			} else {
+				this.issues.push(`${at}.type must be webhook or kafka`)
+			}
+		})
+		return {
+			dispatch: this.bool(raw.dispatch, true, `${key}.dispatch`),
+			intervalMs: this.duration(raw.interval, none.intervalMs, `${key}.interval`),
+			batch: this.int(raw.batch, none.batch, `${key}.batch`, 1),
+			destinations
+		}
 	}
 
 	/** cache (docs/RESULT_CACHE.md §2): off unless enabled; ttl, maxEntries, maxRowBytes and its entities */

@@ -90,6 +90,7 @@ export const MCP_OPERATIONS = ['listTools', 'callTool', 'listResources', 'listRe
  */
 export const COMMAND_OPERATIONS = [
 	'stages', 'fetch', 'pushSentences', 'push', 'dropSentences', 'drop', 'export', 'import', 'pullSchema', 'pull', 'introspectSchema',
-	'migrations', 'migrateSentences', 'migrate', 'seedFiles', 'seed'
+	'migrations', 'migrateSentences', 'migrate', 'seedFiles', 'seed',
+	'outboxList', 'outboxRetry'
 ] as const
 export type CommandOperation = typeof COMMAND_OPERATIONS[number]

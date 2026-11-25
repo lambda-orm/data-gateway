@@ -6,6 +6,19 @@ All notable changes to this project will be documented in this file.
 
 ### Unreleased
 
+**The dispatcher of the outbox** (`docs/OUTBOX_DISPATCHER.md`, G5):
+
+- **`outbox.destinations`** (global or by schema): the events λORM writes with the data (`infrastructure.outbox` of
+  the `lambdaORM.yaml`) are delivered every `interval`, `batch` at a time, to **webhooks** (a `POST` per event, its id
+  in `X-Data-Gateway-Event`, signed `X-Data-Gateway-Signature: sha256=…` of `timestamp.body` with its `secret`) and to
+  **Kafka** (its `topic`, the brokers of `infrastructure.queue`, keyed by the entity and the keys of the row); never
+  the data written. An event goes when every destination that takes it accepted it; else λORM retries it (1, 2, 4…
+  s) and leaves it `dead` after its `maxAttempts`.
+- **The administration:** `GET /admin/workspaces/{schema}/outbox?status=dead` (`schemaRead`) and `POST
+  …/outbox/{id}/retry` (`ddl`).
+- **One replica dispatches:** `outbox.dispatch: false`, or `DATA_GATEWAY_OUTBOX_DISPATCH=false`, on the others.
+- `data_gateway_outbox_events{result="delivered|failed"}` in `/metrics`.
+
 **Subscriptions** (`docs/SUBSCRIPTIONS.md`, G4):
 
 - **Over WebSocket:** `subscribe.entity { entity }` (each write of it: `data.changed` with its action, the keys its view

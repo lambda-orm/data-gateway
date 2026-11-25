@@ -13,6 +13,8 @@ import { AuditPort, ClockPort, LoggerPort, QueueEventsPort } from '../../applica
 import { Auditor } from '../../application/usecases/auditor'
 import { ViewResolver } from '../../application/usecases/viewResolver'
 import { ResultCache } from '../../application/cache/resultCache'
+import { OutboxDestinationPort, OutboxDispatcher } from '../../application/outbox/outboxDispatcher'
+import { KafkaDestination, LambdaOrmOutboxAdapter, WebhookDestination } from '../output/outbox/outboxDestinations'
 import { ReadsCache } from '../../application/usecases/queryUseCases'
 import { MetricsPort } from '../../application/ports/output/supportPorts'
 import { NamedQueryUseCases } from '../../application/usecases/namedQueryUseCases'
@@ -25,6 +27,7 @@ import { AuditConfig } from '../../domain/config/dataGatewayConfig'
 import { ConfigError } from '../../domain/errors/gatewayError'
 import { SchemaSettings } from '../../domain/runtime/schemas'
 import { LambdaOrmAdapter } from '../output/orm/lambdaOrmAdapter'
+import { Orm } from '@lambdaorm/lib'
 import { CommandUseCases } from '../../application/usecases/commandUseCases'
 import { adminTools } from '../../application/mcp/adminTools'
 import { workspaceAdminTools } from '../output/admin/workspaceAdminTools'
@@ -115,7 +118,10 @@ export const composeSchema = async (input: SchemaCompositionInput, deps: { logge
 		stages: new StageUseCases(orm, auditor),
 		named
 	}, orm, deps.clock, input.version, settings.server.timeout)
-	const commands = new CommandUseCases(orm, auditor)
+	const outbox = new LambdaOrmOutboxAdapter(orm.orm as Orm)
+	const commands = new CommandUseCases(orm, auditor, outbox)
+	const dispatcher = outboxDispatcher(input, orm, outbox, logger, deps.metrics)
+	dispatcher?.start()
 	// mcp.freeQueries false: an agent only with the named queries (and the tools of the schema)
 	const tools = [...curatedTools(gatewayTools(gateway), settings.mcp.freeQueries !== false), ...(input.admin ? adminTools(workspaceAdminTools(file, commands)) : [])]
 	const mcp = new DataGatewayMcpServer(new ToolCatalog(tools, settings.mcp.tools), orm, {
@@ -129,6 +135,7 @@ export const composeSchema = async (input: SchemaCompositionInput, deps: { logge
 		mcp,
 		commands,
 		stop: async () => {
+			await dispatcher?.stop().catch(error => logger.error(error))
 			await queue?.stop().catch(error => logger.error(error))
 			await orm.end().catch(error => logger.error(error))
 		}
@@ -152,4 +159,38 @@ const readsCache = (input: SchemaCompositionInput, orm: LambdaOrmAdapter, metric
 	metrics?.gauge('data_gateway_cache_invalidations', 'Writes of an entity that dropped cached results', ['schema'], () => [{ labels: { schema }, value: results.snapshot.invalidations }])
 	metrics?.gauge('data_gateway_cache_entries', 'Results kept in the cache', ['schema'], () => [{ labels: { schema }, value: results.snapshot.entries }])
 	return { results, domain: () => orm.entities() as any }
+}
+
+/**
+ * The dispatcher of the outbox of a schema (docs/OUTBOX_DISPATCHER.md): when its lambdaORM.yaml declares
+ * infrastructure.outbox, the configuration gives destinations and this replica dispatches (outbox.dispatch, and
+ * DATA_GATEWAY_OUTBOX_DISPATCH=false turns it off: one per outbox).
+ */
+const outboxDispatcher = (input: SchemaCompositionInput, orm: LambdaOrmAdapter, outbox: LambdaOrmOutboxAdapter, logger: LoggerPort, metrics?: MetricsPort): OutboxDispatcher | undefined => {
+	const settings = input.settings.outbox
+	const schema = input.path || '/'
+	if (!settings?.destinations.length) return undefined
+	if (!orm.infrastructure()?.outbox) {
+		logger.warn(`schema "${schema}": outbox has destinations but its lambdaORM.yaml declares no infrastructure.outbox: nothing to dispatch`)
+		return undefined
+	}
+	if (!settings.dispatch || process.env.DATA_GATEWAY_OUTBOX_DISPATCH === 'false') {
+		logger.info(`schema "${schema}": the outbox is dispatched by another replica (outbox.dispatch false)`)
+		return undefined
+	}
+	const kafka = orm.infrastructure()?.queue?.config
+	const destinations: OutboxDestinationPort[] = []
+	for (const destination of settings.destinations) {
+		if (destination.type === 'webhook') destinations.push(new WebhookDestination(destination))
+		else if (kafka) destinations.push(new KafkaDestination(destination, kafka))
+		else logger.warn(`schema "${schema}": the outbox destination kafka ${destination.topic} needs infrastructure.queue (its brokers) in the lambdaORM.yaml: ignored`)
+	}
+	if (!destinations.length) return undefined
+	const dispatcher = new OutboxDispatcher(outbox, destinations, settings, logger)
+	metrics?.gauge('data_gateway_outbox_events', 'Events of the outbox the dispatcher delivered or that failed (retried later)', ['schema', 'result'], () => [
+		{ labels: { schema, result: 'delivered' }, value: dispatcher.snapshot.delivered },
+		{ labels: { schema, result: 'failed' }, value: dispatcher.snapshot.failed }
+	])
+	logger.info(`schema "${schema}": the outbox goes to ${destinations.map(d => d.name).join(', ')}`)
+	return dispatcher
 }

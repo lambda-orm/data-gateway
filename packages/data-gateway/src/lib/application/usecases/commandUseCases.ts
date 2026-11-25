@@ -1,5 +1,6 @@
 import { authorize, Operation } from '../../domain/auth/authorizationPolicy'
-import { badRequest } from '../../domain/errors/gatewayError'
+import { badRequest, notFound } from '../../domain/errors/gatewayError'
+import { OutboxPort } from '../outbox/outboxDispatcher'
 import { CommandOperation } from '../../domain/runtime/channelProtocol'
 import { RequestContext } from '../ports/input/dataGatewayPort'
 import { OrmCommandPort } from '../ports/output/ormPorts'
@@ -21,7 +22,9 @@ const OPERATIONS: Record<CommandOperation, Operation> = {
 	migrateSentences: 'stageFetch',
 	migrate: 'stagePush',
 	seedFiles: 'stageFetch',
-	seed: 'stageImport'
+	seed: 'stageImport',
+	outboxList: 'stageFetch',
+	outboxRetry: 'stagePush'
 }
 
 const versionOf = (value: unknown): string => {
@@ -35,7 +38,24 @@ const versionOf = (value: unknown): string => {
  */
 export class CommandUseCases {
 	// eslint-disable-next-line no-useless-constructor
-	constructor (private readonly orm: OrmCommandPort, private readonly auditor: Auditor) {}
+	constructor (private readonly orm: OrmCommandPort, private readonly auditor: Auditor, private readonly outbox?: OutboxPort) {}
+
+	/** the outbox of the schema (docs/OUTBOX_DISPATCHER.md §5): its events by state, and a dead one back to pending */
+	private outboxOp (op: 'outboxList' | 'outboxRetry', args: unknown[]): Promise<unknown> {
+		if (!this.outbox) throw badRequest('ValidationError', 'the schema has no outbox')
+		if (op === 'outboxList') {
+			const status = args[0] ?? 'dead'
+			if (status !== 'pending' && status !== 'done' && status !== 'dead') throw badRequest('ValidationError', 'status is pending, done or dead')
+			const limit = Math.min(Math.max(Number(args[1] ?? 100) || 100, 1), 1000)
+			return this.outbox.list(status, limit)
+		}
+		if (typeof args[0] !== 'string' || !args[0]) throw badRequest('ValidationError', 'id is the one of an event of the outbox')
+		const id = args[0]
+		return this.outbox.retry(id).then(found => {
+			if (!found) throw notFound(`no event ${id} in the outbox`)
+			return { id, status: 'pending' }
+		})
+	}
 
 	private stageOf (stage: unknown): string {
 		const names = this.orm.stageNames()
@@ -50,6 +70,7 @@ export class CommandUseCases {
 	public async run (ctx: RequestContext, op: CommandOperation, args: unknown[]): Promise<unknown> {
 		authorize(ctx.principal, OPERATIONS[op])
 		if (op === 'stages') return this.orm.stageNames()
+		if (op === 'outboxList' || op === 'outboxRetry') return this.outboxOp(op, args)
 		if (op === 'introspectSchema') {
 			if (typeof args[1] !== 'string' || !args[1]) throw badRequest('ValidationError', 'name is the entity of the data (Orders for a list of orders)')
 			return this.orm.introspectSchema(args[0], args[1])

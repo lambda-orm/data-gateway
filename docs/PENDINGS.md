@@ -186,6 +186,11 @@ recomendación, tests por transporte y la conformidad.
 
 ### G5. Despachador del outbox (brecha 3.3)
 
+> **Estado (2026-11-25): hecho** en `feature/outbox-dispatcher` ([`OUTBOX_DISPATCHER.md`](OUTBOX_DISPATCHER.md),
+> decisiones cerradas): webhooks firmados (HMAC) y Kafka (los brokers de `infrastructure.queue`), por schema; los
+> reintentos y `dead` de λORM; `GET …/outbox?status=dead` y `POST …/outbox/{id}/retry` en la administración; una réplica
+> despacha (`outbox.dispatch`, `DATA_GATEWAY_OUTBOX_DISPATCH`). **Falta:** la wiki.
+
 - Lee el outbox (C8: `LambdaOrmOutbox`, `OutboxService.pending/done/failed/dispatch`) y entrega a webhooks HTTP o a
   Kafka, con reintentos exponenciales y una cola de fallidos (DLQ).
 - Configuración por schema: destinos, firmas de los webhooks (HMAC), concurrencia, reintentos.
