@@ -10,6 +10,8 @@ on:
     branches: [main]
     paths:
       - packages/data-gateway/**
+      # the suite the image must pass: a fix of it publishes a version that it had stopped
+      - packages/conformance/**
       - .github/workflows/data-gateway-image.yml
   workflow_dispatch:
     inputs:
