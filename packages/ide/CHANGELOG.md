@@ -2,8 +2,16 @@
 
 ### Unreleased
 
-Needs a data-gateway with the history of the schema (4.1.0, lambda-orm/core #203).
+### 1.1.0 (2026-11-25)
 
+For the data-gateway 4.1.0; what needs it says so (an older gateway doesn't offer it).
+
+- **The identity:** a connection takes the token of an identity provider as its **Bearer token (JWT)**; when it
+  expires the connection says so and asks for a new one. The workbench says the **view** of the credential (the gateway
+  chooses it by the identity), and the options of a query no longer offer one.
+- **Commands:** the preview of **push** (and of **migrate**) lists the changes that can lose data and runs them only
+  once allowed; **migrations** shows the history of the stage, with **go back here** on an applied version
+  (**migrate**); **seed** shows its files and inserts the rows that are not there.
 - **History:** the changes of a schema (who, when, what, the diff and the element before and after) in the view of the
   schema and in the tab History of an entity.
 - **A change of another session** (another IDE, the administration of another person) is announced with who changed
@@ -11,6 +19,20 @@ Needs a data-gateway with the history of the schema (4.1.0, lambda-orm/core #203
 - **Traces:** every request carries a W3C `traceparent` (the requests of one action share a trace), so the gateway and
   λORM continue it; a connection can say where its Grafana is (and its Tempo datasource), and an entity links to its
   traces.
+- **The diagram of a stage:** each source with the tables that live in it and those whose reads or writes it takes; and
+  every diagram has an outline.
+- **Entities:** their constraints in a tab of their own and under the properties they use; the `readValue` and
+  `writeValue` of the properties; the keys with the indexes (**Keys and indexes**), in the view and in the form;
+  **Relations (n)** counts its own relations.
+- **The query wizard** reads a query it didn't write (or one edited by hand), shows a table without a map with every
+  field ticked, and its help gives an example of the entity.
+- **The explorer:** the state and the source code of a schema under its metadata; the actions of a connection, a schema
+  and an entity in what opens when it is chosen; what is saved shows as **Workbench**, and **New project** opens a
+  dialog of that name.
+- **The app:** its menu named λORM Data Gateway, on top; every request with its session; a connection by its name.
+- **Texts:** the names of λORM (source, stage, view, mapping, domain, plan, metadata, execute, Workbench) stay as
+  written in the ten languages and the rest is translated (the tabs of a result, Metadata, About); the variables
+  (.env) have the headers of their columns.
 
 ### 1.0.0 (2026-11-23)
 
