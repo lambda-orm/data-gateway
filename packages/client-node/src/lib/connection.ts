@@ -6,8 +6,11 @@ export interface ConnectOptions {
 	apiKey?: string
 	/** the header of the API key, when the gateway uses another one */
 	apiKeyHeader?: string
-	/** sent as `Authorization: Bearer <token>`; default: DATA_GATEWAY_TOKEN */
-	token?: string
+	/**
+	 * sent as `Authorization: Bearer <token>`; default: DATA_GATEWAY_TOKEN. A function gives it when it is needed (on
+	 * every request of REST and MCP over HTTP, on opening a WebSocket): the token of an identity provider, refreshed
+	 */
+	token?: string | (() => string | Promise<string>)
 	/** any other header */
 	headers?: Record<string, string>
 	/** milliseconds an operation can take before it fails with the code timeout; default 30000 */
@@ -26,6 +29,8 @@ export interface ConnectionTarget {
 	/** the URL of the schema for the transport: http(s)://… or ws(s)://…, without a trailing slash */
 	url: string
 	headers: Record<string, string>
+	/** the token, when it is given by a function: asked for on every request (headersOf) */
+	token?: () => Promise<string>
 	timeout: number
 	onTruncated: 'error' | 'return'
 	stage?: string
@@ -70,15 +75,24 @@ export const parseConnection = (connection: string | undefined, options: Connect
 	const token = options.token ?? env.DATA_GATEWAY_TOKEN
 	const headers: Record<string, string> = {
 		...(apiKey ? { [options.apiKeyHeader ?? 'X-Api-Key']: apiKey } : {}),
-		...(token ? { Authorization: `Bearer ${token}` } : {}),
+		...(typeof token === 'string' && token ? { Authorization: `Bearer ${token}` } : {}),
 		...options.headers
 	}
+	const given = typeof token === 'function' ? token : undefined
 	return {
 		transport: scheme.transport,
 		url: `${scheme.protocol}://${url.host}${url.pathname.replace(/\/+$/, '')}`,
 		headers,
+		...(given ? { token: async () => given() } : {}),
 		timeout: options.timeout ?? (Number.isFinite(fromUrl) && fromUrl > 0 ? fromUrl : 30000),
 		onTruncated: options.onTruncated ?? 'error',
 		stage: options.stage ?? url.searchParams.get('stage') ?? undefined
 	}
+}
+
+/** The headers of a request: the fixed ones, and the token of the moment when it is given by a function */
+export const headersOf = async (target: Pick<ConnectionTarget, 'headers' | 'token'>): Promise<Record<string, string>> => {
+	if (!target.token) return target.headers
+	const token = await target.token()
+	return token ? { ...target.headers, Authorization: `Bearer ${token}` } : target.headers
 }

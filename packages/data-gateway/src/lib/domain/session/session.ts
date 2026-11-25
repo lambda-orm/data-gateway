@@ -13,8 +13,10 @@ export interface Session {
 	permissions: Permission[]
 	createdAt: string
 	lastSeenAt: string
-	/** the end of its lifetime (sessions.maxLifetime after the login) */
+	/** the end of its lifetime: sessions.maxLifetime after the login, or the exp of the token it logged in with if before */
 	expiresAt: string
+	/** the context of λORM of its credential (the claims of its token, docs/JWT.md): its requests carry it */
+	context?: Record<string, unknown>
 	ip?: string
 	client?: SessionClient
 	activity?: { schema?: string, tab?: string }
@@ -53,11 +55,13 @@ export const endOf = (session: Session, now: Date, settings: SessionSettings): S
 }
 
 /** A session as it is listed: never its token (it isn't kept), with `current` for the caller's own */
-export type ListedSession = Omit<Session, 'permissions' | 'revokedAt' | 'revokedBy'> & { current: boolean, connected: boolean }
+export type ListedSession = Omit<Session, 'permissions' | 'context' | 'revokedAt' | 'revokedBy'> & { current: boolean, connected: boolean }
 
 export const listed = (session: Session, currentId: string | undefined, connected: boolean): ListedSession => {
-	const result: ListedSession & Partial<Pick<Session, 'permissions' | 'revokedAt' | 'revokedBy'>> = { ...session, current: session.id === currentId, connected }
+	const result: ListedSession & Partial<Pick<Session, 'permissions' | 'context' | 'revokedAt' | 'revokedBy'>> = { ...session, current: session.id === currentId, connected }
 	delete result.permissions
+	// who it is for the rows (a tenant): not for whoever lists the sessions
+	delete result.context
 	delete result.revokedAt
 	delete result.revokedBy
 	return result

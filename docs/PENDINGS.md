@@ -32,6 +32,11 @@ Las fuentes:
 
 ### R1. Publicar la imagen 4.0.0
 
+> **Estado (2026-11-25): hecho.** La causa no era solo el uid: el `dist` instalaba λORM con rangos `^` y la imagen traía
+> `lib` 3.15, cuyo `model` agrega `required`; el caso de `model` usa `match` (`hotfix/conformance-model-match`, #13) y
+> un cambio de la conformidad también dispara el workflow. `flaviorita/data-gateway:4.0.0` está en Docker Hub y la guía
+> de la wiki se siguió de punta a punta contra ella (los diez pasos, con la imagen del IDE 1.0.0).
+
 La guía de inicio de la wiki (`docs/data-gateway/northwind/docker-compose.yml`) usa `flaviorita/data-gateway:4.0.0`,
 que no existe en Docker Hub: hoy falla para cualquiera que la siga.
 
@@ -44,6 +49,10 @@ que no existe en Docker Hub: hoy falla para cualquiera que la siga.
    `import`, Swagger, IDE).
 
 ### R2. El cliente elige su vista y su contexto (seguridad)
+
+> **Estado (2026-11-25): hecho** (#14). `requestOptions` borra `view` y `context` en los casos de uso de todos los
+> transportes; `plan` lleva el actor; el IDE ya no ofrece la vista. **Sin decidir:** si el cliente puede elegir
+> `stage`, `maxRows` y `allowDestructive`.
 
 `queryUseCases.execute` pasa a λORM las `options` del pedido tal como llegan, más el actor
 (`application/usecases/actor.ts`, `withActor`); `plan` ni eso. Con λORM ≥ 3.10 eso incluye:
@@ -62,15 +71,15 @@ que un `view`/`context` del cliente no llega a λORM.
 
 ### R3. Subir a la λORM actual
 
-> **Estado (2026-11-25):** en `feature/lambdaorm-current` (desde `develop`), **falta el PR**. Hecho: `base` 3.11.1,
+> **Estado (2026-11-25): hecho** (#16). Hecho: `base` 3.11.1,
 > `lib` 3.15.0, `client` 0.10.13; los cuatro errores nuevos con su status y `details`; `push` muestra lo destructivo y
 > lo corre solo con `allowDestructive`; comandos `migrations`, `migrate` y `seed` en la administración y en el IDE
 > (probados contra PostgreSQL); `observeWith`; JSON, vectores y puntos en la guía de MCP; **la imagen fija las
 > versiones probadas** (el `dist` sin rangos: la 4.0.0 se probó con `lib` 3.9 y su imagen instalaba 3.15). `check` y
 > `clients` (también contra la imagen) en verde.
 >
-> **Arreglado en core** (`bugfix/gateway-findings`, PR a `develop` pendiente; sale en `lib` y `base` *patch*). Cuando
-> se publique: subir la versión acá, quitar el cast de `observeWith` en `lambdaOrmAdapter` y volver el caso de Ilusor a
+> **Arreglado en core** (`bugfix/gateway-findings`, en el `develop` de core; falta su release: `lib` y `base` *patch*).
+> Cuando se publique: subir la versión acá, quitar el cast de `observeWith` en `lambdaOrmAdapter` y volver el caso de Ilusor a
 > `Areas.map(p => p.areaType.nme)` (entre fuentes). Lo que se arregló:
 > - Desde `lib` 3.13, un `map` sobre una relación a **otra fuente** se resuelve en memoria y **no valida sus campos**:
 >   `Areas.map(p => p.areaType.nme)` no da error (antes: *did you mean name?*). El test de Ilusor usa ahora una
@@ -116,6 +125,13 @@ El orden de §5. Cada una con su documento de diseño (`docs/<FEATURE>.md` y su 
 recomendación, tests por transporte y la conformidad.
 
 ### G1. JWT / OIDC (brecha 1.1)
+
+> **Estado (2026-11-25): fases 1 a 5 hechas** en `feature/jwt` ([`JWT.md`](JWT.md), decisiones cerradas): `adapter:
+> jwt` y `methods`, roles → permisos, claims → contexto (llega a λORM por el worker), 401 con motivo y
+> `WWW-Authenticate`, 503 si el emisor no responde, sesiones y WebSockets que terminan con el token, el cliente Node con
+> un token que se renueva, y cuatro casos JWT en la conformidad. **Falta:** la wiki (fase 6) y probarlo contra un IdP
+> real (Keycloak); el login con PKCE desde el IDE quedó para después (decisión 5). El efecto del contexto en las filas
+> se prueba con G2 (hoy la gateway no elige vista).
 
 - Un autenticador `jwt`: `issuer`, `audience`, `jwksUri` (con caché y rotación de claves), algoritmos permitidos,
   tolerancia de reloj.

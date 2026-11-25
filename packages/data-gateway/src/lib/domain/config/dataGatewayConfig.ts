@@ -12,12 +12,40 @@ export interface CredentialConfig {
 
 export type AuthenticationType = 'bearer' | 'apikey' | 'basic'
 
+/** adapter: jwt — the tokens of an identity provider (docs/JWT.md) */
+export interface JwtConfig {
+	/** iss of the tokens; with it the jwksUri is discovered (OIDC) when not given */
+	issuer: string
+	/** aud: the token must have one of them; none, not checked */
+	audience: string[]
+	jwksUri?: string
+	/** a shared secret (HS256): for development and tests, from a variable */
+	secret?: string
+	algorithms: string[]
+	clockToleranceSec: number
+	principal: {
+		/** the claim of the name (a path with dots); default sub */
+		name: string
+		permissions?: {
+			/** the claim of the roles: a list, or a text separated by spaces (as scope) */
+			claim: string
+			/** role → permissions */
+			roles: Record<string, Permission[]>
+		}
+	}
+	/** variable of the context of λORM → the claim it takes (a path with dots) */
+	context: Record<string, string>
+}
+
 export interface AuthenticationConfig {
-	adapter: 'none' | 'local'
+	/** methods: several, in order; the first that recognizes the credential decides */
+	adapter: 'none' | 'local' | 'jwt' | 'methods'
 	type?: AuthenticationType
 	/** Header of an API key (lower case); default x-api-key */
 	header?: string
 	credentials: CredentialConfig[]
+	jwt?: JwtConfig
+	methods?: AuthenticationConfig[]
 }
 
 export type RuntimeMode = 'thread' | 'process'

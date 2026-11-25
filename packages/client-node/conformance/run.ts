@@ -3,7 +3,7 @@
 import { connect, DataGatewayClient, GatewayError } from '../src/lib'
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore the runner of the suite is plain JavaScript
-import { CONNECTIONS, CREDENTIALS, check, expectationOf, loadCases, resolve, stepsOf } from '../../conformance/runner/index.mjs'
+import { CONNECTIONS, check, credentialOf, expectationOf, loadCases, resolve, stepsOf } from '../../conformance/runner/index.mjs'
 
 type Args = Record<string, any>
 /** each operation of the cases as the public API of the client does it */
@@ -46,7 +46,7 @@ const main = async (): Promise<void> => {
 	for (const transport of transports) {
 		const open: Record<string, DataGatewayClient> = {}
 		const client = async (credential: string) => {
-			open[credential] ??= await connect(CONNECTIONS[transport], { apiKey: CREDENTIALS[credential] })
+			open[credential] ??= await connect(CONNECTIONS[transport], credentialOf(credential))
 			return open[credential]
 		}
 		console.log(`\n${transport}  ${CONNECTIONS[transport]}`)

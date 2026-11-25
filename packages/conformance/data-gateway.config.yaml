@@ -6,13 +6,27 @@ orm:
   schemas:
     - path: northwind
       env: { NORTHWIND_DB: $NORTHWIND_DB }
+# the keys of the services, and the tokens of the users (docs/JWT.md): HS256 with a secret of the suite (the runner signs them)
 authentication:
-  adapter: local
-  type: apikey
-  header: X-Api-Key
-  keys:
-    - { name: reader,  value: conformance-reader-key,  permissions: [ read ] }
-    - { name: backend, value: conformance-backend-key, permissions: [ read, write, script, queue, stageImport ] }
+  methods:
+    - adapter: jwt
+      issuer: https://conformance.lambdaorm
+      audience: data-gateway
+      secret: conformance-jwt-secret-of-32-bytes!!
+      principal:
+        name: sub
+        permissions:
+          claim: roles
+          roles:
+            reader: [ read ]
+            backend: [ read, write, script, queue, stageImport ]
+      context: { tenant: tenant }
+    - adapter: local
+      type: apikey
+      header: X-Api-Key
+      keys:
+        - { name: reader,  value: conformance-reader-key,  permissions: [ read ] }
+        - { name: backend, value: conformance-backend-key, permissions: [ read, write, script, queue, stageImport ] }
 rateLimit: { windowMs: 30000, max: 0 }
 scripts:
   enabled: true

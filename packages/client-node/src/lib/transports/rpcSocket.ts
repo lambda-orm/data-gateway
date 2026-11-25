@@ -20,12 +20,14 @@ export class RpcSocket {
 	private readonly listeners = new Map<string, Set<NotificationListener>>()
 
 	// eslint-disable-next-line no-useless-constructor
-	constructor (private readonly url: string, private readonly headers: Record<string, string>) {}
+	/** headers: those of the handshake, asked for on every opening (a token given by a function may have changed) */
+	constructor (private readonly url: string, private readonly headers: () => Promise<Record<string, string>>) {}
 
-	public open (): Promise<void> {
+	public async open (): Promise<void> {
+		const headers = await this.headers()
 		return new Promise((resolve, reject) => {
 			// Node's WebSocket (undici) takes the headers of the handshake as an option
-			const socket = new (WebSocket as any)(this.url, { headers: this.headers }) as WebSocket
+			const socket = new (WebSocket as any)(this.url, { headers }) as WebSocket
 			this.socket = socket
 			let opened = false
 			socket.onopen = () => { opened = true; resolve() }

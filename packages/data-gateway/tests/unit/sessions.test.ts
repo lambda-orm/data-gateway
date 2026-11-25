@@ -211,3 +211,66 @@ describe('the configuration of the sessions', () => {
 		expect(read({ port: 9090, sessions: { idleTimeout: '13h' } }).warnings).toContainEqual(expect.stringMatching(/idleTimeout is longer than maxLifetime/))
 	})
 })
+
+describe('a session of a token (docs/JWT.md)', () => {
+	const ann = { ...principal('ann', ['read']), context: { tenant: 't1' }, expiresAt: Date.parse('2026-11-23T10:20:00.000Z') }
+
+	test('it ends with the token, and its requests carry its context; the list doesn\'t show it', () => {
+		const { service, clock } = setup()
+		const { session, token } = service.login(ann, {}, undefined)
+		expect(session.expiresAt).toBe('2026-11-23T10:20:00.000Z')
+		const auth = service.authenticate(token, undefined)
+		expect(auth.principal.context).toEqual({ tenant: 't1' })
+		expect(service.list(auth, false)[0]).not.toHaveProperty('context')
+		clock.advance(19 * MIN)
+		expect(service.authenticate(token, undefined).principal.name).toBe('ann')
+		clock.advance(MIN)
+		expect(error(() => service.authenticate(token, undefined))).toMatchObject({ status: 401, name: 'SessionExpiredError', message: expect.stringMatching(/or the token it logged in with/) })
+		// a credential without an end keeps sessions.maxLifetime
+		expect(service.login(modeler, {}, undefined).session.expiresAt).toBe(new Date(clock.time + 12 * 60 * MIN).toISOString())
+	})
+
+	test('the store of SQLite keeps the context, also in a database of before it (the column added)', () => {
+		const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dg-sessions-ctx-'))
+		const file = path.join(dir, 'state.sqlite')
+		const { DatabaseSync } = require('node:sqlite')
+		const old = new DatabaseSync(file)
+		old.exec('CREATE TABLE sessions (id TEXT PRIMARY KEY, token_hash TEXT NOT NULL UNIQUE, credential TEXT NOT NULL, permissions TEXT NOT NULL, created_at TEXT NOT NULL, last_seen_at TEXT NOT NULL, expires_at TEXT NOT NULL, ip TEXT, client TEXT, activity TEXT, revoked_at TEXT, revoked_by TEXT)')
+		old.close()
+		const store = new SqliteSessionStore(file)
+		const { service } = setup(store)
+		const { token } = service.login(ann, {}, undefined)
+		expect(service.authenticate(token, undefined).principal.context).toEqual({ tenant: 't1' })
+		store.close?.()
+		fs.rmSync(dir, { recursive: true, force: true })
+	})
+})
+
+describe('a connection of a token (docs/JWT.md §3)', () => {
+	const { EventEmitter } = require('events')
+	const WebSocket = require('ws')
+	const socket = () => {
+		const ws = new EventEmitter()
+		ws.readyState = WebSocket.OPEN
+		ws.closed = undefined
+		ws.close = (code: number, reason: string) => { ws.closed = { code, reason }; ws.readyState = WebSocket.CLOSED; ws.emit('close') }
+		return ws
+	}
+
+	test('closed with 4401 when its token expires; one without an end, never', async () => {
+		const { closeWhenExpired, CREDENTIAL_EXPIRED } = require('../../src/lib/infrastructure/input/websocket/credentialExpiry')
+		const ws = socket()
+		closeWhenExpired(ws, { ...principal('ann', ['read']), expiresAt: Date.now() + 50 })
+		expect(ws.closed).toBeUndefined()
+		await new Promise(resolve => setTimeout(resolve, 80))
+		expect(ws.closed).toEqual({ code: CREDENTIAL_EXPIRED, reason: 'the token expired: connect again with a new one' })
+		const key = socket()
+		closeWhenExpired(key, principal('svc', ['read']))
+		await new Promise(resolve => setTimeout(resolve, 20))
+		expect(key.closed).toBeUndefined()
+		// already expired: at once
+		const late = socket()
+		closeWhenExpired(late, { ...principal('ann', ['read']), expiresAt: Date.now() - 1 })
+		expect(late.closed?.code).toBe(4401)
+	})
+})

@@ -1,0 +1,40 @@
+[
+	{
+		"name": "jwt: the token of a user reads with the permissions of its role",
+		"credential": "jwtReader",
+		"operation": "execute",
+		"args": { "query": "Categories.map(p => p.name).sort(p => p.name).page(1, 1)" },
+		"expect": { "length": 1 }
+	},
+	{
+		"name": "jwt: a role that doesn't write is forbidden to",
+		"credential": "jwtReader",
+		"operation": "execute",
+		"args": { "query": "Categories.insert()", "data": { "name": "conformance jwt forbidden" } },
+		"expect": { "error": { "code": "forbidden", "name": "ForbiddenError" } }
+	},
+	{
+		"name": "jwt: a role that writes, writes",
+		"credential": "jwtBackend",
+		"steps": [
+			{
+				"operation": "execute",
+				"args": { "query": "Categories.insert()", "data": { "name": "conformance jwt $transport" } },
+				"expect": { "match": { "data": { "name": "conformance jwt $transport" } } }
+			},
+			{
+				"operation": "execute",
+				"args": { "query": "Categories.delete().filter(p => p.name == name)", "data": { "name": "conformance jwt $transport" } },
+				"expect": { "result": 1 }
+			}
+		]
+	},
+	{
+		"name": "jwt: an expired token is unauthorized",
+		"credential": "jwtExpired",
+		"transports": ["http"],
+		"operation": "execute",
+		"args": { "query": "Categories.map(p => p.name)" },
+		"expect": { "error": { "code": "unauthorized" } }
+	}
+]

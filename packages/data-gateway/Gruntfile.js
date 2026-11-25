@@ -84,7 +84,8 @@ module.exports = function (grunt) {
 			start: 'node index.js',
 			test: data.scripts.test
 		}
-		data.engines = { node: '>=20' }
+		// jose (JWT) is ESM only: require(esm) needs Node 22.12; the image runs 24
+		data.engines = { node: '>=22.12' }
 		data.main = 'index.js'
 		data.types = 'index.d.ts'
 		fs.writeFileSync('./dist/package.json', JSON.stringify(data, null, 2), 'utf8')
