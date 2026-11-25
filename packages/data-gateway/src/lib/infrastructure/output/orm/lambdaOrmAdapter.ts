@@ -58,10 +58,13 @@ export class LambdaOrmAdapter implements OrmQueryPort, OrmScriptPort, OrmSchemaP
 		return this.orm.state?.schema?.infrastructure
 	}
 
-	/** λORM's spans and metrics with this configuration (the gateway's, for a schema without its own) */
+	/**
+	 * λORM's spans and metrics with this configuration (the gateway's, for a schema without its own); the trace conditions
+	 * of the entities of the schema still decide for them
+	 */
 	public observe (config: ResolvedObservability): void {
-		const helper = (this.orm as any).helper
-		helper.telemetry.configure(config, this.orm.state.schema?.name || '', this.orm.exp, (message: string) => helper.logger.log(message))
+		// observeWith is in Orm and not yet in IOrm (pending in core)
+		(this.orm as Orm).observeWith(config)
 	}
 
 	// ─── queries ─────────────────────────────────────────────────────────────

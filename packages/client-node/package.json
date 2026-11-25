@@ -27,7 +27,7 @@
 		"dist": "node ../../scripts/dist.mjs"
 	},
 	"dependencies": {
-		"@lambdaorm/base": "^3.6.0",
+		"@lambdaorm/base": "^3.11.1",
 		"3xpr": "^5.3.1"
 	},
 	"devDependencies": {
