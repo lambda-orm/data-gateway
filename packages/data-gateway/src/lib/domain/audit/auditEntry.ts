@@ -5,7 +5,7 @@ export interface AuditEntry {
 	schema: string
 	transport: string
 	credential: string
-	operation: 'execute' | 'executeScript' | 'executeQueued' | 'stageImport' | 'stagePush' | 'stageDrop'
+	operation: 'execute' | 'executeScript' | 'executeQueued' | 'stageImport' | 'stagePush' | 'stageDrop' | 'stageMigrate' | 'stageSeed'
 	actions?: string[]
 	entities?: string[]
 	query?: string
