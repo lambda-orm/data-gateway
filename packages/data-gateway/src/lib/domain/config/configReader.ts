@@ -1,7 +1,7 @@
 import { ObservabilityConfig } from '@lambdaorm/base'
 import { ALL_PERMISSIONS, isPermission, KNOWN_PERMISSIONS, Permission } from '../auth/permission'
 import {
-	AuthenticationConfig, AuthenticationType, ConfigReading, CredentialConfig, DataGatewayConfig, LoggerConfig, McpConfig,
+	AuthenticationConfig, AuthenticationType, ConfigReading, CredentialConfig, DataGatewayConfig, JwtConfig, LoggerConfig, McpConfig,
 	OrmConfig, RuntimeConfig, RuntimeMode, SchemaConfig, SessionsConfig, TransportConfig, TransportName, TransportsConfig, WatchConfig
 } from './dataGatewayConfig'
 import { parseDuration } from './durations'
@@ -435,10 +435,15 @@ export class ConfigReader {
 			this.issues.push(`${key} must be an object`)
 			return undefined
 		}
+		if (raw.methods !== undefined) return this.methods(raw, key)
 		const adapter = this.str(raw.adapter, 'none')
 		if (adapter === 'none') return { adapter: 'none', credentials: [] }
+		if (adapter === 'jwt') {
+			const jwt = this.jwt(raw, key)
+			return jwt ? { adapter: 'jwt', credentials: [], jwt } : undefined
+		}
 		if (adapter !== 'local') {
-			this.issues.push(`${key}.adapter "${adapter}" is not none or local`)
+			this.issues.push(`${key}.adapter "${adapter}" is not none, local or jwt`)
 			return undefined
 		}
 		const type = this.str(raw.type, '') as AuthenticationType
@@ -476,6 +481,95 @@ export class ConfigReader {
 		if (duplicated.length) this.issues.push(`${key}: duplicated credential names ${[...new Set(duplicated)].join(', ')}`)
 		const header = type === 'apikey' ? this.str(raw.header, 'x-api-key').toLowerCase() : undefined
 		return { adapter: 'local', type, header, credentials }
+	}
+
+	/** methods: several authentications in order (jwt for the users, local keys for the services); none is not one */
+	private methods (raw: Raw, key: string): AuthenticationConfig | undefined {
+		if (raw.adapter !== undefined && raw.adapter !== 'methods') {
+			this.issues.push(`${key}: adapter and methods together; use methods alone`)
+			return undefined
+		}
+		if (!Array.isArray(raw.methods) || raw.methods.length === 0) {
+			this.issues.push(`${key}.methods must be a non empty list`)
+			return undefined
+		}
+		const methods: AuthenticationConfig[] = []
+		raw.methods.forEach((entry: unknown, i: number) => {
+			const at = `${key}.methods[${i}]`
+			if (isObject(entry) && (entry.methods !== undefined || this.str(entry.adapter, 'none') === 'none')) {
+				this.issues.push(`${at}: a method is local or jwt (none would let everyone in; methods don't nest)`)
+				return
+			}
+			const method = this.authentication(entry, at)
+			if (method) methods.push(method)
+		})
+		return methods.length === raw.methods.length ? { adapter: 'methods', credentials: [], methods } : undefined
+	}
+
+	/** adapter: jwt (docs/JWT.md): the tokens of an issuer, their roles mapped to permissions and their claims to the context */
+	private jwt (raw: Raw, key: string): JwtConfig | undefined {
+		const before = this.issues.length
+		const url = (value: unknown, at: string): string | undefined => {
+			if (value === undefined) return undefined
+			try {
+				const parsed = new URL(String(value))
+				if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') throw new Error(parsed.protocol)
+				return String(value)
+			} catch {
+				this.issues.push(`${at} "${value}" is not an http(s) URL`)
+				return undefined
+			}
+		}
+		const issuer = url(raw.issuer, `${key}.issuer`)
+		if (raw.issuer === undefined) this.issues.push(`${key}.issuer is required (the iss of the tokens)`)
+		const audience = raw.audience === undefined ? [] : (Array.isArray(raw.audience) ? raw.audience : [raw.audience]).map(String).filter(Boolean)
+		const jwksUri = url(raw.jwksUri, `${key}.jwksUri`)
+		const secret = raw.secret === undefined || raw.secret === null || raw.secret === '' ? undefined : String(raw.secret)
+		if (raw.secret !== undefined && !secret) this.issues.push(`${key}.secret is empty (a variable not given?)`)
+		if (secret && jwksUri) this.issues.push(`${key}: secret and jwksUri together; a secret (HS256) is for development, the keys of the issuer for the rest`)
+		const algorithms = raw.algorithms === undefined
+			? (secret ? ['HS256'] : ['RS256', 'ES256', 'PS256'])
+			: (Array.isArray(raw.algorithms) ? raw.algorithms.map(String) : [])
+		if (!algorithms.length) this.issues.push(`${key}.algorithms must be a non empty list`)
+		for (const algorithm of algorithms) {
+			const shared = algorithm.startsWith('HS')
+			if (!/^(RS|PS|ES|HS)(256|384|512)$|^EdDSA$/.test(algorithm)) this.issues.push(`${key}.algorithms: "${algorithm}" is not RS, PS, ES or HS 256/384/512, nor EdDSA`)
+			else if (shared !== !!secret) this.issues.push(`${key}.algorithms: ${algorithm} ${shared ? 'needs a secret' : 'is for the keys of the issuer, not a secret'}`)
+		}
+		const clockToleranceSec = raw.clockTolerance === undefined ? 30 : Math.round((parseDuration(raw.clockTolerance as string | number) ?? -1) / 1000)
+		if (clockToleranceSec < 0 || clockToleranceSec > 300) this.issues.push(`${key}.clockTolerance "${raw.clockTolerance}" is not a duration up to 5m (30s)`)
+		const principalRaw = raw.principal === undefined ? {} : raw.principal
+		if (!isObject(principalRaw)) this.issues.push(`${key}.principal must be an object`)
+		const p = isObject(principalRaw) ? principalRaw : {}
+		const name = this.str(p.name, 'sub')
+		let permissions: JwtConfig['principal']['permissions']
+		if (p.permissions !== undefined) {
+			const at = `${key}.principal.permissions`
+			if (!isObject(p.permissions) || !this.str(p.permissions.claim, '') || !isObject(p.permissions.roles)) {
+				this.issues.push(`${at} needs claim (where the roles are) and roles (role → permissions)`)
+			} else {
+				const roles: Record<string, Permission[]> = {}
+				for (const [role, list] of Object.entries(p.permissions.roles)) {
+					// a role says its permissions: one without them must not end up with all
+					if (!Array.isArray(list)) { this.issues.push(`${at}.roles.${role} must be a list of permissions`); continue }
+					roles[role] = this.permissions(list, `${at}.roles.${role}`)
+				}
+				permissions = { claim: String(p.permissions.claim), roles }
+			}
+		}
+		const context: Record<string, string> = {}
+		if (raw.context !== undefined) {
+			if (!isObject(raw.context)) this.issues.push(`${key}.context must be an object (variable: claim)`)
+			else {
+				for (const [variable, path] of Object.entries(raw.context)) {
+					if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(variable)) this.issues.push(`${key}.context: "${variable}" is not a name of a variable`)
+					else if (typeof path !== 'string' || !path) this.issues.push(`${key}.context.${variable} must be the claim it takes`)
+					else context[variable] = path
+				}
+			}
+		}
+		if (this.issues.length > before || !issuer) return undefined
+		return { issuer, audience, ...(jwksUri ? { jwksUri } : {}), ...(secret ? { secret } : {}), algorithms, clockToleranceSec, principal: { name, ...(permissions ? { permissions } : {}) }, context }
 	}
 
 	private credential (type: AuthenticationType, entry: Raw, at: string, name: string, listed: boolean): CredentialConfig | undefined {

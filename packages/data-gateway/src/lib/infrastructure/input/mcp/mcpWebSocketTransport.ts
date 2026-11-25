@@ -8,7 +8,7 @@ import { Transport as SdkTransport } from '@modelcontextprotocol/sdk/shared/tran
 import { JSONRPCMessage, JSONRPCMessageSchema } from '@modelcontextprotocol/sdk/types.js'
 import { SchemaDirectoryPort, ServedSchema } from '../../../application/ports/input/schemaDirectoryPort'
 import { LoggerPort } from '../../../application/ports/output/supportPorts'
-import { Principal, withActor } from '../../../domain/auth/principal'
+import { Principal, refusalOf, withActor } from '../../../domain/auth/principal'
 import { Transport } from '../transport'
 import { createSdkServer } from './sdkMcpServer'
 import { headersFromProtocols } from '../../../domain/auth/protocolCredential'
@@ -163,9 +163,10 @@ export class McpWebSocketTransport implements Transport {
 		send(404, { error: 'NotFound', message: `${req.method} ${url.pathname}` })
 	}
 
-	private reject (socket: Duplex, status: number, message: string): void {
+	private reject (socket: Duplex, status: number, message: string, challenge?: string): void {
 		const body = JSON.stringify({ error: http.STATUS_CODES[status], message })
-		socket.end(`HTTP/1.1 ${status} ${http.STATUS_CODES[status]}\r\nContent-Type: application/json\r\nContent-Length: ${Buffer.byteLength(body)}\r\nConnection: close\r\n\r\n${body}`)
+		const authenticate = challenge ? `WWW-Authenticate: ${challenge}\r\n` : ''
+		socket.end(`HTTP/1.1 ${status} ${http.STATUS_CODES[status]}\r\n${authenticate}Content-Type: application/json\r\nContent-Length: ${Buffer.byteLength(body)}\r\nConnection: close\r\n\r\n${body}`)
 	}
 
 	private async upgrade (req: http.IncomingMessage, socket: Duplex, head: Buffer): Promise<void> {
@@ -176,7 +177,7 @@ export class McpWebSocketTransport implements Transport {
 		let principal: Principal | undefined
 		try {
 			const result = await schema.authenticator(TRANSPORT_NAME).authenticate({ ...headersFromProtocols(req.headers['sec-websocket-protocol']), ...req.headers })
-			if (!result.valid || !result.principal) return this.reject(socket, 401, result.reason ?? 'a valid credential is required')
+			if (!result.valid || !result.principal) { const refusal = refusalOf(result); return this.reject(socket, refusal.status, refusal.message, refusal.challenge) }
 			principal = result.principal
 		} catch (error) {
 			this.deps.logger.error(error as Error)

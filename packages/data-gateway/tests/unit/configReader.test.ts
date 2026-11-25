@@ -109,7 +109,7 @@ describe('config reader', () => {
 
 		test('invalid type, adapter, permissions and duplicated names', () => {
 			expect(read({ ...base, authentication: { adapter: 'local', type: 'jwt', token: 'x' } }).issues).toContain('authentication.type must be bearer, apikey or basic')
-			expect(read({ ...base, authentication: { adapter: 'oauth' } }).issues).toContain('authentication.adapter "oauth" is not none or local')
+			expect(read({ ...base, authentication: { adapter: 'oauth' } }).issues).toContain('authentication.adapter "oauth" is not none, local or jwt')
 			expect(read({ ...base, authentication: { adapter: 'local', type: 'bearer', tokens: [{ name: 'a', value: 'x', permissions: ['admin'] }] } }).issues[0])
 				.toMatch(/unknown permissions admin/)
 			expect(read({ ...base, authentication: { adapter: 'local', type: 'bearer', tokens: [{ name: 'a', value: 'x' }, { name: 'a', value: 'y' }] } }).issues[0])

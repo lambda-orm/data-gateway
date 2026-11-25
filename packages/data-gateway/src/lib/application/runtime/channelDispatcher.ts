@@ -64,7 +64,13 @@ export class ChannelDispatcher {
 
 	private run (request: ChannelRequest): Promise<unknown> {
 		const ctx: RequestContext | undefined = request.principal
-			? { principal: principal(request.principal.name, request.principal.permissions, request.principal.actor), transport: request.transport }
+			? {
+				principal: {
+					...principal(request.principal.name, request.principal.permissions, request.principal.actor),
+					...(request.principal.context ? { context: request.principal.context } : {})
+				},
+				transport: request.transport
+			}
 			: undefined
 		if (request.target === 'gateway' && (GATEWAY_OPERATIONS as readonly string[]).includes(request.op)) {
 			const method = (this.gateway as any)[request.op] as (...args: unknown[]) => Promise<unknown>
