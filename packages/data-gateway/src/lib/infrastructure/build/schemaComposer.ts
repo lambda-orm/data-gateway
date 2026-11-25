@@ -10,6 +10,8 @@ import { McpServerPort } from '../../application/ports/input/mcpServerPort'
 import { AuditPort, ClockPort, LoggerPort, QueueEventsPort } from '../../application/ports/output/supportPorts'
 import { Auditor } from '../../application/usecases/auditor'
 import { ViewResolver } from '../../application/usecases/viewResolver'
+import { NamedQueryUseCases } from '../../application/usecases/namedQueryUseCases'
+import { curatedTools, namedQueryTools } from '../../application/mcp/namedQueryTools'
 import { QueryUseCases } from '../../application/usecases/queryUseCases'
 import { QueueUseCase } from '../../application/usecases/queueUseCase'
 import { SchemaUseCases, StageUseCases } from '../../application/usecases/schemaUseCases'
@@ -86,21 +88,27 @@ export const composeSchema = async (input: SchemaCompositionInput, deps: { logge
 	const missing = views.missing(settings.namedViews ?? [])
 	if (missing.length) logger.warn(`schema "${input.path || '/'}": the views ${missing.join(', ')} of the configuration are not in its lambdaORM.yaml: a request with one is refused (403)`)
 	const queries = new QueryUseCases(orm, auditor, views)
+	// the queries of application.queries with their limits (docs/NAMED_QUERIES.md)
+	const named = new NamedQueryUseCases(orm, queries, settings.queries ?? {})
+	const unknownLimits = Object.keys(settings.queries ?? {}).filter(name => !orm.namedQueries().some(q => q.name === name))
+	if (unknownLimits.length) logger.warn(`schema "${input.path || '/'}": orm.schemas[].queries names ${unknownLimits.join(', ')}, not in its application.queries`)
 	const gateway = new DataGateway({
 		queries,
 		script: new ScriptUseCase(orm, settings.scripts, auditor, views),
 		queue: new QueueUseCase(queue, queries, auditor, deps.queueEvents),
 		schema: new SchemaUseCases(orm, views),
-		stages: new StageUseCases(orm, auditor)
+		stages: new StageUseCases(orm, auditor),
+		named
 	}, orm, deps.clock, input.version, settings.server.timeout)
 	const commands = new CommandUseCases(orm, auditor)
-	const tools = [...gatewayTools(gateway), ...(input.admin ? adminTools(workspaceAdminTools(file, commands)) : [])]
+	// mcp.freeQueries false: an agent only with the named queries (and the tools of the schema)
+	const tools = [...curatedTools(gatewayTools(gateway), settings.mcp.freeQueries !== false), ...(input.admin ? adminTools(workspaceAdminTools(file, commands)) : [])]
 	const mcp = new DataGatewayMcpServer(new ToolCatalog(tools, settings.mcp.tools), orm, {
 		name: input.path ? `${input.mcpName} ${input.path}` : input.mcpName,
 		version: input.version,
 		pageSize: input.pageSize,
 		maxRows: settings.mcp.maxRows
-	}, views)
+	}, views, namedQueryTools(gateway))
 	return {
 		gateway,
 		mcp,

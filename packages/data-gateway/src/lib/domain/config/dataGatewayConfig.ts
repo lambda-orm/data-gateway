@@ -68,7 +68,9 @@ export interface SchemaOverrides {
 	/** Variables its worker receives on top of its .env and the base variables */
 	env?: Record<string, string>
 	scripts?: Partial<ScriptsConfig>
-	mcp?: { maxRows?: number, tools?: { include: string[], exclude: string[] } }
+	mcp?: { maxRows?: number, tools?: { include: string[], exclude: string[] }, freeQueries?: boolean }
+	/** the limits of its named queries, by name */
+	queries?: Record<string, NamedQueryLimitsConfig>
 	server?: { timeout?: number, maxConcurrent?: number, maxResponseBytes?: number }
 	runtime?: { mode?: RuntimeMode, maxMemoryMb?: number, checkConnections?: boolean }
 }
@@ -216,6 +218,17 @@ export interface McpConfig {
 	pageSize: number
 	/** Rows of orm_execute / orm_execute_script; 0 = no limit */
 	maxRows: number
+	/**
+	 * false: an agent has only the queries of application.queries (query_<name>) and the tools of the schema, without
+	 * orm_execute, orm_execute_script, orm_execute_queued nor orm_plan (docs/NAMED_QUERIES.md §3)
+	 */
+	freeQueries: boolean
+}
+
+/** The limits of a query of application.queries (docs/NAMED_QUERIES.md §4) */
+export interface NamedQueryLimitsConfig {
+	maxRows?: number
+	timeoutMs?: number
 }
 
 export type TransportName = keyof TransportsConfig

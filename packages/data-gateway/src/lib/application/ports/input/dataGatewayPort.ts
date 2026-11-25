@@ -1,4 +1,5 @@
 import { DescribedEntities, DomainSearch } from '../../usecases/domainText'
+import { NamedQueryInfo, NamedQueryRequest } from '../../usecases/namedQueryUseCases'
 import {
 	DomainSchema, Entity, EntityMapping, Enum, Mapping, Metadata, MetadataConstraint, MetadataModel, MetadataParameter,
 	QueryOptions, QueryPlan, Schema, SchemaData, ScriptOptions, Stage
@@ -34,6 +35,10 @@ export interface DataGatewayPort {
 	execute (ctx: RequestContext, request: ExecuteRequest): Promise<any>
 	executeScript (ctx: RequestContext, request: ScriptRequest): Promise<any>
 	executeQueued (ctx: RequestContext, request: QueuedRequest): Promise<{ queueId: string }>
+	/** the queries of application.queries that who calls can use (docs/NAMED_QUERIES.md) */
+	queries (ctx: RequestContext): Promise<NamedQueryInfo[]>
+	/** one of them, by its name */
+	query (ctx: RequestContext, name: string, request: NamedQueryRequest): Promise<unknown>
 
 	schema (ctx: RequestContext): Promise<Schema>
 	schemaVersion (ctx: RequestContext): Promise<{ version: string }>

@@ -1,5 +1,5 @@
 import {
-	AuthenticationConfig, DataGatewayConfig, RuntimeMode, SchemaOverrides, ScriptsConfig, TransportName
+	AuthenticationConfig, DataGatewayConfig, NamedQueryLimitsConfig, RuntimeMode, SchemaOverrides, ScriptsConfig, TransportName
 } from '../config/dataGatewayConfig'
 import { schemaPathsIssues } from './schemaPath'
 
@@ -52,7 +52,9 @@ export const resolveSchemas = (config: DataGatewayConfig, discovered: Discovered
 export interface SchemaSettings {
 	transports: TransportName[]
 	scripts: ScriptsConfig
-	mcp: { maxRows: number, tools: { include: string[], exclude: string[] } }
+	mcp: { maxRows: number, tools: { include: string[], exclude: string[] }, freeQueries: boolean }
+	/** the limits of its named queries (docs/NAMED_QUERIES.md §4) */
+	queries: Record<string, NamedQueryLimitsConfig>
 	server: { timeout: number, maxConcurrent: number, maxResponseBytes: number }
 	runtime: { mode: RuntimeMode, maxMemoryMb: number, checkConnections: boolean }
 	/** the view of a caller without one (orm.schemas[].view) */
@@ -79,7 +81,8 @@ export const effectiveSettings = (config: DataGatewayConfig, schema: SchemaDescr
 		// management (the IDE) serves every schema, whatever its transports say
 		transports: o.transports ? exposed.filter(t => t === 'management' || o.transports!.includes(t)) : exposed,
 		scripts: { ...config.scripts, ...o.scripts },
-		mcp: { maxRows: o.mcp?.maxRows ?? config.mcp.maxRows, tools: o.mcp?.tools ?? config.mcp.tools },
+		mcp: { maxRows: o.mcp?.maxRows ?? config.mcp.maxRows, tools: o.mcp?.tools ?? config.mcp.tools, freeQueries: o.mcp?.freeQueries ?? config.mcp.freeQueries ?? true },
+		queries: o.queries ?? {},
 		server: {
 			timeout: o.server?.timeout ?? config.server.timeout,
 			maxConcurrent: o.server?.maxConcurrent ?? config.server.maxConcurrent,

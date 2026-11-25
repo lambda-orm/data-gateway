@@ -8,6 +8,19 @@ All notable changes to this project will be documented in this file.
 
 Needs `@lambdaorm/base` 3.11.1 and `@lambdaorm/lib` 3.15.0.
 
+**Named queries** (`docs/NAMED_QUERIES.md`, G7):
+
+- **The queries of `application.queries`** of the schema are served by their name: `GET /queries` (name, description,
+  parameters and model; never their text) and `POST /queries/{name}` (`{ data, options }`); `queries.list` and
+  `queries.execute` by WebSocket; and an MCP tool each, `query_<name>`, with its parameters typed and its result
+  described. In the view of who calls (one that uses what its view excludes is not listed); run as `execute` (its
+  permissions; the audit says its `name`).
+- **`mcp.freeQueries: false`** (global or by schema): an agent without `orm_execute`, `orm_execute_script`,
+  `orm_execute_queued` nor `orm_plan`, only the named queries and the tools of the schema. `mcp.tools.include` and
+  `exclude` take `query_<name>`.
+- **Limits by query:** `orm.schemas[].queries: { <name>: { maxRows, timeout } }`; more rows is 422
+  (`TooManyRowsError`), longer is 504.
+
 **The view by identity** (`docs/VIEWS_BY_IDENTITY.md`, G2):
 
 - **The gateway chooses the view of λORM of each request:** of the key (`keys[].view`), of the role of the token

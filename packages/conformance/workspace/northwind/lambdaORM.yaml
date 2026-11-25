@@ -193,3 +193,12 @@ infrastructure:
   - name: default
     sources:
     - name: Northwind
+# the queries of the application with a name (docs/NAMED_QUERIES.md): routes, methods and MCP tools of the gateway
+application:
+  queries:
+  - name: categoryByName
+    description: a category by its name
+    query: 'Categories.filter(p => p.name == name).map(p => [p.id, p.name])'
+  - name: customersOf
+    description: the customers of a country, by their id
+    query: 'Customers.filter(p => p.country == country).map(p => [p.id, p.city]).sort(p => p.id)'

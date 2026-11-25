@@ -7,6 +7,7 @@ import { McpServerInfo, McpServerPort } from '../ports/input/mcpServerPort'
 import { OrmSchemaPort } from '../ports/output/ormPorts'
 import { validateArguments } from './argumentValidator'
 import { describeDomain } from './domainDescription'
+import { Tool } from './tool'
 import { NO_VIEWS, ViewResolver } from '../usecases/viewResolver'
 import { EXPRESSIONS_GUIDE } from './expressionsGuide'
 import { limitRows, toolError, toolSuccess } from './resultSerializer'
@@ -54,8 +55,16 @@ export class DataGatewayMcpServer implements McpServerPort {
 		private readonly catalog: ToolCatalog,
 		private readonly schema: OrmSchemaPort,
 		private readonly settings: McpServerSettings,
-		private readonly views: ViewResolver = NO_VIEWS
+		private readonly views: ViewResolver = NO_VIEWS,
+		/** tools of who calls, besides the catalog: the named queries of its view (docs/NAMED_QUERIES.md) */
+		private readonly more: (ctx: RequestContext) => Promise<Tool[]> = async () => []
 	) {}
+
+	/** every tool who calls can use: the catalog and the named queries (filtered by mcp.tools as the catalog) */
+	private async toolsOf (ctx: RequestContext): Promise<Tool[]> {
+		const more = (await this.more(ctx)).filter(tool => this.catalog.allows(tool.name) && tool.visibleTo(ctx.principal))
+		return [...this.catalog.visible(ctx.principal), ...more]
+	}
 
 	public info (): McpServerInfo {
 		return {
@@ -84,12 +93,12 @@ export class DataGatewayMcpServer implements McpServerPort {
 
 	public async listTools (ctx: RequestContext, cursor?: string): Promise<Page<ToolDefinition>> {
 		const domain = this.domainOf(ctx)
-		const definitions = this.catalog.visible(ctx.principal).map(tool => tool.definition(ctx.principal, { domain }))
+		const definitions = (await this.toolsOf(ctx)).map(tool => tool.definition(ctx.principal, { domain }))
 		return paginate(definitions, this.settings.pageSize, cursor)
 	}
 
 	public async callTool (ctx: RequestContext, name: string, args: Record<string, unknown> | undefined): Promise<ToolResult> {
-		const tool = this.catalog.find(ctx.principal, name)
+		const tool = this.catalog.find(ctx.principal, name) ?? (name.startsWith('query_') ? (await this.toolsOf(ctx)).find(t => t.name === name) : undefined)
 		if (!tool) throw new McpRequestError(`unknown tool "${name}"`)
 		const valid = validateArguments(name, tool.definition(ctx.principal, { domain: '' }).inputSchema, args)
 		try {

@@ -190,6 +190,13 @@ recomendación, tests por transporte y la conformidad.
 
 ### G7. Guardrails de MCP (brecha 5.3)
 
+> **Estado (2026-11-25): fases 1 a 5 hechas** en `feature/named-queries` ([`NAMED_QUERIES.md`](NAMED_QUERIES.md),
+> decisiones cerradas): `GET /queries`, `POST /queries/{name}`, `queries.list`/`queries.execute` por WebSocket, las
+> herramientas `query_<name>` de MCP con sus parámetros tipados, todo en la vista de quien llama; `mcp.freeQueries:
+> false`; límites por consulta (`orm.schemas[].queries`); el cliente Node (`queries()`, `query()`). **Falta:** la wiki,
+> la confirmación de mutaciones (G7b, decisión 4) y que el código generado por `lambdaorm build -l client-node` use las
+> rutas (core).
+
 - Herramientas curadas: las **consultas con nombre** del schema (C9, `application.queries`) como herramientas MCP, con
   su descripción, sus parámetros tipados (de `orm.parameters`) y su resultado (de `orm.model`). Lo mismo por REST
   (`POST /queries/{name}`) y WebSocket.

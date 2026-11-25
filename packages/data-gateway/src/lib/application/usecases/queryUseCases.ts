@@ -64,7 +64,8 @@ export class QueryUseCases {
 		return classifyQuery(await this.orm.metadata(query, ctx ? this.inView(ctx) : {}))
 	}
 
-	public async execute (ctx: RequestContext, request: ExecuteRequest): Promise<any> {
+	/** named: the name of a query of application.queries run by it (its audit says it) */
+	public async execute (ctx: RequestContext, request: ExecuteRequest, named?: string): Promise<any> {
 		const query = requireQuery(request.query)
 		const classification = await this.classify(query, ctx)
 		authorize(ctx.principal, 'execute', classification.writes)
@@ -75,6 +76,7 @@ export class QueryUseCases {
 			actions: classification.actions,
 			entities: classification.entities,
 			query,
+			...(named ? { name: named } : {}),
 			data: request.data
 		}, run)
 	}

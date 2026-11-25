@@ -1,0 +1,33 @@
+[
+	{
+		"name": "named queries: listed with their parameters, never their text",
+		"transports": ["http", "ws"],
+		"operation": "queries",
+		"expect": { "match": [
+			{ "name": "categoryByName", "description": "a category by its name", "parameters": [ { "name": "name" } ], "writes": false },
+			{ "name": "customersOf", "description": "the customers of a country, by their id", "parameters": [ { "name": "country" } ], "writes": false }
+		] }
+	},
+	{
+		"name": "named queries: run by the name, with its parameters",
+		"operation": "query",
+		"args": { "name": "categoryByName", "data": { "name": "Beverages" } },
+		"expect": { "result": [ { "id": 1, "name": "Beverages" } ] }
+	},
+	{
+		"name": "named queries: in the view of who calls (one of what it excludes is not listed; its rows filtered)",
+		"credential": "jwtSales",
+		"steps": [
+			{ "operation": "query", "args": { "name": "customersOf", "data": { "country": "France" } }, "expect": { "result": [] } },
+			{ "operation": "query", "args": { "name": "customersOf", "data": { "country": "Germany" } }, "expect": { "length": 11 } },
+			{ "operation": "query", "args": { "name": "categoryByName", "data": { "name": "Beverages" } }, "expect": { "error": { "code": "forbidden" } }, "mcp": { "error": { "code": "invalid" } } }
+		]
+	},
+	{
+		"name": "named queries: one that is not there is not found",
+		"transports": ["http", "ws"],
+		"operation": "query",
+		"args": { "name": "nope", "data": {} },
+		"expect": { "error": { "code": "not_found" } }
+	}
+]

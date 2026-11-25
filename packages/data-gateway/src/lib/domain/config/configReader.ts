@@ -160,6 +160,20 @@ export class ConfigReader {
 			const view = this.viewName(entry.view, `${key}.view`)
 			if (view) schema.view = view
 		}
+		if (entry.queries !== undefined) {
+			if (!isObject(entry.queries)) this.issues.push(`${key}.queries must be an object (the name of a query: its limits)`)
+			else {
+				schema.queries = {}
+				for (const [name, limits] of Object.entries(entry.queries)) {
+					const at = `${key}.queries.${name}`
+					if (!isObject(limits)) { this.issues.push(`${at} must be { maxRows, timeout }`); continue }
+					schema.queries[name] = {
+						...(limits.maxRows !== undefined ? { maxRows: this.int(limits.maxRows, 0, `${at}.maxRows`, 1) } : {}),
+						...(limits.timeout !== undefined ? { timeoutMs: this.duration(limits.timeout, 0, `${at}.timeout`) } : {})
+					}
+				}
+			}
+		}
 		if (entry.env !== undefined) {
 			if (!isObject(entry.env)) {
 				this.issues.push(`${key}.env must be an object`)
@@ -179,6 +193,7 @@ export class ConfigReader {
 		if (isObject(entry.mcp)) {
 			schema.mcp = {}
 			if (entry.mcp.maxRows !== undefined) schema.mcp.maxRows = this.int(entry.mcp.maxRows, 500, `${key}.mcp.maxRows`, 0)
+			if (entry.mcp.freeQueries !== undefined) schema.mcp.freeQueries = this.bool(entry.mcp.freeQueries, true, `${key}.mcp.freeQueries`)
 			if (entry.mcp.tools !== undefined) {
 				schema.mcp.tools = {
 					include: this.toolNames(entry.mcp.tools?.include, `${key}.mcp.tools.include`),
@@ -279,7 +294,8 @@ export class ConfigReader {
 				exclude: this.toolNames(section.tools?.exclude, 'mcp.tools.exclude')
 			},
 			pageSize: this.int(section.pageSize, 50, 'mcp.pageSize', 1),
-			maxRows: this.int(section.maxRows, 500, 'mcp.maxRows', 0)
+			maxRows: this.int(section.maxRows, 500, 'mcp.maxRows', 0),
+			freeQueries: this.bool(section.freeQueries, true, 'mcp.freeQueries')
 		}
 	}
 
@@ -289,9 +305,11 @@ export class ConfigReader {
 			this.issues.push(`${key} must be a list`)
 			return []
 		}
-		const unknown = raw.filter(name => !TOOL_NAMES.includes(String(name)))
+		// query_<name>: a query of application.queries (docs/NAMED_QUERIES.md), checked when the schema loads
+		const known = (name: string) => TOOL_NAMES.includes(name) || /^query_[A-Za-z_][A-Za-z0-9_]*$/.test(name)
+		const unknown = raw.filter(name => !known(String(name)))
 		if (unknown.length) this.issues.push(`${key}: unknown tools ${unknown.join(', ')}`)
-		return raw.map(String).filter(name => TOOL_NAMES.includes(name))
+		return raw.map(String).filter(known)
 	}
 
 	private transports (raw: unknown): TransportsConfig {
