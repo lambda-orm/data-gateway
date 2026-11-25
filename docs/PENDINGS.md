@@ -184,6 +184,11 @@ recomendación, tests por transporte y la conformidad.
 
 ### G6. Backoffice en el IDE (brecha 5.1)
 
+> **Estado (2026-11-25): hecho** (la tabla editable y exportar) en `feature/backoffice` ([`BACKOFFICE.md`](BACKOFFICE.md),
+> decisiones cerradas): en **Data** de una entidad, con `write`, editar una celda (chequeo optimista), agregar y borrar
+> filas, ordenar y filtrar; exportar la página o todo (hasta 100 000 filas) en CSV, JSON y Excel. **Falta:** la wiki y
+> G6b (archivos S3/Blob y paneles).
+
 - Tabla con edición en línea (sobre `update` por clave), exportar CSV/Excel/JSON, archivos (S3/Blob) y paneles
   simples.
 - No depende de core; cuando el producto lo pida.

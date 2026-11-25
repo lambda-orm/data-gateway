@@ -2,6 +2,11 @@
 
 ### Unreleased
 
+- **The data of an entity as a backoffice:** with a credential that writes, a double click changes a cell (only while
+  it still has what was read: if someone changed it, the table says so), **Add a row** and **Delete the row**; any
+  credential sorts by a column, filters with a condition and exports the page or everything (up to 100 000 rows, with
+  progress) as CSV, JSON or Excel (.xlsx).
+
 Needs a data-gateway with the history of the schema (4.1.0, lambda-orm/core #203).
 
 - **History:** the changes of a schema (who, when, what, the diff and the element before and after) in the view of the

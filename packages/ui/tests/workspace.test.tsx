@@ -266,7 +266,8 @@ describe('Workspace', () => {
 		fireEvent.click(within(panel()).getByRole('tab', { name: 'Relaciones (1)' }))
 		expect(within(panel()).getByRole('button', { name: 'Customers' })).toBeTruthy()
 		fireEvent.click(within(panel()).getByRole('tab', { name: 'Datos' }))
-		await waitFor(() => expect(within(panel()).getByRole('status').textContent).toContain('3 filas'))
+		// the data as a table (a backoffice, docs/BACKOFFICE.md): its rows, the header and three of data
+		await waitFor(() => expect(within(within(panel()).getByRole('table', { name: 'Orders' })).getAllByRole('row')).toHaveLength(4))
 		// the relation takes to the other entity's form
 		fireEvent.click(within(panel()).getByRole('tab', { name: 'Relaciones (1)' }))
 		fireEvent.click(within(panel()).getByRole('button', { name: 'Customers' }))
