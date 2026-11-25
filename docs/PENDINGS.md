@@ -158,6 +158,10 @@ recomendación, tests por transporte y la conformidad.
 
 ## 4. Deuda y bugs vistos (de la revisión de la wiki)
 
+> **Estado (2026-11-25):** todos hechos en `bugfix/wiki-review` (desde `develop`), **falta el PR**. El de `plan` y el
+> actor, con R2. Para el i18n se eligió una regla: los nombres del `lambdaORM.yaml` y de la API (source, stage, view,
+> mapping, domain, plan, metadata, execute, Workbench) quedan en inglés en todos los idiomas; lo demás se traduce.
+
 | Qué | Dónde |
 | --- | --- |
 | `GET /transports` da `schemaPath: "/{schema}"` para `mcpWebSocket`, pero su upgrade es `/{schema}/mcp` | gateway |

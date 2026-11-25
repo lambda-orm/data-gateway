@@ -199,3 +199,10 @@ describe('copy', () => {
 		await screen.findByRole('button', { name: 'copied' })
 	})
 })
+
+describe('ResultViewer in another language', () => {
+	test('its tabs are translated, but json and yaml (names of formats)', () => {
+		render(<ResultViewer result={measure('execute', [{ id: 1 }], 1)} locale="es" />)
+		expect(screen.getAllByRole('tab').map(t => t.textContent)).toEqual(['árbol', 'tabla', 'json', 'yaml'])
+	})
+})
