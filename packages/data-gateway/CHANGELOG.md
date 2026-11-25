@@ -26,6 +26,15 @@ Needs `@lambdaorm/base` and `@lambdaorm/lib` with observability (lambda-orm/core
 - **The 412 of a form or of the YAML says who changed it:** `details.changedBy` (credential, client, time, kind,
   target), from the history.
 
+**Security:**
+
+- **The client no longer chooses the view nor the context of λORM:** `options.view` and `options.context` are dropped
+  from what a client sends on every transport (REST, WebSocket, MCP, `script`, `execute-queued`) before reaching λORM,
+  and `plan` now takes the actor and goes through the same filter as `execute`. A client with `read` could ask for any
+  view (or none, the whole domain) and skip what a view hides or masks, and with λORM ≥ 3.10 send a context of another
+  tenant to the row filters of the views. Until the gateway takes them from the identity (JWT/OIDC, the view per
+  credential), λORM runs without view and without context.
+
 ### 4.0.0 (2026-11-23)
 
 **Breaking changes** (`DATA_GATEWAY.md` §12):

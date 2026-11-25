@@ -92,6 +92,19 @@ describe('http transport', () => {
 		expect((await call(base, '/plan', { body: {}, headers: agent })).status).toBe(400)
 	})
 
+	test('the view and the context are the gateway\'s: the ones of the client never reach λORM', async () => {
+		const options = { stage: 'default', view: 'admin', context: { tenant: 'other' } }
+		await call(base, '/execute', { body: { query: 'Products', options }, headers: agent })
+		await call(base, '/plan', { body: { query: 'Products', options }, headers: agent })
+		await call(base, '/script', { body: { script: 'x', options }, headers: backend })
+		await call(base, '/execute-queued', { body: { topic: 't', query: 'Products', options }, headers: backend })
+		for (const sent of [fixture.orm.executed.at(-1), fixture.orm.planned.at(-1), fixture.orm.scripts.at(-1), fixture.queue.calls.at(-1)]) {
+			expect(sent!.options).toMatchObject({ stage: 'default' })
+			expect(sent!.options).not.toHaveProperty('view')
+			expect(sent!.options).not.toHaveProperty('context')
+		}
+	})
+
 	test('schema and stage endpoints; an unknown name answers 404', async () => {
 		for (const path of ['/schema', '/schema/version', '/domain', '/sources', '/sources/main', '/entities', '/entities/Products', '/enums', '/mappings', '/mappings/default', '/stages', '/stages/default', '/views', '/stages/default/exists', '/stages/default/export']) {
 			const res = await call(base, path, { headers: agent })

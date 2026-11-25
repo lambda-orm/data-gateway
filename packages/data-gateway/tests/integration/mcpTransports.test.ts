@@ -91,6 +91,22 @@ describe('mcpHttp: Streamable HTTP (stateless)', () => {
 		}
 	})
 
+	test('the view and the context are the gateway\'s: the ones of the client never reach λORM', async () => {
+		const agent = await connect(streamable(base, 'agent-token'))
+		try {
+			const options = { stage: 'default', view: 'admin', context: { tenant: 'other' } }
+			await agent.callTool({ name: 'orm_execute', arguments: { query: 'Products', options } })
+			await agent.callTool({ name: 'orm_plan', arguments: { query: 'Products', options } })
+			for (const sent of [fixture.orm.executed.at(-1), fixture.orm.planned.at(-1)]) {
+				expect(sent!.options).toMatchObject({ stage: 'default' })
+				expect(sent!.options).not.toHaveProperty('view')
+				expect(sent!.options).not.toHaveProperty('context')
+			}
+		} finally {
+			await agent.close()
+		}
+	})
+
 	test('a write with a read credential: isError; with write: runs, audited as mcpHttp', async () => {
 		const agent = await connect(streamable(base, 'agent-token'))
 		const backend = await connect(streamable(base, 'backend-token'))

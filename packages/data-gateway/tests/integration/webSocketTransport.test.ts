@@ -87,6 +87,22 @@ describe('webSocket transport (schema at a route)', () => {
 		}
 	})
 
+	test('the view and the context are the gateway\'s: the ones of the client never reach λORM', async () => {
+		const c = await open(`${url}/iot/v1`, bearer('agent-token'))
+		try {
+			const options = { stage: 'default', view: 'admin', context: { tenant: 'other' } }
+			await c.request('query.execute', { query: 'Products', options })
+			await c.request('query.plan', { query: 'Products', options })
+			for (const sent of [fixture.orm.executed.at(-1), fixture.orm.planned.at(-1)]) {
+				expect(sent!.options).toMatchObject({ stage: 'default' })
+				expect(sent!.options).not.toHaveProperty('view')
+				expect(sent!.options).not.toHaveProperty('context')
+			}
+		} finally {
+			c.socket.close()
+		}
+	})
+
 	test('a browser: the credential in the subprotocols (it can\'t send headers); lambdaorm answered; none, refused', async () => {
 		const socket = new WebSocket(`${url}/iot/v1`, protocolsFor({ Authorization: 'Bearer agent-token' }))
 		const opened = await new Promise<string>((resolve, reject) => {
