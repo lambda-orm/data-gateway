@@ -32,6 +32,12 @@ Las fuentes:
 
 ### R1. Publicar la imagen 4.0.0
 
+> **Estado (2026-11-25):** arreglado en `hotfix/conformance-model-match` (desde `main`), **falta mergear el PR**. La
+> causa no era solo el uid: el `dist` instala λORM con rangos `^`, la imagen trae `lib` 3.15.0 y `base` 3.11.1, y su
+> `model` agrega `required: true`; el caso *model and parameters of a query* comparaba el resultado entero y fallaba en
+> los cinco transportes. El caso ahora usa `match`, y un cambio de `packages/conformance/**` también dispara el
+> workflow, así que el merge publica la 4.0.0. Verificado localmente: 140 de 140 contra la imagen. Falta el punto 3.
+
 La guía de inicio de la wiki (`docs/data-gateway/northwind/docker-compose.yml`) usa `flaviorita/data-gateway:4.0.0`,
 que no existe en Docker Hub: hoy falla para cualquiera que la siga.
 
@@ -44,6 +50,11 @@ que no existe en Docker Hub: hoy falla para cualquiera que la siga.
    `import`, Swagger, IDE).
 
 ### R2. El cliente elige su vista y su contexto (seguridad)
+
+> **Estado (2026-11-25):** hecho en `bugfix/client-view-context`, **falta el PR a `develop`**. `requestOptions`
+> (antes `withActor`) borra `view` y `context` en los casos de uso por los que pasan todos los transportes; `plan` lleva
+> el actor; un test por transporte (REST, WebSocket, MCP) y uno unitario; el IDE ya no ofrece la vista (changeset de
+> `@lambdaorm/ui`). **Sin decidir:** si el cliente puede elegir `stage`, `maxRows` y `allowDestructive`.
 
 `queryUseCases.execute` pasa a λORM las `options` del pedido tal como llegan, más el actor
 (`application/usecases/actor.ts`, `withActor`); `plan` ni eso. Con λORM ≥ 3.10 eso incluye:
@@ -79,6 +90,10 @@ Subir `@lambdaorm/base`, `lib` y `client` (y el `cli` que instala la imagen) a l
 | SQLite con sql.js (P2): `{ file }` o en memoria | Usarlo para el gateway de desarrollo (hoy `checkConnections: false` y sin base) y para tests que hoy no tienen base |
 | `orm.observeWith` (lib 3.10.0) | Usarlo en `lambdaOrmAdapter` en vez de armar la observabilidad a mano (pendiente de `OBSERVABILITY_HANDOFF.md` de core) |
 | `merge()` = `upsert` (3.15.1); textos escapados por dialecto; `jsonSet` | Nada que cambiar; correr la conformidad y el lab con la versión nueva |
+
+Además: **una imagen reproducible**. El `dist` de la gateway declara λORM con rangos `^` y sin lockfile, así que cada
+build de la imagen instala la λORM más nueva que entra en el rango (la 4.0.0 se probó con `lib` 3.9 y sale con 3.15).
+Fijar las versiones del `dist` (exactas, o el lockfile de pnpm) para que la imagen lleve lo que se probó.
 
 Después: `scripts/ci-local.sh check`, `clients` y `lab`.
 
@@ -162,7 +177,7 @@ recomendación, tests por transporte y la conformidad.
 | --- | --- |
 | `GET /transports` da `schemaPath: "/{schema}"` para `mcpWebSocket`, pero su upgrade es `/{schema}/mcp` | gateway |
 | La descripción de `swagger.yaml` lista menos rutas abiertas que las que el código sirve sin credencial | gateway |
-| `plan` no lleva el actor (`withActor`) como `execute` | gateway |
+| ~~`plan` no lleva el actor (`withActor`) como `execute`~~ hecho con R2 | gateway |
 | El README de la gateway enlaza `wiki/data-gateway/Ui/`, que ya no existe (ahora `wiki/ide/`) | `packages/data-gateway/README.md` |
 | Los `data.json` de Northwind perdieron sus letras no ASCII (`Mnchen`, `Kln`): `packages/conformance/data.json` y `packages/data-gateway/config/northwind/data.json` | copiar el de la wiki (`docs/data-gateway/northwind/data.json`, ya corregido) y ajustar lo que la conformidad compare |
 | El IDE en español deja en inglés las pestañas del resultado (`tree/table/json/yaml`), los botones de acción (`plan`, `metadata`, `execute`…), `Metadata`, `domain` y `Workbench`; en alemán mezcla *Über/Informationen*, *Quellen/Source*; en español *Información* y *Acerca de* para About | `packages/ui`, `packages/ide` (i18n) |
