@@ -46,13 +46,33 @@ export interface OrmStagePort {
 	import (stage: string, data: unknown, actor?: Actor): Promise<void>
 }
 
-/** The commands of λORM over the databases of a stage (the CLI's push, drop, fetch) */
+/** Sentences of a source (and of a migration, for migrate); destructive, the ones that can lose data and why */
+export interface SourceSentences {
+	source: string
+	version?: string
+	sentences: string[]
+	destructive?: { sentence: string, reason: string }[]
+}
+
+/** The commands of λORM over the databases of a stage (the CLI's push, drop, fetch, migrate, seed) */
 export interface OrmCommandPort {
 	stageNames (): string[]
 	/** per mapping, the entities whose tables differ from the model; none when they are in step */
 	fetch (stage: string): Promise<unknown[]>
-	pushSentences (stage: string): Promise<{ source: string, sentences: string[] }[]>
-	push (stage: string, force: boolean, actor?: Actor): Promise<unknown[]>
+	/** per source, the sentences push would run; destructive, the ones that can lose data and why */
+	pushSentences (stage: string): Promise<SourceSentences[]>
+	/** allowDestructive: also the changes that can lose data (without it λORM refuses them: DestructiveChangeError) */
+	push (stage: string, force: boolean, actor?: Actor, allowDestructive?: boolean): Promise<unknown[]>
+	/** the history of the migrations of the stage (infrastructure.migrations), the newest first */
+	migrations (stage: string): Promise<unknown[]>
+	/** per migration after the version, the newest first, the sentences of its undo: what migrate to it would run */
+	migrateSentences (stage: string, version: string): Promise<SourceSentences[]>
+	/** goes back to a version: the undo of the applied migrations after it */
+	migrate (stage: string, version: string, actor?: Actor, allowDestructive?: boolean): Promise<unknown[]>
+	/** the files of the seed of the stage (stages[].seed), in order */
+	seedFiles (stage: string): string[]
+	/** of each file of the seed, the rows whose key is not in the database yet */
+	seed (stage: string, actor?: Actor): Promise<unknown[]>
 	dropSentences (stage: string): Promise<unknown[]>
 	drop (stage: string, force: boolean, actor?: Actor): Promise<unknown[]>
 	export (stage: string): Promise<unknown>

@@ -5,7 +5,7 @@ import { classifyQuery, QueryClassification } from '../../domain/query/queryClas
 import { ExecuteRequest, QueryRequest, RequestContext } from '../ports/input/dataGatewayPort'
 import { OrmQueryPort } from '../ports/output/ormPorts'
 import { Auditor } from './auditor'
-import { withActor } from './actor'
+import { requestOptions } from './requestOptions'
 
 export const requireQuery = (query: unknown): string => {
 	if (typeof query !== 'string' || query.trim() === '') {
@@ -21,7 +21,7 @@ export class QueryUseCases {
 
 	public async plan (ctx: RequestContext, request: QueryRequest): Promise<QueryPlan> {
 		authorize(ctx.principal, 'plan')
-		return this.orm.plan(requireQuery(request.query), request.options)
+		return this.orm.plan(requireQuery(request.query), requestOptions(request.options, ctx))
 	}
 
 	public async metadata (ctx: RequestContext, request: QueryRequest): Promise<Metadata> {
@@ -53,7 +53,7 @@ export class QueryUseCases {
 		const query = requireQuery(request.query)
 		const classification = await this.classify(query)
 		authorize(ctx.principal, 'execute', classification.writes)
-		const run = () => this.orm.execute(query, request.data, withActor(request.options, ctx))
+		const run = () => this.orm.execute(query, request.data, requestOptions(request.options, ctx))
 		if (!classification.writes) return run()
 		return this.auditor.track(ctx, {
 			operation: 'execute',

@@ -30,8 +30,8 @@
   "homepage": "https://github.com/lambda-orm/data-gateway/tree/main/packages/data-gateway#readme",
   "dependencies": {
     "3xpr": "^5.3.1",
-    "@lambdaorm/base": "^3.7.0",
-    "@lambdaorm/lib": "^3.9.0",
+    "@lambdaorm/base": "^3.11.1",
+    "@lambdaorm/lib": "^3.15.0",
     "@modelcontextprotocol/sdk": "1.32.2",
     "@opentelemetry/api": "~1.10.0",
     "@opentelemetry/context-async-hooks": "3.1.1",
@@ -72,7 +72,7 @@
   },
   "devDependencies": {
     "@anthropic-ai/sdk": "1.4.0",
-    "@lambdaorm/client": "^0.10.8",
+    "@lambdaorm/client": "^0.10.13",
     "@types/body-parser": "^1.19.5",
     "@types/cookie-parser": "^1.4.4",
     "@types/express": "^5.0.2",

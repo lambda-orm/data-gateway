@@ -1819,9 +1819,12 @@ components:
       type: object
     QueryOptions:
       additionalProperties: false
+      description: >-
+        The options of λORM that the client chooses. The view and the context are the gateway's: a view or a context
+        sent here is dropped (a client could skip what a view hides or read the rows of another tenant), and so is an
+        actor (the gateway sets the one of the request).
       example:
         stage: default
-        view: default
         chunkSize: 1000
         tryAllCan: true
         headers:
@@ -1831,6 +1834,8 @@ components:
           type: string
         view:
           type: string
+          deprecated: true
+          description: Ignored, the gateway decides the view
         chunkSize:
           type: integer
         tryAllCan:

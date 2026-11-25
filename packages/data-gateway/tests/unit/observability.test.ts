@@ -6,7 +6,7 @@ import { W3CTraceContextPropagator } from '@opentelemetry/core'
 import { InMemorySpanExporter, SimpleSpanProcessor, TracerProvider } from '@opentelemetry/sdk-trace'
 import { ConfigReader } from '../../src/lib/domain/config/configReader'
 import { principal, withActor as principalWithActor } from '../../src/lib/domain/auth/principal'
-import { withActor } from '../../src/lib/application/usecases/actor'
+import { requestOptions } from '../../src/lib/application/usecases/requestOptions'
 import { resolveObservability } from '../../src/lib/infrastructure/build/observability'
 import { ChannelDispatcher } from '../../src/lib/application/runtime/channelDispatcher'
 import { SchemaRouter } from '../../src/lib/application/runtime/schemaRouter'
@@ -46,9 +46,14 @@ describe('actor', () => {
 	})
 	test('the options of λORM take the actor of the gateway: one sent by the client is replaced', () => {
 		const ctx = { principal: principalWithActor(principal('backend', ['read']), { ip: '10.0.0.1' }), transport: 'http' }
-		expect(withActor({ stage: 'default', actor: { credential: 'admin' } } as any, ctx)).toEqual({ stage: 'default', actor: { credential: 'backend', ip: '10.0.0.1' } })
-		expect(withActor('{"stage":"default"}', ctx)).toEqual({ stage: 'default', actor: { credential: 'backend', ip: '10.0.0.1' } })
-		expect(withActor({ actor: { credential: 'admin' } } as any, { principal: principal('x', []), transport: 'http' })).toEqual({})
+		expect(requestOptions({ stage: 'default', actor: { credential: 'admin' } } as any, ctx)).toEqual({ stage: 'default', actor: { credential: 'backend', ip: '10.0.0.1' } })
+		expect(requestOptions('{"stage":"default"}', ctx)).toEqual({ stage: 'default', actor: { credential: 'backend', ip: '10.0.0.1' } })
+		expect(requestOptions({ actor: { credential: 'admin' } } as any, { principal: principal('x', []), transport: 'http' })).toEqual({})
+	})
+	test('the view and the context of the client are dropped: the gateway decides them', () => {
+		const ctx = { principal: principal('x', ['read']), transport: 'http' }
+		expect(requestOptions({ stage: 'default', view: 'admin', context: { tenant: 'other' } } as any, ctx)).toEqual({ stage: 'default' })
+		expect(requestOptions('{"view":"admin","context":{"tenant":"other"}}', ctx)).toEqual({})
 	})
 })
 

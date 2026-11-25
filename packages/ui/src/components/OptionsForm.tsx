@@ -9,7 +9,7 @@ export interface OptionsFormProps {
 	/** the options as JSON text: what the query keeps */
 	value: string
 	onChange: (value: string) => void
-	/** the stages and views of the schema are its choices */
+	/** the stages of the schema are its choices */
 	api: QueryApiPort
 	schema?: string
 	/** a script has two more options (timeout, maxIterations) */
@@ -30,7 +30,6 @@ export const optionsSummary = (text: string, locale?: string): { text: string, i
 	const f = read.fields
 	const parts = [
 		f.stage && `${m.stage}: ${f.stage}`,
-		f.view && `${m.view}: ${f.view}`,
 		f.chunkSize && `${m.chunkSize}: ${f.chunkSize}`,
 		f.tryAllCan && `${m.tryAllCan}: ${f.tryAllCan === 'true' ? m.yes : m.no}`,
 		f.headers.length > 0 && format(m.headersCount, { n: f.headers.length }),
@@ -43,7 +42,7 @@ export const optionsSummary = (text: string, locale?: string): { text: string, i
 
 /**
  * The options of a query (QueryOptions / ScriptOptions of λORM) as a form: each field may stay empty, and says what is
- * valid; stage and view offer those of the schema. The JSON stays what is kept, and can be written as such (JSON).
+ * valid; stage offers those of the schema. The JSON stays what is kept, and can be written as such (JSON).
  */
 export const OptionsForm: React.FC<OptionsFormProps> = ({ value, onChange, api, schema, mode, theme, locale, label, heading = true }) => {
 	const m = optionsMessagesOf(locale)
@@ -68,20 +67,20 @@ export const OptionsForm: React.FC<OptionsFormProps> = ({ value, onChange, api, 
 		onChange(text)
 	}
 
-	// the stages and views of the schema
-	const [choices, setChoices] = useState<{ stages?: string[], views?: string[] }>({})
+	// the stages of the schema
+	const [choices, setChoices] = useState<{ stages?: string[] }>({})
 	useEffect(() => {
 		setChoices({})
 		if (schema === undefined) return
 		let alive = true
-		Promise.all([api.stages?.(schema).catch(() => undefined), api.views?.(schema).catch(() => undefined)])
-			.then(([stages, views]) => { if (alive) setChoices({ stages, views }) })
+		Promise.resolve(api.stages?.(schema)).catch(() => undefined)
+			.then(stages => { if (alive) setChoices({ stages }) })
 		return () => { alive = false }
 	}, [api, schema])
 
 	const id = useMemo(() => `lw-options-${Math.random().toString(36).slice(2, 8)}`, [])
 	/** a choice of the schema (a name kept that is not in it any more is still shown, marked) */
-	const choice = (key: 'stage' | 'view', list: string[] | undefined, hint: string) => {
+	const choice = (key: 'stage', list: string[] | undefined, hint: string) => {
 		const current = fields[key]
 		const names = list ?? []
 		return (
@@ -138,7 +137,6 @@ export const OptionsForm: React.FC<OptionsFormProps> = ({ value, onChange, api, 
 				: (
 					<div className="lw-options-form">
 						{choice('stage', choices.stages, m.stageHint)}
-						{choice('view', choices.views, m.viewHint)}
 						{count('chunkSize', m.chunkSizeHint)}
 						<div className="lw-option">
 							<span className="lw-option-label" aria-hidden="true">{m.tryAllCan}</span>

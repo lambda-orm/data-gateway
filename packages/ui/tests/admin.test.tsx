@@ -90,16 +90,27 @@ class FakeAdmin implements AdminApiPort {
 	async putItems (_items: any[]): Promise<{ items: { id: string, version: string }[] }> { return { items: [] } }
 	async removeItems (_ids: string[]): Promise<{ removed: string[] }> { return { removed: [] } }
 	public jobList: any[] = []
-	async commands () { return { stages: ['default', 'test'], can: { version: true, fetch: true, export: true, push: true, drop: true, import: true, pull: true, introspect: true, incorporate: true } } }
+	async commands () { return { stages: ['default', 'test'], can: { version: true, fetch: true, export: true, push: true, drop: true, import: true, pull: true, introspect: true, incorporate: true, migrations: true, migrate: true, seed: true } } }
 	async previewCommand (_schema: string, command: any, body: any): Promise<any> {
 		this.calls.push(`preview ${command} ${body.stage}`)
 		if (command === 'pull') return { previewId: 'p-pull', command, stage: 'default', expiresAt: 'later', diff: { added: 2, removed: 0, hunks: [{ oldStart: 3, newStart: 3, lines: [{ op: ' ', text: '  entities:' }, { op: '+', text: '  - name: Suppliers' }, { op: '+', text: '    primaryKey: [id]' }] }] } }
-		return { previewId: `p-${command}`, command, stage: body.stage ?? 'default', expiresAt: 'later', sentences: command === 'push' ? [{ source: 'main', sentences: ['CREATE TABLE Categories (id INTEGER)'] }] : ['DROP TABLE Categories'] }
+		if (command === 'seed') return { previewId: 'p-seed', command, stage: 'default', expiresAt: 'later', files: ['data/categories.json'] }
+		if (command === 'migrate') {
+			return { previewId: 'p-migrate', command, stage: 'default', expiresAt: 'later', version: body.version, sentences: [{ source: 'main', version: '261125120000', sentences: ['ALTER TABLE Categories DROP COLUMN code'] }], destructive: [] }
+		}
+		// on test, push narrows a column: it can lose data
+		const destructive = command === 'push' && body.stage === 'test' ? [{ source: 'main', sentence: 'ALTER TABLE Categories ALTER COLUMN name TYPE VARCHAR(40)', reason: 'Categories.name: length 80 to 40' }] : []
+		return { previewId: `p-${command}`, command, stage: body.stage ?? 'default', expiresAt: 'later', destructive, sentences: command === 'push' ? [{ source: 'main', sentences: ['CREATE TABLE Categories (id INTEGER)'] }] : ['DROP TABLE Categories'] }
 	}
 
 	async runCommand (_schema: string, command: any, body: any): Promise<any> {
-		this.calls.push(`run ${command} ${body.stage} ${body.previewId ?? ''} ${body.force ? 'force' : ''}`.trim())
-		const job = { id: `j${this.jobList.length + 1}`, schema: 'northwind/v1', command, stage: body.stage, status: 'done', credential: 'admin', startedAt: new Date().toISOString(), result: command === 'fetch' ? [{ name: 'default', entities: [] }] : [] }
+		this.calls.push(`run ${command} ${body.stage} ${body.previewId ?? ''} ${body.force ? 'force' : ''} ${body.allowDestructive ? 'allowDestructive' : ''}`.trim().replace(/ +/g, ' '))
+		const migrations = [
+			{ version: '261125120000', source: 'main', status: 'applied', time: '2026-11-25T12:00:00Z', actor: { credential: 'admin' } },
+			{ version: '261124090000', source: 'main', status: 'applied', time: '2026-11-24T09:00:00Z' }
+		]
+		const result = command === 'fetch' ? [{ name: 'default', entities: [] }] : command === 'migrations' ? migrations : []
+		const job = { id: `j${this.jobList.length + 1}`, schema: 'northwind/v1', command, stage: body.stage, status: 'done', credential: 'admin', startedAt: new Date().toISOString(), result }
 		this.jobList.unshift(job)
 		return job
 	}
@@ -341,8 +352,40 @@ describe('the commands of a workspace', () => {
 		await screen.findByText(/CREATE TABLE Categories/)
 		expect(screen.getByText('What push will run on stage test')).toBeTruthy()
 		fireEvent.click(screen.getByLabelText(/tryAllCan/))
-		fireEvent.click(screen.getByRole('button', { name: 'Run push' }))
-		await waitFor(() => expect(admin.calls).toContain('run push test p-push force'))
+		// on test it can lose data: it runs only once that is allowed
+		expect(screen.getByText('These changes can lose data:')).toBeTruthy()
+		expect(screen.getByText('Categories.name: length 80 to 40')).toBeTruthy()
+		const run = screen.getByRole('button', { name: 'Run push' }) as HTMLButtonElement
+		expect(run.disabled).toBe(true)
+		fireEvent.click(screen.getByLabelText('apply also the changes that can lose data'))
+		fireEvent.click(run)
+		await waitFor(() => expect(admin.calls).toContain('run push test p-push force allowDestructive'))
+	})
+
+	test('migrations lists the history; migrate goes back to a version from it, after its preview', async () => {
+		const admin = new FakeAdmin()
+		await openCommands(admin)
+		fireEvent.click(await screen.findByRole('button', { name: 'migrations' }))
+		const table = await screen.findByRole('table', { name: 'migrations' })
+		expect(table.textContent).toContain('261125120000')
+		// only the older one can be gone back to
+		const back = screen.getAllByRole('button', { name: 'go back here' })
+		expect(back).toHaveLength(1)
+		fireEvent.click(back[0])
+		await screen.findByText(/DROP COLUMN code/)
+		expect(admin.calls).toContain('preview migrate default')
+		expect(screen.getByText('main · 261125120000')).toBeTruthy()
+		fireEvent.click(screen.getByRole('button', { name: 'Run migrate' }))
+		await waitFor(() => expect(admin.calls).toContain('run migrate default p-migrate'))
+	})
+
+	test('seed shows its files and runs that', async () => {
+		const admin = new FakeAdmin()
+		await openCommands(admin)
+		fireEvent.click(await screen.findByRole('button', { name: 'seed…' }))
+		expect(await screen.findByText('data/categories.json')).toBeTruthy()
+		fireEvent.click(screen.getByRole('button', { name: 'Run seed' }))
+		await waitFor(() => expect(admin.calls).toContain('run seed default p-seed'))
 	})
 
 	test('drop runs only once its stage is typed again', async () => {

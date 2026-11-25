@@ -32,6 +32,7 @@ export const fakeMetadata = (query: string): any => {
 export class FakeOrm implements OrmQueryPort, OrmScriptPort, OrmSchemaPort, OrmStagePort {
 	public executed: { query: string, data?: unknown, options?: unknown }[] = []
 	public scripts: { script: string, data?: unknown, options?: unknown }[] = []
+	public planned: { query: string, options?: unknown }[] = []
 	public executeResult: any = [{ id: 1 }]
 	public scriptResult: any = 7
 	public executeDelayMs = 0
@@ -44,7 +45,11 @@ export class FakeOrm implements OrmQueryPort, OrmScriptPort, OrmSchemaPort, OrmS
 		return this.executeResult
 	}
 
-	public async plan (query: string) { return { entity: query.split('.')[0], dialect: 'PostgreSQL', source: 'main', sentence: 'SELECT 1' } }
+	public async plan (query: string, options?: unknown) {
+		this.planned.push({ query, options })
+		return { entity: query.split('.')[0], dialect: 'PostgreSQL', source: 'main', sentence: 'SELECT 1' }
+	}
+
 	public async metadata (query: string) { return fakeMetadata(query) }
 	public async model () { return [{ name: 'id', type: 'integer' }] as any }
 	public async parameters () { return [{ name: 'id', type: 'integer' }] as any }

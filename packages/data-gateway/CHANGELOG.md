@@ -6,14 +6,30 @@ All notable changes to this project will be documented in this file.
 
 ### Unreleased
 
+Needs `@lambdaorm/base` 3.11.1 and `@lambdaorm/lib` 3.15.0.
+
+**λORM 3.15** (`docs/PENDINGS.md` R3):
+
+- **Its errors have their status:** `ContextError` 400 (a value of the context a filter needs), `ViewError` 403 (an
+  entity the view excludes, a write out of the filter of its view), `CrossSourceError` 422 (a query across sources too
+  big for memory), `DestructiveChangeError` 409; each with what a client can use of it in `details` (`variable` and
+  `where`, `view` and `entity`, `changes`).
+- **`push` says what can lose data:** its preview brings `destructive` (source, sentence and why: a narrower type, a
+  shorter length), and the command runs those only with `allowDestructive: true`; without it the job fails with
+  `DestructiveChangeError`.
+- **Migrations** (`infrastructure.migrations`): the command `migrations` lists the history of the stage (version,
+  source, applied or undone) and `migrate` goes back to a `version`: its preview shows the undo of each later migration
+  (and what of it can lose data), and it runs with `allowDestructive` when it has to.
+- **Seed** (`stages[].seed`): the command `seed` inserts the rows of its files that are not in the database yet; its
+  preview lists the files.
+- The observability of a schema without its own goes through `orm.observeWith`.
+
 **Fixes** (seen reviewing the wiki):
 
 - `GET /transports` gives `schemaPath: "/{schema}/mcp"` for `mcpWebSocket`, where its upgrade is (it said `/{schema}`).
 - The OpenAPI document lists every route open without a credential (also `/version`, `/transports` and the
   documentation), and `/version` is marked open as the gateway serves it.
 - The Northwind data of the configuration keeps its letters (`München`, `Köln`, `México D.F.`).
-
-Needs `@lambdaorm/base` and `@lambdaorm/lib` with observability (lambda-orm/core #203).
 
 **Features** (`DATA_GATEWAY.md` §8.2):
 
@@ -32,6 +48,15 @@ Needs `@lambdaorm/base` and `@lambdaorm/lib` with observability (lambda-orm/core
   LogRecord.
 - **The 412 of a form or of the YAML says who changed it:** `details.changedBy` (credential, client, time, kind,
   target), from the history.
+
+**Security:**
+
+- **The client no longer chooses the view nor the context of λORM:** `options.view` and `options.context` are dropped
+  from what a client sends on every transport (REST, WebSocket, MCP, `script`, `execute-queued`) before reaching λORM,
+  and `plan` now takes the actor and goes through the same filter as `execute`. A client with `read` could ask for any
+  view (or none, the whole domain) and skip what a view hides or masks, and with λORM ≥ 3.10 send a context of another
+  tenant to the row filters of the views. Until the gateway takes them from the identity (JWT/OIDC, the view per
+  credential), λORM runs without view and without context.
 
 ### 4.0.0 (2026-11-23)
 
