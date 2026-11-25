@@ -10,6 +10,7 @@ import { SchemaDirectoryPort, ServedSchema } from '../../../application/ports/in
 import { AuthenticatorPort, LoggerPort } from '../../../application/ports/output/supportPorts'
 import { RpcDispatcher } from '../../../application/rpc/rpcDispatcher'
 import { Principal, refusalOf, withActor } from '../../../domain/auth/principal'
+import { closeWhenExpired } from './credentialExpiry'
 import { RpcCallError } from '../../../domain/errors/gatewayError'
 import { toHttpError } from '../http/httpErrors'
 import { Transport } from '../transport'
@@ -176,6 +177,7 @@ export class WebSocketTransport implements Transport {
 
 	/** One connection: its requests, and the notifications it asked for */
 	private connection (ws: WebSocket, ctx: RequestContext, schema: ServedSchema | undefined): void {
+		closeWhenExpired(ws, ctx.principal)
 		const send = (message: unknown) => { if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(message)) }
 		const notify = (method: string, params: unknown) => send({ jsonrpc: '2.0', method, params })
 		const awaited = new Set<string>()

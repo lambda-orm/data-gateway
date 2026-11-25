@@ -9,6 +9,7 @@ import { JSONRPCMessage, JSONRPCMessageSchema } from '@modelcontextprotocol/sdk/
 import { SchemaDirectoryPort, ServedSchema } from '../../../application/ports/input/schemaDirectoryPort'
 import { LoggerPort } from '../../../application/ports/output/supportPorts'
 import { Principal, refusalOf, withActor } from '../../../domain/auth/principal'
+import { closeWhenExpired } from '../websocket/credentialExpiry'
 import { Transport } from '../transport'
 import { createSdkServer } from './sdkMcpServer'
 import { headersFromProtocols } from '../../../domain/auth/protocolCredential'
@@ -186,6 +187,7 @@ export class McpWebSocketTransport implements Transport {
 		this.wss.handleUpgrade(req, socket, head, ws => {
 			const server = createSdkServer(schema.mcp, { principal: withActor(principal!, { ip: req.socket.remoteAddress }), transport: TRANSPORT_NAME }, this.deps.logger)
 			this.schemaOf.set(ws, schema.path)
+			closeWhenExpired(ws, principal!)
 			ws.on('close', () => {
 				this.schemaOf.delete(ws)
 				server.close().catch(() => undefined)
