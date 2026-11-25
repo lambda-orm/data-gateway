@@ -117,7 +117,7 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 				{!entity.abstract && <button className="lw-primary" onClick={() => onQuery(schema, entity.name)}>{m.queryIt}</button>}
 			</div>
 			<div className="lw-toolbar" role="tablist" aria-label={entity.name}>
-				{([['properties', `${m.properties} (${entity.properties?.length ?? 0})`], ['relations', `${m.relations} (${(entity.relations?.length ?? 0) + referencedBy.length})`],
+				{([['properties', `${m.properties} (${entity.properties?.length ?? 0})`], ['relations', `${m.relations} (${entity.relations?.length ?? 0})`],
 					['keys', m.keysIndexes], ['constraints', `${m.constraints} (${entity.constraints?.length ?? 0})`], ...(entity.abstract ? [] : [['data', m.data]]), ['diagram', m.diagram], ...(admin?.history ? [['history', a.history]] : [])] as [Section, string][]).map(([key, label]) => (
 					<button key={key} role="tab" aria-selected={section === key} className={section === key ? 'lw-active' : ''} onClick={() => setSection(key)}>{label}</button>
 				))}

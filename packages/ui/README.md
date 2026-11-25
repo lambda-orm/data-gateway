@@ -110,7 +110,7 @@ The autocompletion comes from `GET /{schema}/typings` of the gateway (the domain
 
 ## Documentation
 
-- [The UI in the λORM wiki](https://lambda-orm.github.io/wiki/data-gateway/Ui/), with screenshots, and how to put it in
+- [The IDE in the λORM wiki](https://lambda-orm.github.io/wiki/ide/), with screenshots, and how to put it in
   an application of your own
 - [Change log](CHANGELOG.md)
 

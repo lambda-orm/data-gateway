@@ -3,7 +3,7 @@ import { QueryApiPort } from '../application/ports'
 import { DomainInfo } from '../domain/diagram'
 import { functionsOf, lambdaCompletions } from '../domain/lambdaCompletion'
 import { QUERYABLE_DECLARATIONS } from '../infrastructure/monaco/queryableDeclarations.generated'
-import { columnsOf, emptyWizard, joinOf, queryOf, WizardReading, WizardState, withoutTable } from '../domain/queryWizard'
+import { columnsOf, emptyWizard, filterExample, joinOf, queryOf, WizardReading, WizardState, withoutTable } from '../domain/queryWizard'
 import { wizardMessagesOf } from '../domain/wizardI18n'
 import { format, Locale } from '../domain/i18n'
 import { CodeEditor } from './CodeEditor'
@@ -156,7 +156,7 @@ export const QueryWizard: React.FC<QueryWizardProps> = ({ api, schema, domain, i
 							<CodeEditor ariaLabel={m.filter} language="typescript" theme={theme} value={state.filter} lambda compact completion={suggest} triggerCharacters={['.']}
 								onChange={filter => setState(s => ({ ...s, filter }))} height={80} />
 						</div>
-						<div className="lw-hint">{format(m.filterHint, { entity: state.root })}</div>
+						<div className="lw-hint">{format(m.filterHint, { entity: state.root, example: filterExample(domain, state.root) ?? 'p.id == id' })}</div>
 					</div>
 					<div className="lw-wizard-field">
 						<span>{m.sort}</span>

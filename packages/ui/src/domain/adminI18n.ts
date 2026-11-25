@@ -88,6 +88,10 @@ export interface AdminMessages {
 	nothingSelected: string
 	variables: string
 	defined: string
+	varName: string
+	varState: string
+	varUsedIn: string
+	varValue: string
 	notDefined: string
 	newValue: string
 	setValue: string
@@ -260,6 +264,10 @@ ROWS.push(
 	['commandsOf', 'Schema {name}', 'Esquema {name}', 'Esquema {name}', 'Schéma {name}', 'Schema {name}', 'Schema {name}', 'Schema {name}', 'Esquema {name}', 'Esquema {name}', '{name} eskema'],
 	['variables', 'Variables (.env)', 'Variables (.env)', 'Variáveis (.env)', 'Variables (.env)', 'Variabili (.env)', 'Variablen (.env)', 'Variabelen (.env)', 'Variables (.env)', 'Variables (.env)', 'Aldagaiak (.env)'],
 	['defined', 'defined', 'definida', 'definida', 'définie', 'definita', 'definiert', 'gedefinieerd', 'definida', 'definida', 'definituta'],
+	['varName', 'variable', 'variable', 'variável', 'variable', 'variabile', 'Variable', 'variabele', 'variable', 'variable', 'aldagaia'],
+	['varState', 'state', 'estado', 'estado', 'état', 'stato', 'Zustand', 'status', 'estat', 'estado', 'egoera'],
+	['varUsedIn', 'used in', 'se usa en', 'usada em', 'utilisée dans', 'usata in', 'verwendet in', 'gebruikt in', 's’usa a', 'úsase en', 'non erabilia'],
+	['varValue', 'value', 'valor', 'valor', 'valeur', 'valore', 'Wert', 'waarde', 'valor', 'valor', 'balioa'],
 	['notDefined', 'not in .env', 'no está en .env', 'não está no .env', 'absente de .env', 'non in .env', 'nicht in .env', 'niet in .env', 'no és a .env', 'non está en .env', 'ez dago .env-n'],
 	['newValue', 'New value (not shown again)', 'Valor nuevo (no se vuelve a mostrar)', 'Valor novo (não é mostrado de novo)', 'Nouvelle valeur (plus affichée ensuite)', 'Nuovo valore (non verrà più mostrato)', 'Neuer Wert (wird nicht wieder angezeigt)', 'Nieuwe waarde (wordt niet meer getoond)', 'Valor nou (no es torna a mostrar)', 'Valor novo (non se volve mostrar)', 'Balio berria (ez da berriz erakutsiko)'],
 	['setValue', 'Set', 'Definir', 'Definir', 'Définir', 'Imposta', 'Setzen', 'Instellen', 'Defineix', 'Definir', 'Ezarri'],
@@ -271,9 +279,9 @@ ROWS.push(
 	['forms', 'Schema (forms)', 'Esquema (formularios)', 'Esquema (formulários)', 'Schéma (formulaires)', 'Schema (moduli)', 'Schema (Formulare)', 'Schema (formulieren)', 'Esquema (formularis)', 'Esquema (formularios)', 'Eskema (inprimakiak)'],
 	['entities', 'Entities', 'Entidades', 'Entidades', 'Entités', 'Entità', 'Entitäten', 'Entiteiten', 'Entitats', 'Entidades', 'Entitateak'],
 	['enums', 'Enums', 'Enums', 'Enums', 'Énumérations', 'Enum', 'Enums', 'Enums', 'Enums', 'Enums', 'Enumak'],
-	['sources', 'Sources', 'Sources', 'Sources', 'Sources', 'Sorgenti', 'Quellen', 'Bronnen', 'Fonts', 'Fontes', 'Iturriak'],
-	['mappings', 'Mappings', 'Mappings', 'Mappings', 'Mappings', 'Mapping', 'Mappings', 'Mappings', 'Mappings', 'Mappings', 'Mapping-ak'],
-	['stages', 'Stages', 'Stages', 'Stages', 'Stages', 'Stage', 'Stages', 'Stages', 'Stages', 'Stages', 'Stage-ak'],
+	['sources', 'Sources', 'Sources', 'Sources', 'Sources', 'Sources', 'Sources', 'Sources', 'Sources', 'Sources', 'Sources'],
+	['mappings', 'Mappings', 'Mappings', 'Mappings', 'Mappings', 'Mappings', 'Mappings', 'Mappings', 'Mappings', 'Mappings', 'Mappings'],
+	['stages', 'Stages', 'Stages', 'Stages', 'Stages', 'Stages', 'Stages', 'Stages', 'Stages', 'Stages', 'Stages'],
 	['newNamed', 'New in {name}', 'Nuevo en {name}', 'Novo em {name}', 'Nouveau dans {name}', 'Nuovo in {name}', 'Neu in {name}', 'Nieuw in {name}', 'Nou a {name}', 'Novo en {name}', 'Berria {name}-n'],
 	['rename', 'Rename', 'Renombrar', 'Renomear', 'Renommer', 'Rinomina', 'Umbenennen', 'Hernoemen', 'Canvia el nom', 'Renomear', 'Berrizendatu'],
 	['usedBy', '{name} is used by:', '{name} lo usan:', '{name} é usado por:', '{name} est utilisé par :', '{name} è usato da:', '{name} wird verwendet von:', '{name} wordt gebruikt door:', '{name} l’usen:', '{name} úsano:', '{name} hauek erabiltzen dute:'],
@@ -323,7 +331,7 @@ ROWS.push(
 	['noMigrations', 'No migrations: push records them when the schema has infrastructure.migrations', 'Sin migraciones: push las registra cuando el schema tiene infrastructure.migrations', 'Sem migrações: push as registra quando o schema tem infrastructure.migrations', 'Aucune migration : push les enregistre quand le schéma a infrastructure.migrations', 'Nessuna migrazione: push le registra quando lo schema ha infrastructure.migrations', 'Keine Migrationen: push zeichnet sie auf, wenn das Schema infrastructure.migrations hat', 'Geen migraties: push legt ze vast als het schema infrastructure.migrations heeft', "Sense migracions: push les registra quan l'esquema té infrastructure.migrations", 'Sen migracións: push rexístraas cando o esquema ten infrastructure.migrations', 'Migraziorik ez: push-ek erregistratzen ditu eskemak infrastructure.migrations duenean'],
 	['migrateTo', 'go back here', 'volver acá', 'voltar aqui', 'revenir ici', 'tornare qui', 'hierher zurück', 'hierheen terug', 'tornar aquí', 'volver aquí', 'hona itzuli'],
 	['migrationVersion', 'version', 'versión', 'versão', 'version', 'versione', 'Version', 'versie', 'versió', 'versión', 'bertsioa'],
-	['migrationSource', 'source', 'fuente', 'fonte', 'source', 'sorgente', 'Quelle', 'bron', 'font', 'fonte', 'iturria'],
+	['migrationSource', 'source', 'source', 'source', 'source', 'source', 'source', 'source', 'source', 'source', 'source'],
 	['migrationStatus', 'status', 'estado', 'estado', 'état', 'stato', 'Status', 'status', 'estat', 'estado', 'egoera'],
 	['cmd_pull', 'bring the databases into the model', 'traer las bases al modelo', 'trazer os bancos para o modelo', 'ramener les bases dans le modèle', 'portare i database nel modello', 'die Datenbanken ins Modell übernehmen', 'de databases in het model overnemen', 'portar les bases al model', 'traer as bases ao modelo', 'datu-baseak eredura ekarri'],
 	['cmd_drop', 'remove the tables of the stage', 'eliminar las tablas del stage', 'remover as tabelas do stage', 'supprimer les tables du stage', 'eliminare le tabelle dello stage', 'die Tabellen des Stage löschen', 'de tabellen van de stage verwijderen', 'eliminar les taules del stage', 'eliminar as táboas do stage', 'stage-aren taulak ezabatu'],
@@ -331,7 +339,7 @@ ROWS.push(
 	['cmd_incorporate', 'create an entity from a data file and import its rows', 'crear una entidad desde un archivo de datos e importar sus filas', 'criar uma entidade a partir de um arquivo de dados e importar as linhas', 'créer une entité depuis un fichier de données et importer ses lignes', 'creare un’entità da un file di dati e importarne le righe', 'eine Entität aus einer Datendatei erstellen und ihre Zeilen importieren', 'een entiteit uit een gegevensbestand maken en de rijen importeren', 'crear una entitat des d’un fitxer de dades i importar-ne les files', 'crear unha entidade desde un ficheiro de datos e importar as filas', 'datu-fitxategi batetik entitate bat sortu eta errenkadak inportatu'],
 	['cmd_build', 'generate the model code (src/ or zip)', 'generar el código del modelo (src/ o zip)', 'gerar o código do modelo (src/ ou zip)', 'générer le code du modèle (src/ ou zip)', 'generare il codice del modello (src/ o zip)', 'den Code des Modells erzeugen (src/ oder Zip)', 'de code van het model genereren (src/ of zip)', 'generar el codi del model (src/ o zip)', 'xerar o código do modelo (src/ ou zip)', 'ereduaren kodea sortu (src/ edo zip)'],
 	['cmd_version', 'the versions of λORM in the gateway', 'las versiones de λORM en la gateway', 'as versões do λORM na gateway', 'les versions de λORM dans la gateway', 'le versioni di λORM nel gateway', 'die λORM-Versionen im Gateway', 'de λORM-versies in de gateway', 'les versions de λORM a la gateway', 'as versións de λORM na gateway', 'gateway-ko λORM bertsioak'],
-	['about', 'About', 'Información', 'Informações', 'Informations', 'Informazioni', 'Informationen', 'Informatie', 'Informació', 'Información', 'Informazioa'],
+	['about', 'About', 'Acerca de', 'Sobre', 'À propos', 'Informazioni', 'Über', 'Over', 'Quant a', 'Acerca de', 'Honi buruz'],
 	['schemaName', 'Name', 'Nombre', 'Nome', 'Nom', 'Nome', 'Name', 'Naam', 'Nom', 'Nome', 'Izena'],
 	['schemaDescription', 'Description', 'Descripción', 'Descrição', 'Description', 'Descrizione', 'Beschreibung', 'Beschrijving', 'Descripció', 'Descrición', 'Deskribapena'],
 	['schemaVersion', 'Version', 'Versión', 'Versão', 'Version', 'Versione', 'Version', 'Versie', 'Versió', 'Versión', 'Bertsioa'],
@@ -382,7 +390,7 @@ ROWS.push(
 	['moveDown', 'Move down', 'Bajar', 'Descer', 'Descendre', 'Sposta giù', 'Nach unten', 'Omlaag', 'Baixa', 'Baixar', 'Behera'],
 	['notAVariable', '{name}: not a variable of a sentence ({names})', '{name}: no es una variable de una sentencia ({names})', '{name}: não é uma variável de uma sentença ({names})', '{name} : pas une variable d’une phrase ({names})', '{name}: non è una variabile di una frase ({names})', '{name}: keine Variable eines Satzes ({names})', '{name}: geen variabele van een zin ({names})', '{name}: no és una variable d’una sentència ({names})', '{name}: non é unha variable dunha sentenza ({names})', '{name}: ez da sententzia baten aldagaia ({names})'],
 	['rootTaken', 'The schema at the root (/) is the only one the gateway can serve: move it to a folder of the workspace to add others.', 'El esquema de la raíz (/) es el único que la gateway puede servir: movelo a una carpeta del workspace para agregar otros.', 'O esquema da raiz (/) é o único que a gateway pode servir: mova-o para uma pasta do workspace para adicionar outros.', 'Le schéma à la racine (/) est le seul que la gateway peut servir : déplacez-le dans un dossier du workspace pour en ajouter d’autres.', 'Lo schema alla radice (/) è l’unico che il gateway può servire: spostalo in una cartella del workspace per aggiungerne altri.', 'Das Schema im Stamm (/) ist das einzige, das das Gateway bedienen kann: verschieben Sie es in einen Ordner des Workspace, um weitere hinzuzufügen.', 'Het schema in de root (/) is het enige dat de gateway kan bedienen: verplaats het naar een map van de workspace om er meer toe te voegen.', 'L’esquema de l’arrel (/) és l’únic que la gateway pot servir: mou-lo a una carpeta del workspace per afegir-ne d’altres.', 'O esquema da raíz (/) é o único que a gateway pode servir: móveo a un cartafol do workspace para engadir outros.', 'Erroko (/) eskema da gateway-k zerbitzatu dezakeen bakarra: eraman workspace-ko karpeta batera beste batzuk gehitzeko.'],
-	['metadata', 'Metadata', 'Metadata', 'Metadados', 'Métadonnées', 'Metadati', 'Metadaten', 'Metadata', 'Metadades', 'Metadatos', 'Metadatuak'],
+	['metadata', 'Metadata', 'Metadatos', 'Metadados', 'Métadonnées', 'Metadati', 'Metadaten', 'Metadata', 'Metadades', 'Metadatos', 'Metadatuak'],
 	['openSchema', 'Open {name}: its commands', 'Abrir {name}: sus comandos', 'Abrir {name}: seus comandos', 'Ouvrir {name} : ses commandes', 'Apri {name}: i suoi comandi', '{name} öffnen: seine Befehle', '{name} openen: de opdrachten', 'Obre {name}: les seves ordres', 'Abrir {name}: os seus comandos', 'Ireki {name}: bere komandoak'],
 	['contextVariables', 'Variables of the sentence', 'Variables de la sentencia', 'Variáveis da sentença', 'Variables de la phrase', 'Variabili della frase', 'Variablen des Satzes', 'Variabelen van de zin', 'Variables de la sentència', 'Variables da sentenza', 'Sententziaren aldagaiak'],
 	['insertIt', 'Insert {name}', 'Insertar {name}', 'Inserir {name}', 'Insérer {name}', 'Inserisci {name}', '{name} einfügen', '{name} invoegen', 'Insereix {name}', 'Inserir {name}', 'Txertatu {name}'],

@@ -39,6 +39,34 @@ const entityOf = (domain: DomainInfo, name: string): EntityInfo | undefined => d
 /** a relation to many: λORM names it manyToOne (the other entity has many rows for this one) */
 export const toMany = (relation: Pick<RelationInfo, 'type'>): boolean => relation.type === 'manyToOne'
 
+const NUMBERS = ['integer', 'decimal', 'number', 'float', 'double']
+
+/**
+ * An example of a filter on p for an entity, with its own fields: a number of it compared with a constant, and a text
+ * of the entity of one of its relations (or of its own) compared with a value of the data (Products: p.price > 10 &&
+ * p.category.name == name). Undefined when it has no properties.
+ */
+export const filterExample = (domain: DomainInfo, name: string): string | undefined => {
+	const entity = entityOf(domain, name)
+	const properties = entity?.properties ?? []
+	if (!entity || properties.length === 0) return undefined
+	// not a key nor the field of a relation: id, customerId
+	const plainOf = (e: EntityInfo | undefined) => (e?.properties ?? []).filter(p => !(e?.primaryKey ?? []).includes(p.name) && !p.autoIncrement && p.name !== 'id' && !p.name.endsWith('Id'))
+	const plain = plainOf(entity)
+	const number = plain.find(p => NUMBERS.includes(p.type ?? ''))
+	const isText = (p: { type?: string, enum?: string }) => (p.type ?? 'string') === 'string' && !p.enum
+	let text: string | undefined
+	for (const relation of entity.relations ?? []) {
+		if (toMany(relation)) continue
+		const other = plainOf(entityOf(domain, relation.entity)).find(isText)
+		if (other) { text = `p.${relation.name}.${other.name} == ${other.name}`; break }
+	}
+	const own = plain.find(isText)
+	text ??= own ? `p.${own.name} == ${own.name}` : undefined
+	const parts = [number ? `p.${number.name} > 10` : undefined, text].filter(Boolean)
+	return parts.length ? parts.join(' && ') : `p.${properties[0].name} == ${properties[0].name}`
+}
+
 /** The tables of the wizard as a tree from the root: each one with its relation */
 const childrenOf = (state: WizardState, entity: string): WizardTable[] => state.tables.filter(t => t.from === entity)
 

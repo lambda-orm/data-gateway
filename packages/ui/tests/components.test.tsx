@@ -200,6 +200,13 @@ describe('copy', () => {
 	})
 })
 
+describe('ResultViewer in another language', () => {
+	test('its tabs are translated, but json and yaml (names of formats)', () => {
+		render(<ResultViewer result={measure('execute', [{ id: 1 }], 1)} locale="es" />)
+		expect(screen.getAllByRole('tab').map(t => t.textContent)).toEqual(['árbol', 'tabla', 'json', 'yaml'])
+	})
+})
+
 describe('who calls, with its view', () => {
 	test('the workbench says the view of the credential (gateway 4.1.0)', async () => {
 		const { QueryWorkbench } = await import('../src/components/QueryWorkbench')

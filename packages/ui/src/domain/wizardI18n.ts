@@ -30,7 +30,7 @@ export interface WizardMessages {
 const en: WizardMessages = {
 	wizard: 'wizard', title: 'Query wizard', startFrom: 'start from',
 	tablesHint: 'Choose the fields of each table (the check of its title: all of them); + on a table adds its related ones, × takes it out.',
-	filter: 'filter', filterHint: 'on p, the {entity} the query starts from: p.price > 10 && p.category.name == name; empty, no filter',
+	filter: 'filter', filterHint: 'on p, the {entity} the query starts from: {example}; empty, no filter',
 	sort: 'order', addSort: 'add an order', ascending: 'ascending', descending: 'descending', sortHint: 'by the columns of the result; empty, no order', removeSort: 'remove the order',
 	page: 'page', pageNumber: 'page', pageSize: 'rows per page', pageHint: 'whole numbers; without rows per page, every row',
 	query: 'the query', cancel: 'cancel', create: 'create the query', update: 'update the query',
@@ -44,7 +44,7 @@ const MESSAGES: Record<Locale, WizardMessages> = {
 	es: {
 		wizard: 'asistente', title: 'Asistente de consultas', startFrom: 'partir de',
 		tablesHint: 'Elegí los campos de cada tabla (el check de su título: todos); el + de una tabla agrega sus relacionadas, la × la saca.',
-		filter: 'filtro', filterHint: 'sobre p, la {entity} de la que parte la consulta: p.price > 10 && p.category.name == name; vacío, sin filtro',
+		filter: 'filtro', filterHint: 'sobre p, la {entity} de la que parte la consulta: {example}; vacío, sin filtro',
 		sort: 'orden', addSort: 'agregar un orden', ascending: 'ascendente', descending: 'descendente', sortHint: 'por las columnas del resultado; vacío, sin orden', removeSort: 'quitar el orden',
 		page: 'página', pageNumber: 'página', pageSize: 'filas por página', pageHint: 'enteros; sin filas por página, todas las filas',
 		query: 'la consulta', cancel: 'cancelar', create: 'crear la consulta', update: 'actualizar la consulta',
@@ -55,7 +55,7 @@ const MESSAGES: Record<Locale, WizardMessages> = {
 	pt: {
 		wizard: 'assistente', title: 'Assistente de consultas', startFrom: 'partir de',
 		tablesHint: 'Escolha os campos de cada tabela (o check do título: todos); o + de uma tabela adiciona as relacionadas, o × a remove.',
-		filter: 'filtro', filterHint: 'sobre p, a {entity} de onde a consulta parte: p.price > 10 && p.category.name == name; vazio, sem filtro',
+		filter: 'filtro', filterHint: 'sobre p, a {entity} de onde a consulta parte: {example}; vazio, sem filtro',
 		sort: 'ordem', addSort: 'adicionar uma ordem', ascending: 'crescente', descending: 'decrescente', sortHint: 'pelas colunas do resultado; vazio, sem ordem', removeSort: 'remover a ordem',
 		page: 'página', pageNumber: 'página', pageSize: 'linhas por página', pageHint: 'inteiros; sem linhas por página, todas as linhas',
 		query: 'a consulta', cancel: 'cancelar', create: 'criar a consulta', update: 'atualizar a consulta',
@@ -66,7 +66,7 @@ const MESSAGES: Record<Locale, WizardMessages> = {
 	fr: {
 		wizard: 'assistant', title: 'Assistant de requêtes', startFrom: 'partir de',
 		tablesHint: 'Choisissez les champs de chaque table (la case de son titre : tous) ; le + d’une table ajoute ses tables liées, le × la retire.',
-		filter: 'filtre', filterHint: 'sur p, la {entity} d’où part la requête : p.price > 10 && p.category.name == name ; vide, sans filtre',
+		filter: 'filtre', filterHint: 'sur p, la {entity} d’où part la requête : {example} ; vide, sans filtre',
 		sort: 'ordre', addSort: 'ajouter un ordre', ascending: 'croissant', descending: 'décroissant', sortHint: 'par les colonnes du résultat ; vide, sans ordre', removeSort: 'retirer l’ordre',
 		page: 'page', pageNumber: 'page', pageSize: 'lignes par page', pageHint: 'des entiers ; sans lignes par page, toutes les lignes',
 		query: 'la requête', cancel: 'annuler', create: 'créer la requête', update: 'mettre à jour la requête',
@@ -77,7 +77,7 @@ const MESSAGES: Record<Locale, WizardMessages> = {
 	it: {
 		wizard: 'procedura guidata', title: 'Procedura guidata delle query', startFrom: 'partire da',
 		tablesHint: 'Scegli i campi di ogni tabella (la casella del titolo: tutti); il + di una tabella aggiunge le correlate, la × la toglie.',
-		filter: 'filtro', filterHint: 'su p, la {entity} da cui parte la query: p.price > 10 && p.category.name == name; vuoto, nessun filtro',
+		filter: 'filtro', filterHint: 'su p, la {entity} da cui parte la query: {example}; vuoto, nessun filtro',
 		sort: 'ordine', addSort: 'aggiungi un ordine', ascending: 'crescente', descending: 'decrescente', sortHint: 'per le colonne del risultato; vuoto, nessun ordine', removeSort: 'togli l’ordine',
 		page: 'pagina', pageNumber: 'pagina', pageSize: 'righe per pagina', pageHint: 'interi; senza righe per pagina, tutte le righe',
 		query: 'la query', cancel: 'annulla', create: 'crea la query', update: 'aggiorna la query',
@@ -88,7 +88,7 @@ const MESSAGES: Record<Locale, WizardMessages> = {
 	de: {
 		wizard: 'Assistent', title: 'Abfrage-Assistent', startFrom: 'ausgehend von',
 		tablesHint: 'Wähle die Felder jeder Tabelle (das Häkchen im Titel: alle); das + einer Tabelle fügt ihre verwandten hinzu, das × entfernt sie.',
-		filter: 'Filter', filterHint: 'auf p, die {entity}, von der die Abfrage ausgeht: p.price > 10 && p.category.name == name; leer, kein Filter',
+		filter: 'Filter', filterHint: 'auf p, die {entity}, von der die Abfrage ausgeht: {example}; leer, kein Filter',
 		sort: 'Reihenfolge', addSort: 'Reihenfolge hinzufügen', ascending: 'aufsteigend', descending: 'absteigend', sortHint: 'nach den Spalten des Ergebnisses; leer, keine Reihenfolge', removeSort: 'Reihenfolge entfernen',
 		page: 'Seite', pageNumber: 'Seite', pageSize: 'Zeilen pro Seite', pageHint: 'ganze Zahlen; ohne Zeilen pro Seite alle Zeilen',
 		query: 'die Abfrage', cancel: 'abbrechen', create: 'Abfrage erstellen', update: 'Abfrage aktualisieren',
@@ -99,7 +99,7 @@ const MESSAGES: Record<Locale, WizardMessages> = {
 	nl: {
 		wizard: 'wizard', title: 'Querywizard', startFrom: 'vertrekken van',
 		tablesHint: 'Kies de velden van elke tabel (het vinkje in de titel: allemaal); de + van een tabel voegt de gerelateerde toe, de × haalt hem weg.',
-		filter: 'filter', filterHint: 'op p, de {entity} waar de query van vertrekt: p.price > 10 && p.category.name == name; leeg, geen filter',
+		filter: 'filter', filterHint: 'op p, de {entity} waar de query van vertrekt: {example}; leeg, geen filter',
 		sort: 'volgorde', addSort: 'een volgorde toevoegen', ascending: 'oplopend', descending: 'aflopend', sortHint: 'op de kolommen van het resultaat; leeg, geen volgorde', removeSort: 'de volgorde verwijderen',
 		page: 'pagina', pageNumber: 'pagina', pageSize: 'rijen per pagina', pageHint: 'gehele getallen; zonder rijen per pagina, alle rijen',
 		query: 'de query', cancel: 'annuleren', create: 'de query maken', update: 'de query bijwerken',
@@ -110,7 +110,7 @@ const MESSAGES: Record<Locale, WizardMessages> = {
 	ca: {
 		wizard: 'assistent', title: 'Assistent de consultes', startFrom: 'partir de',
 		tablesHint: 'Tria els camps de cada taula (la casella del títol: tots); el + d’una taula afegeix les relacionades, la × la treu.',
-		filter: 'filtre', filterHint: 'sobre p, la {entity} de la qual parteix la consulta: p.price > 10 && p.category.name == name; buit, sense filtre',
+		filter: 'filtre', filterHint: 'sobre p, la {entity} de la qual parteix la consulta: {example}; buit, sense filtre',
 		sort: 'ordre', addSort: 'afegir un ordre', ascending: 'ascendent', descending: 'descendent', sortHint: 'per les columnes del resultat; buit, sense ordre', removeSort: 'treure l’ordre',
 		page: 'pàgina', pageNumber: 'pàgina', pageSize: 'files per pàgina', pageHint: 'enters; sense files per pàgina, totes les files',
 		query: 'la consulta', cancel: 'cancel·lar', create: 'crear la consulta', update: 'actualitzar la consulta',
@@ -121,7 +121,7 @@ const MESSAGES: Record<Locale, WizardMessages> = {
 	gl: {
 		wizard: 'asistente', title: 'Asistente de consultas', startFrom: 'partir de',
 		tablesHint: 'Escolle os campos de cada táboa (a caixa do título: todos); o + dunha táboa engade as relacionadas, a × quítaa.',
-		filter: 'filtro', filterHint: 'sobre p, a {entity} da que parte a consulta: p.price > 10 && p.category.name == name; baleiro, sen filtro',
+		filter: 'filtro', filterHint: 'sobre p, a {entity} da que parte a consulta: {example}; baleiro, sen filtro',
 		sort: 'orde', addSort: 'engadir unha orde', ascending: 'ascendente', descending: 'descendente', sortHint: 'polas columnas do resultado; baleiro, sen orde', removeSort: 'quitar a orde',
 		page: 'páxina', pageNumber: 'páxina', pageSize: 'filas por páxina', pageHint: 'enteiros; sen filas por páxina, todas as filas',
 		query: 'a consulta', cancel: 'cancelar', create: 'crear a consulta', update: 'actualizar a consulta',
@@ -132,7 +132,7 @@ const MESSAGES: Record<Locale, WizardMessages> = {
 	eu: {
 		wizard: 'morroia', title: 'Kontsulten morroia', startFrom: 'abiapuntua',
 		tablesHint: 'Aukeratu taula bakoitzaren eremuak (izenburuko laukia: denak); taula baten +-ak erlazionatuak gehitzen ditu, ×-ak kentzen du.',
-		filter: 'iragazkia', filterHint: 'p-ren gainean, kontsultaren abiapuntuko {entity}: p.price > 10 && p.category.name == name; hutsik, iragazkirik gabe',
+		filter: 'iragazkia', filterHint: 'p-ren gainean, kontsultaren abiapuntuko {entity}: {example}; hutsik, iragazkirik gabe',
 		sort: 'ordena', addSort: 'gehitu ordena bat', ascending: 'gorakorra', descending: 'beherakorra', sortHint: 'emaitzaren zutabeen arabera; hutsik, ordenarik gabe', removeSort: 'kendu ordena',
 		page: 'orria', pageNumber: 'orria', pageSize: 'errenkadak orriko', pageHint: 'zenbaki osoak; orriko errenkadarik gabe, errenkada guztiak',
 		query: 'kontsulta', cancel: 'utzi', create: 'sortu kontsulta', update: 'eguneratu kontsulta',

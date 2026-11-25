@@ -136,7 +136,7 @@ export const ResultViewer: React.FC<ResultViewerProps> = ({ result, maxRows = 20
 			{meta}
 			<div className="lw-toolbar" role="tablist">
 				{(['tree', 'table', 'json', 'yaml'] as View[]).filter(v => v !== 'table' || table).map(v => (
-					<button key={v} role="tab" aria-selected={view === v} className={view === v ? 'lw-active' : ''} onClick={() => setView(v)}>{v}</button>
+					<button key={v} role="tab" aria-selected={view === v} className={view === v ? 'lw-active' : ''} onClick={() => setView(v)}>{v === 'tree' ? m.viewTree : v === 'table' ? m.viewTable : v}</button>
 				))}
 				<span className="lw-spacer" />
 				<button className="lw-icon" aria-label={copied ? m.copied : m.copy} title={copied ? m.copied : m.copy}

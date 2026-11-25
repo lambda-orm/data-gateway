@@ -271,7 +271,8 @@ describe('Workspace', () => {
 		fireEvent.click(within(panel()).getByRole('tab', { name: 'Relaciones (1)' }))
 		fireEvent.click(within(panel()).getByRole('button', { name: 'Customers' }))
 		await waitFor(() => expect(within(panel()).getByRole('heading', { name: 'Customers' })).toBeTruthy())
-		expect(within(panel()).getByRole('tab', { name: 'Relaciones (1)' })).toBeTruthy()
+		// its own relations, as the explorer counts them (Orders refers to it: that is under Referenced by)
+		expect(within(panel()).getByRole('tab', { name: 'Relaciones (0)' })).toBeTruthy()
 		fireEvent.click(within(panel()).getByRole('button', { name: 'Consultar' }))
 		await waitFor(() => expect((within(panel()).getByRole('textbox', { name: 'query' }) as HTMLTextAreaElement).value).toBe('Customers.page(1, 10)'))
 

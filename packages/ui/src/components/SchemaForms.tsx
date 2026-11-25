@@ -59,6 +59,12 @@ const Variables: React.FC<{ admin: AdminApiPort, schema: string, canAdmin: boole
 			<p className="lw-type">{m.variablesNote}</p>
 			{error && <div className="lw-notice" role="alert">{error}</div>}
 			<table className="lw-table lw-form-rows" aria-label={m.variables}>
+				<thead>
+					<tr>
+						<th>{m.varName}</th><th>{m.varState}</th><th>{m.varUsedIn}</th>
+						{canAdmin && <><th>{m.varValue}</th><th /></>}
+					</tr>
+				</thead>
 				<tbody>
 					{rows.map(v => (
 						<tr key={v.name}>
@@ -422,21 +428,26 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, theme, schema, 
 					{isNew && text('name')}
 					{select('extends', names.entities.filter(n => n !== draft.name))}
 					<div className="lw-form-inline">{check('abstract')}{check('view')}</div>
-					{text('primaryKey', { fields: true })}
-					{text('uniqueKey', { fields: true })}
 					{(() => {
 						const count = (key: string) => Array.isArray(draft?.[key]) ? draft[key].length : 0
-						const tabs: [EntityTab, string][] = [['properties', e.properties], ['relations', e.relations], ['indexes', e.indexes], ['constraints', e.constraints]]
+						// as the view of the entity: its keys and its indexes in one tab, which counts nothing (as there)
+						const tabs: [EntityTab, string][] = [['properties', e.properties], ['relations', e.relations], ['indexes', e.keysIndexes], ['constraints', e.constraints]]
 						return (
 							<>
 								<div className="lw-toolbar lw-entity-tabs" role="tablist" aria-label={draft.name ?? ''}>
 									{tabs.map(([key, label]) => (
-										<button key={key} type="button" role="tab" aria-selected={entityTab === key} className={entityTab === key ? 'lw-active' : ''} onClick={() => setEntityTab(key)}>{label} ({count(key)})</button>
+										<button key={key} type="button" role="tab" aria-selected={entityTab === key} className={entityTab === key ? 'lw-active' : ''} onClick={() => setEntityTab(key)}>{label}{key === 'indexes' ? '' : ` (${count(key)})`}</button>
 									))}
 								</div>
 								{entityTab === 'properties' && rows('properties', [{ key: 'name' }, { key: 'type', kind: 'select', options: TYPES, placeholder: 'string' }, { key: 'length', kind: 'number' }, { key: 'required', kind: 'check' }, { key: 'autoIncrement', kind: 'check' }, { key: 'default' }, { key: 'enum', kind: 'select', options: names.enums }, { key: 'expressions', kind: 'expressions', keys: PROPERTY_EXPRESSIONS }], propertyExpressions, false)}
 								{entityTab === 'relations' && rows('relations', [{ key: 'name' }, { key: 'type', kind: 'select', options: RELATION_TYPES, placeholder: 'oneToMany' }, { key: 'from', kind: 'fields' }, { key: 'entity', kind: 'select', options: names.entities }, { key: 'to', kind: 'fields' }, { key: 'target' }, { key: 'weak', kind: 'check' }], undefined, false)}
-								{entityTab === 'indexes' && rows('indexes', [{ key: 'name' }, { key: 'fields', kind: 'fields' }], undefined, false)}
+								{entityTab === 'indexes' && (
+									<>
+										{text('primaryKey', { fields: true })}
+										{text('uniqueKey', { fields: true })}
+										{rows('indexes', [{ key: 'name' }, { key: 'fields', kind: 'fields' }], undefined, false)}
+									</>
+								)}
 								{entityTab === 'constraints' && rows('constraints', [{ key: 'message' }, { key: 'condition', kind: 'expressions', keys: ['condition'] }], constraintCondition, false)}
 							</>
 						)

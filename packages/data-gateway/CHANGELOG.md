@@ -68,6 +68,13 @@ Needs `@lambdaorm/base` 3.11.1 and `@lambdaorm/lib` 3.15.0.
   preview lists the files.
 - The observability of a schema without its own goes through `orm.observeWith`.
 
+**Fixes** (seen reviewing the wiki):
+
+- `GET /transports` gives `schemaPath: "/{schema}/mcp"` for `mcpWebSocket`, where its upgrade is (it said `/{schema}`).
+- The OpenAPI document lists every route open without a credential (also `/version`, `/transports` and the
+  documentation), and `/version` is marked open as the gateway serves it.
+- The Northwind data of the configuration keeps its letters (`München`, `Köln`, `México D.F.`).
+
 **Features** (`DATA_GATEWAY.md` §8.2):
 
 - **OpenTelemetry:** the section `observability` of `data-gateway.config.yaml` (the shape of the one of a

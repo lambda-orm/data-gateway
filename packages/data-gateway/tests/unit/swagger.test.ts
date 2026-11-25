@@ -9,7 +9,7 @@ describe('swagger.yaml', () => {
 	test('parses, declares the bearer token and leaves the health routes open', () => {
 		expect(swagger.openapi).toBe('3.0.0')
 		expect(swagger.components.securitySchemes.bearerAuth).toEqual(expect.objectContaining({ type: 'http', scheme: 'bearer' }))
-		for (const route of ['/ping', '/health', '/metrics']) {
+		for (const route of ['/ping', '/health', '/version', '/metrics']) {
 			expect(swagger.paths[route].get.security).toEqual([])
 		}
 		expect(swagger.paths['/script']).toBeDefined()
@@ -49,5 +49,18 @@ describe('the security of the document, as the schemas are configured', () => {
 	})
 	test('no authentication: nothing to authorize', () => {
 		expect(withSecurity(doc, [{ type: 'none' }])).toMatchObject({ components: { securitySchemes: {} }, security: [{}] })
+	})
+})
+
+describe('GET /transports', () => {
+	test('where each transport reaches a schema: the upgrade of MCP over WebSocket is at /{schema}/mcp', () => {
+		const { transportsOf } = require('../../src/lib/infrastructure/build/registries')
+		const transports = transportsOf({
+			http: { port: 1, basePath: '', swagger: { enabled: true } },
+			webSocket: { port: 2, basePath: '', asyncapi: { enabled: false } },
+			mcpHttp: { port: 3, basePath: '' },
+			mcpWebSocket: { port: 4, basePath: '', asyncapi: { enabled: false } }
+		})
+		expect(Object.fromEntries(transports.map((t: any) => [t.name, t.schemaPath]))).toEqual({ http: undefined, webSocket: '/{schema}', mcpHttp: '/{schema}/mcp', mcpWebSocket: '/{schema}/mcp' })
 	})
 })
