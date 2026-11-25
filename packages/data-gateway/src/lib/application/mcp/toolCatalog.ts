@@ -14,9 +14,13 @@ export interface ToolFilter {
 export class ToolCatalog {
 	private readonly tools: Tool[]
 
-	constructor (tools: Tool[], filter: ToolFilter = { include: [], exclude: [] }) {
-		this.tools = tools.filter(tool =>
-			(filter.include.length === 0 || filter.include.includes(tool.name)) && !filter.exclude.includes(tool.name))
+	constructor (tools: Tool[], private readonly filter: ToolFilter = { include: [], exclude: [] }) {
+		this.tools = tools.filter(tool => this.allows(tool.name))
+	}
+
+	/** mcp.tools.include / exclude: also for the tools that come later (the named queries) */
+	public allows (name: string): boolean {
+		return (this.filter.include.length === 0 || this.filter.include.includes(name)) && !this.filter.exclude.includes(name)
 	}
 
 	public get names (): string[] {

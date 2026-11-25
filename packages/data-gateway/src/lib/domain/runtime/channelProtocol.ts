@@ -65,7 +65,7 @@ export type ChannelMessage = ChannelRequest | ChannelResponse | ChannelEvent
 /** Operations a schema worker answers: anything else is refused (the channel is not an eval) */
 export const GATEWAY_OPERATIONS = [
 	'version', 'health', 'ping', 'plan', 'metadata', 'model', 'parameters', 'constraints', 'execute', 'executeScript',
-	'executeQueued', 'schema', 'schemaVersion', 'domain', 'sources', 'source', 'entities', 'entity', 'enums', 'enum',
+	'executeQueued', 'queries', 'query', 'schema', 'schemaVersion', 'domain', 'sources', 'source', 'entities', 'entity', 'enums', 'enum',
 	'mappings', 'mapping', 'entityMapping', 'stages', 'stage', 'views', 'typings', 'search', 'describe', 'stageExists', 'stageExport', 'stageImport'
 ] as const
 

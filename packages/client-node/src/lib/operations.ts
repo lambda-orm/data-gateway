@@ -7,6 +7,7 @@ export type Operation =
 	| 'schema' | 'schemaVersion' | 'domain' | 'entities' | 'entity' | 'search' | 'describe' | 'enums' | 'enum' | 'sources' | 'source'
 	| 'mappings' | 'mapping' | 'entityMapping' | 'stages' | 'stage' | 'views'
 	| 'stageExists' | 'stageExport' | 'stageImport' | 'version' | 'health' | 'whoami'
+	| 'queries' | 'query'
 
 export type Args = Record<string, any>
 type Route<T> = (args: Args) => T
@@ -46,7 +47,9 @@ export const REST: Partial<Record<Operation, Route<[string, string, unknown?]>>>
 	stageImport: a => ['POST', `/stages/${enc(a.stage)}/import`, a.data],
 	version: () => ['GET', '/version'],
 	health: () => ['GET', '/health'],
-	whoami: () => ['GET', '/whoami']
+	whoami: () => ['GET', '/whoami'],
+	queries: () => ['GET', '/queries'],
+	query: a => ['POST', `/queries/${enc(a.name)}`, { data: a.data ?? {}, options: a.options }]
 }
 
 /** [method, params] */
@@ -80,7 +83,9 @@ export const RPC: Partial<Record<Operation, Route<[string, Args]>>> = {
 	stageExport: a => ['stage.export', { stage: a.stage }],
 	stageImport: a => ['stage.import', { stage: a.stage, data: a.data }],
 	version: () => ['general.version', {}],
-	health: () => ['general.health', {}]
+	health: () => ['general.health', {}],
+	queries: () => ['queries.list', {}],
+	query: a => ['queries.execute', { name: a.name, data: a.data ?? {}, options: a.options }]
 }
 
 /** [tool, arguments] */
@@ -114,12 +119,15 @@ export const MCP: Partial<Record<Operation, Route<[string, Args]>>> = {
 	stageExport: a => ['stage_export', { stage: a.stage }],
 	stageImport: a => ['stage_import', { stage: a.stage, data: a.data }],
 	version: () => ['gateway_version', {}],
-	health: () => ['gateway_health', {}]
+	health: () => ['gateway_health', {}],
+	// a named query is the tool query_<name>, its parameters as its arguments
+	query: a => [`query_${a.name}`, a.data ?? {}]
 }
 
 /** where an operation that a transport doesn't have can be found */
 export const WHERE: Partial<Record<Operation, string>> = {
-	whoami: 'use an http(s):// connection'
+	whoami: 'use an http(s):// connection',
+	queries: 'use an http(s):// or ws(s):// connection (on MCP they are the tools query_<name> of tools/list)'
 }
 
 /** drops what is undefined (options not given), as JSON would */

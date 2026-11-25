@@ -1,7 +1,7 @@
 import {
 	Actor,
 	DomainSchema, Entity, EntityMapping, Enum, Mapping, Metadata, MetadataConstraint, MetadataModel, MetadataParameter,
-	QueryOptions, QueryPlan, SchemaData, ScriptOptions, Stage
+	NamedQuery, QueryOptions, QueryPlan, SchemaData, ScriptOptions, Stage
 } from '@lambdaorm/base'
 
 /** Queries of one schema: what λORM answers about a query, and its execution. */
@@ -13,6 +13,8 @@ export interface OrmQueryPort {
 	model (query: string, options?: QueryOptions): Promise<MetadataModel[]>
 	parameters (query: string, options?: QueryOptions): Promise<MetadataParameter[]>
 	constraints (query: string, options?: QueryOptions): Promise<MetadataConstraint>
+	/** the queries of the application with a name (application.queries), compiled when the schema loaded */
+	namedQueries (): NamedQuery[]
 }
 
 /** Several queries in one transaction: a 3xpr script calling orm.execute. */

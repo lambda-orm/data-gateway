@@ -1,4 +1,5 @@
-import { timeout } from '../../domain/errors/gatewayError'
+import { notFound, timeout } from '../../domain/errors/gatewayError'
+import { NamedQueryRequest, NamedQueryUseCases } from '../usecases/namedQueryUseCases'
 import {
 	DataGatewayPort, ExecuteRequest, QueryRequest, QueuedRequest, RequestContext, ScriptRequest
 } from '../ports/input/dataGatewayPort'
@@ -15,6 +16,8 @@ export interface DataGatewayUseCases {
 	queue: QueueUseCase
 	schema: SchemaUseCases
 	stages: StageUseCases
+	/** application.queries; without it, none */
+	named?: NamedQueryUseCases
 }
 
 /**
@@ -57,6 +60,12 @@ export class DataGateway implements DataGatewayPort {
 	public execute (ctx: RequestContext, request: ExecuteRequest) { return this.limit(() => this.useCases.queries.execute(ctx, request)) }
 	public executeScript (ctx: RequestContext, request: ScriptRequest) { return this.limit(() => this.useCases.script.execute(ctx, request)) }
 	public executeQueued (ctx: RequestContext, request: QueuedRequest) { return this.limit(() => this.useCases.queue.execute(ctx, request)) }
+	public async queries (ctx: RequestContext) { return this.useCases.named ? this.useCases.named.list(ctx) : [] }
+	public query (ctx: RequestContext, name: string, request: NamedQueryRequest) {
+		const named = this.useCases.named
+		if (!named) return Promise.reject(notFound(`query ${name} not found (the schema has no application.queries)`))
+		return this.limit(() => named.execute(ctx, name, request ?? {}))
+	}
 
 	public schema (ctx: RequestContext) { return this.useCases.schema.schema(ctx) }
 	public schemaVersion (ctx: RequestContext) { return this.useCases.schema.version(ctx) }

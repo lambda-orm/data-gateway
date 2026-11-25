@@ -41,7 +41,9 @@ const REST = {
 	stageExists: a => ['GET', `/stages/${encodeURIComponent(a.stage)}/exists`],
 	stageExport: a => ['GET', `/stages/${encodeURIComponent(a.stage)}/export`],
 	version: () => ['GET', '/version'],
-	health: () => ['GET', '/health']
+	health: () => ['GET', '/health'],
+	queries: () => ['GET', '/queries'],
+	query: a => ['POST', `/queries/${encodeURIComponent(a.name)}`, { data: a.data ?? {}, options: a.options }]
 }
 
 /** operation → [method, params] of the JSON-RPC API (webSocket) */
@@ -71,7 +73,9 @@ const RPC = {
 	stageExists: a => ['stage.exists', { stage: a.stage }],
 	stageExport: a => ['stage.export', { stage: a.stage }],
 	version: () => ['general.version', {}],
-	health: () => ['general.health', {}]
+	health: () => ['general.health', {}],
+	queries: () => ['queries.list', {}],
+	query: a => ['queries.execute', { name: a.name, data: a.data ?? {}, options: a.options }]
 }
 
 /** operation → [tool, arguments] of the MCP server of the schema */
@@ -101,7 +105,9 @@ const MCP = {
 	stageExists: a => ['stage_exists', { stage: a.stage }],
 	stageExport: a => ['stage_export', { stage: a.stage }],
 	version: () => ['gateway_version', {}],
-	health: () => ['gateway_health', {}]
+	health: () => ['gateway_health', {}],
+	// a named query is the tool query_<name> (MCP has no list of them: they are in tools/list)
+	query: a => [`query_${a.name}`, a.data ?? {}]
 }
 
 const clean = (value) => JSON.parse(JSON.stringify(value)) // drops undefined (options not given)

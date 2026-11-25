@@ -62,7 +62,8 @@ credential:
 
 **Operations** (the common API of the clients, `docs/DATA_GATEWAY_CLIENTS_PLAN.md` §3), with their arguments:
 `execute` (`query`, `data`, `options`), `executeScript` (`script`, `data`, `options`), `plan` (`query`, `options`),
-`metadata`, `model`, `parameters`, `constraints` (`query`), `schemaVersion`, `domain`, `entities`, `entity`
+`metadata`, `model`, `parameters`, `constraints` (`query`), `queries`, `query` (`name`, `data`, `options`: a query of
+`application.queries`; on MCP the tool `query_<name>`, which has no list), `schemaVersion`, `domain`, `entities`, `entity`
 (`entity`), `enums`, `enum` (`enum`), `sources`, `source` (`source`), `mappings`, `mapping` (`mapping`), `stages`,
 `stage` (`stage`), `views`, `stageExists` (`stage`), `stageExport` (`stage`), `version`, `health`.
 

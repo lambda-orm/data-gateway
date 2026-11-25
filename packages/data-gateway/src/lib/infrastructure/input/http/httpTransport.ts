@@ -334,6 +334,9 @@ export class HttpTransport implements Transport {
 		router.post('/parameters', this.handle((req, ctx) => gw.parameters(ctx, body(req))))
 		router.post('/plan', this.handle((req, ctx) => gw.plan(ctx, body(req))))
 		router.post('/execute', this.handle((req, ctx) => gw.execute(ctx, body(req))))
+		// the queries of application.queries, by their name (docs/NAMED_QUERIES.md)
+		router.get('/queries', this.handle((_req, ctx) => gw.queries(ctx)))
+		router.post('/queries/:name', this.handle((req, ctx) => gw.query(ctx, String(req.params.name), { data: body(req).data, options: body(req).options })))
 		router.post('/script', this.handle((req, ctx) => gw.executeScript(ctx, body(req))))
 		// answers the id of the execution as a string, like the former service
 		router.post('/execute-queued', this.handle(async (req, ctx) => (await gw.executeQueued(ctx, body(req))).queueId))

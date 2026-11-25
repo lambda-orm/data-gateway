@@ -30,6 +30,9 @@ export class RpcDispatcher {
 		this.register('query.execute', (gw, ctx, p) => gw.execute(ctx, { query: p.query, data: p.data, options: p.options }))
 		this.register('query.executeQueued', (gw, ctx, p) => gw.executeQueued(ctx, { topic: p.topic, query: p.query, data: p.data, chunk: p.chunk, options: p.options, notify: p.notify }))
 		this.register('query.script', (gw, ctx, p) => gw.executeScript(ctx, { script: p.script, data: p.data, options: p.options }))
+		// the queries of application.queries (docs/NAMED_QUERIES.md)
+		this.register('queries.list', (gw, ctx) => gw.queries(ctx))
+		this.register('queries.execute', (gw, ctx, p) => gw.query(ctx, text(p, 'name'), { data: p.data, options: p.options }))
 		for (const name of ['plan', 'metadata', 'model', 'parameters', 'constraints'] as const) {
 			this.register(`query.${name}`, (gw, ctx, p) => (gw[name] as any).call(gw, ctx, { query: p.query, options: p.options }))
 		}
