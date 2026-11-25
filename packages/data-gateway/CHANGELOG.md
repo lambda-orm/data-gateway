@@ -4,6 +4,106 @@ All notable changes to this project will be documented in this file.
 
 ## Versions
 
+### Unreleased
+
+### 4.1.0 (2026-11-25)
+
+With `@lambdaorm/base` 3.11.1 and `@lambdaorm/lib` 3.15.0, the exact versions the image installs.
+
+**Named queries** (`docs/NAMED_QUERIES.md`, G7):
+
+- **The queries of `application.queries`** of the schema are served by their name: `GET /queries` (name, description,
+  parameters and model; never their text) and `POST /queries/{name}` (`{ data, options }`); `queries.list` and
+  `queries.execute` by WebSocket; and an MCP tool each, `query_<name>`, with its parameters typed and its result
+  described. In the view of who calls (one that uses what its view excludes is not listed); run as `execute` (its
+  permissions; the audit says its `name`).
+- **`mcp.freeQueries: false`** (global or by schema): an agent without `orm_execute`, `orm_execute_script`,
+  `orm_execute_queued` nor `orm_plan`, only the named queries and the tools of the schema. `mcp.tools.include` and
+  `exclude` take `query_<name>`.
+- **Limits by query:** `orm.schemas[].queries: { <name>: { maxRows, timeout } }`; more rows is 422
+  (`TooManyRowsError`), longer is 504.
+
+**The view by identity** (`docs/VIEWS_BY_IDENTITY.md`, G2):
+
+- **The gateway chooses the view of λORM of each request:** of the key (`keys[].view`), of the role of the token
+  (`roles: { support: { permissions: [read], view: support } }`), else of the schema (`orm.schemas[].view`), else
+  none (the domain). The client's is still dropped.
+- **Everything is in that view:** the queries (masked, without what it excludes, their rows filtered with the context
+  of the token), their `metadata`, `model`, `parameters` and `constraints`, the domain (`/schema`, `/domain`,
+  `/entities`, `/typings`, the search), the entities of the mappings, the views listed, the descriptions and resources
+  of MCP, and `/whoami` (`view`).
+- **Never guessed:** a token whose roles give two views is 403; a view the schema doesn't have is said when it loads
+  and its requests are 403; a credential with a view and `stageImport` or `ddl` is warned (the commands of stage see the
+  whole schema).
+
+**JWT / OIDC** (`docs/JWT.md`, G1):
+
+- **`authentication.adapter: jwt`:** the tokens of an identity provider, checked with its keys (its JWKS, discovered
+  from `issuer` when `jwksUri` is not given, cached; a token of a new `kid` reads it again) or a shared `secret` (HS256,
+  for development); `issuer`, `audience`, `algorithms` (never `none`), `clockTolerance`.
+- **Who it is, from its claims:** `principal.name` (default `sub`), the permissions of its roles
+  (`principal.permissions.claim` and `roles`: role → permissions; a role must list them), and `context` (variable →
+  claim), the context of λORM of its requests: it reaches the row filters of the views, the defaults and the
+  conditions; one sent by the client is still dropped.
+- **`authentication.methods`:** several in order (a JWT for the users, the API keys of the services); the first that
+  recognizes the credential decides.
+- **A refused token says why:** 401 with `the token is not valid: expired` (`issuer`, `audience`, `signature`,
+  `algorithm`, `unknown key`…) and `WWW-Authenticate: Bearer error="invalid_token"`; an issuer that can't be reached,
+  503. The token is never written anywhere.
+- **Nothing outlives its token:** a session of `management` ends at its `exp`; a WebSocket or MCP WebSocket connection
+  is closed with 4401.
+- The image needs Node ≥ 22.12 (`jose` is ESM; the image runs 24).
+
+**λORM 3.15** (`docs/PENDINGS.md` R3):
+
+- **Its errors have their status:** `ContextError` 400 (a value of the context a filter needs), `ViewError` 403 (an
+  entity the view excludes, a write out of the filter of its view), `CrossSourceError` 422 (a query across sources too
+  big for memory), `DestructiveChangeError` 409; each with what a client can use of it in `details` (`variable` and
+  `where`, `view` and `entity`, `changes`).
+- **`push` says what can lose data:** its preview brings `destructive` (source, sentence and why: a narrower type, a
+  shorter length), and the command runs those only with `allowDestructive: true`; without it the job fails with
+  `DestructiveChangeError`.
+- **Migrations** (`infrastructure.migrations`): the command `migrations` lists the history of the stage (version,
+  source, applied or undone) and `migrate` goes back to a `version`: its preview shows the undo of each later migration
+  (and what of it can lose data), and it runs with `allowDestructive` when it has to.
+- **Seed** (`stages[].seed`): the command `seed` inserts the rows of its files that are not in the database yet; its
+  preview lists the files.
+- The observability of a schema without its own goes through `orm.observeWith`.
+
+**Fixes** (seen reviewing the wiki):
+
+- `GET /transports` gives `schemaPath: "/{schema}/mcp"` for `mcpWebSocket`, where its upgrade is (it said `/{schema}`).
+- The OpenAPI document lists every route open without a credential (also `/version`, `/transports` and the
+  documentation), and `/version` is marked open as the gateway serves it.
+- The Northwind data of the configuration keeps its letters (`München`, `Köln`, `México D.F.`).
+
+**Observability** (`DATA_GATEWAY.md` §8.2):
+
+- **OpenTelemetry:** the section `observability` of `data-gateway.config.yaml` (the shape of the one of a
+  `lambdaORM.yaml`; the `OTEL_*` variables override it) starts the SDK in the edge and in every schema worker, before
+  λORM, which uses it. A `SERVER` span per HTTP request (by its route template), WebSocket message and MCP call, child
+  of the caller's `traceparent`; the trace goes on in the worker and in λORM's spans.
+- **The actor** of each request (credential; session, IDE and IP on `management`) reaches λORM; one sent by a client
+  is replaced.
+- **λORM's metrics in `/metrics`**, with the names of the OpenTelemetry → Prometheus compatibility
+  (`db_client_operation_duration_seconds`…), and `http_server_request_duration_seconds` with the labels of the
+  conventions.
+- **The history of a schema:** every change of the administration is a `schema.change` with who, before, after and
+  the JSON Patch, in `logs/changes.jsonl` of the workspace and in OpenTelemetry; `GET
+  /admin/workspaces/{schema}/history`. `workspace.changed` says who and what. The audit also goes as an OpenTelemetry
+  LogRecord.
+- **The 412 of a form or of the YAML says who changed it:** `details.changedBy` (credential, client, time, kind,
+  target), from the history.
+
+**Security:**
+
+- **The client no longer chooses the view nor the context of λORM:** `options.view` and `options.context` are dropped
+  from what a client sends on every transport (REST, WebSocket, MCP, `script`, `execute-queued`) before reaching λORM,
+  and `plan` now takes the actor and goes through the same filter as `execute`. A client with `read` could ask for any
+  view (or none, the whole domain) and skip what a view hides or masks, and with λORM ≥ 3.10 send a context of another
+  tenant to the row filters of the views. The gateway takes them from the identity (JWT / OIDC and the view by
+  identity, above).
+
 ### 4.0.0 (2026-11-23)
 
 **Breaking changes** (`DATA_GATEWAY.md` §12):

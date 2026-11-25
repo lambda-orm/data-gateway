@@ -16,7 +16,7 @@ own application — the same one the [Data Gateway](https://lambda-orm.github.io
 - **diagrams** of the domain (class / entity-relationship), laid out by themselves and editable;
 - only the actions the **credential's permissions** allow; ten languages.
 
-![The UI](https://raw.githubusercontent.com/lambda-orm/wiki/main/docs/data-gateway/images/ui-query.png)
+![The UI](https://raw.githubusercontent.com/lambda-orm/wiki/main/docs/ide/images/ide-query.png)
 
 ## Install and mount
 
@@ -110,7 +110,7 @@ The autocompletion comes from `GET /{schema}/typings` of the gateway (the domain
 
 ## Documentation
 
-- [The UI in the λORM wiki](https://lambda-orm.github.io/wiki/data-gateway/Ui/), with screenshots, and how to put it in
+- [The IDE in the λORM wiki](https://lambda-orm.github.io/wiki/ide/), with screenshots, and how to put it in
   an application of your own
 - [Change log](CHANGELOG.md)
 

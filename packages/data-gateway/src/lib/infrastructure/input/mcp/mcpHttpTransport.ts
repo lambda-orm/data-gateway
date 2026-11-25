@@ -8,7 +8,7 @@ import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js'
 import { Server } from '@modelcontextprotocol/sdk/server/index.js'
 import { SchemaDirectoryPort, ServedSchema } from '../../../application/ports/input/schemaDirectoryPort'
 import { AuthenticatorPort, LoggerPort, MetricsPort } from '../../../application/ports/output/supportPorts'
-import { Principal } from '../../../domain/auth/principal'
+import { Principal, refusalOf, withActor } from '../../../domain/auth/principal'
 import { Transport } from '../transport'
 import { createSdkServer } from './sdkMcpServer'
 
@@ -173,10 +173,12 @@ export class McpHttpTransport implements Transport {
 		try {
 			const result = await authenticator.authenticate(req.headers)
 			if (!result.valid || !result.principal) {
-				rpcError(res, 401, -32001, result.reason ?? 'a valid credential is required')
+				const refusal = refusalOf(result)
+				if (refusal.challenge) res.setHeader('WWW-Authenticate', refusal.challenge)
+				rpcError(res, refusal.status, -32001, refusal.message)
 				return
 			}
-			res.locals.principal = result.principal
+			res.locals.principal = withActor(result.principal, { ip: req.socket.remoteAddress })
 			next()
 		} catch (error) {
 			next(error)

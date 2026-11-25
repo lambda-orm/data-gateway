@@ -30,6 +30,7 @@ node runner/index.mjs         # every case on every transport (--transport http,
 | `mcpWebSocket` | `mcp+ws://127.0.0.1:19082/northwind` |
 | `webSocket` (JSON-RPC) | `ws://127.0.0.1:19083/northwind` |
 | credentials (header `X-Api-Key`) | `conformance-reader-key` (`read`), `conformance-backend-key` (`read, write, script, queue, stageImport`) |
+| tokens (`Authorization: Bearer`, JWT HS256) | issuer `https://conformance.lambdaorm`, audience `data-gateway`, the roles `reader` and `backend` in the claim `roles` |
 
 The gateway has `mcp.maxRows: 50`, so a longer list is cut on MCP (the case of 77 products checks it).
 
@@ -50,7 +51,10 @@ credential:
 }
 ```
 
-- `credential`: `reader` (default) or `backend`.
+- `credential`: `reader` (default) or `backend` (API keys), or `jwtReader`, `jwtBackend`, `jwtExpired`, `jwtSales`: a
+  token of a user with that role (or already expired; `jwtSales` has the view `sales` and the claim `country:
+  Germany`), signed by the runner with the secret of the suite (HS256,
+  `data-gateway.config.yaml`); a client's runner takes them from `credentialOf` of `runner/index.mjs`.
 - `transports`: only on these (default: the five: `http`, `ws`, `mcp+http`, `mcp+sse`, `mcp+ws`).
 - A case of one step can leave out `steps` and have `operation`, `args`, `expect` (and `mcp`) itself.
 - In `args` and in the expectations, `"$0"`, `"$1"`… is the result of that step, and `$transport` (also inside a
@@ -58,7 +62,8 @@ credential:
 
 **Operations** (the common API of the clients, `docs/DATA_GATEWAY_CLIENTS_PLAN.md` §3), with their arguments:
 `execute` (`query`, `data`, `options`), `executeScript` (`script`, `data`, `options`), `plan` (`query`, `options`),
-`metadata`, `model`, `parameters`, `constraints` (`query`), `schemaVersion`, `domain`, `entities`, `entity`
+`metadata`, `model`, `parameters`, `constraints` (`query`), `queries`, `query` (`name`, `data`, `options`: a query of
+`application.queries`; on MCP the tool `query_<name>`, which has no list), `schemaVersion`, `domain`, `entities`, `entity`
 (`entity`), `enums`, `enum` (`enum`), `sources`, `source` (`source`), `mappings`, `mapping` (`mapping`), `stages`,
 `stage` (`stage`), `views`, `stageExists` (`stage`), `stageExport` (`stage`), `version`, `health`.
 

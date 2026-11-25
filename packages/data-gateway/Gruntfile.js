@@ -68,10 +68,14 @@ module.exports = function (grunt) {
 		const fs = require('fs')
 		const data = require('./package.json')
 		// workspace:* → the version of the package in this repo (npm can't install workspace:*) — L8
+		// the others → the version installed here, exact: the image runs what was tested (with ^ each build took the latest
+		// λORM in the range: the image of 4.0.0 was tested with lib 3.9 and installed 3.15)
 		for (const dep of Object.keys(data.dependencies || {})) {
 			if (String(data.dependencies[dep]).startsWith('workspace:')) {
 				const depPkg = require(path.join(repoRoot, 'packages', dep.split('/').pop(), 'package.json'))
 				data.dependencies[dep] = `^${depPkg.version}`
+			} else {
+				data.dependencies[dep] = JSON.parse(fs.readFileSync(path.join(__dirname, 'node_modules', dep, 'package.json'), 'utf8')).version
 			}
 		}
 		delete data.devDependencies
@@ -80,7 +84,8 @@ module.exports = function (grunt) {
 			start: 'node index.js',
 			test: data.scripts.test
 		}
-		data.engines = { node: '>=20' }
+		// jose (JWT) is ESM only: require(esm) needs Node 22.12; the image runs 24
+		data.engines = { node: '>=22.12' }
 		data.main = 'index.js'
 		data.types = 'index.d.ts'
 		fs.writeFileSync('./dist/package.json', JSON.stringify(data, null, 2), 'utf8')

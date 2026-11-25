@@ -117,8 +117,8 @@ const row = (name: string) => {
 const action = (rowName: string, label: string) => within(row(rowName)).getByRole('button', { name: label })
 /** The entities of a schema: inside its domain */
 const openEntities = (label: string) => { if (!screen.getAllByRole('treeitem').some(r => r.querySelector('.lw-tree-label')?.textContent === label)) fireEvent.click(row('domain')); fireEvent.click(row(label)) }
-/** What is saved in a schema: inside its projects */
-const openProjects = (label = 'proyectos') => { if (!row(label).getAttribute('aria-expanded') || row(label).getAttribute('aria-expanded') === 'false') fireEvent.click(row(label)) }
+/** What is saved in a schema: inside its Workbench */
+const openProjects = (label = 'Workbench') => { if (!row(label).getAttribute('aria-expanded') || row(label).getAttribute('aria-expanded') === 'false') fireEvent.click(row(label)) }
 
 /** The + of a row, then one of its items */
 const add = (rowName: string, label: string) => { fireEvent.click(action(rowName, 'Agregar')); fireEvent.click(screen.getByRole('menuitem', { name: new RegExp(label) })) }
@@ -215,7 +215,7 @@ describe('Workspace', () => {
 		openProjects()
 		await screen.findByText('Todavía no hay nada guardado')
 
-		add('proyectos', 'Nuevo proyecto')
+		add('Workbench', 'Nuevo proyecto')
 		fireEvent.change(screen.getByRole('textbox', { name: 'name' }), { target: { value: 'Reportes' } })
 		fireEvent.click(screen.getByRole('button', { name: 'Crear' }))
 		await waitFor(() => expect(row('Reportes')).toBeTruthy())
@@ -258,8 +258,8 @@ describe('Workspace', () => {
 		expect(screen.getByText('customerId')).toBeTruthy()
 		fireEvent.click(row('Relaciones (1)'))
 		expect(screen.getAllByRole('treeitem').some(r => r.textContent === 'customer→ Customers · N — 1')).toBe(true)
-		// the Open action of the row (as a double click does)
-		fireEvent.click(action('Orders', 'Abrir'))
+		// a double click opens it (its row has no actions: they are in its view)
+		fireEvent.doubleClick(row('Orders'))
 		await waitFor(() => expect(screen.getByRole('tab', { selected: true }).textContent).toContain('Orders'))
 		expect(within(panel()).getByRole('heading', { name: 'Orders' })).toBeTruthy()
 		expect(within(panel()).getAllByRole('row').map(r => r.textContent)).toContain('2customerIdstringCustomers.id')
@@ -271,7 +271,8 @@ describe('Workspace', () => {
 		fireEvent.click(within(panel()).getByRole('tab', { name: 'Relaciones (1)' }))
 		fireEvent.click(within(panel()).getByRole('button', { name: 'Customers' }))
 		await waitFor(() => expect(within(panel()).getByRole('heading', { name: 'Customers' })).toBeTruthy())
-		expect(within(panel()).getByRole('tab', { name: 'Relaciones (1)' })).toBeTruthy()
+		// its own relations, as the explorer counts them (Orders refers to it: that is under Referenced by)
+		expect(within(panel()).getByRole('tab', { name: 'Relaciones (0)' })).toBeTruthy()
 		fireEvent.click(within(panel()).getByRole('button', { name: 'Consultar' }))
 		await waitFor(() => expect((within(panel()).getByRole('textbox', { name: 'query' }) as HTMLTextAreaElement).value).toBe('Customers.page(1, 10)'))
 
@@ -296,7 +297,7 @@ describe('saved diagrams', () => {
 		const { container } = render(<Workspace api={new DomainApi()} store={store} history={false} locale="es" />)
 		await waitFor(() => expect(row('northwind/v1')).toBeTruthy())
 		openProjects()
-		add('proyectos', 'Nuevo diagrama')
+		add('Workbench', 'Nuevo diagrama')
 		const dialog = await screen.findByRole('dialog')
 		fireEvent.change(within(dialog).getByRole('textbox', { name: 'name' }), { target: { value: 'Ventas' } })
 		fireEvent.click(within(dialog).getByRole('button', { name: 'Crear' }))

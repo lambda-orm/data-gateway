@@ -9,11 +9,16 @@ import { childrenOf, folderPaths, SavedItem, subtreeOf } from '../domain/savedIt
 import { ConfirmDialog, Icons, ItemDialog, MenuButton, Modal } from './dialogs'
 import { adminMessagesOf } from '../domain/adminI18n'
 import { FormFocus } from './SchemaForms'
-import { AdminCapabilities } from '../application/ports'
+import { AdminApiPort, AdminCapabilities } from '../application/ports'
+import { BuildDialog, downloadBlob } from './BuildDialog'
 
 export interface ExplorerProps {
 	schemas: SchemaInfo[]
 	controller: WorkspaceController
+	/** Asked to read again (its Refresh): what it has read of a schema, or of all when schema is undefined */
+	refresh?: { n: number, schema?: string }
+	/** Its Refresh of a schema (a button on its row) */
+	onRefreshSchema?: (schema: string) => void
 	api: QueryApiPort
 	locale?: Locale
 	theme?: 'light' | 'dark'
@@ -42,9 +47,14 @@ export interface ExplorerAdmin {
 	/** the schema itself: its tab with the commands in a toolbar */
 	onOpenSchema?: (schema: string) => void
 	/** one element of the schema (an entity, a source…), the application section or the variables */
-	onOpenElement?: (schema: string, focus: FormFocus) => void
+	/** edit: asked by Edit (the form opens in edit), not by a click to read it */
+	onOpenElement?: (schema: string, focus: FormFocus, edit?: boolean) => void
 	/** a file of data/ or src/ */
 	onOpenFile?: (schema: string, path: string) => void
+	/** the diagram of a stage: its sources, the tables of each one, their conditions */
+	onOpenStageDiagram?: (schema: string, stage: string) => void
+	/** the administration itself: the code of the domain built (build), a folder of the code downloaded as a zip */
+	api?: AdminApiPort
 	/** the lambdaORM.yaml as an object (the lists of infrastructure) */
 	loadSchemaDoc?: (schema: string) => Promise<any>
 	/** the files under a folder of data/ or src/ */
@@ -53,8 +63,11 @@ export interface ExplorerAdmin {
 	onRemoveSchema: (schema: string) => void
 }
 
+/** the folders of src/ the build of the gateway writes, one for each of its languages */
+const BUILD_FOLDERS = ['node', 'client-node']
+
 type Dialog =
-	| { kind: 'folder', schema: string, parentId?: string }
+	| { kind: 'folder', schema: string, parentId?: string, project?: boolean }
 	| { kind: 'edit', item: SavedItem }
 	| { kind: 'delete', item: SavedItem }
 	| { kind: 'import', text: string }
@@ -113,7 +126,7 @@ const Action: React.FC<{ label: string, onClick: () => void, children: React.Rea
  * saved in it (folders, queries, diagrams) with a name and a description. Folders nest; items are dragged into them.
  * The whole workspace is exported to and imported from a JSON file.
  */
-export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, locale, theme, activeId, onOpen, onOpenEntity, onOpenDomain, onNewQuery, onNewDiagram, loadDomain: domainOf, admin, expanded: expandedProp, onExpandedChange }) => {
+export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, schemas, controller, api, locale, theme, activeId, onOpen, onOpenEntity, onOpenDomain, onNewQuery, onNewDiagram, loadDomain: domainOf, admin, expanded: expandedProp, onExpandedChange }) => {
 	const m = explorerMessagesOf(locale)
 	const a = adminMessagesOf(locale)
 	// the lambdaORM.yaml of a schema (to fix one that didn't start, too) and removing it
@@ -124,11 +137,14 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 	const [docs, setDocs] = useState<Record<string, any>>({})
 	const [files, setFiles] = useState<Record<string, { path: string, dir: boolean }[] | string>>({})
 	const [roots, setRoots] = useState<Record<string, { data: string, src: string, model: string }>>({})
+	// the schema whose code is being built (its dialog), and the code being deleted (its confirmation)
+	const [building, setBuilding] = useState<{ schema: string, language?: 'node' | 'client-node', name?: string }>()
+	const [removingCode, setRemovingCode] = useState<{ schema: string, dir: string, name: string }>()
 	const loadDoc = (schema: string) => {
 		if (!admin?.loadSchemaDoc) return
 		admin.loadSchemaDoc(schema).then(doc => setDocs(d => ({ ...d, [schema]: doc ?? {} })), () => setDocs(d => ({ ...d, [schema]: {} })))
 	}
-	const loadFolder = (schema: string, which: 'data' | 'model') => {
+	const loadFolder = (schema: string, which: 'data' | 'src') => {
 		if (!admin?.loadFiles) return
 		const known = roots[schema]
 		const id = `${schema}\0${which}`
@@ -148,7 +164,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 			sinceSeen.current[s.path] = s.since
 			if (before === undefined || before === s.since) continue
 			if (docs[s.path] !== undefined) loadDoc(s.path)
-			for (const which of ['data', 'model'] as const) if (files[`${s.path}\0${which}`] !== undefined) loadFolder(s.path, which)
+			for (const which of ['data', 'src'] as const) if (files[`${s.path}\0${which}`] !== undefined) loadFolder(s.path, which)
 		}
 	}, [schemas])
 	const canWrite = !!admin?.can.schemaWrite && !!admin.onOpenElement
@@ -159,9 +175,12 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 		? [<Row key={`${section}-none`} level={level} label={a.empty} icon={null} muted />]
 		: names.map(name => (
 			<Row key={`${section}:${name}`} level={level} label={name} icon={section === 'enums' ? <Icons.enums /> : section === 'mappings' ? <Icons.mappings /> : section === 'sources' ? <Icons.sources /> : <Icons.stages />}
-				onOpen={admin?.onOpenElement ? () => admin.onOpenElement!(schema, { section, name }) : undefined} />
+				onOpen={admin?.onOpenElement ? () => admin.onOpenElement!(schema, { section, name }) : undefined}
+				actions={section === 'stages' && admin?.onOpenStageDiagram
+					? <Action label={`${a.stageDiagram}: ${name}`} onClick={() => admin.onOpenStageDiagram!(schema, name)}><Icons.diagram /></Action>
+					: undefined} />
 		))
-	const fileRows = (schema: string, which: 'data' | 'model', level: number) => {
+	const fileRows = (schema: string, which: 'data' | 'src', level: number) => {
 		const list = files[`${schema}\0${which}`]
 		if (list === undefined) return [<Row key={`${which}-loading`} level={level} label={m.loading} icon={null} muted />]
 		if (typeof list === 'string') return [<Row key={`${which}-error`} level={level} label={list} icon={null} muted />]
@@ -172,6 +191,49 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 			<Row key={f.path} level={level} label={f.path.slice(root.length + 1)} icon={<Icons.query />} title={f.path}
 				onOpen={admin?.onOpenFile ? () => admin.onOpenFile!(schema, f.path) : undefined} />
 		))
+	}
+	// the language of a folder of code, by the extensions of its files (the most of them)
+	const LANGUAGES: Record<string, string> = { ts: 'TypeScript', tsx: 'TypeScript', js: 'JavaScript', mjs: 'JavaScript', kt: 'Kotlin', java: 'Java', go: 'Go', py: 'Python', cs: 'C#', rs: 'Rust', php: 'PHP', rb: 'Ruby', swift: 'Swift', dart: 'Dart', scala: 'Scala' }
+	/** what a node of code is named: its language, and the folder when it is the one of a build (node, client-node) */
+	const codeName = (folder: string, paths: string[]): string => {
+		const counts = new Map<string, number>()
+		for (const p of paths) { const language = LANGUAGES[p.split('.').pop()?.toLowerCase() ?? '']; if (language) counts.set(language, (counts.get(language) ?? 0) + 1) }
+		const language = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0]
+		if (!language) return folder
+		return BUILD_FOLDERS.includes(folder) ? `${language} · ${folder}` : language
+	}
+	// the source code: a folder of src/ for each language built (node, client-node…), with its files and its zip
+	const codeRows = (schema: string, level: number, k: (part: string) => string, unfold: (part: string) => () => void) => {
+		const list = files[`${schema}\0src`]
+		if (list === undefined) return [<Row key="code-loading" level={level} label={m.loading} icon={null} muted />]
+		if (typeof list === 'string') return [<Row key="code-error" level={level} label={list} icon={null} muted />]
+		const root = roots[schema]?.src ?? 'src'
+		const codes = [...new Set(list.filter(f => f.path.startsWith(`${root}/`)).map(f => f.path.slice(root.length + 1).split('/')[0]).filter(Boolean))].sort()
+		if (codes.length === 0) return [<Row key="code-none" level={level} label={a.empty} icon={null} muted />]
+		return codes.flatMap(name => {
+			const dir = `${root}/${name}`
+			const inside = list.filter(f => !f.dir && f.path.startsWith(`${dir}/`))
+			const label = codeName(name, inside.map(f => f.path))
+			const api = admin?.api
+			const canBuild = !!admin?.can.build && !!api
+			const actions = (
+				<>
+					{api?.folderZip && <Action label={format(a.downloadZip, { name: label })} onClick={() => { api.folderZip!(schema, dir).then(blob => downloadBlob(blob, `${schema.replace(/\//g, '_') || 'root'}-${name}.zip`), e => setMessage(e?.message ?? String(e))) }}><Icons.download /></Action>}
+					{canBuild && BUILD_FOLDERS.includes(name) && (
+						<Action label={format(a.rebuildCode, { name: label })} onClick={() => setBuilding({ schema, language: name as 'node' | 'client-node', name: label })}><Icons.rebuild /></Action>
+					)}
+					{canBuild && api!.removeCode && <Action label={format(a.removeCode, { name: label })} onClick={() => setRemovingCode({ schema, dir, name: label })}><Icons.trash /></Action>}
+				</>
+			)
+			return [
+				<Row key={`code:${name}`} level={level} label={label} icon={<Icons.code />} title={dir} expanded={expanded.has(k(`code:${name}`))} onToggle={unfold(`code:${name}`)} actions={actions} />,
+				...(expanded.has(k(`code:${name}`))
+					? inside.length
+						? inside.map(f => <Row key={f.path} level={level + 1} label={f.path.slice(dir.length + 1)} icon={<Icons.query />} title={f.path} onOpen={admin?.onOpenFile ? () => admin.onOpenFile!(schema, f.path) : undefined} />)
+						: [<Row key={`code:${name}-none`} level={level + 1} label={a.empty} icon={null} muted />]
+					: [])
+			]
+		})
 	}
 	const namesIn = (list: unknown): string[] => Array.isArray(list) ? list.map((e: any) => e?.name).filter((n: unknown): n is string => typeof n === 'string') : []
 	const removeSchema = (schema: string) => admin?.can.schemaAdmin
@@ -206,7 +268,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 			if (has('d') || has('e') || has('n')) loadDomain(s.path)
 			if (has('i') || has('mappings') || has('sources') || has('stages')) once(`doc:${s.path}`, () => loadDoc(s.path))
 			if (has('da')) once(`data:${s.path}`, () => loadFolder(s.path, 'data'))
-			if (has('mo')) once(`model:${s.path}`, () => loadFolder(s.path, 'model'))
+			if (has('sc')) once(`src:${s.path}`, () => loadFolder(s.path, 'src'))
 		}
 	}, [expanded, schemas])
 
@@ -229,6 +291,22 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 		setDomains(d => ({ ...d, [schema]: m.loading }))
 		read(schema).then(domain => setDomains(d => ({ ...d, [schema]: domain })), e => setDomains(d => ({ ...d, [schema]: e?.message ?? String(e) })))
 	}
+
+	// Refresh: what it read of the schema (or of all) is read again (its domain, its YAML, its folders)
+	useEffect(() => {
+		if (!refresh?.n) return
+		const of = (path: string) => refresh.schema === undefined || refresh.schema === path
+		const read = domainOf ?? (api.domain ? (path: string) => api.domain!(path) : undefined)
+		for (const path of Object.keys(domains)) {
+			if (!of(path) || !read) continue
+			read(path).then(domain => setDomains(d => ({ ...d, [path]: domain })), e => setDomains(d => ({ ...d, [path]: e?.message ?? String(e) })))
+		}
+		for (const path of Object.keys(docs)) if (of(path)) loadDoc(path)
+		for (const id of Object.keys(files)) {
+			const [path, which] = id.split('\0')
+			if (of(path) && (which === 'data' || which === 'src')) loadFolder(path, which)
+		}
+	}, [refresh?.n])
 
 	const move = (id: string, parentId: string | undefined) => { controller.move(id, parentId).catch(e => setMessage(problemText(e, m))) }
 
@@ -256,7 +334,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 
 	const creators = (schema: string, parentId?: string, top = false) => (
 		<MenuButton label={m.add} icon={<Icons.plus />} items={[
-			{ label: top ? a.newProject : m.newFolder, icon: <Icons.folderPlus />, onClick: () => setDialog({ kind: 'folder', schema, parentId }) },
+			{ label: top ? a.newProject : m.newFolder, icon: <Icons.folderPlus />, onClick: () => setDialog({ kind: 'folder', schema, parentId, project: top }) },
 			{ label: m.newQuery, icon: <Icons.queryPlus />, onClick: () => onNewQuery(schema, parentId) },
 			...(onNewDiagram ? [{ label: m.newDiagram, icon: <Icons.diagramPlus />, onClick: () => onNewDiagram(schema, parentId) }] : [])
 		]} />
@@ -274,7 +352,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 			)
 			const row = (
 				<Row key={item.id} level={level} label={item.name} title={item.description ? `${item.name}\n${item.description}` : item.name}
-					icon={isFolder ? <Icons.folder /> : item.kind === 'diagram' ? <Icons.diagram /> : <Icons.query />}
+					icon={isFolder ? <Icons.folder /> : item.kind === 'diagram' ? (item.stage ? <Icons.stages /> : <Icons.diagram />) : <Icons.query />}
 					expanded={isFolder ? expanded.has(key) : undefined} active={item.id === activeId}
 					onToggle={isFolder ? () => toggle(key) : undefined} onOpen={isFolder ? undefined : () => onOpen(item)}
 					drag={item.id} dropTarget={isFolder ? { onDrop: id => { if (id !== item.id) { move(id, item.id); open(key) } } } : undefined}
@@ -318,11 +396,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 			const relations = entity.relations ?? []
 			const rows: React.ReactNode[] = [
 				<Row key={key} level={5} label={entity.name} icon={<Icons.entity />} title={`${entity.name} — ${m.openEntity}`}
-					expanded={expanded.has(key)} onToggle={() => { if (!expanded.has(key)) onOpenEntity(schema, entity.name); toggle(key) }} onOpen={() => onOpenEntity(schema, entity.name)}
-					actions={<>
-						{canWrite && <Action label={`${a.edit} ${entity.name}`} onClick={() => admin!.onOpenElement!(schema, { section: 'entities', name: entity.name })}><Icons.edit /></Action>}
-						<Action label={m.open} onClick={() => onOpenEntity(schema, entity.name)}><Icons.open /></Action>
-					</>} />
+					expanded={expanded.has(key)} onToggle={() => { if (!expanded.has(key)) onOpenEntity(schema, entity.name); toggle(key) }} onOpen={() => onOpenEntity(schema, entity.name)} />
 			]
 			if (!expanded.has(key)) {
 				// what the filter found in it, without opening it
@@ -383,10 +457,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 								onToggle={() => { if (!expanded.has(key)) admin?.onOpenSchema?.(s.path); toggle(key) }}
 								onOpen={admin?.onOpenSchema ? () => admin.onOpenSchema!(s.path) : undefined}
 								title={s.pending ? `${m.schemaPending}: ${s.pending}` : undefined}
-								actions={<>
-									{admin?.onOpenSchema && <Action label={format(a.openSchema, { name: s.path || '/' })} onClick={() => admin.onOpenSchema!(s.path)}><Icons.open /></Action>}
-									{removeSchema(s.path)}
-								</>} />
+								actions={onRefreshSchema ? <Action label={format(m.refreshOf, { name: s.path || '/' })} onClick={() => onRefreshSchema(s.path)}><Icons.refresh /></Action> : undefined} />
 							{expanded.has(key) && (
 								<>
 									{s.pending && <div className="lw-schema-reason lw-schema-pending" role="note" style={{ paddingLeft: 6 + 14 + 22 }}>{m.schemaPending}: {s.pending}</div>}
@@ -422,15 +493,16 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 													)}
 												</>
 											)}
-											{admin?.can.schemaRead && admin.loadFiles && (
-												<>
-													<Row level={3} label={a.data} icon={<Icons.data />} expanded={expanded.has(k('da'))} onToggle={unfold('da', () => loadFolder(s.path, 'data'))} />
-													{expanded.has(k('da')) && fileRows(s.path, 'data', 4)}
-													<Row level={3} label={a.src} icon={<Icons.src />} expanded={expanded.has(k('sr'))} onToggle={unfold('sr')} />
-													{expanded.has(k('sr')) && <Row level={4} label={a.model} icon={<Icons.model />} expanded={expanded.has(k('mo'))} onToggle={unfold('mo', () => loadFolder(s.path, 'model'))} />}
-													{expanded.has(k('sr')) && expanded.has(k('mo')) && fileRows(s.path, 'model', 5)}
-												</>
-											)}
+										</>
+									)}
+									{admin?.can.schemaRead && admin.loadFiles && (
+										<>
+											<Row level={2} label={a.state} icon={<Icons.state />} expanded={expanded.has(k('st'))} onToggle={unfold('st')} />
+											{expanded.has(k('st')) && <Row level={3} label={a.data} icon={<Icons.data />} expanded={expanded.has(k('da'))} onToggle={unfold('da', () => loadFolder(s.path, 'data'))} />}
+											{expanded.has(k('st')) && expanded.has(k('da')) && fileRows(s.path, 'data', 4)}
+											<Row level={2} label={a.sourceCode} icon={<Icons.src />} expanded={expanded.has(k('sc'))} onToggle={unfold('sc', () => loadFolder(s.path, 'src'))}
+												actions={admin.can.build && admin.api ? <Action label={`${a.build}: ${s.path || '/'}`} onClick={() => setBuilding({ schema: s.path })}><Icons.code /></Action> : null} />
+											{expanded.has(k('sc')) && codeRows(s.path, 3, k, unfold)}
 										</>
 									)}
 									<Row level={2} label={a.projects} icon={<Icons.projects />} expanded={expanded.has(k('p'))} onToggle={unfold('p')}
@@ -444,8 +516,26 @@ export const Explorer: React.FC<ExplorerProps> = ({ schemas, controller, api, lo
 				})}
 			</div>
 
+			{removingCode && admin?.api?.removeCode && (
+				<ConfirmDialog title={a.removeCode.replace('{name}', removingCode.name)} confirm={format(a.removeCode, { name: '' }).trim()} cancel={m.cancel} theme={theme}
+					message={format(a.removeCodeConfirm, { name: removingCode.name, dir: removingCode.dir })}
+					onConfirm={() => {
+						const { schema, name } = removingCode
+						admin.api!.removeCode!(schema, removingCode.dir).then(() => { setMessage(format(a.removedCode, { name })); loadFolder(schema, 'src') }, e => setMessage(e?.message ?? String(e)))
+					}}
+					onClose={() => setRemovingCode(undefined)} />
+			)}
+			{building && admin?.api && (
+				<BuildDialog admin={admin.api} schema={building.schema} language={building.language} locale={locale} theme={theme} onClose={() => setBuilding(undefined)}
+					onBuilt={(built, language) => {
+						const { schema, name } = building
+						setMessage(format(a.rebuilt, { name: name ?? language, n: built.filter(f => f.written === 'created' || f.written === 'updated').length }))
+						loadFolder(schema, 'src')
+						setExpanded(e => new Set([...e, `sc:${schema}`]))
+					}} />
+			)}
 			{dialog?.kind === 'folder' && (
-				<ItemDialog title={m.newFolder} submit={m.create} texts={m} theme={theme} initial={{ parentId: dialog.parentId }} folders={folders(dialog.schema)}
+				<ItemDialog title={dialog.project ? a.newProject : m.newFolder} submit={m.create} texts={m} theme={theme} initial={{ parentId: dialog.parentId }} folders={folders(dialog.schema)}
 					onClose={() => setDialog(undefined)}
 					onSubmit={async v => {
 						try { const f = await controller.createFolder({ schema: dialog.schema, ...v }); open(v.parentId ? `f:${v.parentId}` : `s:${dialog.schema}`); open(`f:${f.id}`) } catch (e) { return problemText(e, m) }

@@ -4,7 +4,8 @@ import { AuthenticatorPort, LoggerPort, MetricsPort } from '../../application/po
 import { SchemaDirectoryPort } from '../../application/ports/input/schemaDirectoryPort'
 import { AuthenticationConfig, DataGatewayConfig, TransportName } from '../../domain/config/dataGatewayConfig'
 import { parseSize } from '../../domain/config/sizes'
-import { ApiKeyAuthenticator, BasicAuthenticator, BearerAuthenticator, NoneAuthenticator } from '../output/auth/authenticators'
+import { ApiKeyAuthenticator, BasicAuthenticator, BearerAuthenticator, MethodsAuthenticator, NoneAuthenticator } from '../output/auth/authenticators'
+import { JwtAuthenticator } from '../output/auth/jwtAuthenticator'
 import { HttpTransport } from '../input/http/httpTransport'
 import { McpHttpTransport } from '../input/mcp/mcpHttpTransport'
 import { McpWebSocketTransport } from '../input/mcp/mcpWebSocketTransport'
@@ -25,7 +26,7 @@ export const transportsOf = (t: TransportsConfig): TransportInfo[] => [
 	...(t.http ? [{ name: 'http' as const, port: t.http.port, basePath: t.http.basePath, ...(t.http.swagger.enabled ? { docs: '/openapi.json' } : {}) }] : []),
 	...(t.webSocket ? [{ name: 'webSocket' as const, port: t.webSocket.port, basePath: t.webSocket.basePath, schemaPath: '/{schema}', ...(t.webSocket.asyncapi.enabled ? { docs: '/asyncapi.json' } : {}) }] : []),
 	...(t.mcpHttp ? [{ name: 'mcpHttp' as const, port: t.mcpHttp.port, basePath: t.mcpHttp.basePath, schemaPath: '/{schema}/mcp' }] : []),
-	...(t.mcpWebSocket ? [{ name: 'mcpWebSocket' as const, port: t.mcpWebSocket.port, basePath: t.mcpWebSocket.basePath, schemaPath: '/{schema}', ...(t.mcpWebSocket.asyncapi.enabled ? { docs: '/asyncapi.json' } : {}) }] : [])
+	...(t.mcpWebSocket ? [{ name: 'mcpWebSocket' as const, port: t.mcpWebSocket.port, basePath: t.mcpWebSocket.basePath, schemaPath: '/{schema}/mcp', ...(t.mcpWebSocket.asyncapi.enabled ? { docs: '/asyncapi.json' } : {}) }] : [])
 ]
 
 type AuthenticatorFactory = (config: AuthenticationConfig) => AuthenticatorPort
@@ -39,6 +40,8 @@ export class AuthenticatorRegistry {
 		this.register('local:bearer', c => new BearerAuthenticator(c.credentials))
 		this.register('local:apikey', c => new ApiKeyAuthenticator(c.credentials, c.header))
 		this.register('local:basic', c => new BasicAuthenticator(c.credentials))
+		this.register('jwt', c => new JwtAuthenticator(c.jwt!))
+		this.register('methods', c => new MethodsAuthenticator((c.methods ?? []).map(m => this.build(m))))
 	}
 
 	public register (key: string, factory: AuthenticatorFactory): void {
@@ -46,7 +49,7 @@ export class AuthenticatorRegistry {
 	}
 
 	public build (config: AuthenticationConfig): AuthenticatorPort {
-		const key = config.adapter === 'none' ? 'none' : `${config.adapter}:${config.type}`
+		const key = config.adapter === 'local' ? `local:${config.type}` : config.adapter
 		const factory = this.factories.get(key)
 		if (!factory) throw new Error(`no authenticator registered for ${key}`)
 		return factory(config)

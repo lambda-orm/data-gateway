@@ -17,7 +17,8 @@ export const languageOf = (admin: AdminApiPort): Promise<ExpressionLanguage | un
 }
 
 /** An expression checked by the gateway a moment after it changes: its problem (it doesn't parse, an unknown variable) */
-export const useExpressionCheck = (admin: AdminApiPort, value: string, context: string, language: ExpressionLanguage | undefined, locale?: string) => {
+/** variables: the names the expression may use when they aren't a context of the gateway (the properties of an entity) */
+export const useExpressionCheck = (admin: AdminApiPort, value: string, context: string, language: ExpressionLanguage | undefined, locale?: string, variables?: string[]) => {
 	const m = adminMessagesOf(locale)
 	const [check, setCheck] = useState<ExpressionCheck>()
 	useEffect(() => {
@@ -28,7 +29,10 @@ export const useExpressionCheck = (admin: AdminApiPort, value: string, context: 
 		}, 400)
 		return () => { alive = false; clearTimeout(timer) }
 	}, [admin, value, context])
-	const problem = check?.error ?? (check?.unknown.length ? format(m.notAVariable, { name: check.unknown.join(', '), names: (language?.contexts[context] ?? []).map(v => v.name).join(', ') }) : undefined)
+	const known = variables ?? (language?.contexts[context] ?? []).map(v => v.name)
+	// with variables of its own, the gateway only says what the expression uses: what isn't one of them is unknown here
+	const unknown = variables ? (check?.variables ?? []).filter(v => !variables.includes(v)) : check?.unknown ?? []
+	const problem = check?.error ?? (unknown.length ? format(m.notAVariable, { name: unknown.join(', '), names: known.join(', ') }) : undefined)
 	return { check, problem, error: !!check?.error }
 }
 
@@ -48,6 +52,10 @@ export interface ExpressionInputProps {
 	context?: string
 	/** the names of the entities of the schema, suggested inside quotes */
 	entities?: string[]
+	/** its variables, when they aren't those of a context of the gateway (the properties of an entity) */
+	variables?: string[]
+	/** the height of the editor (default 44) */
+	height?: number
 	ariaLabel: string
 	placeholder?: string
 	theme?: 'light' | 'dark'
@@ -58,9 +66,11 @@ export interface ExpressionInputProps {
  * An expression of 3xpr (λORM's expressions) in an editor: the variables of its context, the functions and the
  * entities suggested while it is written, and checked by the gateway a moment after each change.
  */
-export const ExpressionInput: React.FC<ExpressionInputProps> = ({ admin, value, onChange, readOnly = false, context = 'stageSource', entities = [], ariaLabel, placeholder, theme, locale }) => {
+export const ExpressionInput: React.FC<ExpressionInputProps> = ({ admin, value, onChange, readOnly = false, context = 'stageSource', entities = [], variables, height = 44, ariaLabel, placeholder, theme, locale }) => {
 	const language = useExpressionLanguage(admin)
-	const { problem, error } = useExpressionCheck(admin, value, context, language, locale)
+	const { problem, error } = useExpressionCheck(admin, value, context, language, locale, variables)
+	// the completions of its own variables: the language with them as the variables of its context
+	const own = useMemo(() => variables && language ? { ...language, contexts: { ...language.contexts, [context]: variables.map(name => ({ name, type: 'any', description: '' })) } } : language, [language, variables, context])
 	const lines = value.split('\n')
 	const markers = useMemo<EditorMarker[]>(() => problem
 		? [{ message: problem, severity: error ? 'error' : 'warning', startLineNumber: 1, startColumn: 1, endLineNumber: lines.length, endColumn: (lines[lines.length - 1]?.length ?? 0) + 1 }]
@@ -68,9 +78,9 @@ export const ExpressionInput: React.FC<ExpressionInputProps> = ({ admin, value, 
 
 	return (
 		<div className="lw-expression">
-			<CodeEditor value={value} onChange={onChange} language="3xpr" expressionVariables={(language?.contexts[context] ?? []).map(v => v.name)} readOnly={readOnly} compact height={44} theme={theme} ariaLabel={ariaLabel}
+			<CodeEditor value={value} onChange={onChange} language="3xpr" expressionVariables={variables ?? (language?.contexts[context] ?? []).map(v => v.name)} readOnly={readOnly} compact height={height} theme={theme} ariaLabel={ariaLabel}
 				markers={markers} triggerCharacters={['.', '"', '(', ' ']}
-				completion={(text, line, column) => expressionCompletions(language, context, entities, text.split('\n')[line - 1] ?? '', column)} />
+				completion={(text, line, column) => expressionCompletions(own, context, entities, text.split('\n')[line - 1] ?? '', column)} />
 			{!value && placeholder && <small className="lw-type lw-expression-hint">{placeholder}</small>}
 			{problem && <small className={error ? 'lw-error' : 'lw-warning'} role="status">{problem}</small>}
 		</div>

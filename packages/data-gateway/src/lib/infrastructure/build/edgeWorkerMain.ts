@@ -9,6 +9,7 @@ import { buildAdmin, buildLogger, measureConnections, schemaAuthenticators } fro
 import { MeasuredSchemaDirectory } from '../../application/runtime/measuredDirectory'
 import { AuthenticatorRegistry, TransportRegistry } from './registries'
 import { control, EdgeWorkerData } from './workerControl'
+import { startObservability, stopObservability } from './observability'
 
 const run = async (): Promise<void> => {
 	const ctl = control()
@@ -25,7 +26,9 @@ const run = async (): Promise<void> => {
 		scriptsEnabled: settings.scripts.enabled,
 		authenticators: schemaAuthenticators(config, descriptor, settings, registry)
 	})
-	const router = new SchemaRouter(data.schemas.map(routed), new SystemClock(), data.version)
+	// the SDK of the edge: the spans of the transports, and their traceparent to the workers
+	const tracing = await startObservability(data.observability, logger)
+	const router = new SchemaRouter(data.schemas.map(routed), new SystemClock(), data.version, tracing)
 	const metrics = config.metrics.enabled ? new PromClientMetrics('edge') : new NoMetrics()
 	// /metrics: the edge's and every schema worker's, asked through its channel (the ones served at that moment)
 	metrics.addSource(() => Promise.all(router.states().map(s => router.workerMetrics(s.path).catch(() => []))))
@@ -64,6 +67,7 @@ const run = async (): Promise<void> => {
 			// stop taking requests, let the ones in flight finish (the transports wait for them), then go
 			await Promise.all(transports.map(t => t.stop().catch(error => logger.error(error))))
 			router.closeAll()
+			await stopObservability().catch(() => undefined)
 			process.exit(0)
 		}
 	})

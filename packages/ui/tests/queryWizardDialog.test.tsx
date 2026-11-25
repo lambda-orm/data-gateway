@@ -5,7 +5,7 @@ import { afterEach, describe, expect, test, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { QueryWizard } from '../src/components/QueryWizard'
 import { DomainInfo } from '../src/domain/diagram'
-import { emptyWizard, WizardState } from '../src/domain/queryWizard'
+import { emptyWizard, wizardFromQuery, WizardState } from '../src/domain/queryWizard'
 import type { LayoutPort } from '../src/infrastructure/elkLayout'
 import { FakeApi } from './fakes'
 
@@ -40,16 +40,24 @@ describe('QueryWizard', () => {
 		const dialog = await screen.findByRole('dialog', { name: 'Query wizard' })
 		expect((within(dialog).getByLabelText('start from') as HTMLSelectElement).value).toBe('Customers')
 		fireEvent.change(within(dialog).getByLabelText('start from'), { target: { value: 'Orders' } })
-		// a click on a field chooses it
-		fireEvent.click(await screen.findByRole('checkbox', { name: 'Orders.orderDate' }))
-		fireEvent.click(screen.getByRole('checkbox', { name: 'Orders.id' }))
+		// no map: every field ticked, and the check of its title
+		expect((await screen.findByRole('checkbox', { name: 'Orders.orderDate' })).getAttribute('aria-checked')).toBe('true')
+		expect(screen.getByRole('checkbox', { name: 'Orders: all properties' }).getAttribute('aria-checked')).toBe('true')
+		// the check of the title off: only its primary key; then a click on a field ticks it
+		fireEvent.click(screen.getByRole('checkbox', { name: 'Orders: all properties' }))
+		expect(screen.getByRole('checkbox', { name: 'Orders.customerId' }).getAttribute('aria-checked')).toBe('false')
+		fireEvent.click(screen.getByRole('checkbox', { name: 'Orders.orderDate' }))
 		expect(screen.getByRole('checkbox', { name: 'Orders.id' }).getAttribute('aria-checked')).toBe('true')
+		expect(screen.getByRole('checkbox', { name: 'Orders: all properties' }).getAttribute('aria-checked')).toBe('false')
 		// the + of Orders adds Customers (its relation to one)
 		fireEvent.click(screen.getByRole('button', { name: /Orders$/ }))
 		const related = await screen.findByRole('dialog', { name: /Orders/ })
 		fireEvent.click(within(related).getByRole('checkbox', { name: /Customers/ }))
 		fireEvent.click(within(related).getByRole('button', { name: /\(1\)/ }))
-		fireEvent.click(await screen.findByRole('checkbox', { name: 'Customers.name' }))
+		// all of Customers ticked: unticking id leaves name; the last one stays
+		fireEvent.click(await screen.findByRole('checkbox', { name: 'Customers.id' }))
+		fireEvent.click(screen.getByRole('checkbox', { name: 'Customers.name' }))
+		expect(screen.getByRole('checkbox', { name: 'Customers.name' }).getAttribute('aria-checked')).toBe('true')
 		fireEvent.change(screen.getByRole('textbox', { name: 'filter' }), { target: { value: 'p.orderDate > from' } })
 		fireEvent.click(screen.getByRole('button', { name: '+ add an order' }))
 		fireEvent.change(screen.getByLabelText('order 1'), { target: { value: 'orderDate' } })
@@ -80,6 +88,42 @@ describe('QueryWizard', () => {
 		fireEvent.click(screen.getByRole('checkbox', { name: 'Orders.orderDate' }))
 		await waitFor(() => expect(screen.queryByLabelText('order 1')).toBeNull())
 		expect((screen.getByRole('textbox', { name: 'the query' }) as HTMLTextAreaElement).value).toBe('Orders\n\t.map(p => ({ id: p.id }))')
+		expect(screen.getByRole('button', { name: 'update the query' })).toBeTruthy()
+	})
+
+	test('a query written by hand: its tables, fields, filter, order and page; what it can\'t show, told', async () => {
+		const reading = wizardFromQuery('Orders.filter(o => o.orderDate > from).include(o => o.customer.map(c => ({ name: c.name }))).map(o => ({ id: o.id, orderDate: o.orderDate, total: o.id * 2 })).sort(o => o.orderDate.desc()).page(2, 10)', DOMAIN)
+		const accepted: string[] = []
+		render(<QueryWizard api={new DomainApi()} schema="northwind/v1" domain={DOMAIN} reading={reading} start="Orders" layout={rowLayout}
+			onClose={() => undefined} onAccept={(_, query) => accepted.push(query)} />)
+		expect((await screen.findByRole('checkbox', { name: 'Customers.name' })).getAttribute('aria-checked')).toBe('true')
+		expect(screen.getByRole('checkbox', { name: 'Orders.orderDate' }).getAttribute('aria-checked')).toBe('true')
+		expect((screen.getByLabelText('order 1') as HTMLSelectElement).value).toBe('orderDate')
+		expect((screen.getByLabelText('rows per page') as HTMLInputElement).value).toBe('10')
+		expect(screen.getByRole('status').textContent).toContain('.map(o => ({ total: o.id * 2 }))')
+		// it writes a new query: create, not update
+		fireEvent.click(screen.getByRole('button', { name: 'create the query' }))
+		expect(accepted[0]).toBe([
+			'Orders',
+			'\t.filter(p => p.orderDate > from)',
+			'\t.include(p => p.customer.map(q => ({ name: q.name })))',
+			'\t.map(p => ({ id: p.id, orderDate: p.orderDate }))',
+			'\t.sort(p => desc(p.orderDate))',
+			'\t.page(2, 10)'
+		].join('\n'))
+		// another entity to start from: what wasn't read is no longer told
+		fireEvent.change(screen.getByLabelText('start from'), { target: { value: 'Customers' } })
+		expect(screen.queryByText(/can’t show/)).toBeNull()
+	})
+
+	test('a query it wrote, edited by hand: read again from the tab, it updates that query', async () => {
+		const initial: WizardState = { ...emptyWizard('Orders'), fields: { Orders: ['id'] } }
+		const current = 'Orders.map(p => ({ id: p.id, orderDate: p.orderDate })).page(1, 5)'
+		render(<QueryWizard api={new DomainApi()} schema="northwind/v1" domain={DOMAIN} initial={initial} reading={wizardFromQuery(current, DOMAIN)} current={current} layout={rowLayout}
+			onClose={() => undefined} onAccept={() => undefined} />)
+		expect((await screen.findByRole('checkbox', { name: 'Orders.orderDate' })).getAttribute('aria-checked')).toBe('true')
+		expect((screen.getByLabelText('rows per page') as HTMLInputElement).value).toBe('5')
+		expect(screen.queryByRole('alert')).toBeNull()
 		expect(screen.getByRole('button', { name: 'update the query' })).toBeTruthy()
 	})
 })

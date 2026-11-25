@@ -5,6 +5,16 @@
 			{
 				"tsconfig": "tsconfig.json"
 			}
+		],
+		"^.+/node_modules/(\\.pnpm/)?jose[@/].+\\.js$": [
+			"babel-jest",
+			{
+				"babelrc": false,
+				"configFile": false,
+				"plugins": [
+					"@babel/plugin-transform-modules-commonjs"
+				]
+			}
 		]
 	},
 	"testMatch": [
@@ -20,5 +30,8 @@
 	"modulePathIgnorePatterns": [
 		"<rootDir>/dist/",
 		"<rootDir>/build/"
+	],
+	"transformIgnorePatterns": [
+		"/node_modules/(?!(\\.pnpm/)?jose[@/])"
 	]
 }

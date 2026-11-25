@@ -1,3 +1,4 @@
+import { requestTracer } from '../telemetry/requestTracer'
 import express from 'express'
 import http from 'http'
 import path from 'path'
@@ -8,7 +9,7 @@ import swaggerUi from 'swagger-ui-express'
 import { DataGatewayPort, RequestContext } from '../../../application/ports/input/dataGatewayPort'
 import { SchemaDirectoryPort, ServedSchema } from '../../../application/ports/input/schemaDirectoryPort'
 import { AuthenticatorPort, CredentialScheme, LoggerPort, MetricsPort } from '../../../application/ports/output/supportPorts'
-import { Principal } from '../../../domain/auth/principal'
+import { Principal, refusalOf, withActor } from '../../../domain/auth/principal'
 import { Transport } from '../transport'
 import { toHttpError } from './httpErrors'
 import { closestNames } from '@lambdaorm/base'
@@ -42,7 +43,7 @@ export interface TransportInfo {
 	basePath: string
 	/** where its document is, relative to its base path: openapi.json (http), asyncapi.json (webSocket, mcpWebSocket) */
 	docs?: string
-	/** how a schema is reached: {basePath}/{schema} (webSocket, mcpWebSocket), {basePath}/{schema}/mcp (mcpHttp) */
+	/** how a schema is reached: {basePath}/{schema} (webSocket), {basePath}/{schema}/mcp (mcpHttp, mcpWebSocket) */
 	schemaPath?: string
 }
 
@@ -120,6 +121,15 @@ export class HttpTransport implements Transport {
 		return this.deps.directory.schemas().filter(s => s.exposedOn(this.name))
 	}
 
+	/** the route template of a request, for its span: the schema as {schema} (its routes are mounted under each schema) */
+	private routeOf (req: express.Request): string | undefined {
+		const relative = req.route?.path as string | undefined
+		if (relative === undefined) return undefined
+		const tail = relative === '/' ? '' : relative
+		const schema = this.served.find(s => s.path && this.schemaBase(s) === req.baseUrl)
+		return schema ? `${this.options.basePath}/{schema}${tail}` : `${req.baseUrl}${tail}` || '/'
+	}
+
 	private schemaBase (schema: ServedSchema): string {
 		return `${this.options.basePath}${schema.path ? `/${schema.path}` : ''}`
 	}
@@ -140,11 +150,14 @@ export class HttpTransport implements Transport {
 		const app = express()
 		const { metrics } = this.deps
 		app.disable('x-powered-by')
+		// the span of the request first: everything after runs inside it
+		app.use(requestTracer.http(req => this.routeOf(req)))
 		app.use((req, res, next) => {
 			const end = metrics.startTimer()
 			res.on('finish', () => end({
 				method: req.method,
 				route: req.route?.path ?? 'unmatched',
+				template: this.routeOf(req) ?? '',
 				code: res.statusCode,
 				credential: (res.locals.principal as Principal | undefined)?.name ?? '-'
 			}))
@@ -212,6 +225,8 @@ export class HttpTransport implements Transport {
 			router.get('/whoami', this.handle(async (_req, ctx) => ({
 				name: ctx.principal.name,
 				permissions: [...ctx.principal.permissions],
+				// the view of λORM of the credential (its key, its roles); without one, the schema's or the domain
+				...(ctx.principal.view ? { view: ctx.principal.view } : {}),
 				schema: schema.path,
 				scripts: schema.features.scripts
 			})))
@@ -270,10 +285,12 @@ export class HttpTransport implements Transport {
 		try {
 			const result = await authenticator.authenticate(req.headers)
 			if (!result.valid || !result.principal) {
-				res.status(401).json({ error: 'Unauthorized', message: result.reason ?? 'a valid credential is required' })
+				const refusal = refusalOf(result)
+				if (refusal.challenge) res.setHeader('WWW-Authenticate', refusal.challenge)
+				res.status(refusal.status).json({ error: refusal.status === 401 ? 'Unauthorized' : 'Unavailable', message: refusal.message })
 				return
 			}
-			res.locals.principal = result.principal
+			res.locals.principal = withActor(result.principal, { ip: req.socket.remoteAddress })
 			next()
 		} catch (error) {
 			next(error)
@@ -317,6 +334,9 @@ export class HttpTransport implements Transport {
 		router.post('/parameters', this.handle((req, ctx) => gw.parameters(ctx, body(req))))
 		router.post('/plan', this.handle((req, ctx) => gw.plan(ctx, body(req))))
 		router.post('/execute', this.handle((req, ctx) => gw.execute(ctx, body(req))))
+		// the queries of application.queries, by their name (docs/NAMED_QUERIES.md)
+		router.get('/queries', this.handle((_req, ctx) => gw.queries(ctx)))
+		router.post('/queries/:name', this.handle((req, ctx) => gw.query(ctx, String(req.params.name), { data: body(req).data, options: body(req).options })))
 		router.post('/script', this.handle((req, ctx) => gw.executeScript(ctx, body(req))))
 		// answers the id of the execution as a string, like the former service
 		router.post('/execute-queued', this.handle(async (req, ctx) => (await gw.executeQueued(ctx, body(req))).queueId))

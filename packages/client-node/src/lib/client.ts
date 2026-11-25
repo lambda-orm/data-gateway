@@ -91,6 +91,17 @@ export class DataGatewayClient {
 	public parameters (query: Query): Promise<MetadataParameter[]> { return this.call('parameters', { query: queryText(query) }) }
 	public constraints (query: Query): Promise<MetadataConstraint> { return this.call('constraints', { query: queryText(query) }) }
 
+	/**
+	 * The queries of application.queries of the schema that this credential can use, with their parameters and their
+	 * model (never their text): REST and WebSocket (gateway 4.1.0, docs/NAMED_QUERIES.md)
+	 */
+	public queries (): Promise<{ name: string, description?: string, parameters: MetadataParameter[], model: MetadataModel[], writes: boolean }[]> { return this.call('queries') }
+
+	/** runs a query of application.queries by its name, with its parameters: every transport */
+	public query<T = any> (name: string, data: any = {}, options?: QueryOptions): Promise<T> {
+		return this.call('query', { name, data, options: this.options(options) })
+	}
+
 	/** who the credential is and what it can do (REST only) */
 	public whoami (): Promise<Whoami> { return this.call('whoami') }
 

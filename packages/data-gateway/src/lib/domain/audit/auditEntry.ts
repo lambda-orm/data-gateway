@@ -5,10 +5,12 @@ export interface AuditEntry {
 	schema: string
 	transport: string
 	credential: string
-	operation: 'execute' | 'executeScript' | 'executeQueued' | 'stageImport' | 'stagePush' | 'stageDrop'
+	operation: 'execute' | 'executeScript' | 'executeQueued' | 'stageImport' | 'stagePush' | 'stageDrop' | 'stageMigrate' | 'stageSeed'
 	actions?: string[]
 	entities?: string[]
 	query?: string
+	/** a query of application.queries run by its name (docs/NAMED_QUERIES.md) */
+	name?: string
 	stage?: string
 	/** Only with audit.includeData: the data can hold personal information */
 	data?: unknown

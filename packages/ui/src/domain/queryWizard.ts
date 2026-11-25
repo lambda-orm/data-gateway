@@ -39,6 +39,34 @@ const entityOf = (domain: DomainInfo, name: string): EntityInfo | undefined => d
 /** a relation to many: λORM names it manyToOne (the other entity has many rows for this one) */
 export const toMany = (relation: Pick<RelationInfo, 'type'>): boolean => relation.type === 'manyToOne'
 
+const NUMBERS = ['integer', 'decimal', 'number', 'float', 'double']
+
+/**
+ * An example of a filter on p for an entity, with its own fields: a number of it compared with a constant, and a text
+ * of the entity of one of its relations (or of its own) compared with a value of the data (Products: p.price > 10 &&
+ * p.category.name == name). Undefined when it has no properties.
+ */
+export const filterExample = (domain: DomainInfo, name: string): string | undefined => {
+	const entity = entityOf(domain, name)
+	const properties = entity?.properties ?? []
+	if (!entity || properties.length === 0) return undefined
+	// not a key nor the field of a relation: id, customerId
+	const plainOf = (e: EntityInfo | undefined) => (e?.properties ?? []).filter(p => !(e?.primaryKey ?? []).includes(p.name) && !p.autoIncrement && p.name !== 'id' && !p.name.endsWith('Id'))
+	const plain = plainOf(entity)
+	const number = plain.find(p => NUMBERS.includes(p.type ?? ''))
+	const isText = (p: { type?: string, enum?: string }) => (p.type ?? 'string') === 'string' && !p.enum
+	let text: string | undefined
+	for (const relation of entity.relations ?? []) {
+		if (toMany(relation)) continue
+		const other = plainOf(entityOf(domain, relation.entity)).find(isText)
+		if (other) { text = `p.${relation.name}.${other.name} == ${other.name}`; break }
+	}
+	const own = plain.find(isText)
+	text ??= own ? `p.${own.name} == ${own.name}` : undefined
+	const parts = [number ? `p.${number.name} > 10` : undefined, text].filter(Boolean)
+	return parts.length ? parts.join(' && ') : `p.${properties[0].name} == ${properties[0].name}`
+}
+
 /** The tables of the wizard as a tree from the root: each one with its relation */
 const childrenOf = (state: WizardState, entity: string): WizardTable[] => state.tables.filter(t => t.from === entity)
 
@@ -141,4 +169,171 @@ export const wizardOf = (raw: unknown): WizardState | undefined => {
 		page: { number: typeof o.page?.number === 'string' ? o.page.number : '', size: typeof o.page?.size === 'string' ? o.page.size : '' },
 		...(o.positions && typeof o.positions === 'object' ? { positions: o.positions } : {})
 	}
+}
+
+/** The wizard read from the text of a query: what it could represent, and the parts it couldn't (left out) */
+export interface WizardReading {
+	state: WizardState
+	/** the parts of the query the wizard can't show (a computed field, a filter of an include, a groupBy…) */
+	unread: string[]
+}
+
+/** A call of the chain of a query: .name(args) */
+interface Call { name: string, args: string }
+
+/** Where the bracket opened at index closes (strings skipped); -1 when it doesn't */
+const closing = (text: string, index: number): number => {
+	let depth = 0
+	for (let i = index; i < text.length; i++) {
+		const c = text[i]
+		if (c === '"' || c === '\'' || c === '`') {
+			for (i++; i < text.length && text[i] !== c; i++) if (text[i] === '\\') i++
+			continue
+		}
+		if (c === '(' || c === '[' || c === '{') depth++
+		else if (c === ')' || c === ']' || c === '}') { depth--; if (depth === 0) return i }
+	}
+	return -1
+}
+
+/** The head of a chain (a name, or v.name for a relation) and its calls; undefined when the text is not a chain */
+const chainOf = (text: string): { head: string, calls: Call[] } | undefined => {
+	const m = /^\s*([A-Za-z_$][\w$]*(?:\s*\.\s*[A-Za-z_$][\w$]*(?![\w$]|\s*\())?)/.exec(text)
+	if (!m) return undefined
+	let rest = text.slice(m[0].length)
+	const head = m[1].replace(/\s+/g, '')
+	const calls: Call[] = []
+	while (rest.trim()) {
+		const c = /^\s*\.\s*([A-Za-z_$][\w$]*)\s*\(/.exec(rest)
+		if (!c) return undefined
+		const open = c[0].length - 1
+		const close = closing(rest, open)
+		if (close < 0) return undefined
+		calls.push({ name: c[1], args: rest.slice(open + 1, close).trim() })
+		rest = rest.slice(close + 1)
+	}
+	return { head, calls }
+}
+
+/** The items of a list at its top level: a, b(c, d), [e, f] → three */
+const itemsOf = (text: string): string[] => {
+	const items: string[] = []
+	let start = 0
+	for (let i = 0; i < text.length; i++) {
+		const c = text[i]
+		if (c === '"' || c === '\'' || c === '`' || c === '(' || c === '[' || c === '{') {
+			const end = c === '(' || c === '[' || c === '{' ? closing(text, i) : (() => { let j = i + 1; for (; j < text.length && text[j] !== c; j++) if (text[j] === '\\') j++; return j })()
+			if (end < 0) return [text.trim()]
+			i = end
+		} else if (c === ',') { items.push(text.slice(start, i).trim()); start = i + 1 }
+	}
+	const last = text.slice(start).trim()
+	if (last) items.push(last)
+	return items
+}
+
+/** A lambda: v => body, or (v) => body */
+const lambdaOf = (text: string): { v: string, body: string } | undefined => {
+	const m = /^\s*\(?\s*([A-Za-z_$][\w$]*)\s*\)?\s*=>\s*([\s\S]*)$/.exec(text)
+	return m ? { v: m[1], body: m[2].trim() } : undefined
+}
+
+/** The body of a lambda as a list: [a, b] → a, b; a → a */
+const listOf = (body: string): string[] => {
+	const t = body.trim()
+	return t.startsWith('[') && closing(t, 0) === t.length - 1 ? itemsOf(t.slice(1, -1)) : [t]
+}
+
+/**
+ * The fields of a map: ({ name: v.name, … }), and its entries that are not a field of its own name (computed, renamed,
+ * of a relation); undefined when it is not an object
+ */
+const fieldsOf = (body: string, v: string, entity: EntityInfo | undefined): { fields: string[], other: string[] } | undefined => {
+	let t = body.trim()
+	if (t.startsWith('(') && closing(t, 0) === t.length - 1) t = t.slice(1, -1).trim()
+	if (!t.startsWith('{') || closing(t, 0) !== t.length - 1) return undefined
+	const names = new Set((entity?.properties ?? []).map(p => p.name))
+	const fields: string[] = []
+	const other: string[] = []
+	for (const item of itemsOf(t.slice(1, -1))) {
+		const m = new RegExp(`^([A-Za-z_$][\\w$]*)\\s*:\\s*${v}\\s*\\.\\s*([A-Za-z_$][\\w$]*)$`).exec(item)
+		if (m && m[1] === m[2] && names.has(m[2]) && !fields.includes(m[2])) fields.push(m[2])
+		else other.push(item.replace(/\s+/g, ' '))
+	}
+	return { fields, other }
+}
+
+/** The variable of a lambda renamed to p (not after a dot: a property with that name stays) */
+const renamed = (body: string, v: string): string => v === 'p' ? body : body.replace(new RegExp(`(?<![\\w$.])${v}(?![\\w$])`, 'g'), 'p')
+
+/**
+ * The wizard of a query written by hand, as far as it can show it: the entity it starts from, a filter, the includes of
+ * its relations (each with the fields of its map and its own includes), the fields of the map of the root, the order by
+ * them and the page. What it can't show (a computed or renamed field, a filter of an include, groupBy…) goes in unread.
+ * Undefined when the query doesn't start from an entity of the domain.
+ */
+export const wizardFromQuery = (query: string, domain: DomainInfo): WizardReading | undefined => {
+	const chain = chainOf(query.trim())
+	if (!chain || !entityOf(domain, chain.head)) return undefined
+	const state = emptyWizard(chain.head)
+	const unread: string[] = []
+	const short = (text: string) => text.replace(/\s+/g, ' ').trim()
+	// the fields of a map; all of them is the same as no map (every field ticked)
+	const keep = (entity: string, fields: string[]) => {
+		const all = entityOf(domain, entity)?.properties ?? []
+		if (all.length && all.every(p => fields.includes(p.name))) return
+		state.fields[entity] = fields
+	}
+
+	/** the includes of a table: each one a relation of it, with its map and its own includes */
+	const include = (entity: string, args: string) => {
+		const lambda = lambdaOf(args)
+		if (!lambda) { unread.push(`.include(${short(args)})`); return }
+		for (const item of listOf(lambda.body)) {
+			const rel = chainOf(item)
+			const [v, name] = rel?.head.split('.') ?? []
+			const relation = v === lambda.v && name ? entityOf(domain, entity)?.relations?.find(r => r.name === name) : undefined
+			if (!rel || !relation || relation.entity === state.root || state.tables.some(t => t.entity === relation.entity)) { unread.push(short(item)); continue }
+			state.tables.push({ entity: relation.entity, from: entity, relation: relation.name })
+			for (const call of rel.calls) {
+				if (call.name === 'include') include(relation.entity, call.args)
+				else if (call.name === 'map') {
+					const inner = lambdaOf(call.args)
+					const map = inner && fieldsOf(inner.body, inner.v, entityOf(domain, relation.entity))
+					if (map?.fields.length) keep(relation.entity, map.fields)
+					if (!map) unread.push(`${v}.${name}.map(${short(call.args)})`)
+					else unread.push(...map.other.map(o => `${v}.${name}.map(${inner!.v} => ({ ${o} }))`))
+				} else unread.push(`${v}.${name}.${call.name}(${short(call.args)})`)
+			}
+		}
+	}
+
+	const sorts: Call[] = []
+	for (const call of chain.calls) {
+		const lambda = lambdaOf(call.args)
+		if (call.name === 'filter' && lambda && !state.filter) state.filter = renamed(lambda.body, lambda.v)
+		else if (call.name === 'include') include(state.root, call.args)
+		else if (call.name === 'map' && lambda && !state.fields[state.root]) {
+			const map = fieldsOf(lambda.body, lambda.v, entityOf(domain, state.root))
+			if (map?.fields.length) keep(state.root, map.fields)
+			if (!map) unread.push(`.map(${short(call.args)})`)
+			else unread.push(...map.other.map(o => `.map(${lambda.v} => ({ ${o} }))`))
+		} else if (call.name === 'sort' && lambda) sorts.push(call)
+		else if (call.name === 'page' && /^\s*\d+\s*,\s*\d+\s*$/.test(call.args)) {
+			const [number, size] = call.args.split(',').map(s => s.trim())
+			state.page = { number, size }
+		} else unread.push(`.${call.name}(${short(call.args)})`)
+	}
+	// the order, by the columns of the result (known once the map is read)
+	const valid = new Set(columnsOf(state, domain).map(c => c.alias))
+	for (const call of sorts) {
+		const { v, body } = lambdaOf(call.args)!
+		for (const item of listOf(body)) {
+			const m = new RegExp(`^(?:(asc|desc)\\s*\\(\\s*${v}\\.([\\w$]+)\\s*\\)|${v}\\.([\\w$]+)(?:\\s*\\.\\s*(asc|desc)\\s*\\(\\s*\\))?)$`).exec(item.trim())
+			const column = m?.[2] ?? m?.[3]
+			if (column && valid.has(column) && !state.sort.some(s => s.column === column)) state.sort.push({ column, desc: (m?.[1] ?? m?.[4]) === 'desc' })
+			else unread.push(`.sort(${v} => ${short(item)})`)
+		}
+	}
+	return { state, unread }
 }

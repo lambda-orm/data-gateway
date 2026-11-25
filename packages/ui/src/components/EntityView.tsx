@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { QueryApiPort } from '../application/ports'
-import { cardinalityOf, DomainInfo, edgesOf, EntityInfo, referencesTo } from '../domain/diagram'
+import { AdminApiPort, QueryApiPort } from '../application/ports'
+import { adminMessagesOf } from '../domain/adminI18n'
+import { HistoryView } from './HistoryView'
+import { cardinalityOf, constraintsOf, DomainInfo, edgesOf, EntityInfo, EXPRESSION_HELP, expressionsOf, propertiesIn, referencesTo } from '../domain/diagram'
 import { explorerMessagesOf, format } from '../domain/explorerI18n'
 import { Locale } from '../domain/i18n'
 import { measure, failure, QueryResult } from '../domain/results'
@@ -28,11 +30,21 @@ export interface EntityViewProps {
 	onEdit?: (schema: string, entity: string) => void
 	/** the text of the button of onEdit */
 	editLabel?: string
+	/** Its removal (what uses it, and a confirmation), when the credential may write the schema */
+	onRemove?: (schema: string, entity: string) => void
+	/** the text of the button of onRemove */
+	removeLabel?: string
 	/** Rows per page of the data (default 50) */
 	pageSize?: number
+	/** the administration (schemaRead): the tab History, with the changes of this entity */
+	admin?: AdminApiPort
+	/** where to see the traces of this entity (Grafana / Tempo, filtered by lambdaorm.entity) */
+	tracesUrl?: string
+	/** when it changes, the history is read again */
+	revision?: string | number
 }
 
-type Section = 'properties' | 'relations' | 'keys' | 'data' | 'diagram'
+type Section = 'properties' | 'relations' | 'keys' | 'constraints' | 'data' | 'diagram' | 'history'
 
 const Check: React.FC<{ on?: boolean }> = ({ on }) => <>{on ? '✓' : ''}</>
 
@@ -41,13 +53,16 @@ const Check: React.FC<{ on?: boolean }> = ({ on }) => <>{on ? '✓' : ''}</>
  * auto, default, enum, what each foreign key references, expressions), its relations and what references it, its
  * keys, indexes and constraints, its rows (read only, by pages) and its diagram with its neighbours.
  */
-export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: name, domain: loadDomain, theme = 'light', locale, onOpenEntity, onQuery, onQueryText, onEdit, culture, editLabel = 'Edit', pageSize = 50 }) => {
+export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: name, domain: loadDomain, theme = 'light', locale, onOpenEntity, onQuery, onQueryText, onEdit, culture, editLabel = 'Edit', onRemove, removeLabel = 'Remove', pageSize = 50, admin, tracesUrl, revision }) => {
 	const m = explorerMessagesOf(locale)
+	const a = adminMessagesOf(locale)
 	const [domain, setDomain] = useState<DomainInfo>()
 	const [error, setError] = useState<string>()
 	const [section, setSection] = useState<Section>('properties')
 	const [page, setPage] = useState(1)
 	const [result, setResult] = useState<QueryResult>()
+	// the property whose expressions are shown under the table
+	const [expressionsShown, setExpressionsShown] = useState<string>()
 
 	useEffect(() => { loadDomain().then(setDomain, e => setError(e?.message ?? String(e))) }, [loadDomain])
 
@@ -84,6 +99,7 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 	const keys = new Set(entity.primaryKey ?? [])
 	const unique = new Set(entity.uniqueKey ?? [])
 	const link = (target: string) => <button className="lw-link" onClick={() => onOpenEntity(schema, target)}>{target}</button>
+	const shown = entity.properties?.find(p => p.name === expressionsShown)
 	const rows = Array.isArray(result?.value) ? (result!.value as unknown[]).length : 0
 
 	return (
@@ -95,23 +111,26 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 				{entity.view && <span className="lw-badge">{m.viewEntity}</span>}
 				{entity.extends && <span className="lw-badge">{format(m.extendsEntity, { name: entity.extends })}</span>}
 				<span className="lw-spacer" />
+				{tracesUrl && <a href={tracesUrl} target="_blank" rel="noopener noreferrer">{a.viewTraces}</a>}
+				{onRemove && <button className="lw-danger" onClick={() => onRemove(schema, entity.name)}>{removeLabel}</button>}
 				{onEdit && <button onClick={() => onEdit(schema, entity.name)}>{editLabel}</button>}
 				{!entity.abstract && <button className="lw-primary" onClick={() => onQuery(schema, entity.name)}>{m.queryIt}</button>}
 			</div>
 			<div className="lw-toolbar" role="tablist" aria-label={entity.name}>
-				{([['properties', `${m.properties} (${entity.properties?.length ?? 0})`], ['relations', `${m.relations} (${(entity.relations?.length ?? 0) + referencedBy.length})`],
-					['keys', m.keysIndexes], ...(entity.abstract ? [] : [['data', m.data]]), ['diagram', m.diagram]] as [Section, string][]).map(([key, label]) => (
+				{([['properties', `${m.properties} (${entity.properties?.length ?? 0})`], ['relations', `${m.relations} (${entity.relations?.length ?? 0})`],
+					['keys', m.keysIndexes], ['constraints', `${m.constraints} (${entity.constraints?.length ?? 0})`], ...(entity.abstract ? [] : [['data', m.data]]), ['diagram', m.diagram], ...(admin?.history ? [['history', a.history]] : [])] as [Section, string][]).map(([key, label]) => (
 					<button key={key} role="tab" aria-selected={section === key} className={section === key ? 'lw-active' : ''} onClick={() => setSection(key)}>{label}</button>
 				))}
 			</div>
 
+			{section === 'history' && admin && <HistoryView admin={admin} schema={schema} target={`domain/entities/${entity.name}`} locale={locale} revision={revision} />}
 			{section === 'properties' && (
 				<div className="lw-view">
 					<table className="lw-table lw-form-table">
 						<thead><tr><th>#</th><th>{m.name}</th><th>{m.type}</th><th>{m.length}</th><th>{m.required}</th><th>PK</th><th>{m.auto}</th><th>{m.defaultValue}</th><th>{m.references}</th><th>{m.expressions}</th></tr></thead>
 						<tbody>
 							{(entity.properties ?? []).map((p, i) => (
-								<tr key={p.name}>
+								<tr key={p.name} className={expressionsShown === p.name ? 'lw-active' : undefined}>
 									<td className="lw-muted">{i + 1}</td>
 									<td className={keys.has(p.name) ? 'lw-pk' : ''}>{p.name}</td>
 									<td>{p.enum ? `${p.enum} (enum)` : p.type ?? 'string'}</td>
@@ -121,11 +140,37 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 									<td><Check on={p.autoIncrement} /></td>
 									<td><code>{p.default ?? ''}</code></td>
 									<td>{references.has(p.name) && link(references.get(p.name)!.split('.')[0])}{references.has(p.name) && <span className="lw-muted">.{references.get(p.name)!.split('.').slice(1).join('.')}</span>}</td>
-									<td>{p.readExp && <span className="lw-exp"><span className="lw-muted">read </span><ExpressionView expression={p.readExp} variables={names} /></span>}{p.writeExp && <span className="lw-exp"><span className="lw-muted">write </span><ExpressionView expression={p.writeExp} variables={names} /></span>}</td>
+									<td>{(expressionsOf(p).length > 0 || constraintsOf(entity, p.name).length > 0) && (
+										<button type="button" className="lw-link lw-expression-toggle" aria-pressed={expressionsShown === p.name}
+											title={[...expressionsOf(p), ...(constraintsOf(entity, p.name).length ? [`${m.constraints} (${constraintsOf(entity, p.name).length})`] : [])].join(', ')}
+											onClick={() => setExpressionsShown(expressionsShown === p.name ? undefined : p.name)}>ƒ {m.expression}</button>
+									)}</td>
 								</tr>
 							))}
 						</tbody>
 					</table>
+					{shown && (
+						<section className="lw-expression-detail" aria-label={format(m.expressionsOf, { name: shown.name })}>
+							<h4>{format(m.expressionsOf, { name: shown.name })}</h4>
+							{expressionsOf(shown).map(k => (
+								<div key={k} className="lw-expression-item">
+									<p className="lw-expression-label"><code>{k}</code>: {m[EXPRESSION_HELP[k]]}</p>
+									<ExpressionView expression={shown[k]!} variables={names} />
+								</div>
+							))}
+							{constraintsOf(entity, shown.name).length > 0 && (
+								<div className="lw-validations">
+									<p className="lw-expression-label"><code>constraints</code>: {m.validationsHint}</p>
+									{constraintsOf(entity, shown.name).map((c, i) => (
+										<div key={i} className="lw-expression-item">
+											<p className="lw-constraint-message">{c.message}</p>
+											<ExpressionView expression={c.condition} variables={names} />
+										</div>
+									))}
+								</div>
+							)}
+						</section>
+					)}
 				</div>
 			)}
 
@@ -167,10 +212,26 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 						<table className="lw-table lw-form-table"><thead><tr><th>{m.name}</th><th>{m.fields}</th></tr></thead>
 							<tbody>{entity.indexes.map(i => <tr key={i.name}><td>{i.name}</td><td><code>{i.fields.join(', ')}</code></td></tr>)}</tbody></table>
 					) : <p className="lw-muted">{m.none}</p>}
-					<h4>{m.constraints}</h4>
+				</div>
+			)}
+
+			{section === 'constraints' && (
+				<div className="lw-view">
+					<p className="lw-muted">{m.validationsHint}</p>
 					{entity.constraints?.length ? (
-						<table className="lw-table lw-form-table"><thead><tr><th>{m.message}</th><th>{m.condition}</th></tr></thead>
-							<tbody>{entity.constraints.map((c, i) => <tr key={i}><td>{c.message}</td><td><ExpressionView expression={c.condition} variables={names} /></td></tr>)}</tbody></table>
+						<table className="lw-table lw-form-table" aria-label={m.constraints}>
+							<thead><tr><th>#</th><th>{m.message}</th><th>{m.condition}</th><th>{m.usesProperties}</th></tr></thead>
+							<tbody>
+								{entity.constraints.map((c, i) => (
+									<tr key={i}>
+										<td className="lw-muted">{i + 1}</td>
+										<td>{c.message}</td>
+										<td className="lw-condition"><ExpressionView expression={c.condition} variables={names} /></td>
+										<td>{propertiesIn(c.condition, names).map(n => <code key={n} className="lw-uses">{n}</code>)}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
 					) : <p className="lw-muted">{m.none}</p>}
 				</div>
 			)}

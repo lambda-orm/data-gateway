@@ -3,7 +3,7 @@ info:
   contact:
     email: flaviolrita@hotmail.com
     name: 'Flavio Lionel Rita'
-  description: 'Data Gateway: the schemas of this instance through [λORM](https://lambda-orm.github.io/wiki/) queries (lambda expressions over the domain). Every request but /ping, /health, /metrics and /schemas needs a credential, as configured in data-gateway.config.yaml (bearer token, API key or basic).'
+  description: 'Data Gateway: the schemas of this instance through [λORM](https://lambda-orm.github.io/wiki/) queries (lambda expressions over the domain). Every request needs a credential, as configured in data-gateway.config.yaml (bearer token, API key or basic), but /ping, /health, /version and /metrics (of the gateway and of each schema), /schemas, /transports and this documentation (/doc, /openapi.json).'
   license:
     name: MIT
     url: https://opensource.org/license/mit/
@@ -59,6 +59,7 @@ paths:
     get:
       operationId: version
       parameters: []
+      security: []
       responses:
         "200":
           content:
@@ -1818,9 +1819,12 @@ components:
       type: object
     QueryOptions:
       additionalProperties: false
+      description: >-
+        The options of λORM that the client chooses. The view and the context are the gateway's: a view or a context
+        sent here is dropped (a client could skip what a view hides or read the rows of another tenant), and so is an
+        actor (the gateway sets the one of the request).
       example:
         stage: default
-        view: default
         chunkSize: 1000
         tryAllCan: true
         headers:
@@ -1830,6 +1834,8 @@ components:
           type: string
         view:
           type: string
+          deprecated: true
+          description: Ignored, the gateway decides the view
         chunkSize:
           type: integer
         tryAllCan:

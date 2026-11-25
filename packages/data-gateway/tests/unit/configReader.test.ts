@@ -109,7 +109,7 @@ describe('config reader', () => {
 
 		test('invalid type, adapter, permissions and duplicated names', () => {
 			expect(read({ ...base, authentication: { adapter: 'local', type: 'jwt', token: 'x' } }).issues).toContain('authentication.type must be bearer, apikey or basic')
-			expect(read({ ...base, authentication: { adapter: 'oauth' } }).issues).toContain('authentication.adapter "oauth" is not none or local')
+			expect(read({ ...base, authentication: { adapter: 'oauth' } }).issues).toContain('authentication.adapter "oauth" is not none, local or jwt')
 			expect(read({ ...base, authentication: { adapter: 'local', type: 'bearer', tokens: [{ name: 'a', value: 'x', permissions: ['admin'] }] } }).issues[0])
 				.toMatch(/unknown permissions admin/)
 			expect(read({ ...base, authentication: { adapter: 'local', type: 'bearer', tokens: [{ name: 'a', value: 'x' }, { name: 'a', value: 'y' }] } }).issues[0])
@@ -167,8 +167,12 @@ describe('config reader', () => {
 
 	test('mcp: tools must be names of tools; maxRows 0 = no limit', () => {
 		const { config } = read({ ...base, mcp: { tools: { exclude: ['orm_execute_script'] }, maxRows: '0', name: 'iot' } })
-		expect(config?.mcp).toEqual({ name: 'iot', tools: { include: [], exclude: ['orm_execute_script'] }, pageSize: 50, maxRows: 0 })
+		expect(config?.mcp).toEqual({ name: 'iot', tools: { include: [], exclude: ['orm_execute_script'] }, pageSize: 50, maxRows: 0, freeQueries: true })
 		expect(read({ ...base, mcp: { tools: { include: ['orm_nope'] } } }).issues).toEqual(['mcp.tools.include: unknown tools orm_nope'])
+		// a named query (docs/NAMED_QUERIES.md): query_<name>; freeQueries false leaves an agent only with them
+		const named = read({ ...base, mcp: { freeQueries: false, tools: { exclude: ['query_internalReport'] } } })
+		expect(named.issues).toEqual([])
+		expect(named.config?.mcp).toMatchObject({ freeQueries: false, tools: { exclude: ['query_internalReport'] } })
 	})
 
 	test('unknown sections are warned', () => {

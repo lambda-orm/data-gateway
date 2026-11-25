@@ -7,7 +7,7 @@ import { DataGatewayPort, RequestContext } from '../ports/input/dataGatewayPort'
 import { McpServerInfo, McpServerPort } from '../ports/input/mcpServerPort'
 import { GatewayHealth, SchemaDirectoryPort, ServedSchema } from '../ports/input/schemaDirectoryPort'
 import { SchemaChannelPort } from '../ports/output/runtimePorts'
-import { AuthenticatorPort, ClockPort, QueueOutcome } from '../ports/output/supportPorts'
+import { AuthenticatorPort, ClockPort, QueueOutcome, NO_TRACING, TracingPort } from '../ports/output/supportPorts'
 import { Listeners } from './listeners'
 import { toolError } from '../mcp/resultSerializer'
 
@@ -56,7 +56,8 @@ export class SchemaRouter implements SchemaDirectoryPort {
 	private readonly schemasChanges = new Listeners<void>()
 	private readonly workspaceChanges = new Listeners<WorkspaceChange>()
 
-	constructor (settings: RoutedSchemaSettings[], private readonly clock: ClockPort, private readonly gatewayVersion: string) {
+	constructor (settings: RoutedSchemaSettings[], private readonly clock: ClockPort, private readonly gatewayVersion: string,
+		private readonly tracing: TracingPort = NO_TRACING) {
 		for (const s of settings) this.routes.set(s.path, new RoutedSchema(s, clock.now().toISOString()))
 		this.serveAll()
 	}
@@ -91,7 +92,21 @@ export class SchemaRouter implements SchemaDirectoryPort {
 		return this.workspaceChanges.subscribe(listener)
 	}
 
+	/** the versions of the lambdaORM.yaml that the administration wrote and announced (with who), by their hash */
+	private readonly announced = new Map<string, number>()
+
+	/**
+	 * A change of a workspace, to the IDEs. One of the administration comes with who and what; the monitor sees the same
+	 * file a moment later: that second one is not announced again. One from outside (an editor, git) goes as it comes.
+	 */
 	public workspaceChanged (change: WorkspaceChange): void {
+		const now = Date.now()
+		for (const [version, at] of this.announced) if (now - at > 60000) this.announced.delete(version)
+		if (change.change?.version) {
+			this.announced.set(change.change.version, now)
+		} else if (change.kind === 'schema' && change.version && this.announced.delete(change.version.slice(0, 16))) {
+			return
+		}
 		this.workspaceChanges.emit(change)
 	}
 
@@ -183,9 +198,10 @@ export class SchemaRouter implements SchemaDirectoryPort {
 					target,
 					op,
 					args,
-					principal: ctx ? { name: ctx.principal.name, permissions: [...ctx.principal.permissions] } : undefined,
+					principal: ctx ? { name: ctx.principal.name, permissions: [...ctx.principal.permissions], actor: ctx.principal.actor, ...(ctx.principal.context ? { context: ctx.principal.context } : {}), ...(ctx.principal.view ? { view: ctx.principal.view } : {}) } : undefined,
 					transport: ctx?.transport ?? 'edge',
-					deadline: Date.now() + waitMs
+					deadline: Date.now() + waitMs,
+					trace: this.tracing.carrier()
 				}),
 				new Promise<never>((_resolve, reject) => { timer = setTimeout(() => reject(timeout(limit)), waitMs) })
 			])

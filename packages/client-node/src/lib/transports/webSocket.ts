@@ -1,4 +1,4 @@
-import { ConnectionTarget } from '../connection'
+import { ConnectionTarget, headersOf } from '../connection'
 import { gatewayError, GatewayError, transportError, unsupported } from '../errors'
 import { Args, clean, Operation, RPC, WHERE } from '../operations'
 import { RpcSocket } from './rpcSocket'
@@ -10,7 +10,7 @@ export class WebSocketTransport implements Transport {
 	private readonly socket: RpcSocket
 
 	constructor (private readonly target: ConnectionTarget) {
-		this.socket = new RpcSocket(target.url, target.headers)
+		this.socket = new RpcSocket(target.url, () => headersOf(target))
 	}
 
 	public async open (): Promise<void> {

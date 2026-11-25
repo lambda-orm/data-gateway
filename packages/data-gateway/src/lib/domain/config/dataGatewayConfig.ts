@@ -1,3 +1,4 @@
+import { ObservabilityConfig } from '@lambdaorm/base'
 import { Permission } from '../auth/permission'
 
 /** A credential of a `local` authenticator. The secret is `value` (bearer token, API key) or `password` (basic). */
@@ -7,16 +8,52 @@ export interface CredentialConfig {
 	username?: string
 	password?: string
 	permissions: Permission[]
+	/** the view of λORM of its requests (docs/VIEWS_BY_IDENTITY.md); none, the one of the schema */
+	view?: string
+}
+
+/** A role of the tokens of an issuer: its permissions, and the view of λORM of who has it */
+export interface RoleConfig {
+	permissions: Permission[]
+	view?: string
 }
 
 export type AuthenticationType = 'bearer' | 'apikey' | 'basic'
 
+/** adapter: jwt — the tokens of an identity provider (docs/JWT.md) */
+export interface JwtConfig {
+	/** iss of the tokens; with it the jwksUri is discovered (OIDC) when not given */
+	issuer: string
+	/** aud: the token must have one of them; none, not checked */
+	audience: string[]
+	jwksUri?: string
+	/** a shared secret (HS256): for development and tests, from a variable */
+	secret?: string
+	algorithms: string[]
+	clockToleranceSec: number
+	principal: {
+		/** the claim of the name (a path with dots); default sub */
+		name: string
+		permissions?: {
+			/** the claim of the roles: a list, or a text separated by spaces (as scope) */
+			claim: string
+			/** role → its permissions and its view */
+			roles: Record<string, RoleConfig>
+		}
+	}
+	/** variable of the context of λORM → the claim it takes (a path with dots) */
+	context: Record<string, string>
+}
+
 export interface AuthenticationConfig {
-	adapter: 'none' | 'local'
+	/** methods: several, in order; the first that recognizes the credential decides */
+	adapter: 'none' | 'local' | 'jwt' | 'methods'
 	type?: AuthenticationType
 	/** Header of an API key (lower case); default x-api-key */
 	header?: string
 	credentials: CredentialConfig[]
+	jwt?: JwtConfig
+	methods?: AuthenticationConfig[]
 }
 
 export type RuntimeMode = 'thread' | 'process'
@@ -26,10 +63,14 @@ export interface SchemaOverrides {
 	/** Transports that expose it (default: all exposed) */
 	transports?: TransportName[]
 	authentication?: AuthenticationConfig
+	/** the view of λORM of a caller without one (docs/VIEWS_BY_IDENTITY.md); none, default (the domain) */
+	view?: string
 	/** Variables its worker receives on top of its .env and the base variables */
 	env?: Record<string, string>
 	scripts?: Partial<ScriptsConfig>
-	mcp?: { maxRows?: number, tools?: { include: string[], exclude: string[] } }
+	mcp?: { maxRows?: number, tools?: { include: string[], exclude: string[] }, freeQueries?: boolean }
+	/** the limits of its named queries, by name */
+	queries?: Record<string, NamedQueryLimitsConfig>
 	server?: { timeout?: number, maxConcurrent?: number, maxResponseBytes?: number }
 	runtime?: { mode?: RuntimeMode, maxMemoryMb?: number, checkConnections?: boolean }
 }
@@ -177,6 +218,17 @@ export interface McpConfig {
 	pageSize: number
 	/** Rows of orm_execute / orm_execute_script; 0 = no limit */
 	maxRows: number
+	/**
+	 * false: an agent has only the queries of application.queries (query_<name>) and the tools of the schema, without
+	 * orm_execute, orm_execute_script, orm_execute_queued nor orm_plan (docs/NAMED_QUERIES.md §3)
+	 */
+	freeQueries: boolean
+}
+
+/** The limits of a query of application.queries (docs/NAMED_QUERIES.md §4) */
+export interface NamedQueryLimitsConfig {
+	maxRows?: number
+	timeoutMs?: number
 }
 
 export type TransportName = keyof TransportsConfig
@@ -202,6 +254,11 @@ export interface DataGatewayConfig {
 	server: ServerConfig
 	logger: LoggerConfig
 	metrics: MetricsConfig
+	/**
+	 * The OpenTelemetry of the gateway (docs/OBSERVABILITY.md): the same shape as infrastructure.observability of a
+	 * lambdaORM.yaml; the OTEL_* variables override it. Its SDK is the one of λORM too.
+	 */
+	observability?: ObservabilityConfig
 	audit: AuditConfig
 	authentication: AuthenticationConfig
 	rateLimit: RateLimitConfig

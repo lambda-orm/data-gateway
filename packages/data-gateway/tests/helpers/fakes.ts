@@ -1,4 +1,5 @@
 // Fakes of the output ports: the application and the transports are tested without λORM nor a database.
+import { NamedQueryUseCases } from '../../src/lib/application/usecases/namedQueryUseCases'
 import { DataGateway } from '../../src/lib/application/facade/dataGateway'
 import { OrmQueryPort, OrmSchemaPort, OrmScriptPort, OrmStagePort } from '../../src/lib/application/ports/output/ormPorts'
 import { AuditPort, ClockPort, QueueExecuteArgs, QueueOutcome, QueuePort } from '../../src/lib/application/ports/output/supportPorts'
@@ -32,6 +33,7 @@ export const fakeMetadata = (query: string): any => {
 export class FakeOrm implements OrmQueryPort, OrmScriptPort, OrmSchemaPort, OrmStagePort {
 	public executed: { query: string, data?: unknown, options?: unknown }[] = []
 	public scripts: { script: string, data?: unknown, options?: unknown }[] = []
+	public planned: { query: string, options?: unknown }[] = []
 	public executeResult: any = [{ id: 1 }]
 	public scriptResult: any = 7
 	public executeDelayMs = 0
@@ -44,10 +46,16 @@ export class FakeOrm implements OrmQueryPort, OrmScriptPort, OrmSchemaPort, OrmS
 		return this.executeResult
 	}
 
-	public async plan (query: string) { return { entity: query.split('.')[0], dialect: 'PostgreSQL', source: 'main', sentence: 'SELECT 1' } }
-	public async metadata (query: string) { return fakeMetadata(query) }
-	public async model () { return [{ name: 'id', type: 'integer' }] as any }
-	public async parameters () { return [{ name: 'id', type: 'integer' }] as any }
+	public async plan (query: string, options?: unknown) {
+		this.planned.push({ query, options })
+		return { entity: query.split('.')[0], dialect: 'PostgreSQL', source: 'main', sentence: 'SELECT 1' }
+	}
+
+	public async metadata (query: string, _options?: unknown) { return fakeMetadata(query) }
+	public async model (_query?: string, _options?: unknown) { return [{ name: 'id', type: 'integer' }] as any }
+	public async parameters (_query?: string, _options?: unknown) { return [{ name: 'id', type: 'integer' }] as any }
+	public named: { name: string, query: string, description?: string }[] = []
+	public namedQueries () { return this.named }
 	public async constraints () { return { entity: 'Products', constraints: [] } as any }
 	public async executeScript (script: string, data?: unknown, options?: unknown) {
 		this.scripts.push({ script, data, options })
@@ -56,10 +64,10 @@ export class FakeOrm implements OrmQueryPort, OrmScriptPort, OrmSchemaPort, OrmS
 
 	public check () {}
 	public version () { return { version: '1.0.0' } }
-	public domain () { return { entities: [{ name: 'Products' }], enums: [] } as any }
+	public domain (_view?: string) { return { entities: [{ name: 'Products' }], enums: [] } as any }
 	public sources () { return [{ name: 'main', dialect: 'PostgreSQL' }] }
 	public source (name: string) { return name === 'main' ? { name: 'main', dialect: 'PostgreSQL' } : undefined }
-	public entities () { return [{ name: 'Products' }] as any }
+	public entities (_view?: string) { return [{ name: 'Products' }] as any }
 	public entity (name: string) { return name === 'Products' ? { name } as any : undefined }
 	public enums () { return [] }
 	public enum () { return undefined }
@@ -109,7 +117,7 @@ export interface GatewayFixture {
 	queueOutcomes: Listeners<QueueOutcome>
 }
 
-export const fakeGateway = (options: { scripts?: Partial<ScriptSettings>, timeoutMs?: number, includeData?: boolean, auditEnabled?: boolean, queue?: FakeQueue | null } = {}): GatewayFixture => {
+export const fakeGateway = (options: { scripts?: Partial<ScriptSettings>, timeoutMs?: number, includeData?: boolean, auditEnabled?: boolean, queue?: FakeQueue | null, queryLimits?: Record<string, { maxRows?: number, timeoutMs?: number }> } = {}): GatewayFixture => {
 	const orm = new FakeOrm()
 	const audit = new MemoryAudit()
 	const clock = new FixedClock()
@@ -123,7 +131,8 @@ export const fakeGateway = (options: { scripts?: Partial<ScriptSettings>, timeou
 		script: new ScriptUseCase(orm, scripts, auditor),
 		queue: new QueueUseCase(queue, queries, auditor, { completed: outcome => queueOutcomes.emit(outcome) }),
 		schema: new SchemaUseCases(orm),
-		stages: new StageUseCases(orm, auditor)
+		stages: new StageUseCases(orm, auditor),
+		named: new NamedQueryUseCases(orm, queries, options.queryLimits ?? {})
 	}, orm, clock, '9.9.9', options.timeoutMs ?? 5000)
 	return { gateway, orm, audit, queue: queue ?? new FakeQueue(), queueOutcomes }
 }

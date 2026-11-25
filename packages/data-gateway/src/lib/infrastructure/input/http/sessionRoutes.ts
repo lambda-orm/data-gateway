@@ -1,3 +1,4 @@
+import { refusalOf, withActor } from '../../../domain/auth/principal'
 import express from 'express'
 import { Authenticated, SessionService } from '../../../application/session/sessionService'
 import { AuthenticatorPort } from '../../../application/ports/output/supportPorts'
@@ -35,7 +36,13 @@ export const sessionAuthentication = (deps: SessionDeps, open: string[]): expres
 		if (open.includes(req.path)) return next()
 		try {
 			const auth = deps.service.authenticate(tokenOf(req), ipOf(req, deps.address))
-			res.locals.principal = auth.principal
+			// who it is for λORM and the history: the credential, the session, the IDE and its address
+			const client = auth.session.client
+			res.locals.principal = withActor(auth.principal, {
+				session: auth.session.id,
+				client: client?.app ? `${client.app}${client.version ? ` ${client.version}` : ''}` : undefined,
+				ip: auth.session.ip ?? ipOf(req, deps.address)
+			})
 			res.locals.session = auth
 			next()
 		} catch (error) {
@@ -81,8 +88,9 @@ export const sessionRouter = (deps: SessionDeps): express.Router => {
 		const ip = ipOf(req, deps.address)
 		const result = await deps.authenticator.authenticate(req.headers)
 		if (!result.valid || !result.principal) {
-			deps.service.rejected(result.reason ?? 'invalid credential', ip)
-			return Promise.reject(Object.assign(new Error(result.reason ?? 'a valid credential is required'), { status: 401, name: 'UnauthorizedError' }))
+			const refusal = refusalOf(result)
+			deps.service.rejected(refusal.message, ip)
+			return Promise.reject(Object.assign(new Error(refusal.message), { status: refusal.status, name: refusal.status === 401 ? 'UnauthorizedError' : 'UnavailableError' }))
 		}
 		const login = deps.service.login(result.principal, clientOf(req.body, req.headers['user-agent']), ip)
 		const { session } = login

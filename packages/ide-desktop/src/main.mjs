@@ -72,7 +72,7 @@ const createWindow = (proxy) => {
 	const kept = readWindow()
 	const win = new BrowserWindow({
 		x: kept.x, y: kept.y, width: kept.width ?? 1400, height: kept.height ?? 900, minWidth: 800, minHeight: 500,
-		title: 'Data Gateway IDE',
+		title: 'λORM Data Gateway',
 		// in development its icon; packaged, the one electron-builder gives the app
 		icon: fs.existsSync(path.join(here, '..', 'build', 'icon.png')) ? path.join(here, '..', 'build', 'icon.png') : undefined,
 		show: false,
@@ -111,7 +111,7 @@ const menu = () => Menu.buildFromTemplate([
 			{ label: 'Check for updates', id: 'check-updates', click: () => updates?.check(true) },
 			{ label: 'Check automatically', id: 'auto-updates', type: 'checkbox', checked: updates?.automatic ?? true, click: item => updates?.setAutomatic(item.checked) },
 			{ type: 'separator' },
-			{ label: `Data Gateway IDE ${version}`, enabled: false }
+			{ label: `λORM Data Gateway ${version}`, enabled: false }
 		]
 	}
 ])
@@ -122,6 +122,8 @@ app.whenReady().then(async () => {
 	const proxy = await startProxy()
 	// what the page needs of the app: the base of its proxy, its version, the platform (nothing else is exposed)
 	ipcMain.on('ide:config', event => { event.returnValue = { proxyBase: proxy.base, version, platform: process.platform } })
+	// the menu of the page asks for the check of updates (its native dialogs answer)
+	ipcMain.handle('ide:check-updates', () => updates?.check(true))
 	protocol.handle('app', serveApp(proxy.origin))
 	Menu.setApplicationMenu(menu())
 	const win = createWindow(proxy)
@@ -152,7 +154,7 @@ const runSmokeTest = async (win, proxy) => {
 		const withToken = await fetch(`${proxy.base}${target}`, { headers: { Origin: APP_ORIGIN } })
 		const without = await fetch(`${proxy.origin}/${target}`, { headers: { Origin: APP_ORIGIN } })
 		if (withToken.status !== 502 || without.status !== 403) return fail(`the proxy answered ${withToken.status} / ${without.status}`)
-		console.log(`[smoke-test] ok: Data Gateway IDE ${version} on ${process.platform} ${process.arch}`)
+		console.log(`[smoke-test] ok: λORM Data Gateway ${version} on ${process.platform} ${process.arch}`)
 		app.exit(0)
 	} catch (error) {
 		fail(error?.stack ?? String(error))

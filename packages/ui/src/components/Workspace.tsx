@@ -1,5 +1,6 @@
+import { HistoryView } from './HistoryView'
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
-import { QueryApiPort, SchemaInfo, SessionStorePort, WorkspaceStore } from '../application/ports'
+import { QueryApiPort, SchemaInfo, SessionStorePort, WorkspaceStore, WorkspaceChangeEvent } from '../application/ports'
 import { readSession, WorkspaceSession } from '../domain/session'
 import { BrowserSessionStore, FallbackSessionStore, GatewaySessionStore } from '../infrastructure/sessionStores'
 import { WorkspaceController, WorkspaceState } from '../application/workspaceController'
@@ -21,7 +22,8 @@ import { CommandsPanel } from './CommandsPanel'
 import { FormFocus, SchemaForms } from './SchemaForms'
 import { FileView } from './FileView'
 import { QueryWizard } from './QueryWizard'
-import { WizardState } from '../domain/queryWizard'
+import { StageDiagram, StageView } from './StageDiagram'
+import { queryOf, WizardReading, WizardState, wizardFromQuery } from '../domain/queryWizard'
 import { wizardMessagesOf } from '../domain/wizardI18n'
 import { fromYaml } from '../domain/results'
 import { RestAdminApi } from '../infrastructure/restAdminApi'
@@ -61,7 +63,8 @@ export interface WorkspaceProps extends Omit<QueryWorkbenchProps, 'initial' | 'o
 	 */
 	connections?: WorkspaceConnection[]
 	/** The root of the connections in the explorer (an IDE): its title and its buttons (add one) */
-	connectionsHeading?: { title: string, actions?: React.ReactNode }
+	/** the root of the connections in the explorer: its title, what goes before it (the menu of the app) and its actions */
+	connectionsHeading?: { title: string, lead?: React.ReactNode, actions?: React.ReactNode }
 }
 
 /** A data-gateway the workspace is connected to: its workspaces stay in it (the IDE only connects) */
@@ -79,8 +82,10 @@ export interface WorkspaceConnection {
 	/** where its saved items are kept when the gateway doesn't keep them (by default this browser, under workspaceKey) */
 	store?: WorkspaceStore
 	workspaceKey?: string
-	/** buttons of its heading (open its page, edit, remove) */
+	/** buttons of its heading */
 	actions?: React.ReactNode
+	/** Its page (edit, remove): opened by a click on its name */
+	onOpen?: () => void
 	/** it can't be reached now: why (its explorer says it) */
 	problem?: string
 	/**
@@ -92,9 +97,13 @@ export interface WorkspaceConnection {
 	 * The gateway says something changed (its WebSocket of events: schema.statusChanged, workspace.changed): the schemas
 	 * and what is saved are read again at once. A subscription; it answers how to unsubscribe
 	 */
-	changes?: (listener: () => void) => () => void
+	changes?: (listener: (event?: WorkspaceChangeEvent) => void) => () => void
 	/** How often its schemas are read again while `changes` works (it replaces refreshMs of the workspace) */
 	refreshMs?: number
+	/** the id of the session of this IDE in the gateway: a change of another session is announced, with a Refresh */
+	session?: () => string | undefined
+	/** where to see the traces of an entity (Grafana / Tempo filtered by lambdaorm.entity), when the connection has it */
+	tracesUrl?: (schema: string, entity: string) => string | undefined
 }
 
 /** A flag of this browser (a convenience: without storage it is never set) */
@@ -104,7 +113,7 @@ const writeFlag = (key: string): void => { try { globalThis.localStorage?.setIte
 /** What tells that the schemas changed: their routes, states and the version each serves */
 const revisionOf = (schemas: SchemaInfo[]): string => schemas.map(s => `${s.path}|${s.status}|${s.since ?? ''}|${s.pending ?? ''}|${s.reason ?? ''}`).join('\n')
 
-type TabKind = 'query' | 'domain' | 'entity' | 'diagram' | 'schemaFile' | 'schema' | 'element' | 'file' | 'page'
+type TabKind = 'query' | 'domain' | 'entity' | 'diagram' | 'schemaFile' | 'schema' | 'element' | 'file' | 'page' | 'stageDiagram'
 
 interface DiagramDraft { entities: string[], positions?: Record<string, { x: number, y: number }>, bends?: Record<string, number>, compact: boolean, detail?: DiagramDetail, relationNames: boolean }
 
@@ -125,8 +134,15 @@ interface Tab {
 	draft?: DiagramDraft
 	/** The element of an element tab (an entity, a source, the application section…) */
 	focus?: FormFocus
+	/** When its form was asked to edit (Edit, not a click to read it): it opens in edit, Cancel and Save */
+	editRequest?: number
+	/** When its removal was asked (Remove in the view of the element) */
+	removeRequest?: number
 	/** The file of a file tab (data/…, src/…) */
 	file?: string
+	/** The stage of a diagram of a stage, and how it was left (turned, what it shows, its boxes moved) */
+	stage?: string
+	stageView?: StageView
 	/** The page of the application of a page tab (account, preferences) */
 	page?: string
 	/** The connection it belongs to (by default the first) */
@@ -136,6 +152,9 @@ interface Tab {
 	/** The query rewritten in place (by the wizard): its editor starts again with the new text */
 	rev?: number
 }
+
+/** How a diagram of a stage is shown, as compared: what is not set is the default */
+const viewKey = (v: StageView | undefined) => ({ orientation: v?.orientation ?? 'top', detail: v?.detail ?? 'tables', positions: v?.positions ?? {} })
 
 const SAME = (a: SavedQueryContent, b: SavedQueryContent) => a.mode === b.mode && a.query === b.query && a.script === b.script && a.data === b.data && a.options === b.options
 const contentOf = (q: SavedQuery): SavedQueryContent => ({ mode: q.mode, query: q.query, script: q.script, data: q.data, options: q.options })
@@ -187,6 +206,10 @@ interface Runtime {
 	domainOf: (schema: string) => Promise<DomainInfo>
 	loaderOf: (schema: string) => () => Promise<DomainInfo>
 	pokeSoon: () => void
+	/** Read again what was read of a schema (or of all): changed elsewhere, by another IDE or user */
+	refresh: (schema?: string) => void
+	/** How many times it was refreshed: the forms and views read again when it changes */
+	refreshes: number
 }
 
 /** What the explorer of a connection asks the workspace to open (the connection is given by the section) */
@@ -198,8 +221,9 @@ interface Openers {
 	newDiagram: (conn: string, schema: string, parentId?: string) => void
 	schemaFile: (conn: string, schema: string) => void
 	schema: (conn: string, schema: string) => void
-	element: (conn: string, schema: string, focus: FormFocus) => void
+	element: (conn: string, schema: string, focus: FormFocus, edit?: boolean) => void
 	file: (conn: string, schema: string, file: string) => void
+	stageDiagram: (conn: string, schema: string, stage: string) => void
 	newSchema: (conn: string) => void
 	removeSchema: (conn: string, schema: string) => void
 }
@@ -312,12 +336,33 @@ const ConnectionSection: React.FC<{
 		const timer = refreshMs > 0 ? setInterval(read, refreshMs) : undefined
 		return () => { off?.(); if (timer) clearInterval(timer) }
 	}, [api, refreshMs, poke, spec.changes])
+	// a change of another session (another IDE, the CLI through the gateway): said, with a Refresh
+	const [remote, setRemote] = useState<{ text: string, schema?: string }>()
+	useEffect(() => {
+		const off = spec.changes?.(event => {
+			const change = event?.change
+			if (!change || (change.actor?.session && change.actor.session === spec.session?.())) return
+			setRemote({
+				text: format(a.remoteChange, { name: change.actor?.credential ?? change.actor?.client ?? '?', target: change.target ?? change.kind, schema: event?.path || '/' }),
+				schema: event?.path
+			})
+		})
+		return () => { off?.() }
+	}, [spec.changes, spec.session, a])
 	const pokeSoon = useCallback(() => { for (const ms of [300, 1500, 4000]) setTimeout(() => setPoke(p => p + 1), ms) }, [])
+	// Refresh: the schemas, the domains, what is saved and what the explorer read, again
+	const [refreshing, setRefreshing] = useState<{ n: number, schema?: string }>({ n: 0 })
+	const refresh = useCallback((schema?: string) => {
+		for (const path of [...domains.current.keys()]) if (schema === undefined || path === schema) { domains.current.delete(path); loaders.current.delete(path) }
+		setPoke(p => p + 1)
+		if (known) controller.load()
+		setRefreshing(r => ({ n: r.n + 1, schema }))
+	}, [controller, known])
 	const revision = useMemo(() => revisionOf(listed), [listed])
 	const schemas = useMemo(() => listed.filter(s => s.status === 'ready'), [listed])
 
-	const runtime = useMemo<Runtime>(() => ({ id, api, adminApi, can, controller, state, listed, schemas, revision, domainOf, loaderOf, pokeSoon }),
-		[id, api, adminApi, can, controller, state, listed, schemas, revision, domainOf, loaderOf, pokeSoon])
+	const runtime = useMemo<Runtime>(() => ({ id, api, adminApi, can, controller, state, listed, schemas, revision, domainOf, loaderOf, pokeSoon, refresh, refreshes: refreshing.n }),
+		[id, api, adminApi, can, controller, state, listed, schemas, revision, domainOf, loaderOf, pokeSoon, refresh, refreshing.n])
 	useEffect(() => { onRuntime(id, runtime) }, [id, runtime, onRuntime])
 	useEffect(() => () => onRuntime(id, undefined), [id, onRuntime])
 
@@ -332,11 +377,21 @@ const ConnectionSection: React.FC<{
 						<span className={`lw-chevron ${folded ? '' : 'lw-open'}`} aria-hidden="true"><Icons.chevron /></span>
 					</button>
 					<span className={spec.problem ? 'lw-connection-icon lw-problem' : 'lw-connection-icon'} title={spec.problem}>{spec.problem ? <Icons.warning /> : <Icons.connection />}</span>
-					<span className="lw-connection-name" title={spec.description}>
-						<strong>{spec.name}</strong>{spec.current && <span className="lw-badge">{a.current}</span>}
-						{spec.description && <span className="lw-type lw-connection-url">{spec.description}</span>}
+					{(() => {
+						const name = (
+							<>
+								<strong>{spec.name}</strong>{spec.current && <span className="lw-badge">{a.current}</span>}
+								{spec.description && <span className="lw-type lw-connection-url">{spec.description}</span>}
+							</>
+						)
+						return spec.onOpen
+							? <button type="button" className="lw-connection-name lw-connection-open" title={spec.description} aria-label={spec.name} onClick={spec.onOpen}>{name}</button>
+							: <span className="lw-connection-name" title={spec.description}>{name}</span>
+					})()}
+					<span className="lw-connection-actions">
+						<button type="button" className="lw-icon-button" aria-label={format(x.refreshOf, { name: spec.name })} title={format(x.refreshOf, { name: spec.name })} onClick={() => refresh()}><Icons.refresh /></button>
+						{spec.actions}
 					</span>
-					<span className="lw-connection-actions">{spec.actions}</span>
 				</div>
 			)}
 			{!folded && (
@@ -348,12 +403,17 @@ const ConnectionSection: React.FC<{
 							<ul className="lw-issues">{sharedStore!.problems.map(p => <li key={`${p.schema}/${p.file}`}>{p.schema || '/'}/{p.file}: {p.message}</li>)}</ul>
 						</div>
 					)}
+					{remote && (
+						<div className="lw-notice" role="status">
+							{remote.text} <button type="button" onClick={() => { refresh(remote.schema); setRemote(undefined) }}>{a.refreshNow}</button>
+						</div>
+					)}
 					{inBrowser.length > 0 && (
 						<div className="lw-notice" role="note">
 							{format(a.browserItems, { n: inBrowser.length })} <button type="button" onClick={copyToWorkspace}>{a.copyToWorkspace}</button>
 						</div>
 					)}
-					<Explorer schemas={listed} controller={controller} api={api} locale={locale} theme={theme} activeId={activeId}
+					<Explorer schemas={listed} controller={controller} api={api} refresh={refreshing} onRefreshSchema={refresh} locale={locale} theme={theme} activeId={activeId}
 						expanded={expanded} onExpandedChange={onExpandedChange}
 						loadDomain={domainOf} onOpen={item => open.saved(id, item)} onOpenDomain={schema => open.domain(id, schema)} onOpenEntity={(schema, entity) => open.entity(id, schema, entity)}
 						onNewQuery={(schema, parentId) => open.newQuery(id, schema, parentId)}
@@ -362,8 +422,10 @@ const ConnectionSection: React.FC<{
 							can,
 							onOpenSchemaFile: schema => open.schemaFile(id, schema),
 							onOpenSchema: schema => open.schema(id, schema),
-							onOpenElement: (schema, focus) => open.element(id, schema, focus),
+							onOpenElement: (schema, focus, edit) => open.element(id, schema, focus, edit),
 							onOpenFile: (schema, file) => open.file(id, schema, file),
+							onOpenStageDiagram: (schema, stage) => open.stageDiagram(id, schema, stage),
+							api: adminApi,
 							loadSchemaDoc,
 							loadFiles,
 							onNewSchema: () => open.newSchema(id),
@@ -413,7 +475,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 	const [rootFolded, setRootFolded] = useState(false)
 	const [saving, setSaving] = useState<{ tab: Tab, as: boolean }>()
 	const [creatingDiagram, setCreatingDiagram] = useState<{ conn: string, schema: string, parentId?: string }>()
-	const [wizarding, setWizarding] = useState<{ tab: Tab, schema: string, domain: DomainInfo }>()
+	const [wizarding, setWizarding] = useState<{ tab: Tab, schema: string, domain: DomainInfo, reading?: WizardReading }>()
 	const [choosingEntities, setChoosingEntities] = useState<Tab>()
 	const [notice, setNotice] = useState<string>()
 	const [newSchema, setNewSchema] = useState<string>()
@@ -510,7 +572,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 			neighbours: (name: string) => edges.flatMap(e => e.parent === name ? [e.child] : e.child === name ? [e.parent] : [])
 		}
 	}
-	const sinceOf = (conn: string, schema: string | undefined) => rt(conn)?.listed.find(s => s.path === schema)?.since ?? ''
+	const sinceOf = (conn: string, schema: string | undefined) => `${rt(conn)?.listed.find(s => s.path === schema)?.since ?? ''}#${rt(conn)?.refreshes ?? 0}`
 	useEffect(() => { if (!notice) return; const t = setTimeout(() => setNotice(undefined), 5000); return () => clearTimeout(t) }, [notice])
 
 	const savedOf = (tab: Tab): SavedItem | undefined => tab.savedId ? rt(connOf(tab))?.state.items.find(i => i.id === tab.savedId) : undefined
@@ -518,6 +580,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 		const saved = savedOf(tab)
 		if (tab.kind === 'diagram') return saved?.kind === 'diagram' && !!tab.draft && !sameDraft(tab.draft, draftOf(saved))
 		if (tab.kind === 'schemaFile') return dirtySchemas.has(tab.id)
+		// not saved yet: changed once it is turned, shown otherwise or a box moved
+		if (tab.kind === 'stageDiagram') return saved?.kind !== 'diagram' ? !!tab.stageView : JSON.stringify(viewKey(tab.stageView)) !== JSON.stringify(viewKey(saved.stageView))
 		if (tab.kind !== 'query') return false
 		const content = contents.current.get(tab.id)
 		if (!content) return false
@@ -573,6 +637,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 	const openSaved = (conn: string, item: SavedItem) => {
 		if (item.kind === 'folder' || reuse(t => same(conn, t) && t.savedId === item.id)) return
 		if (item.kind === 'query') add({ kind: 'query', title: item.name, schema: item.schema, savedId: item.id, initial: contentOf(item), wizard: item.wizard, connection: conn })
+		else if (item.stage) add({ kind: 'stageDiagram', title: item.name, schema: item.schema, stage: item.stage, stageView: item.stageView, savedId: item.id, connection: conn })
 		else add({ kind: 'diagram', title: item.name, schema: item.schema, savedId: item.id, draft: draftOf(item), connection: conn })
 	}
 	const newQuery = (conn: string, schema: string, parentId?: string, initial?: Partial<SavedQueryContent>, title?: string) =>
@@ -593,17 +658,47 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 	const focusKey = (f: FormFocus) => `${f.section}:${(f as any).name ?? ''}`
 	const focusTitle = (f: FormFocus) => (f as any).name ?? (f.section === 'application' || f.section === 'variables' || f.section === 'about' ? a[f.section] : format(a.newNamed, { name: a[f.section] }))
 	// one element of the schema; a new one (no name) is always a tab of its own
-	const openElement = (conn: string, schema: string, focus: FormFocus) => {
+	// edit: asked by Edit, it opens in edit (an open tab of it goes to edit too)
+	// remove: asked by Remove in the view of the element (its form says what uses it and asks to confirm)
+	const openElement = (conn: string, schema: string, focus: FormFocus, edit = false, remove = false) => {
 		const named = (focus as any).name !== undefined || focus.section === 'application' || focus.section === 'variables' || focus.section === 'about'
+		const editRequest = edit ? Date.now() : undefined
+		const removeRequest = remove ? Date.now() : undefined
+		const open = named ? tabs.find(t => same(conn, t) && t.kind === 'element' && t.schema === schema && !!t.focus && focusKey(t.focus) === focusKey(focus)) : undefined
+		if (open && (editRequest || removeRequest)) setTabs(all => all.map(t => t.id === open.id ? { ...t, editRequest: editRequest ?? t.editRequest, removeRequest: removeRequest ?? t.removeRequest } : t))
 		if (named && reuse(t => same(conn, t) && t.kind === 'element' && t.schema === schema && !!t.focus && focusKey(t.focus) === focusKey(focus))) return
-		add({ kind: 'element', title: focusTitle(focus), schema, focus, connection: conn })
+		add({ kind: 'element', title: focusTitle(focus), schema, focus, connection: conn, editRequest, removeRequest })
+	}
+	// a form opened by Edit, cancelled or saved: it closes, and an entity goes back to its view
+	const elementDone = (conn: string, tab: Tab) => {
+		close(tab.id)
+		const focus = tab.focus as { section: string, name?: string } | undefined
+		if (focus?.section === 'entities' && focus.name) openEntity(conn, tab.schema ?? '', focus.name)
 	}
 	const elementChanged = (id: number, focus: FormFocus | undefined) => {
-		if (!focus) { close(id); return }
+		if (!focus) {
+			// removed: the view of a removed entity goes too
+			const form = tabs.find(t => t.id === id)
+			const was = form?.focus as { section: string, name?: string } | undefined
+			const gone = new Set([id, ...(form && was?.section === 'entities' && was.name
+				? tabs.filter(t => t.kind === 'entity' && same(connOf(form), t) && t.schema === form.schema && t.entity === was.name).map(t => t.id)
+				: [])])
+			const index = tabs.findIndex(t => t.id === id)
+			const rest = tabs.filter(t => !gone.has(t.id))
+			for (const g of gone) contents.current.delete(g)
+			setTabs(rest)
+			if (gone.has(active)) setActive(rest[Math.max(0, Math.min(index, rest.length) - 1)]?.id ?? -1)
+			return
+		}
 		setTabs(all => all.map(t => t.id === id ? { ...t, focus, title: focusTitle(focus) } : t))
 	}
 	const openFile = (conn: string, schema: string, file: string) => {
 		if (!reuse(t => same(conn, t) && t.kind === 'file' && t.schema === schema && t.file === file)) add({ kind: 'file', title: file.split('/').pop() ?? file, schema, file, connection: conn })
+	}
+	const openStageDiagram = (conn: string, schema: string, stage: string) => {
+		const kept = rt(conn)?.state.items.find(i => i.kind === 'diagram' && i.schema === schema && i.stage === stage)
+		if (kept) { openSaved(conn, kept); return }
+		if (!reuse(t => same(conn, t) && t.kind === 'stageDiagram' && t.schema === schema && t.stage === stage)) add({ kind: 'stageDiagram', title: format(a.stageDiagramOf, { name: stage }), schema, stage, connection: conn })
 	}
 	const openDomain = (conn: string, schema: string) => {
 		if (!reuse(t => same(conn, t) && t.kind === 'domain' && t.schema === schema)) add({ kind: 'domain', title: `${x.domainYaml} ${schema || '/'}`, schema, connection: conn })
@@ -618,6 +713,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 		schema: openSchema,
 		element: openElement,
 		file: openFile,
+		stageDiagram: openStageDiagram,
 		newSchema: conn => setNewSchema(conn),
 		removeSchema: (conn, schema) => setRemoving({ conn, schema })
 	}
@@ -636,6 +732,15 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 		const saved = savedOf(tab)
 		const controller = rt(connOf(tab))?.controller
 		if (!controller) return
+		// a diagram of a stage: how it is shown, in place; the first time (or as another one), its name and folder
+		if (tab.kind === 'stageDiagram') {
+			if (saved?.kind === 'diagram' && !as) {
+				try { await controller.update(saved.id, { stageView: tab.stageView ?? {} }) } catch (e) { setNotice(problemText(e, x)) }
+				return
+			}
+			setSaving({ tab, as })
+			return
+		}
 		if (tab.kind === 'diagram') {
 			if (saved?.kind !== 'diagram' || !tab.draft) return
 			try { await controller.update(saved.id, { entities: tab.draft.entities, positions: tab.draft.positions, bends: tab.draft.bends, compact: tab.draft.compact, detail: tab.draft.detail, relationNames: tab.draft.relationNames }) } catch (e) { setNotice(problemText(e, x)) }
@@ -659,7 +764,17 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 		const schema = contents.current.get(tab.id)?.schema ?? tab.schema
 		const r = rt(connOf(tab))
 		if (schema === undefined || !r) return
-		try { setWizarding({ tab, schema, domain: await r.domainOf(schema) }) } catch (e) { setNotice(problemText(e, x)) }
+		try {
+			const domain = await r.domainOf(schema)
+			// a query not written by the wizard: read as far as it can show it (its tables, fields, filter, order and page)
+			const query = contents.current.get(tab.id)
+			// one it wrote and was edited by hand since: read too, with its boxes where they were
+			const text = query?.query ?? ''
+			const edited = !tab.wizard || text.trim() !== queryOf(tab.wizard, domain).trim()
+			const read = query?.mode === 'script' || !edited ? undefined : wizardFromQuery(text, domain)
+			const reading = read && tab.wizard?.positions ? { ...read, state: { ...read.state, positions: tab.wizard.positions } } : read
+			setWizarding({ tab, schema, domain, reading })
+		} catch (e) { setNotice(problemText(e, x)) }
 	}
 	const acceptWizard = (state: WizardState, query: string) => {
 		if (!wizarding) return
@@ -705,7 +820,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 		if (e.key === 'Enter') { e.preventDefault(); fitWidth() }
 	}
 
-	const iconOf = (tab: Tab) => tab.kind === 'page' ? pages?.[tab.page ?? '']?.icon ?? null : tab.kind === 'element' ? <Icons.edit /> : tab.kind === 'schema' ? <Icons.terminal /> : tab.kind === 'file' ? <Icons.query /> : tab.kind === 'domain' || tab.kind === 'schemaFile' ? <Icons.yaml /> : tab.kind === 'entity' ? <Icons.entity /> : tab.kind === 'diagram' ? <Icons.diagram /> : savedOf(tab) ? <Icons.query /> : null
+	const iconOf = (tab: Tab) => tab.kind === 'page' ? pages?.[tab.page ?? '']?.icon ?? null : tab.kind === 'element' ? <Icons.edit /> : tab.kind === 'stageDiagram' ? <Icons.stages /> : tab.kind === 'schema' ? <Icons.terminal /> : tab.kind === 'file' ? <Icons.query /> : tab.kind === 'domain' || tab.kind === 'schemaFile' ? <Icons.yaml /> : tab.kind === 'entity' ? <Icons.entity /> : tab.kind === 'diagram' ? <Icons.diagram /> : savedOf(tab) ? <Icons.query /> : null
 	const activeTab = tabs.find(t => t.id === active)
 	const saveKeys = (tab: Tab) => (e: React.KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(tab) } }
 	const texts = { ...x, entities: x.entities }
@@ -727,18 +842,32 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 					<div className="lw-space-side" style={{ width }} ref={side}>
 						{connectionsHeading && (
 							<div className="lw-connections-root">
-								<button type="button" className="lw-icon-button" aria-expanded={!rootFolded} aria-label={`${rootFolded ? x.showExplorer : x.hideExplorer} ${connectionsHeading.title}`} onClick={() => setRootFolded(!rootFolded)}>
-									<span className={`lw-chevron ${rootFolded ? '' : 'lw-open'}`} aria-hidden="true"><Icons.chevron /></span>
-								</button>
-								<Icons.connections />
-								<strong>{connectionsHeading.title}</strong>
-								<span className="lw-type">{connections.length}</span>
-								<span className="lw-spacer" />
-								<span className="lw-connection-actions">{connectionsHeading.actions}</span>
+								{connectionsHeading.lead}
+								{connectionsHeading.lead
+									? (
+										<>
+											{/* by the menu of the app: their title and count, nothing to fold */}
+											<span className="lw-spacer" />
+											<strong className="lw-connections-title">{connectionsHeading.title}</strong>
+											<span className="lw-type">{connections.length}</span>
+										</>
+										)
+									: (
+										<>
+											<button type="button" className="lw-icon-button" aria-expanded={!rootFolded} aria-label={`${rootFolded ? x.showExplorer : x.hideExplorer} ${connectionsHeading.title}`} onClick={() => setRootFolded(!rootFolded)}>
+												<span className={`lw-chevron ${rootFolded ? '' : 'lw-open'}`} aria-hidden="true"><Icons.chevron /></span>
+											</button>
+											<Icons.connections />
+											<strong className="lw-connections-title">{connectionsHeading.title}</strong>
+											<span className="lw-type">{connections.length}</span>
+											<span className="lw-spacer" />
+										</>
+										)}
+								<span className="lw-connection-actions"><button type="button" className="lw-icon-button" aria-label={format(x.refreshOf, { name: connectionsHeading.title })} title={format(x.refreshOf, { name: connectionsHeading.title })} onClick={() => { for (const r of Object.values(runtimes)) r.refresh() }}><Icons.refresh /></button>{connectionsHeading.actions}</span>
 							</div>
 						)}
 						{/* the sections stay mounted while folded: what each connection knows (its schemas) is kept */}
-						<div className={connectionsHeading ? 'lw-connections-list' : undefined} hidden={!!connectionsHeading && rootFolded}>
+						<div className={connectionsHeading ? 'lw-connections-list' : undefined} hidden={!!connectionsHeading && !connectionsHeading.lead && rootFolded}>
 							{connections.map(spec => (
 								<ConnectionSection key={spec.id} spec={spec} heading={heading} refreshMs={refreshMs} theme={theme} locale={workbench.locale}
 									activeId={activeTab && connOf(activeTab) === spec.id ? activeTab.savedId : undefined}
@@ -797,21 +926,39 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 						const can = r?.can
 						return (
 							<div key={tab.id} role="tabpanel" aria-label={saved?.name ?? tab.title} hidden={tab.id !== active}
-								onKeyDownCapture={tab.kind === 'query' || tab.kind === 'diagram' ? saveKeys(tab) : undefined}>
+								onKeyDownCapture={tab.kind === 'query' || tab.kind === 'diagram' || tab.kind === 'stageDiagram' ? saveKeys(tab) : undefined}>
 								{tab.kind === 'page' && pages?.[tab.page ?? ''] && <div className="lw-page">{pages[tab.page!].render()}</div>}
 								{tab.kind !== 'page' && !r && <div className={`lw-workbench lw-${theme}`}><p className="lw-muted">{x.loading}</p></div>}
 								{r && tab.kind === 'element' && adminApi && tab.focus && (
 									<SchemaForms admin={adminApi} theme={theme} schema={tab.schema ?? ''} writable={!!can?.schemaWrite} canAdmin={!!can?.schemaAdmin} revision={sinceOf(conn, tab.schema)} locale={workbench.locale}
-										focus={tab.focus} onChanged={focus => elementChanged(tab.id, focus)} />
+										focus={tab.focus} editRequest={tab.editRequest} removeRequest={tab.removeRequest} onChanged={focus => elementChanged(tab.id, focus)}
+										onDone={() => elementDone(conn, tab)} />
 								)}
 								{r && tab.kind === 'schema' && adminApi && (
 									<CommandsPanel admin={adminApi} schema={tab.schema ?? ''} canSave={!!can?.workbenchWrite} canBuild={!!can?.build} locale={workbench.locale}
 										title={format(a.commandsOf, { name: tab.schema || '/' })}>
 										{can?.schemaRead && (
 											<SchemaForms admin={adminApi} theme={theme} schema={tab.schema ?? ''} writable={!!can?.schemaWrite} canAdmin={!!can?.schemaAdmin} revision={sinceOf(conn, tab.schema)} locale={workbench.locale}
-												focus={{ section: 'about' }} />
+												focus={{ section: 'about' }} onRemoveSchema={can?.schemaAdmin ? () => openers.removeSchema(conn, tab.schema ?? '') : undefined} />
+										)}
+										{can?.schemaRead && adminApi.history && (
+											<details className="lw-history-section">
+												<summary>{a.history}</summary>
+												<HistoryView admin={adminApi} schema={tab.schema ?? ''} locale={workbench.locale} revision={sinceOf(conn, tab.schema)} />
+											</details>
 										)}
 									</CommandsPanel>
+								)}
+								{r && tab.kind === 'stageDiagram' && adminApi && tab.stage && (
+									<StageDiagram admin={adminApi} schema={tab.schema ?? ''} stage={tab.stage} theme={theme} locale={workbench.locale} revision={sinceOf(conn, tab.schema)}
+										view={tab.stageView} onViewChange={stageView => setTabs(all => all.map(t => t.id === tab.id ? { ...t, stageView } : t))}
+										toolbar={(
+											<span className="lw-save">
+												<button onClick={() => save(tab)} disabled={!!saved && !dirty(tab)} title="Ctrl+S">{x.save}</button>
+												{saved && <button onClick={() => save(tab, true)}>{x.saveAs}</button>}
+												{saved && !dirty(tab) && <span className="lw-muted">{x.saved}</span>}
+											</span>
+										)} />
 								)}
 								{r && tab.kind === 'file' && adminApi && tab.file && (
 									<FileView admin={adminApi} schema={tab.schema ?? ''} path={tab.file} theme={theme} revision={sinceOf(conn, tab.schema)} />
@@ -825,7 +972,10 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 								{r && tab.kind === 'entity' && (
 									<EntityView key={sinceOf(conn, tab.schema)} api={r.api} schema={tab.schema ?? ''} entity={tab.entity ?? ''} domain={r.loaderOf(tab.schema ?? '')} theme={theme} locale={workbench.locale}
 										onOpenEntity={(schema, entity) => openEntity(conn, schema, entity)} onQuery={queryEntity(conn)} onQueryText={queryOfDiagram(conn)} culture={workbench.culture}
-										onEdit={adminApi && can?.schemaWrite ? (schema, entity) => openElement(conn, schema, { section: 'entities', name: entity }) : undefined} editLabel={a.edit} />
+										onEdit={adminApi && can?.schemaWrite ? (schema, entity) => openElement(conn, schema, { section: 'entities', name: entity }, true) : undefined} editLabel={a.edit}
+										onRemove={adminApi && can?.schemaWrite ? (schema, entity) => openElement(conn, schema, { section: 'entities', name: entity }, false, true) : undefined} removeLabel={a.remove}
+										admin={adminApi && can?.schemaRead ? adminApi : undefined} revision={sinceOf(conn, tab.schema)}
+										tracesUrl={connections.find(c => c.id === conn)?.tracesUrl?.(tab.schema ?? '', tab.entity ?? '')} />
 								)}
 								{r && tab.kind === 'diagram' && tab.draft && (
 									<div tabIndex={-1} className="lw-diagram-tab">
@@ -864,11 +1014,18 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 			</div>
 
 			{saving && savingRt && (
-				<ItemDialog title={x.saveQuery} submit={x.save} texts={x} theme={theme}
+				<ItemDialog title={saving.tab.kind === 'stageDiagram' ? a.stageDiagram : x.saveQuery} submit={x.save} texts={x} theme={theme}
 					initial={{ name: saving.as ? '' : (savedOf(saving.tab)?.name ?? (saving.tab.title.startsWith(m.tabNamed) ? '' : saving.tab.title)), parentId: saving.tab.parentId }}
-					folders={folderPaths(savingRt.state.items, contents.current.get(saving.tab.id)?.schema ?? '')}
+					folders={folderPaths(savingRt.state.items, saving.tab.kind === 'stageDiagram' ? saving.tab.schema ?? '' : contents.current.get(saving.tab.id)?.schema ?? '')}
 					onClose={() => setSaving(undefined)}
 					onSubmit={async v => {
+						if (saving.tab.kind === 'stageDiagram') {
+							try {
+								const diagram = await savingRt.controller.createDiagram({ schema: saving.tab.schema ?? '', ...v }, { entities: [], stage: saving.tab.stage, stageView: saving.tab.stageView ?? {} })
+								setTabs(t => t.map(tab => tab.id === saving.tab.id ? { ...tab, savedId: diagram.id, title: diagram.name, parentId: diagram.parentId } : tab))
+							} catch (e) { return problemText(e, x) }
+							return
+						}
 						const content = contents.current.get(saving.tab.id)
 						if (!content || content.schema === undefined) return
 						try {
@@ -879,7 +1036,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 					}} />
 			)}
 			{wizarding && rt(connOf(wizarding.tab)) && (
-				<QueryWizard api={rt(connOf(wizarding.tab))!.api} schema={wizarding.schema} domain={wizarding.domain} initial={wizarding.tab.wizard} theme={theme} locale={workbench.locale}
+				<QueryWizard api={rt(connOf(wizarding.tab))!.api} schema={wizarding.schema} domain={wizarding.domain} initial={wizarding.tab.wizard} reading={wizarding.reading} theme={theme} locale={workbench.locale}
 					current={wizarding.tab.wizard ? contents.current.get(wizarding.tab.id)?.query : undefined}
 					start={/^\s*([\w.]+)/.exec(contents.current.get(wizarding.tab.id)?.query ?? '')?.[1]?.replace(/\.(filter|map|include|sort|page|first|having|groupBy|distinct)$/, '')}
 					onClose={() => setWizarding(undefined)} onAccept={acceptWizard} />

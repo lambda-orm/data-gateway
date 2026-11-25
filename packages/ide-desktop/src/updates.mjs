@@ -6,7 +6,8 @@ import { app, dialog, shell } from 'electron'
 import fs from 'node:fs'
 import path from 'node:path'
 
-const PAGE = 'https://lambda-orm.github.io/wiki/ide/'
+// the page of the downloads of the IDE, where the macOS and .deb builds take a new version from
+const PAGE = 'https://lambda-orm.github.io/wiki/ide/Download/'
 const RELEASES = 'https://api.github.com/repos/lambda-orm/data-gateway/releases?per_page=30'
 const EVERY_MS = 6 * 3600000
 
@@ -47,12 +48,12 @@ export const setupUpdates = ({ version, window }) => {
 		if (latest && newer(latest.version, version)) {
 			const { response } = await dialog.showMessageBox(window, {
 				type: 'info', buttons: ['Download', 'Later'], defaultId: 0, cancelId: 1,
-				message: `Data Gateway IDE ${latest.version} is available`,
+				message: `λORM Data Gateway ${latest.version} is available`,
 				detail: `You have ${version}. Download the new version from the page of the IDE.`
 			})
 			if (response === 0) shell.openExternal(PAGE)
 		} else if (manual) {
-			dialog.showMessageBox(window, { type: 'info', message: 'Data Gateway IDE is up to date', detail: `You have ${version}, the latest.` })
+			dialog.showMessageBox(window, { type: 'info', message: 'λORM Data Gateway is up to date', detail: `You have ${version}, the latest.` })
 		}
 	}
 
@@ -66,7 +67,7 @@ export const setupUpdates = ({ version, window }) => {
 			updater.on('update-downloaded', async (info) => {
 				const { response } = await dialog.showMessageBox(window, {
 					type: 'info', buttons: ['Restart now', 'Later'], defaultId: 0, cancelId: 1,
-					message: `Data Gateway IDE ${info.version} is ready`,
+					message: `λORM Data Gateway ${info.version} is ready`,
 					detail: 'Restart to use it, or it is installed when the IDE closes.'
 				})
 				if (response === 0) updater.quitAndInstall()
@@ -74,7 +75,7 @@ export const setupUpdates = ({ version, window }) => {
 		}
 		const result = await updater.checkForUpdates()
 		if (manual && (!result?.updateInfo || !newer(result.updateInfo.version, version))) {
-			dialog.showMessageBox(window, { type: 'info', message: 'Data Gateway IDE is up to date', detail: `You have ${version}, the latest.` })
+			dialog.showMessageBox(window, { type: 'info', message: 'λORM Data Gateway is up to date', detail: `You have ${version}, the latest.` })
 		}
 	}
 

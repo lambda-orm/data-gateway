@@ -4,6 +4,8 @@ import { GatewayError, badRequest } from '../../domain/errors/gatewayError'
 import { RequestContext, ScriptRequest } from '../ports/input/dataGatewayPort'
 import { OrmScriptPort } from '../ports/output/ormPorts'
 import { Auditor } from './auditor'
+import { requestOptions } from './requestOptions'
+import { NO_VIEWS, ViewResolver } from './viewResolver'
 
 export interface ScriptSettings {
 	enabled: boolean
@@ -21,7 +23,7 @@ const lower = (requested: unknown, limit: number): number => {
 /** Several queries in one transaction: a 3xpr script calling orm.execute (orm.executeScript). Always audited. */
 export class ScriptUseCase {
 	// eslint-disable-next-line no-useless-constructor
-	constructor (private readonly orm: OrmScriptPort, private readonly settings: ScriptSettings, private readonly auditor: Auditor) {}
+	constructor (private readonly orm: OrmScriptPort, private readonly settings: ScriptSettings, private readonly auditor: Auditor, private readonly views: ViewResolver = NO_VIEWS) {}
 
 	public async execute (ctx: RequestContext, request: ScriptRequest): Promise<any> {
 		authorize(ctx.principal, 'executeScript')
@@ -35,9 +37,8 @@ export class ScriptUseCase {
 		if (script.length > this.settings.maxLength) {
 			throw new GatewayError(413, 'ScriptTooLongError', `script longer than ${this.settings.maxLength} characters (scripts.maxLength)`)
 		}
-		const options: ScriptOptions = typeof request.options === 'string'
-			? JSON.parse(request.options)
-			: { ...(request.options || {}) }
+		// the script and its orm.execute run in the view of who calls (λORM: they inherit it)
+		const options: ScriptOptions = requestOptions(request.options, ctx, this.views.of(ctx.principal))
 		options.timeout = lower(options.timeout, this.settings.timeoutMs)
 		options.maxIterations = lower(options.maxIterations, this.settings.maxIterations)
 		return this.auditor.track(ctx, { operation: 'executeScript', query: script, data: request.data }, async () => {

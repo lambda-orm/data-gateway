@@ -14,6 +14,21 @@ describe('http errors', () => {
 		expect(toHttpError(dbError('23505')).body).toEqual({ error: 'ExecutionError', code: '23505', message: 'db' })
 	})
 
+	test('the errors of λORM ≥ 3.10: their status and what a client can use of them', () => {
+		const { ContextError, ViewError, CrossSourceError, DestructiveChangeError } = require('@lambdaorm/base')
+		expect(toHttpError(new ContextError('tenant', 'the filter of the view support'))).toMatchObject({
+			status: 400, body: { error: 'ContextError', details: { variable: 'tenant', where: 'the filter of the view support' } }
+		})
+		expect(toHttpError(new ViewError('support', 'Orders', 'the row of Orders is out of the filter of the view support'))).toMatchObject({
+			status: 403, body: { error: 'ViewError', details: { view: 'support', entity: 'Orders' } }
+		})
+		expect(toHttpError(new CrossSourceError('Orders brings more than 1000 rows'))).toMatchObject({ status: 422, body: { error: 'CrossSourceError' } })
+		expect(toHttpError(new CrossSourceError('x')).body.details).toBeUndefined()
+		expect(toHttpError(new DestructiveChangeError(['Products.name: varchar(80) → varchar(40)']))).toMatchObject({
+			status: 409, body: { error: 'DestructiveChangeError', details: { changes: ['Products.name: varchar(80) → varchar(40)'] } }
+		})
+	})
+
 	test('a string code that is not an HTTP status never becomes one (it used to crash Express)', () => {
 		const error = toHttpError(Object.assign(new Error('x'), { code: 'ERR_INVALID_ARG_TYPE' }))
 		expect(error.status).toBe(500)

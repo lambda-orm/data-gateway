@@ -829,7 +829,56 @@ el adaptador WebSocket de `@lambdaorm/client` (§9).
   publican como `data_gateway_schema_restarts{schema}` (lo que el edge sabe de cada esquema).
 - **Health:** §4 (`/health`, `/{esquema}/health`, `/schemas`).
 - **Rechazos por carga:** `data_gateway_throttled_total{schema,transport}` (respuestas `429` por `maxConcurrent`).
-- OpenTelemetry queda para una fase posterior (`TracerPort` + adaptador).
+- **OpenTelemetry:** §8.2 (trazas, métricas de λORM, historial del schema).
+- `http_server_request_duration_seconds{http_request_method,http_route,http_response_status_code}` es la duración de
+  las peticiones HTTP con los nombres de la convención de OpenTelemetry (`http_route` es la plantilla:
+  `/data-gateway/{schema}/execute`); `http_request_duration_seconds` sigue para los tableros que la usan.
+
+### 8.2 OpenTelemetry
+
+La sección `observability` de `data-gateway.config.yaml` tiene la forma de `infrastructure.observability` de un
+`lambdaORM.yaml` (core: `docs/OBSERVABILITY.md` §4), y las variables `OTEL_*` estándar mandan sobre ella. Las
+cabeceras del exportador (tokens) van solo en `OTEL_EXPORTER_OTLP_HEADERS`.
+
+```yaml
+observability:
+  serviceName: data-gateway            # por defecto; OTEL_SERVICE_NAME manda
+  exporter: { type: otlp, endpoint: http://alloy:4318 }   # http/protobuf por defecto; http/json; sin gRPC
+  traces:
+    enabled: true
+    sampler: { ratio: 1, parentBased: true }
+  metrics:
+    enabled: true                      # además por OTLP (en /metrics van siempre que metrics.enabled)
+  logs:
+    adapters: [{ type: opentelemetry }]   # la auditoría y los cambios del schema, a Loki
+```
+
+- **Un SDK por hilo:** el proceso principal la resuelve una vez (con sus `OTEL_*`, que un worker aislado no recibe) y
+  la pasa al edge y a cada worker de esquema, que inician el SDK de λORM **antes** de `Orm.init`: el `Orm` lo usa (un
+  solo `service.name` y exportador). Un esquema sin `infrastructure.observability` toma la del gateway; con la suya,
+  sus trazas y reglas deciden los spans de λORM.
+- **Trazas:** un span `SERVER` por petición HTTP (`POST /data-gateway/{schema}/execute`, nunca la ruta concreta),
+  mensaje de WebSocket (`rpc.method`) y llamada MCP (`tools/call orm_execute`), hijo del `traceparent` del que llama
+  (cabecera HTTP, o `_meta` de JSON-RPC/MCP). El `traceparent` viaja al worker en el mensaje del canal, y los spans
+  de λORM (`lambdaorm.execute`, las sentencias) quedan dentro de la misma traza.
+- **Actor:** el gateway arma el actor de cada petición (credencial; sesión, IDE e IP en `management`; IP en los
+  demás) y lo pasa a λORM (`enduser.id`, la variable `user` de las reglas de trazas, el actor de los eventos). Uno que
+  mande el cliente en `options.actor` se reemplaza.
+- **Métricas:** con `metrics.enabled` (por defecto), el SDK de cada worker tiene un lector Prometheus sin servidor
+  propio; `/metrics` suma las de λORM a las de prom-client, una familia por nombre, con los nombres de la
+  compatibilidad OpenTelemetry → Prometheus (como el Collector, Prometheus 3 y VictoriaMetrics):
+  `db_client_operation_duration_seconds`, `lambdaorm_query_duration_seconds`, `lambdaorm_constraint_violations_total`…
+  Los mismos nombres por pull (`/metrics`) que por push (OTLP), así un tablero sirve para los dos. Validado con
+  `promtool check metrics` e importado en VictoriaMetrics.
+- **Historial del esquema:** cada cambio de la administración (`schema.patch`, `schema.write`, `code.build`,
+  `code.remove`, `env.set`: solo nombres) es un `schema.change` con su actor, el elemento antes y después (como está
+  escrito, variables sin resolver) y el diff (JSON Patch, RFC 6902), en `<workspace>/<paths.logs>/changes.jsonl`
+  (junto a los de λORM: `push`, `pull`… cuando el esquema tiene `observability`) y por OpenTelemetry.
+  `GET /admin/workspaces/{schema}/history?since=&target=&kind=&limit=&cursor=` (permiso `schemaRead`) lo lee, el más
+  nuevo primero. `workspace.changed` lleva `change: { id, kind, target, actor, time }` y se anuncia una sola vez (el
+  monitor no lo repite); uno de afuera (un editor, git) llega como antes, sin actor. `logs/` no se anuncia.
+- **Auditoría:** además de stdout, cada entrada sale como LogRecord de OpenTelemetry (`event: audit`) enlazado a la
+  traza de su petición.
 
 ### 8.1 Auditoría de escrituras
 
@@ -985,14 +1034,17 @@ Un workspace se nombra por su ruta en **un** segmento, codificada: `iot%2Fv1` (`
 | `POST` | `/admin/workspaces/{ruta}/references` | `{ at }` → quién usa ese elemento (antes de eliminarlo) | `schemaRead` |
 | `GET` | `/admin/workspaces/{ruta}/variables` | las variables de las conexiones (§11.5): cuáles define el `.env` y quién las usa; **nunca su valor** | `schemaRead` |
 | `PUT` | `/admin/workspaces/{ruta}/variables` | `{ set?: { NOMBRE: valor }, remove?: [NOMBRE] }` en el `.env`, conservando el resto | `schemaAdmin` |
-| `POST` | `/admin/workspaces/{ruta}/build` | `{ language: node \| client-node, write? }`: el modelo y los repositorios (§11.5) | `build` (+ `read`) |
-| `GET` | `/admin/workspaces/{ruta}/build.zip?language=` | lo mismo como `.zip`, sin escribir nada | `build` (+ `read`) |
+| `POST` | `/admin/workspaces/{ruta}/build` | `{ language: node \| client-node, write?, model?, repositories? }`: el modelo y los repositorios (§11.5; `model: false` o `repositories: false`, solo el otro, como `-m` y `-r` de la CLI), cada lenguaje en su carpeta: `src/{language}/domain/…` (desde 4.1.0; antes, `src/domain/…`) | `build` (+ `read`) |
+| `GET` | `/admin/workspaces/{ruta}/build.zip?language=[&model=false][&repositories=false]` | lo mismo como `.zip`, sin escribir nada | `build` (+ `read`) |
 | `GET` | `/admin/workspaces/{ruta}/files?dir=` / `…/files/content?path=` | los archivos de `data/` y de `src/` (recursivo) / el texto de uno; nunca el `.env`, `orm_state/` ni un oculto | `schemaRead` |
+| `GET` | `/admin/workspaces/{ruta}/files.zip?dir=` | una carpeta de `data/` o de `src/` como `.zip`, tal como está en el workspace (el código de un lenguaje con sus repositorios editados): `{ruta}-{carpeta}.zip` | `schemaRead` |
+| `DELETE` | `/admin/workspaces/{ruta}/files?dir=src/…` | quita una carpeta del código fuente (el código de un lenguaje, con sus repositorios): `{ removed }`; solo carpetas de `src/` | `build` |
 | `POST` | `/admin/validate` | `{ text }` → `{ valid, issues: [{ severity, message, line?, column? }] }` | `schemaRead` |
 | `GET` | `/admin/session` | el estado de la UI de la credencial que pregunta: `{ state, updatedAt }` o `{ state: null }` (§11.8) | autenticado |
 | `PUT` | `/admin/session` | `{ state }` lo guarda (un objeto, hasta 2 MB); `{ state: null }` lo olvida | autenticado |
 | `GET` | `/admin/expressions` | el lenguaje de las expresiones (3xpr): `{ functions, operators, constants, contexts }`; `contexts.stageSource` son las variables de la condición de un source de un stage (`entity`, `action`, `category`, `type`, `read`, `write`, `dml`, `ddl`) | `schemaRead` |
 | `POST` | `/admin/expressions/check` | `{ expression, context? }` → `{ valid, error?, variables, unknown }`: si parsea y si usa solo las variables de su contexto | `schemaRead` |
+| `GET` | `/admin/workspaces/{ruta}/stages/{stage}/routing` | a dónde va cada entidad del stage, evaluado como rutea λORM (el primer source cuya condición es verdadera; uno sin condición toma el resto): `{ stage, sources: [{ name, dialect, mapping, condition?, error?, entities: [{ entity, table, view?, read?, write? }] }], unrouted }`; `table` por el mapping del source, `read`/`write` cuando sus lecturas o escrituras van a otro source; el diagrama del stage del IDE | `schemaRead` |
 | `GET` | `/admin/workbench[?schema={ruta}]` | lo guardado en los workspaces (§11.1), `ETag`; con `If-None-Match` igual, `304` | `read` o `workbenchWrite` |
 | `PUT` | `/admin/workbench` | `{ items }`: guarda, mueve o renombra; cada uno que existía dice su `version` | `workbenchWrite` |
 | `POST` | `/admin/workbench/remove` | `{ ids }`: elimina (una carpeta con lo que tiene) | `workbenchWrite` |

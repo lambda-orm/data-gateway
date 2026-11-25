@@ -6,11 +6,14 @@ import {
 import { badRequest, forbidden, GatewayError, notFound } from '../../domain/errors/gatewayError'
 import { SchemaState } from '../../domain/runtime/policies'
 import { normalizeSchemaPath, schemaPathIssues, schemaPathsIssues } from '../../domain/runtime/schemaPath'
-import { applyPatch, PatchError, referencesOf, SchemaPatch } from '../../domain/admin/schemaPatch'
+import { applyPatch, elementAt, PatchError, referencesOf, SchemaPatch } from '../../domain/admin/schemaPatch'
+import { jsonDiff } from '../../domain/admin/jsonPatch'
+import { SchemaChange, ulid } from '@lambdaorm/base'
 import { lineDiff } from '../../domain/admin/lineDiff'
 import { dotEnvNames, editDotEnv, schemaVariables, VARIABLE_NAME } from '../../domain/admin/dotEnv'
 import { EXPRESSION_CONTEXTS, ExpressionVariable } from '../../domain/admin/expressions'
-import { CodeGeneratorPort, ExpressionLanguage, ExpressionLanguagePort, SchemaIssue, SessionStatePort, SchemaValidatorPort, VersionConflict, WorkspaceStorePort, YamlPort } from '../ports/output/adminPorts'
+import { StageRouting, stageRoutingOf } from '../../domain/admin/stageRouting'
+import { CodeGeneratorPort, ExpressionLanguage, ExpressionLanguagePort, SchemaHistoryFilter, SchemaHistoryPort, SchemaIssue, SessionStatePort, SchemaValidatorPort, VersionConflict, WorkspaceStorePort, YamlPort } from '../ports/output/adminPorts'
 import { ClockPort, LoggerPort } from '../ports/output/supportPorts'
 
 export const SCHEMA_FILE = 'lambdaORM.yaml'
@@ -83,7 +86,9 @@ export class AdminService {
 		/** the expressions of a schema (3xpr): the condition of a source of a stage */
 		private readonly expressions?: ExpressionLanguagePort,
 		/** where the UI of each credential was (its tabs, drafts, what is unfolded) */
-		private readonly sessions?: SessionStatePort
+		private readonly sessions?: SessionStatePort,
+		/** the history of the changes of each schema (schema.change), and their announcement to the IDEs */
+		private readonly history?: SchemaHistoryPort
 	) {}
 
 	/** The state of the UI of the credential that asks: only its own, whatever its permissions */
@@ -128,6 +133,21 @@ export class AdminService {
 		return { valid: !checked.error && unknown.length === 0, ...checked, unknown }
 	}
 
+	/**
+	 * Where the entities of a stage go: each source of the stage, in order, with its condition and the entities that
+	 * live in it (their table by its mapping), evaluated as λORM routes a sentence (the stage diagram of the UI)
+	 */
+	public async stageRouting (principal: Principal, path: string, stage: string): Promise<StageRouting> {
+		this.require(principal, 'schemaRead')
+		if (!this.expressions) throw notFound('the expressions are not available')
+		const file = await this.store.read(this.workspaceOf(path), SCHEMA_FILE)
+		if (!file) throw notFound(`schema "${path}" has no ${SCHEMA_FILE}`)
+		const expressions = this.expressions
+		const routing = stageRoutingOf(this.yaml.parse(file.text), stage, (expression, data) => expressions.evaluate(expression, { ...data }))
+		if (!routing) throw notFound(`schema "${path}" has no stage "${stage}"`)
+		return routing
+	}
+
 	// ─── permissions ─────────────────────────────────────────────────────────
 
 	private require (principal: Principal, permission: Permission): void {
@@ -151,6 +171,70 @@ export class AdminService {
 
 	private audit (principal: Principal, action: string, target: string): void {
 		this.logger.info(`[data-gateway] admin: "${principal.name}" ${action} ${target}`)
+	}
+
+	/**
+	 * A schema.change of the administration in the history of the schema: who (the actor of the session: credential,
+	 * session, IDE, IP), what and when. A history that can't be written doesn't undo the change: it is logged.
+	 */
+	private async changed (principal: Principal, path: string, workspace: string, change: Pick<SchemaChange, 'kind'> & Partial<SchemaChange>): Promise<void> {
+		if (!this.history) return
+		const event: SchemaChange = {
+			id: ulid(),
+			time: this.clock.now().toISOString(),
+			schema: path,
+			version: {},
+			actor: principal.actor ?? { credential: principal.name },
+			result: 'ok',
+			...change
+		}
+		for (const key of Object.keys(event) as (keyof SchemaChange)[]) if (event[key] === undefined) delete event[key]
+		try {
+			await this.history.record(path, workspace, event)
+		} catch (error: any) {
+			this.logger.warn(`[data-gateway] the history of "${path || '/'}" was not written: ${error?.message ?? error}`)
+		}
+	}
+
+	/**
+	 * The history of a schema (docs/OBSERVABILITY.md §5.3), the newest first: what the IDEs, the CLI and the gateway
+	 * changed in it, with who and the diff.
+	 */
+	public async changes (principal: Principal, path: string, query: { since?: unknown, target?: unknown, kind?: unknown, limit?: unknown, cursor?: unknown }): Promise<{ items: SchemaChange[], nextCursor?: string }> {
+		this.require(principal, 'schemaRead')
+		if (!this.history) return { items: [] }
+		const text = (value: unknown) => typeof value === 'string' && value.trim() ? value.trim() : undefined
+		const limit = query.limit === undefined ? 50 : Number(query.limit)
+		if (!Number.isInteger(limit) || limit < 1 || limit > 500) throw badRequest('ValidationError', 'limit is from 1 to 500')
+		const since = text(query.since)
+		if (since && Number.isNaN(Date.parse(since))) throw badRequest('ValidationError', 'since is an ISO time')
+		const filter: SchemaHistoryFilter = { since, target: text(query.target), kind: text(query.kind), limit, cursor: text(query.cursor) }
+		return this.history.read(this.workspaceOf(path), filter)
+	}
+
+	/**
+	 * Who changed an element last (for the 412 of a form: "<credential> changed it at <time>"): the newest change of the
+	 * history on it, on what holds it or inside it, or a write of the whole file
+	 */
+	private async changedBy (workspace: string, target?: string): Promise<{ credential?: string, client?: string, time: string, kind: string, target?: string } | undefined> {
+		if (!this.history) return undefined
+		try {
+			const { items } = await this.history.read(workspace, { limit: 100 })
+			const touches = (other?: string) => !target || !other || other.startsWith(target) || target.startsWith(other)
+			const last = items.find(p => p.kind === 'schema.write' || p.kind === 'schema.file' || (p.kind === 'schema.patch' && touches(p.target)))
+			return last ? { credential: last.actor?.credential, client: last.actor?.client, time: last.time, kind: last.kind, target: last.target } : undefined
+		} catch {
+			return undefined
+		}
+	}
+
+	/** the JSON Patch between two texts of the lambdaORM.yaml; none if one doesn't parse */
+	private diffOf (before: string, after: string) {
+		try {
+			return jsonDiff(this.yaml.parse(before), this.yaml.parse(after))
+		} catch {
+			return undefined
+		}
 	}
 
 	private workspaceOf (path: string): string {
@@ -256,18 +340,25 @@ export class AdminService {
 		const workspace = this.workspaceOf(path)
 		const issues = await this.validator.validate(text)
 		if (issues.some(i => i.severity === 'error')) throw invalidSchema(issues)
+		let before: string | undefined
 		const version = await this.store.withLock(workspace, async () => {
 			try {
+				before = (await this.store.read(workspace, SCHEMA_FILE))?.text
 				return await this.store.write(workspace, SCHEMA_FILE, text, ifMatch)
 			} catch (error) {
 				if (error instanceof VersionConflict) {
 					const current = await this.store.read(workspace, SCHEMA_FILE)
-					throw preconditionFailed(`${SCHEMA_FILE} of "${path}" changed since it was read`, { version: current?.version, text: current?.text })
+					throw preconditionFailed(`${SCHEMA_FILE} of "${path}" changed since it was read`, { version: current?.version, text: current?.text, changedBy: await this.changedBy(workspace) })
 				}
 				throw error
 			}
 		})
 		this.audit(principal, 'wrote', `${path}/${SCHEMA_FILE}`)
+		await this.changed(principal, path, workspace, {
+			kind: 'schema.write',
+			diff: before === undefined ? undefined : this.diffOf(before, text),
+			version: { before: ifMatch.slice(0, 16), after: version.slice(0, 16) }
+		})
 		return { version, issues }
 	}
 
@@ -283,11 +374,12 @@ export class AdminService {
 			const file = await this.store.read(workspace, SCHEMA_FILE)
 			if (!file) throw notFound(`schema "${path}" has no ${SCHEMA_FILE}`)
 			let changed: { schema: unknown, references: string[] }
+			const before = this.yaml.parse(file.text)
 			try {
-				changed = applyPatch(this.yaml.parse(file.text), patch)
+				changed = applyPatch(structuredClone(before), patch)
 			} catch (error) {
 				if (!(error instanceof PatchError)) throw error
-				if (error.kind === 'conflict') throw preconditionFailed(error.message, { current: error.current, version: file.version })
+				if (error.kind === 'conflict') throw preconditionFailed(error.message, { current: error.current, version: file.version, changedBy: await this.changedBy(workspace, patch.at.join('/')) })
 				throw error.kind === 'notFound' ? notFound(error.message) : badRequest('ValidationError', error.message)
 			}
 			const text = this.yaml.merge(file.text, changed.schema)
@@ -296,6 +388,17 @@ export class AdminService {
 			const version = await this.store.write(workspace, SCHEMA_FILE, text, file.version)
 			const diff = lineDiff(file.text, text)
 			this.audit(principal, `${patch.op} ${patch.at.join('/')}${patch.to ? ` to ${patch.to}` : ''} in`, `${path}/${SCHEMA_FILE}`)
+			// the element before and after, as written (variables unsolved), and the diff of the schema
+			const renamed = patch.op === 'rename' && patch.to ? [...patch.at.slice(0, -1), patch.to] : patch.at
+			await this.changed(principal, path, workspace, {
+				kind: 'schema.patch',
+				target: patch.at.join('/'),
+				op: patch.op,
+				before: patch.op === 'add' ? undefined : elementAt(before as any, patch.at)?.value,
+				after: patch.op === 'remove' ? undefined : elementAt(changed.schema as any, renamed)?.value,
+				diff: jsonDiff(before, changed.schema),
+				version: { before: file.version.slice(0, 16), after: version.slice(0, 16) }
+			})
 			return { version, references: changed.references, added: diff.added, removed: diff.removed, issues }
 		})
 	}
@@ -325,7 +428,8 @@ export class AdminService {
 		const file = await this.store.read(workspace, SCHEMA_FILE)
 		let paths: any = {}
 		try { paths = (this.yaml.parse(file?.text ?? '') as any)?.infrastructure?.paths ?? {} } catch { /* the defaults */ }
-		const base = `${paths.src || 'src'}/${paths.domain || 'domain'}`.replace(/\/+/g, '/')
+		// each language in a folder of its own under src/: node, client-node, and the ones to come
+		const base = `${paths.src || 'src'}/${language}/${paths.domain || 'domain'}`.replace(/\/+/g, '/')
 		const generated = this.code.files(language, domain, { model: request.model !== false, repositories: request.repositories !== false })
 		const files: { path: string, content: string, written?: 'created' | 'updated' | 'kept' }[] = generated.map(g => ({ path: `${base}/${g.file}`, content: g.content }))
 		if (request.write === true) {
@@ -338,6 +442,7 @@ export class AdminService {
 				}
 			})
 			this.audit(principal, `built ${language} code (${files.filter(f => f.written !== 'kept').length} files) in`, `${path}/${base}`)
+			await this.changed(principal, path, workspace, { kind: 'code.build', target: base })
 		}
 		return { language: language as string, files }
 	}
@@ -377,6 +482,41 @@ export class AdminService {
 	}
 
 	/** The text of a file of data/ or src/ (an export, a script, the code of build) */
+	/**
+	 * The files of a folder of data/ or src/, as they are in the workspace (the code of a language, with its repositories
+	 * as edited): its name and its files, relative to the folder, to be zipped
+	 */
+	public async folderFiles (principal: Principal, path: string, dir: unknown): Promise<{ name: string, files: { path: string, content: string }[] }> {
+		this.require(principal, 'schemaRead')
+		const workspace = this.workspaceOf(path)
+		const folder = await this.readable(workspace, dir)
+		const listed = (await this.store.list(workspace, folder)).filter(f => !f.dir)
+		const files: { path: string, content: string }[] = []
+		for (const f of listed) {
+			const file = await this.store.read(workspace, f.path)
+			if (file) files.push({ path: f.path.slice(folder.length + 1), content: file.text })
+		}
+		return { name: folder.split('/').pop() || folder, files }
+	}
+
+	/**
+	 * A folder of the source code taken out of the workspace (the code of a language under src/, with its repositories):
+	 * nothing else can be removed so
+	 */
+	public async removeCode (principal: Principal, path: string, dir: unknown): Promise<{ removed: string }> {
+		this.require(principal, 'build')
+		const workspace = this.workspaceOf(path)
+		const roots = await this.fileRoots(workspace)
+		const folder = await this.readable(workspace, dir)
+		if (!folder.startsWith(`${roots.src}/`)) throw new GatewayError(403, 'ForbiddenError', `only a folder of ${roots.src}/ can be removed here`)
+		const listed = await this.store.list(workspace, folder)
+		if (!listed.length) throw notFound(`"${folder}" is not in the workspace of "${path}"`)
+		await this.store.withLock(workspace, () => this.store.remove(workspace, folder))
+		this.audit(principal, `removed the code ${folder} of`, path)
+		await this.changed(principal, path, workspace, { kind: 'code.remove', target: folder })
+		return { removed: folder }
+	}
+
 	public async fileContent (principal: Principal, path: string, file: unknown): Promise<{ path: string, text: string, version: string, modified: string }> {
 		this.require(principal, 'schemaRead')
 		const workspace = this.workspaceOf(path)
@@ -428,6 +568,8 @@ export class AdminService {
 		})
 		// the names, never the values
 		this.audit(principal, `set ${Object.keys(set).join(', ') || '-'} and removed ${remove.join(', ') || '-'} in`, `${path}/.env`)
+		// the names, never the values
+		await this.changed(principal, path, workspace, { kind: 'env.set', target: [...Object.keys(set), ...remove].join(',') })
 		return this.variables(principal, path).catch(() => ({ variables: [] }))
 	}
 

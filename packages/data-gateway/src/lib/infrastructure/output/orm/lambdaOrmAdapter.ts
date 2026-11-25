@@ -1,6 +1,6 @@
 import { IOrm, Orm } from '@lambdaorm/lib'
-import { QueryOptions, ScriptOptions } from '@lambdaorm/base'
-import { OrmCommandPort, OrmQueryPort, OrmSchemaPort, OrmScriptPort, OrmStagePort } from '../../../application/ports/output/ormPorts'
+import { Actor, QueryOptions, ResolvedObservability, ScriptOptions } from '@lambdaorm/base'
+import { OrmCommandPort, OrmQueryPort, OrmSchemaPort, OrmScriptPort, OrmStagePort, SourceSentences } from '../../../application/ports/output/ormPorts'
 
 /** λORM (@lambdaorm/lib) behind the ports of the application: one instance per schema. */
 export class LambdaOrmAdapter implements OrmQueryPort, OrmScriptPort, OrmSchemaPort, OrmStagePort, OrmCommandPort {
@@ -58,15 +58,25 @@ export class LambdaOrmAdapter implements OrmQueryPort, OrmScriptPort, OrmSchemaP
 		return this.orm.state?.schema?.infrastructure
 	}
 
+	/**
+	 * λORM's spans and metrics with this configuration (the gateway's, for a schema without its own); the trace conditions
+	 * of the entities of the schema still decide for them
+	 */
+	public observe (config: ResolvedObservability): void {
+		// observeWith is in Orm and not yet in IOrm (pending in core)
+		(this.orm as Orm).observeWith(config)
+	}
+
 	// ─── queries ─────────────────────────────────────────────────────────────
 
 	public execute (query: string, data?: unknown, options?: QueryOptions) { return this.orm.execute(query, data, options) }
 	public async plan (query: string, options?: QueryOptions) { return this.orm.plan(query, options) }
-	public async metadata (query: string) { return this.orm.metadata(query) }
-	public async model (query: string) { return this.orm.model(query) }
-	public async parameters (query: string) { return this.orm.parameters(query) }
-	public async constraints (query: string) { return this.orm.constraints(query) }
+	public async metadata (query: string, options?: QueryOptions) { return this.orm.metadata(query, options) }
+	public async model (query: string, options?: QueryOptions) { return this.orm.model(query, options) }
+	public async parameters (query: string, options?: QueryOptions) { return this.orm.parameters(query, options) }
+	public async constraints (query: string, options?: QueryOptions) { return this.orm.constraints(query, options) }
 	public executeScript (script: string, data?: unknown, options?: ScriptOptions) { return this.orm.executeScript(script, data, options) }
+	public namedQueries () { return this.orm.state.schema?.application?.queries ?? [] }
 
 	// ─── schema ──────────────────────────────────────────────────────────────
 
@@ -78,12 +88,12 @@ export class LambdaOrmAdapter implements OrmQueryPort, OrmScriptPort, OrmSchemaP
 	}
 
 	public version () { return this.orm.state.getSchemaVersion() }
-	public domain () { return this.orm.state.getSchemaDomain() }
+	public domain (view?: string) { return this.orm.state.getSchemaDomain(view) }
 	public sources () { return this.orm.state.getSchemaSources() }
 	// only a source of the schema (getSchemaSource answers { name, dialect: 'unknown' } for any other name)
 	public source (name: string) { return this.orm.state.getSchemaSources()?.find(source => source.name === name) }
-	public entities () { return this.orm.state.getSchemaEntities() }
-	public entity (name: string) { return this.orm.state.getSchemaEntity(name) }
+	public entities (view?: string) { return this.orm.state.getSchemaEntities(view) }
+	public entity (name: string, view?: string) { return this.orm.state.getSchemaEntity(name, view) }
 	public enums () { return this.orm.state.getSchemaEnums() }
 	public enum (name: string) { return this.orm.state.getSchemaEnum(name) }
 	public mappings () { return this.orm.state.getSchemaMappings() }
@@ -97,16 +107,46 @@ export class LambdaOrmAdapter implements OrmQueryPort, OrmScriptPort, OrmSchemaP
 
 	public exists (stage: string) { return this.orm.stage.exists(stage) }
 	public export (stage: string) { return this.orm.stage.export({ stage }).execute() }
-	public import (stage: string, data: unknown) { return this.orm.stage.import({ stage }).execute(data as any) }
+	public import (stage: string, data: unknown, actor?: Actor) { return this.orm.stage.import({ stage, actor }).execute(data as any) }
 
 	// ─── commands (admin) ────────────────────────────────────────────────────
 
 	public stageNames (): string[] { return (this.orm.state.getSchemaStages() ?? []).map((s: { name: string }) => s.name) }
 	public fetch (stage: string) { return this.orm.stage.fetch({ stage }) as Promise<unknown[]> }
-	public pushSentences (stage: string) { return this.orm.stage.push({ stage }).sentencesBySource() }
-	public push (stage: string, force: boolean) { return this.orm.stage.push({ stage, tryAllCan: force }).execute() as Promise<unknown[]> }
+	public async pushSentences (stage: string): Promise<SourceSentences[]> {
+		const bySource = new Map<string, SourceSentences>()
+		for (const query of await this.orm.stage.push({ stage }).queries()) {
+			const source = bySource.get(query.source) ?? bySource.set(query.source, { source: query.source, sentences: [] }).get(query.source)!
+			source.sentences.push(query.sentence)
+			if (query.destructive) (source.destructive ??= []).push({ sentence: query.sentence, reason: query.destructive })
+		}
+		return [...bySource.values()]
+	}
+
+	public push (stage: string, force: boolean, actor?: Actor, allowDestructive?: boolean) {
+		return this.orm.stage.push({ stage, tryAllCan: force, actor, ...(allowDestructive ? { allowDestructive } : {}) }).execute() as Promise<unknown[]>
+	}
+
+	public migrations (stage: string) { return this.orm.stage.migrations.list({ stage }) as Promise<unknown[]> }
+
+	/** as λORM's migrate does it: the applied migrations after the version, the newest first, and their undo */
+	public async migrateSentences (stage: string, version: string): Promise<SourceSentences[]> {
+		const later = (await this.orm.stage.migrations.list({ stage })).filter(m => m.status === 'applied' && m.version > version)
+		return later.map(m => {
+			const undo = m.undo ?? []
+			const destructive = undo.filter(u => u.destructive).map(u => ({ sentence: u.sentence, reason: u.destructive! }))
+			return { source: m.source, version: m.version, sentences: undo.map(u => u.sentence), ...(destructive.length ? { destructive } : {}) }
+		})
+	}
+
+	public migrate (stage: string, version: string, actor?: Actor, allowDestructive?: boolean) {
+		return this.orm.stage.migrate(version, { stage, actor, ...(allowDestructive ? { allowDestructive } : {}) }) as Promise<unknown[]>
+	}
+
+	public seedFiles (stage: string) { return this.orm.stage.seed({ stage }).files() }
+	public seed (stage: string, actor?: Actor) { return this.orm.stage.seed({ stage, actor }).execute() as Promise<unknown[]> }
 	public dropSentences (stage: string) { return this.orm.stage.drop({ stage }).sentence() as Promise<unknown[]> }
-	public drop (stage: string, force: boolean) { return this.orm.stage.drop({ stage, tryAllCan: force }).execute() as Promise<unknown[]> }
+	public drop (stage: string, force: boolean, actor?: Actor) { return this.orm.stage.drop({ stage, tryAllCan: force, actor }).execute() as Promise<unknown[]> }
 
 	/** The schema as written (variables unsolved), without its application: code of the schema that must not run here */
 	private writtenSchema (): { schema: any, application: unknown } {
@@ -140,12 +180,12 @@ export class LambdaOrmAdapter implements OrmQueryPort, OrmScriptPort, OrmSchemaP
 	 * pull on the schema served: the state of the stage (orm_state) updated as λORM does, but without letting λORM write
 	 * the lambdaORM.yaml (js-yaml loses its comments and order): the gateway writes the schema it answers.
 	 */
-	public async pull (stage: string): Promise<unknown> {
+	public async pull (stage: string, actor?: Actor): Promise<unknown> {
 		const facade = (this.orm.state as any).facade
 		const write = facade.write
 		facade.write = async () => undefined
 		try {
-			await this.orm.stage.pull({ stage })
+			await this.orm.stage.pull({ stage, actor })
 		} finally {
 			facade.write = write
 		}

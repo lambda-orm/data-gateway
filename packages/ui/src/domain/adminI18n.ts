@@ -2,6 +2,20 @@ import { format, Locale } from './i18n'
 
 /** The texts of the administration of the workspaces (the schema in YAML, new and removed schemas); {name} is replaced */
 export interface AdminMessages {
+	history: string
+	historyEmpty: string
+	historyUnavailable: string
+	historyMore: string
+	historyWhen: string
+	historyWho: string
+	historyWhat: string
+	historyBefore: string
+	historyAfter: string
+	historyChanges: string
+	changedBy: string
+	remoteChange: string
+	refreshNow: string
+	viewTraces: string
 	schemaFile: string
 	save: string
 	saving: string
@@ -74,6 +88,10 @@ export interface AdminMessages {
 	nothingSelected: string
 	variables: string
 	defined: string
+	varName: string
+	varState: string
+	varUsedIn: string
+	varValue: string
 	notDefined: string
 	newValue: string
 	setValue: string
@@ -83,6 +101,18 @@ export interface AdminMessages {
 	cmd_exportSave: string
 	cmd_import: string
 	cmd_push: string
+	cmd_migrations: string
+	cmd_migrate: string
+	cmd_seed: string
+	destructive: string
+	allowDestructive: string
+	seedFiles: string
+	noSeed: string
+	noMigrations: string
+	migrateTo: string
+	migrationVersion: string
+	migrationSource: string
+	migrationStatus: string
 	cmd_pull: string
 	cmd_drop: string
 	cmd_introspect: string
@@ -110,6 +140,13 @@ export interface AdminMessages {
 	stageSourcesNote: string
 	condition: string
 	conditionHint: string
+	expression: string
+	expressionsOf: string
+	validationsHint: string
+	helpReadExp: string
+	helpWriteExp: string
+	helpReadValue: string
+	helpWriteValue: string
 	addSource: string
 	moveUp: string
 	moveDown: string
@@ -131,11 +168,54 @@ export interface AdminMessages {
 	newProject: string
 	empty: string
 	commandsOf: string
+	stageDiagram: string
+	stageDiagramOf: string
+	stageGateway: string
+	stageTables: string
+	stageUnrouted: string
+	stageConditionError: string
+	stageChoose: string
+	stageReads: string
+	stageWrites: string
+	stageNoRouting: string
+	stageReadsHere: string
+	stageWritesHere: string
+	stageLivesIn: string
+	stageShow: string
+	stageShowTables: string
+	stageShowNames: string
+	stageGatewayTop: string
+	stageGatewayLeft: string
+	state: string
+	sourceCode: string
+	downloadZip: string
+	rebuildCode: string
+	removeCode: string
+	removeCodeConfirm: string
+	rebuilt: string
+	removedCode: string
+	buildParts: string
+	buildModel: string
+	buildRepositories: string
 }
 
 type Row = [keyof AdminMessages, ...string[]]
 
 const ROWS: Row[] = [
+	['history', 'History', 'Historial', 'Histórico', 'Historique', 'Cronologia', 'Verlauf', 'Geschiedenis', 'Historial', 'Historial', 'Historia'],
+	['historyEmpty', 'No changes recorded yet', 'Todavía no hay cambios registrados', 'Ainda não há alterações registradas', 'Aucune modification enregistrée pour l’instant', 'Nessuna modifica registrata finora', 'Noch keine Änderungen aufgezeichnet', 'Nog geen wijzigingen vastgelegd', 'Encara no hi ha canvis registrats', 'Aínda non hai cambios rexistrados', 'Oraindik ez dago aldaketarik erregistratuta'],
+	['historyUnavailable', 'This gateway does not keep the history of the schema', 'Esta gateway no guarda el historial del esquema', 'Esta gateway não guarda o histórico do esquema', 'Cette passerelle ne conserve pas l’historique du schéma', 'Questo gateway non conserva la cronologia dello schema', 'Dieses Gateway speichert den Verlauf des Schemas nicht', 'Deze gateway bewaart de geschiedenis van het schema niet', 'Aquesta passarel·la no desa l’historial de l’esquema', 'Esta pasarela non garda o historial do esquema', 'Pasabide honek ez du eskemaren historia gordetzen'],
+	['historyMore', 'Older changes', 'Cambios anteriores', 'Alterações anteriores', 'Modifications plus anciennes', 'Modifiche precedenti', 'Ältere Änderungen', 'Oudere wijzigingen', 'Canvis anteriors', 'Cambios anteriores', 'Aldaketa zaharragoak'],
+	['historyWhen', 'When', 'Cuándo', 'Quando', 'Quand', 'Quando', 'Wann', 'Wanneer', 'Quan', 'Cando', 'Noiz'],
+	['historyWho', 'Who', 'Quién', 'Quem', 'Qui', 'Chi', 'Wer', 'Wie', 'Qui', 'Quen', 'Nork'],
+	['historyWhat', 'What', 'Qué', 'O quê', 'Quoi', 'Cosa', 'Was', 'Wat', 'Què', 'Que', 'Zer'],
+	['historyBefore', 'Before', 'Antes', 'Antes', 'Avant', 'Prima', 'Vorher', 'Voor', 'Abans', 'Antes', 'Lehen'],
+	['historyAfter', 'After', 'Después', 'Depois', 'Après', 'Dopo', 'Nachher', 'Na', 'Després', 'Despois', 'Ondoren'],
+	['historyChanges', 'Changes', 'Cambios', 'Alterações', 'Modifications', 'Modifiche', 'Änderungen', 'Wijzigingen', 'Canvis', 'Cambios', 'Aldaketak'],
+	['changedBy', '{name} changed it at {time}: this is what it has now', '{name} lo cambió a las {time}: esto es lo que tiene ahora', '{name} alterou às {time}: isto é o que tem agora', '{name} l’a modifié à {time} : voici ce qu’il contient', '{name} l’ha cambiato alle {time}: ecco cosa contiene ora', '{name} hat es um {time} geändert: das ist der aktuelle Stand', '{name} heeft het om {time} gewijzigd: dit is wat het nu bevat', '{name} l’ha canviat a les {time}: això és el que té ara', '{name} cambiouno ás {time}: isto é o que ten agora', '{name}(e)k aldatu du {time}(e)tan: hau da orain duena'],
+	['remoteChange', '{name} changed {target} in {schema}', '{name} cambió {target} en {schema}', '{name} alterou {target} em {schema}', '{name} a modifié {target} dans {schema}', '{name} ha cambiato {target} in {schema}', '{name} hat {target} in {schema} geändert', '{name} heeft {target} in {schema} gewijzigd', '{name} ha canviat {target} a {schema}', '{name} cambiou {target} en {schema}', '{name}(e)k {target} aldatu du {schema} eskeman'],
+	['refreshNow', 'Refresh', 'Actualizar', 'Atualizar', 'Actualiser', 'Aggiorna', 'Aktualisieren', 'Vernieuwen', 'Actualitza', 'Actualizar', 'Freskatu'],
+	['viewTraces', 'View traces', 'Ver trazas', 'Ver rastreamentos', 'Voir les traces', 'Vedi le tracce', 'Traces anzeigen', 'Traces bekijken', 'Veure traces', 'Ver trazas', 'Ikusi arrastoak'],
 	['schemaFile', 'Schema (lambdaORM.yaml)', 'Esquema (lambdaORM.yaml)', 'Esquema (lambdaORM.yaml)', 'Schéma (lambdaORM.yaml)', 'Schema (lambdaORM.yaml)', 'Schema (lambdaORM.yaml)', 'Schema (lambdaORM.yaml)', 'Esquema (lambdaORM.yaml)', 'Esquema (lambdaORM.yaml)', 'Eskema (lambdaORM.yaml)'],
 	['save', 'Save', 'Guardar', 'Salvar', 'Enregistrer', 'Salva', 'Speichern', 'Opslaan', 'Desa', 'Gardar', 'Gorde'],
 	['saving', 'Saving…', 'Guardando…', 'Salvando…', 'Enregistrement…', 'Salvataggio…', 'Wird gespeichert…', 'Opslaan…', 'Desant…', 'Gardando…', 'Gordetzen…'],
@@ -178,12 +258,16 @@ ROWS.push(
 	['data', 'data', 'data', 'data', 'data', 'data', 'data', 'data', 'data', 'data', 'data'],
 	['src', 'src', 'src', 'src', 'src', 'src', 'src', 'src', 'src', 'src', 'src'],
 	['model', 'model', 'model', 'model', 'model', 'model', 'model', 'model', 'model', 'model', 'model'],
-	['projects', 'projects', 'proyectos', 'projetos', 'projets', 'progetti', 'Projekte', 'projecten', 'projectes', 'proxectos', 'proiektuak'],
+	['projects', 'Workbench', 'Workbench', 'Workbench', 'Workbench', 'Workbench', 'Workbench', 'Workbench', 'Workbench', 'Workbench', 'Workbench'],
 	['newProject', 'New project', 'Nuevo proyecto', 'Novo projeto', 'Nouveau projet', 'Nuovo progetto', 'Neues Projekt', 'Nieuw project', 'Projecte nou', 'Novo proxecto', 'Proiektu berria'],
 	['empty', '(empty)', '(vacío)', '(vazio)', '(vide)', '(vuoto)', '(leer)', '(leeg)', '(buit)', '(baleiro)', '(hutsa)'],
 	['commandsOf', 'Schema {name}', 'Esquema {name}', 'Esquema {name}', 'Schéma {name}', 'Schema {name}', 'Schema {name}', 'Schema {name}', 'Esquema {name}', 'Esquema {name}', '{name} eskema'],
 	['variables', 'Variables (.env)', 'Variables (.env)', 'Variáveis (.env)', 'Variables (.env)', 'Variabili (.env)', 'Variablen (.env)', 'Variabelen (.env)', 'Variables (.env)', 'Variables (.env)', 'Aldagaiak (.env)'],
 	['defined', 'defined', 'definida', 'definida', 'définie', 'definita', 'definiert', 'gedefinieerd', 'definida', 'definida', 'definituta'],
+	['varName', 'variable', 'variable', 'variável', 'variable', 'variabile', 'Variable', 'variabele', 'variable', 'variable', 'aldagaia'],
+	['varState', 'state', 'estado', 'estado', 'état', 'stato', 'Zustand', 'status', 'estat', 'estado', 'egoera'],
+	['varUsedIn', 'used in', 'se usa en', 'usada em', 'utilisée dans', 'usata in', 'verwendet in', 'gebruikt in', 's’usa a', 'úsase en', 'non erabilia'],
+	['varValue', 'value', 'valor', 'valor', 'valeur', 'valore', 'Wert', 'waarde', 'valor', 'valor', 'balioa'],
 	['notDefined', 'not in .env', 'no está en .env', 'não está no .env', 'absente de .env', 'non in .env', 'nicht in .env', 'niet in .env', 'no és a .env', 'non está en .env', 'ez dago .env-n'],
 	['newValue', 'New value (not shown again)', 'Valor nuevo (no se vuelve a mostrar)', 'Valor novo (não é mostrado de novo)', 'Nouvelle valeur (plus affichée ensuite)', 'Nuovo valore (non verrà più mostrato)', 'Neuer Wert (wird nicht wieder angezeigt)', 'Nieuwe waarde (wordt niet meer getoond)', 'Valor nou (no es torna a mostrar)', 'Valor novo (non se volve mostrar)', 'Balio berria (ez da berriz erakutsiko)'],
 	['setValue', 'Set', 'Definir', 'Definir', 'Définir', 'Imposta', 'Setzen', 'Instellen', 'Defineix', 'Definir', 'Ezarri'],
@@ -195,9 +279,9 @@ ROWS.push(
 	['forms', 'Schema (forms)', 'Esquema (formularios)', 'Esquema (formulários)', 'Schéma (formulaires)', 'Schema (moduli)', 'Schema (Formulare)', 'Schema (formulieren)', 'Esquema (formularis)', 'Esquema (formularios)', 'Eskema (inprimakiak)'],
 	['entities', 'Entities', 'Entidades', 'Entidades', 'Entités', 'Entità', 'Entitäten', 'Entiteiten', 'Entitats', 'Entidades', 'Entitateak'],
 	['enums', 'Enums', 'Enums', 'Enums', 'Énumérations', 'Enum', 'Enums', 'Enums', 'Enums', 'Enums', 'Enumak'],
-	['sources', 'Sources', 'Sources', 'Sources', 'Sources', 'Sorgenti', 'Quellen', 'Bronnen', 'Fonts', 'Fontes', 'Iturriak'],
-	['mappings', 'Mappings', 'Mappings', 'Mappings', 'Mappings', 'Mapping', 'Mappings', 'Mappings', 'Mappings', 'Mappings', 'Mapping-ak'],
-	['stages', 'Stages', 'Stages', 'Stages', 'Stages', 'Stage', 'Stages', 'Stages', 'Stages', 'Stages', 'Stage-ak'],
+	['sources', 'Sources', 'Sources', 'Sources', 'Sources', 'Sources', 'Sources', 'Sources', 'Sources', 'Sources', 'Sources'],
+	['mappings', 'Mappings', 'Mappings', 'Mappings', 'Mappings', 'Mappings', 'Mappings', 'Mappings', 'Mappings', 'Mappings', 'Mappings'],
+	['stages', 'Stages', 'Stages', 'Stages', 'Stages', 'Stages', 'Stages', 'Stages', 'Stages', 'Stages', 'Stages'],
 	['newNamed', 'New in {name}', 'Nuevo en {name}', 'Novo em {name}', 'Nouveau dans {name}', 'Nuovo in {name}', 'Neu in {name}', 'Nieuw in {name}', 'Nou a {name}', 'Novo en {name}', 'Berria {name}-n'],
 	['rename', 'Rename', 'Renombrar', 'Renomear', 'Renommer', 'Rinomina', 'Umbenennen', 'Hernoemen', 'Canvia el nom', 'Renomear', 'Berrizendatu'],
 	['usedBy', '{name} is used by:', '{name} lo usan:', '{name} é usado por:', '{name} est utilisé par :', '{name} è usato da:', '{name} wird verwendet von:', '{name} wordt gebruikt door:', '{name} l’usen:', '{name} úsano:', '{name} hauek erabiltzen dute:'],
@@ -237,13 +321,25 @@ ROWS.push(
 	['cmd_exportSave', 'export the data of the stage to data/', 'exportar los datos del stage a data/', 'exportar os dados do stage para data/', 'exporter les données du stage dans data/', 'esportare i dati dello stage in data/', 'die Daten des Stage nach data/ exportieren', 'de gegevens van de stage naar data/ exporteren', 'exportar les dades del stage a data/', 'exportar os datos do stage a data/', 'stage-aren datuak data/-ra esportatu'],
 	['cmd_import', 'import an export file into the stage', 'importar un archivo exportado al stage', 'importar um arquivo exportado no stage', 'importer un fichier d’export dans le stage', 'importare un file esportato nello stage', 'eine Exportdatei in den Stage importieren', 'een exportbestand in de stage importeren', 'importar un fitxer exportat al stage', 'importar un ficheiro exportado ao stage', 'esportazio-fitxategi bat stage-ra inportatu'],
 	['cmd_push', 'apply the model to the databases', 'aplicar el modelo a las bases', 'aplicar o modelo aos bancos', 'appliquer le modèle aux bases', 'applicare il modello ai database', 'das Modell auf die Datenbanken anwenden', 'het model op de databases toepassen', 'aplicar el model a les bases', 'aplicar o modelo ás bases', 'eredua datu-baseei aplikatu'],
+	['cmd_migrations', 'the history of the migrations of the stage', 'el historial de migraciones del stage', 'o histórico de migrações do stage', "l'historique des migrations du stage", 'la cronologia delle migrazioni dello stage', 'der Verlauf der Migrationen der Stage', 'de geschiedenis van de migraties van de stage', "l'historial de migracions de l'stage", 'o historial de migracións do stage', 'stagearen migrazioen historia'],
+	['cmd_migrate', 'go back to a version of the stage', 'volver a una versión del stage', 'voltar a uma versão do stage', 'revenir à une version du stage', 'tornare a una versione dello stage', 'zu einer Version der Stage zurückkehren', 'teruggaan naar een versie van de stage', "tornar a una versió de l'stage", 'volver a unha versión do stage', 'stagearen bertsio batera itzuli'],
+	['cmd_seed', 'insert the rows of the seed that are not there yet', 'insertar las filas del seed que todavía no están', 'inserir as linhas do seed que ainda não estão', 'insérer les lignes du seed qui ne sont pas encore là', 'inserire le righe del seed che non ci sono ancora', 'die Zeilen des Seeds einfügen, die noch fehlen', 'de rijen van de seed invoegen die er nog niet zijn', 'inserir les files del seed que encara no hi són', 'inserir as filas do seed que aínda non están', 'oraindik ez dauden seed-eko errenkadak txertatu'],
+	['destructive', 'These changes can lose data:', 'Estos cambios pueden perder datos:', 'Estas alterações podem perder dados:', 'Ces changements peuvent perdre des données :', 'Queste modifiche possono perdere dati:', 'Diese Änderungen können Daten verlieren:', 'Deze wijzigingen kunnen gegevens verliezen:', 'Aquests canvis poden perdre dades:', 'Estes cambios poden perder datos:', 'Aldaketa hauek datuak gal ditzakete:'],
+	['allowDestructive', 'apply also the changes that can lose data', 'aplicar también los cambios que pueden perder datos', 'aplicar também as alterações que podem perder dados', 'appliquer aussi les changements qui peuvent perdre des données', 'applicare anche le modifiche che possono perdere dati', 'auch die Änderungen anwenden, die Daten verlieren können', 'ook de wijzigingen toepassen die gegevens kunnen verliezen', 'aplicar també els canvis que poden perdre dades', 'aplicar tamén os cambios que poden perder datos', 'datuak gal ditzaketen aldaketak ere aplikatu'],
+	['seedFiles', 'Its files, in order (only the rows that are not there are inserted):', 'Sus archivos, en orden (solo se insertan las filas que no están):', 'Os seus arquivos, em ordem (só são inseridas as linhas que não estão):', "Ses fichiers, dans l'ordre (seules les lignes absentes sont insérées) :", 'I suoi file, in ordine (si inseriscono solo le righe che non ci sono):', 'Seine Dateien, in Reihenfolge (nur fehlende Zeilen werden eingefügt):', 'De bestanden, op volgorde (alleen ontbrekende rijen worden ingevoegd):', "Els seus fitxers, en ordre (només s'insereixen les files que no hi són):", 'Os seus ficheiros, en orde (só se inserten as filas que non están):', 'Bere fitxategiak, ordenan (falta diren errenkadak bakarrik txertatzen dira):'],
+	['noSeed', 'The stage has no seed (stages[].seed)', 'El stage no tiene seed (stages[].seed)', 'O stage não tem seed (stages[].seed)', "Le stage n'a pas de seed (stages[].seed)", 'Lo stage non ha seed (stages[].seed)', 'Die Stage hat keinen Seed (stages[].seed)', 'De stage heeft geen seed (stages[].seed)', "L'stage no té seed (stages[].seed)", 'O stage non ten seed (stages[].seed)', 'Stageak ez du seed-ik (stages[].seed)'],
+	['noMigrations', 'No migrations: push records them when the schema has infrastructure.migrations', 'Sin migraciones: push las registra cuando el schema tiene infrastructure.migrations', 'Sem migrações: push as registra quando o schema tem infrastructure.migrations', 'Aucune migration : push les enregistre quand le schéma a infrastructure.migrations', 'Nessuna migrazione: push le registra quando lo schema ha infrastructure.migrations', 'Keine Migrationen: push zeichnet sie auf, wenn das Schema infrastructure.migrations hat', 'Geen migraties: push legt ze vast als het schema infrastructure.migrations heeft', "Sense migracions: push les registra quan l'esquema té infrastructure.migrations", 'Sen migracións: push rexístraas cando o esquema ten infrastructure.migrations', 'Migraziorik ez: push-ek erregistratzen ditu eskemak infrastructure.migrations duenean'],
+	['migrateTo', 'go back here', 'volver acá', 'voltar aqui', 'revenir ici', 'tornare qui', 'hierher zurück', 'hierheen terug', 'tornar aquí', 'volver aquí', 'hona itzuli'],
+	['migrationVersion', 'version', 'versión', 'versão', 'version', 'versione', 'Version', 'versie', 'versió', 'versión', 'bertsioa'],
+	['migrationSource', 'source', 'source', 'source', 'source', 'source', 'source', 'source', 'source', 'source', 'source'],
+	['migrationStatus', 'status', 'estado', 'estado', 'état', 'stato', 'Status', 'status', 'estat', 'estado', 'egoera'],
 	['cmd_pull', 'bring the databases into the model', 'traer las bases al modelo', 'trazer os bancos para o modelo', 'ramener les bases dans le modèle', 'portare i database nel modello', 'die Datenbanken ins Modell übernehmen', 'de databases in het model overnemen', 'portar les bases al model', 'traer as bases ao modelo', 'datu-baseak eredura ekarri'],
 	['cmd_drop', 'remove the tables of the stage', 'eliminar las tablas del stage', 'remover as tabelas do stage', 'supprimer les tables du stage', 'eliminare le tabelle dello stage', 'die Tabellen des Stage löschen', 'de tabellen van de stage verwijderen', 'eliminar les taules del stage', 'eliminar as táboas do stage', 'stage-aren taulak ezabatu'],
 	['cmd_introspect', 'create an entity from a data file', 'crear una entidad desde un archivo de datos', 'criar uma entidade a partir de um arquivo de dados', 'créer une entité depuis un fichier de données', 'creare un’entità da un file di dati', 'eine Entität aus einer Datendatei erstellen', 'een entiteit uit een gegevensbestand maken', 'crear una entitat des d’un fitxer de dades', 'crear unha entidade desde un ficheiro de datos', 'datu-fitxategi batetik entitate bat sortu'],
 	['cmd_incorporate', 'create an entity from a data file and import its rows', 'crear una entidad desde un archivo de datos e importar sus filas', 'criar uma entidade a partir de um arquivo de dados e importar as linhas', 'créer une entité depuis un fichier de données et importer ses lignes', 'creare un’entità da un file di dati e importarne le righe', 'eine Entität aus einer Datendatei erstellen und ihre Zeilen importieren', 'een entiteit uit een gegevensbestand maken en de rijen importeren', 'crear una entitat des d’un fitxer de dades i importar-ne les files', 'crear unha entidade desde un ficheiro de datos e importar as filas', 'datu-fitxategi batetik entitate bat sortu eta errenkadak inportatu'],
 	['cmd_build', 'generate the model code (src/ or zip)', 'generar el código del modelo (src/ o zip)', 'gerar o código do modelo (src/ ou zip)', 'générer le code du modèle (src/ ou zip)', 'generare il codice del modello (src/ o zip)', 'den Code des Modells erzeugen (src/ oder Zip)', 'de code van het model genereren (src/ of zip)', 'generar el codi del model (src/ o zip)', 'xerar o código do modelo (src/ ou zip)', 'ereduaren kodea sortu (src/ edo zip)'],
 	['cmd_version', 'the versions of λORM in the gateway', 'las versiones de λORM en la gateway', 'as versões do λORM na gateway', 'les versions de λORM dans la gateway', 'le versioni di λORM nel gateway', 'die λORM-Versionen im Gateway', 'de λORM-versies in de gateway', 'les versions de λORM a la gateway', 'as versións de λORM na gateway', 'gateway-ko λORM bertsioak'],
-	['about', 'About', 'Información', 'Informações', 'Informations', 'Informazioni', 'Informationen', 'Informatie', 'Informació', 'Información', 'Informazioa'],
+	['about', 'About', 'Acerca de', 'Sobre', 'À propos', 'Informazioni', 'Über', 'Over', 'Quant a', 'Acerca de', 'Honi buruz'],
 	['schemaName', 'Name', 'Nombre', 'Nome', 'Nom', 'Nome', 'Name', 'Naam', 'Nom', 'Nome', 'Izena'],
 	['schemaDescription', 'Description', 'Descripción', 'Descrição', 'Description', 'Descrizione', 'Beschreibung', 'Beschrijving', 'Descripció', 'Descrición', 'Deskribapena'],
 	['schemaVersion', 'Version', 'Versión', 'Versão', 'Version', 'Versione', 'Version', 'Versie', 'Versió', 'Versión', 'Bertsioa'],
@@ -251,14 +347,50 @@ ROWS.push(
 	['closeOthers', 'Close others', 'Cerrar los demás', 'Fechar os outros', 'Fermer les autres', 'Chiudi gli altri', 'Andere schließen', 'Andere sluiten', 'Tanca els altres', 'Pechar os demais', 'Besteak itxi'],
 	['closeAll', 'Close all', 'Cerrar todos', 'Fechar todos', 'Tout fermer', 'Chiudi tutti', 'Alle schließen', 'Alles sluiten', 'Tanca-ho tot', 'Pechar todos', 'Denak itxi'],
 	['stageSourcesNote', 'In order: the first source whose condition is true takes the sentence; a last one without condition takes the rest.', 'En orden: el primer source cuya condición es verdadera toma la sentencia; uno último sin condición toma el resto.', 'Em ordem: o primeiro source cuja condição é verdadeira fica com a sentença; um último sem condição fica com o resto.', 'Dans l’ordre : la première source dont la condition est vraie prend la phrase ; une dernière sans condition prend le reste.', 'In ordine: la prima source la cui condizione è vera prende la frase; un’ultima senza condizione prende il resto.', 'Der Reihe nach: die erste Source, deren Bedingung wahr ist, nimmt den Satz; eine letzte ohne Bedingung nimmt den Rest.', 'Op volgorde: de eerste source waarvan de voorwaarde waar is neemt de zin; een laatste zonder voorwaarde neemt de rest.', 'En ordre: el primer source amb la condició certa pren la sentència; un últim sense condició pren la resta.', 'En orde: o primeiro source coa condición certa toma a sentenza; un último sen condición toma o resto.', 'Ordenean: baldintza egiazkoa duen lehen source-ak hartzen du sententzia; baldintzarik gabeko azken batek gainerakoa.'],
+	['stageDiagram', 'Diagram of the stage', 'Diagrama del stage', 'Diagrama do stage', 'Diagramme du stage', 'Diagramma dello stage', 'Diagramm des Stage', 'Diagram van de stage', 'Diagrama de l’stage', 'Diagrama do stage', 'Stage-aren diagrama'],
+	['stageDiagramOf', 'Stage {name}', 'Stage {name}', 'Stage {name}', 'Stage {name}', 'Stage {name}', 'Stage {name}', 'Stage {name}', 'Stage {name}', 'Stage {name}', '{name} stage-a'],
+	['stageGateway', 'Data Gateway', 'Data Gateway', 'Data Gateway', 'Data Gateway', 'Data Gateway', 'Data Gateway', 'Data Gateway', 'Data Gateway', 'Data Gateway', 'Data Gateway'],
+	['stageTables', '{n} tables', '{n} tablas', '{n} tabelas', '{n} tables', '{n} tabelle', '{n} Tabellen', '{n} tabellen', '{n} taules', '{n} táboas', '{n} taula'],
+	['stageUnrouted', 'No source of the stage takes: {names}', 'Ningún source del stage toma: {names}', 'Nenhum source do stage fica com: {names}', 'Aucune source du stage ne prend : {names}', 'Nessuna source dello stage prende: {names}', 'Keine Source des Stage nimmt: {names}', 'Geen source van de stage neemt: {names}', 'Cap source de l’stage pren: {names}', 'Ningún source do stage toma: {names}', 'Stage-aren source batek ere ez du hartzen: {names}'],
+	['stageConditionError', 'The condition does not evaluate (it is taken as false): {error}', 'La condición no se puede evaluar (se toma como falsa): {error}', 'A condição não pode ser avaliada (é tomada como falsa): {error}', 'La condition ne s’évalue pas (elle est prise comme fausse) : {error}', 'La condizione non si valuta (è presa come falsa): {error}', 'Die Bedingung lässt sich nicht auswerten (sie gilt als falsch): {error}', 'De voorwaarde valt niet te evalueren (ze geldt als onwaar): {error}', 'La condició no s’avalua (es pren com a falsa): {error}', 'A condición non se avalía (tómase como falsa): {error}', 'Baldintza ezin da ebaluatu (faltsutzat hartzen da): {error}'],
+	['stageChoose', 'Click the arrow of a source to see its condition.', 'Hacé clic en la flecha de un source para ver su condición.', 'Clique na seta de um source para ver a sua condição.', 'Cliquez sur la flèche d’une source pour voir sa condition.', 'Fai clic sulla freccia di una source per vederne la condizione.', 'Klicke auf den Pfeil einer Source, um ihre Bedingung zu sehen.', 'Klik op de pijl van een source om de voorwaarde te zien.', 'Fes clic a la fletxa d’un source per veure’n la condició.', 'Fai clic na frecha dun source para ver a súa condición.', 'Egin klik source baten geziaren gainean bere baldintza ikusteko.'],
+	['stageReads', 'reads: {source}', 'lecturas: {source}', 'leituras: {source}', 'lectures : {source}', 'letture: {source}', 'Lesen: {source}', 'lezen: {source}', 'lectures: {source}', 'lecturas: {source}', 'irakurketak: {source}'],
+	['stageWrites', 'writes: {source}', 'escrituras: {source}', 'escritas: {source}', 'écritures : {source}', 'scritture: {source}', 'Schreiben: {source}', 'schrijven: {source}', 'escriptures: {source}', 'escrituras: {source}', 'idazketak: {source}'],
+	['stageNoRouting', 'This gateway can’t tell where the entities of a stage go (data-gateway 4.1.0 or later).', 'Este gateway no puede decir a dónde va cada entidad de un stage (data-gateway 4.1.0 o posterior).', 'Este gateway não pode dizer para onde vai cada entidade de um stage (data-gateway 4.1.0 ou posterior).', 'Ce gateway ne peut pas dire où vont les entités d’un stage (data-gateway 4.1.0 ou plus récent).', 'Questo gateway non può dire dove vanno le entità di uno stage (data-gateway 4.1.0 o successivo).', 'Dieses Gateway kann nicht sagen, wohin die Entitäten eines Stage gehen (data-gateway 4.1.0 oder neuer).', 'Deze gateway kan niet zeggen waar de entiteiten van een stage heen gaan (data-gateway 4.1.0 of later).', 'Aquest gateway no pot dir on va cada entitat d’un stage (data-gateway 4.1.0 o posterior).', 'Este gateway non pode dicir a onde vai cada entidade dun stage (data-gateway 4.1.0 ou posterior).', 'Gateway honek ezin du esan stage baten entitateak nora doazen (data-gateway 4.1.0 edo berriagoa).'],
+	['stageReadsHere', 'its reads', 'sus lecturas', 'as suas leituras', 'ses lectures', 'le sue letture', 'ihr Lesen', 'het lezen', 'les seves lectures', 'as súas lecturas', 'bere irakurketak'],
+	['stageWritesHere', 'its writes', 'sus escrituras', 'as suas escritas', 'ses écritures', 'le sue scritture', 'ihr Schreiben', 'het schrijven', 'les seves escriptures', 'as súas escrituras', 'bere idazketak'],
+	['stageLivesIn', 'lives in {source}', 'vive en {source}', 'vive em {source}', 'vit dans {source}', 'vive in {source}', 'liegt in {source}', 'woont in {source}', 'viu a {source}', 'vive en {source}', '{source}-n bizi da'],
+	['stageShow', 'show', 'mostrar', 'mostrar', 'afficher', 'mostra', 'zeigen', 'tonen', 'mostra', 'amosar', 'erakutsi'],
+	['stageShowTables', 'the tables of each source', 'las tablas de cada source', 'as tabelas de cada source', 'les tables de chaque source', 'le tabelle di ogni source', 'die Tabellen jeder Source', 'de tabellen van elke source', 'les taules de cada source', 'as táboas de cada source', 'source bakoitzaren taulak'],
+	['stageShowNames', 'the name of each source only', 'solo el nombre de cada source', 'só o nome de cada source', 'le nom de chaque source seulement', 'solo il nome di ogni source', 'nur den Namen jeder Source', 'alleen de naam van elke source', 'només el nom de cada source', 'só o nome de cada source', 'source bakoitzaren izena soilik'],
+	['stageGatewayTop', 'the gateway on top, the sources below', 'el gateway arriba, los sources debajo', 'o gateway em cima, os sources embaixo', 'le gateway en haut, les sources en dessous', 'il gateway in alto, le source sotto', 'das Gateway oben, die Sources darunter', 'de gateway boven, de sources eronder', 'el gateway a dalt, els sources a sota', 'o gateway arriba, os sources debaixo', 'gateway-a goian, source-ak behean'],
+	['stageGatewayLeft', 'the gateway on the left, the sources on the right', 'el gateway a la izquierda, los sources a la derecha', 'o gateway à esquerda, os sources à direita', 'le gateway à gauche, les sources à droite', 'il gateway a sinistra, le source a destra', 'das Gateway links, die Sources rechts', 'de gateway links, de sources rechts', 'el gateway a l’esquerra, els sources a la dreta', 'o gateway á esquerda, os sources á dereita', 'gateway-a ezkerrean, source-ak eskuinean'],
+	['state', 'State', 'Estado', 'Estado', 'État', 'Stato', 'Zustand', 'Status', 'Estat', 'Estado', 'Egoera'],
+	['sourceCode', 'Source code', 'Código fuente', 'Código-fonte', 'Code source', 'Codice sorgente', 'Quellcode', 'Broncode', 'Codi font', 'Código fonte', 'Iturburu-kodea'],
+	['downloadZip', 'Download {name} as .zip', 'Descargar {name} como .zip', 'Baixar {name} como .zip', 'Télécharger {name} en .zip', 'Scarica {name} come .zip', '{name} als .zip herunterladen', '{name} als .zip downloaden', 'Baixa {name} com a .zip', 'Descargar {name} como .zip', 'Deskargatu {name} .zip gisa'],
+	['rebuildCode', 'Build {name} again', 'Volver a generar {name}', 'Gerar {name} de novo', 'Régénérer {name}', 'Rigenera {name}', '{name} neu erzeugen', '{name} opnieuw genereren', 'Torna a generar {name}', 'Xerar {name} de novo', 'Sortu {name} berriro'],
+	['removeCode', 'Delete {name}', 'Eliminar {name}', 'Excluir {name}', 'Supprimer {name}', 'Elimina {name}', '{name} löschen', '{name} verwijderen', 'Elimina {name}', 'Eliminar {name}', 'Ezabatu {name}'],
+	['removeCodeConfirm', 'Delete the code {name} ({dir})? Its files go, the repositories written by hand too. It cannot be undone.', '¿Eliminar el código {name} ({dir})? Se van sus archivos, también los repositorios escritos a mano. No se puede deshacer.', 'Excluir o código {name} ({dir})? Os seus arquivos se vão, também os repositórios escritos à mão. Não pode ser desfeito.', 'Supprimer le code {name} ({dir}) ? Ses fichiers partent, les dépôts écrits à la main aussi. C’est irréversible.', 'Eliminare il codice {name} ({dir})? I suoi file se ne vanno, anche i repository scritti a mano. Non si può annullare.', 'Den Code {name} ({dir}) löschen? Seine Dateien gehen, auch die von Hand geschriebenen Repositories. Das kann nicht rückgängig gemacht werden.', 'De code {name} ({dir}) verwijderen? Zijn bestanden gaan weg, ook de met de hand geschreven repositories. Dit kan niet ongedaan worden.', 'Eliminar el codi {name} ({dir})? Se’n van els fitxers, també els repositoris escrits a mà. No es pot desfer.', 'Eliminar o código {name} ({dir})? Vanse os seus ficheiros, tamén os repositorios escritos a man. Non se pode desfacer.', '{name} kodea ({dir}) ezabatu? Bere fitxategiak joango dira, eskuz idatzitako biltegiak ere bai. Ezin da desegin.'],
+	['rebuilt', '{name} built again: {n} files written (the repositories already there stay)', '{name} generado de nuevo: {n} archivos escritos (los repositorios que ya estaban quedan)', '{name} gerado de novo: {n} arquivos gravados (os repositórios que já estavam ficam)', '{name} régénéré : {n} fichiers écrits (les dépôts déjà là restent)', '{name} rigenerato: {n} file scritti (i repository già presenti restano)', '{name} neu erzeugt: {n} Dateien geschrieben (vorhandene Repositories bleiben)', '{name} opnieuw gegenereerd: {n} bestanden geschreven (bestaande repositories blijven)', '{name} generat de nou: {n} fitxers escrits (els repositoris que ja hi eren es queden)', '{name} xerado de novo: {n} ficheiros escritos (os repositorios que xa estaban quedan)', '{name} berriro sortua: {n} fitxategi idatzita (lehendik zeuden biltegiak geratzen dira)'],
+	['removedCode', '{name} deleted', '{name} eliminado', '{name} excluído', '{name} supprimé', '{name} eliminato', '{name} gelöscht', '{name} verwijderd', '{name} eliminat', '{name} eliminado', '{name} ezabatuta'],
+	['buildParts', 'What it generates', 'Qué genera', 'O que gera', 'Ce qu’il génère', 'Cosa genera', 'Was erzeugt wird', 'Wat het genereert', 'Què genera', 'Que xera', 'Zer sortzen duen'],
+	['buildModel', 'the model (rewritten)', 'el modelo (se reescribe)', 'o modelo (reescrito)', 'le modèle (réécrit)', 'il modello (riscritto)', 'das Modell (neu geschrieben)', 'het model (herschreven)', 'el model (es reescriu)', 'o modelo (reescríbese)', 'eredua (berridazten da)'],
+	['buildRepositories', 'the repositories (one already there stays)', 'los repositorios (uno que ya está queda)', 'os repositórios (um que já existe fica)', 'les dépôts (un déjà là reste)', 'i repository (uno già presente resta)', 'die Repositories (vorhandene bleiben)', 'de repositories (een bestaande blijft)', 'els repositoris (un que ja hi és es queda)', 'os repositorios (un que xa está queda)', 'biltegiak (lehendik dagoena geratzen da)'],
 	['condition', 'Condition', 'Condición', 'Condição', 'Condition', 'Condizione', 'Bedingung', 'Voorwaarde', 'Condició', 'Condición', 'Baldintza'],
 	['conditionHint', 'An expression, e.g. entity.in(["Products","Orders"]) && read — empty: the rest', 'Una expresión, p. ej. entity.in(["Products","Orders"]) && read — vacía: el resto', 'Uma expressão, p. ex. entity.in(["Products","Orders"]) && read — vazia: o resto', 'Une expression, p. ex. entity.in(["Products","Orders"]) && read — vide : le reste', 'Un’espressione, es. entity.in(["Products","Orders"]) && read — vuota: il resto', 'Ein Ausdruck, z. B. entity.in(["Products","Orders"]) && read — leer: der Rest', 'Een expressie, bv. entity.in(["Products","Orders"]) && read — leeg: de rest', 'Una expressió, p. ex. entity.in(["Products","Orders"]) && read — buida: la resta', 'Unha expresión, p. ex. entity.in(["Products","Orders"]) && read — baleira: o resto', 'Adierazpen bat, adib. entity.in(["Products","Orders"]) && read — hutsik: gainerakoa'],
+	['expression', 'Expression', 'Expresión', 'Expressão', 'Expression', 'Espressione', 'Ausdruck', 'Expressie', 'Expressió', 'Expresión', 'Adierazpena'],
+	['expressionsOf', 'Expressions of {name}', 'Expresiones de {name}', 'Expressões de {name}', 'Expressions de {name}', 'Espressioni di {name}', 'Ausdrücke von {name}', 'Expressies van {name}', 'Expressions de {name}', 'Expresións de {name}', '{name}(r)en adierazpenak'],
+	['validationsHint', 'Checked by λORM before each insert and update (after writeValue): a condition that is false rejects the sentence with its message.', 'λORM las comprueba antes de cada insert y update (después de writeValue): una condición falsa rechaza la sentencia con su mensaje.', 'O λORM as verifica antes de cada insert e update (depois do writeValue): uma condição falsa rejeita a sentença com sua mensagem.', 'λORM les vérifie avant chaque insert et update (après writeValue) : une condition fausse rejette la requête avec son message.', 'λORM le verifica prima di ogni insert e update (dopo writeValue): una condizione falsa rifiuta l’istruzione con il suo messaggio.', 'λORM prüft sie vor jedem Insert und Update (nach writeValue): eine falsche Bedingung weist die Anweisung mit ihrer Meldung ab.', 'λORM controleert ze vóór elke insert en update (na writeValue): een onware voorwaarde weigert de opdracht met haar melding.', 'λORM les comprova abans de cada insert i update (després de writeValue): una condició falsa rebutja la sentència amb el seu missatge.', 'λORM compróbaas antes de cada insert e update (despois de writeValue): unha condición falsa rexeita a sentenza coa súa mensaxe.', 'λORMek insert eta update bakoitzaren aurretik egiaztatzen ditu (writeValue ondoren): baldintza faltsu batek sententzia baztertzen du bere mezuarekin.'],
+	['helpReadExp', 'Replaces the column when reading: λORM translates it into the query (SQL) and the property returns its result. E.g. mask(email), concat(lastname,", ",firstname).', 'Reemplaza la columna al leer: λORM la traduce a la consulta (SQL) y la propiedad devuelve su resultado. Ej.: mask(email), concat(lastname,", ",firstname).', 'Substitui a coluna ao ler: o λORM a traduz para a consulta (SQL) e a propriedade devolve o seu resultado. Ex.: mask(email), concat(lastname,", ",firstname).', 'Remplace la colonne à la lecture : λORM la traduit dans la requête (SQL) et la propriété renvoie son résultat. Ex. : mask(email), concat(lastname,", ",firstname).', 'Sostituisce la colonna in lettura: λORM la traduce nella query (SQL) e la proprietà restituisce il suo risultato. Es.: mask(email), concat(lastname,", ",firstname).', 'Ersetzt die Spalte beim Lesen: λORM übersetzt sie in die Abfrage (SQL), und die Eigenschaft liefert ihr Ergebnis. Z. B. mask(email), concat(lastname,", ",firstname).', 'Vervangt de kolom bij het lezen: λORM vertaalt haar naar de query (SQL) en de eigenschap geeft haar resultaat. Bv. mask(email), concat(lastname,", ",firstname).', 'Substitueix la columna en llegir: λORM la tradueix a la consulta (SQL) i la propietat en retorna el resultat. P. ex.: mask(email), concat(lastname,", ",firstname).', 'Substitúe a columna ao ler: λORM tradúcea á consulta (SQL) e a propiedade devolve o seu resultado. P. ex.: mask(email), concat(lastname,", ",firstname).', 'Irakurtzean zutabea ordezten du: λORMek kontsultara (SQL) itzultzen du eta propietateak bere emaitza itzultzen du. Adib.: mask(email), concat(lastname,", ",firstname).'],
+	['helpWriteExp', 'Meant for what is written in the column, but λORM 3.8 does not apply it: use writeValue.', 'Pensada para lo que se escribe en la columna, pero λORM 3.8 no la aplica: usa writeValue.', 'Pensada para o que se escreve na coluna, mas o λORM 3.8 não a aplica: use writeValue.', "Prévue pour ce qui est écrit dans la colonne, mais λORM 3.8 ne l'applique pas : utilisez writeValue.", 'Pensata per ciò che si scrive nella colonna, ma λORM 3.8 non la applica: usa writeValue.', 'Gedacht für das, was in die Spalte geschrieben wird, aber λORM 3.8 wendet sie nicht an: nutze writeValue.', 'Bedoeld voor wat in de kolom wordt geschreven, maar λORM 3.8 past haar niet toe: gebruik writeValue.', "Pensada per al que s'escriu a la columna, però λORM 3.8 no l'aplica: fes servir writeValue.", 'Pensada para o que se escribe na columna, pero λORM 3.8 non a aplica: usa writeValue.', 'Zutabean idazten denerako pentsatua, baina λORM 3.8k ez du aplikatzen: erabili writeValue.'],
+	['helpReadValue', 'Transforms each value after reading it, in the gateway (not in the database). E.g. decrypt(email,$DATA_SECRET_KEY).', 'Transforma cada valor después de leerlo, en el gateway (no en la base de datos). Ej.: decrypt(email,$DATA_SECRET_KEY).', 'Transforma cada valor depois de lê-lo, no gateway (não no banco de dados). Ex.: decrypt(email,$DATA_SECRET_KEY).', 'Transforme chaque valeur après sa lecture, dans le gateway (pas dans la base de données). Ex. : decrypt(email,$DATA_SECRET_KEY).', 'Trasforma ogni valore dopo averlo letto, nel gateway (non nel database). Es.: decrypt(email,$DATA_SECRET_KEY).', 'Wandelt jeden Wert nach dem Lesen um, im Gateway (nicht in der Datenbank). Z. B. decrypt(email,$DATA_SECRET_KEY).', 'Zet elke waarde om na het lezen, in de gateway (niet in de database). Bv. decrypt(email,$DATA_SECRET_KEY).', 'Transforma cada valor després de llegir-lo, al gateway (no a la base de dades). P. ex.: decrypt(email,$DATA_SECRET_KEY).', 'Transforma cada valor despois de lelo, no gateway (non na base de datos). P. ex.: decrypt(email,$DATA_SECRET_KEY).', 'Balio bakoitza irakurri ondoren eraldatzen du, gatewayan (ez datu-basean). Adib.: decrypt(email,$DATA_SECRET_KEY).'],
+	['helpWriteValue', 'Transforms each value before writing it (insert, update), in the gateway; the constraints see its result. E.g. encrypt(email,$DATA_SECRET_KEY).', 'Transforma cada valor antes de escribirlo (insert, update), en el gateway; las constraints ven su resultado. Ej.: encrypt(email,$DATA_SECRET_KEY).', 'Transforma cada valor antes de escrevê-lo (insert, update), no gateway; as constraints veem o seu resultado. Ex.: encrypt(email,$DATA_SECRET_KEY).', "Transforme chaque valeur avant de l'écrire (insert, update), dans le gateway ; les constraints voient son résultat. Ex. : encrypt(email,$DATA_SECRET_KEY).", 'Trasforma ogni valore prima di scriverlo (insert, update), nel gateway; le constraints vedono il suo risultato. Es.: encrypt(email,$DATA_SECRET_KEY).', 'Wandelt jeden Wert vor dem Schreiben um (Insert, Update), im Gateway; die Constraints sehen sein Ergebnis. Z. B. encrypt(email,$DATA_SECRET_KEY).', 'Zet elke waarde om vóór het schrijven (insert, update), in de gateway; de constraints zien het resultaat. Bv. encrypt(email,$DATA_SECRET_KEY).', "Transforma cada valor abans d'escriure'l (insert, update), al gateway; les constraints en veuen el resultat. P. ex.: encrypt(email,$DATA_SECRET_KEY).", 'Transforma cada valor antes de escribilo (insert, update), no gateway; as constraints ven o seu resultado. P. ex.: encrypt(email,$DATA_SECRET_KEY).', 'Balio bakoitza idatzi aurretik eraldatzen du (insert, update), gatewayan; constraintek bere emaitza ikusten dute. Adib.: encrypt(email,$DATA_SECRET_KEY).'],
 	['addSource', 'Add source', 'Agregar source', 'Adicionar source', 'Ajouter une source', 'Aggiungi source', 'Source hinzufügen', 'Source toevoegen', 'Afegeix source', 'Engadir source', 'Gehitu source'],
 	['moveUp', 'Move up', 'Subir', 'Subir', 'Monter', 'Sposta su', 'Nach oben', 'Omhoog', 'Puja', 'Subir', 'Gora'],
 	['moveDown', 'Move down', 'Bajar', 'Descer', 'Descendre', 'Sposta giù', 'Nach unten', 'Omlaag', 'Baixa', 'Baixar', 'Behera'],
 	['notAVariable', '{name}: not a variable of a sentence ({names})', '{name}: no es una variable de una sentencia ({names})', '{name}: não é uma variável de uma sentença ({names})', '{name} : pas une variable d’une phrase ({names})', '{name}: non è una variabile di una frase ({names})', '{name}: keine Variable eines Satzes ({names})', '{name}: geen variabele van een zin ({names})', '{name}: no és una variable d’una sentència ({names})', '{name}: non é unha variable dunha sentenza ({names})', '{name}: ez da sententzia baten aldagaia ({names})'],
 	['rootTaken', 'The schema at the root (/) is the only one the gateway can serve: move it to a folder of the workspace to add others.', 'El esquema de la raíz (/) es el único que la gateway puede servir: movelo a una carpeta del workspace para agregar otros.', 'O esquema da raiz (/) é o único que a gateway pode servir: mova-o para uma pasta do workspace para adicionar outros.', 'Le schéma à la racine (/) est le seul que la gateway peut servir : déplacez-le dans un dossier du workspace pour en ajouter d’autres.', 'Lo schema alla radice (/) è l’unico che il gateway può servire: spostalo in una cartella del workspace per aggiungerne altri.', 'Das Schema im Stamm (/) ist das einzige, das das Gateway bedienen kann: verschieben Sie es in einen Ordner des Workspace, um weitere hinzuzufügen.', 'Het schema in de root (/) is het enige dat de gateway kan bedienen: verplaats het naar een map van de workspace om er meer toe te voegen.', 'L’esquema de l’arrel (/) és l’únic que la gateway pot servir: mou-lo a una carpeta del workspace per afegir-ne d’altres.', 'O esquema da raíz (/) é o único que a gateway pode servir: móveo a un cartafol do workspace para engadir outros.', 'Erroko (/) eskema da gateway-k zerbitzatu dezakeen bakarra: eraman workspace-ko karpeta batera beste batzuk gehitzeko.'],
-	['metadata', 'Metadata', 'Metadata', 'Metadados', 'Métadonnées', 'Metadati', 'Metadaten', 'Metadata', 'Metadades', 'Metadatos', 'Metadatuak'],
+	['metadata', 'Metadata', 'Metadatos', 'Metadados', 'Métadonnées', 'Metadati', 'Metadaten', 'Metadata', 'Metadades', 'Metadatos', 'Metadatuak'],
 	['openSchema', 'Open {name}: its commands', 'Abrir {name}: sus comandos', 'Abrir {name}: seus comandos', 'Ouvrir {name} : ses commandes', 'Apri {name}: i suoi comandi', '{name} öffnen: seine Befehle', '{name} openen: de opdrachten', 'Obre {name}: les seves ordres', 'Abrir {name}: os seus comandos', 'Ireki {name}: bere komandoak'],
 	['contextVariables', 'Variables of the sentence', 'Variables de la sentencia', 'Variáveis da sentença', 'Variables de la phrase', 'Variabili della frase', 'Variablen des Satzes', 'Variabelen van de zin', 'Variables de la sentència', 'Variables da sentenza', 'Sententziaren aldagaiak'],
 	['insertIt', 'Insert {name}', 'Insertar {name}', 'Inserir {name}', 'Insérer {name}', 'Inserisci {name}', '{name} einfügen', '{name} invoegen', 'Insereix {name}', 'Inserir {name}', 'Txertatu {name}'],

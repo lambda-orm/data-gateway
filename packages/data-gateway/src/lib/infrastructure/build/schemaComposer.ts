@@ -1,3 +1,4 @@
+import { ResolvedObservability } from '@lambdaorm/base'
 import fs from 'fs'
 import path from 'path'
 import { DataGateway } from '../../application/facade/dataGateway'
@@ -8,6 +9,9 @@ import { DataGatewayPort } from '../../application/ports/input/dataGatewayPort'
 import { McpServerPort } from '../../application/ports/input/mcpServerPort'
 import { AuditPort, ClockPort, LoggerPort, QueueEventsPort } from '../../application/ports/output/supportPorts'
 import { Auditor } from '../../application/usecases/auditor'
+import { ViewResolver } from '../../application/usecases/viewResolver'
+import { NamedQueryUseCases } from '../../application/usecases/namedQueryUseCases'
+import { curatedTools, namedQueryTools } from '../../application/mcp/namedQueryTools'
 import { QueryUseCases } from '../../application/usecases/queryUseCases'
 import { QueueUseCase } from '../../application/usecases/queueUseCase'
 import { SchemaUseCases, StageUseCases } from '../../application/usecases/schemaUseCases'
@@ -34,6 +38,8 @@ export interface SchemaCompositionInput {
 	checkConnections: boolean
 	/** transports.management: the read-only tools of the administration in its MCP server */
 	admin?: boolean
+	/** the observability of the gateway: λORM's spans and metrics of a schema without infrastructure.observability */
+	observability?: ResolvedObservability
 }
 
 export interface ComposedSchema {
@@ -58,6 +64,8 @@ export const composeSchema = async (input: SchemaCompositionInput, deps: { logge
 	if (!fs.existsSync(file)) throw new ConfigError([`schema "${input.path || '/'}": ${file} not found (the workspace must have its lambdaORM.yaml)`])
 	const orm = new LambdaOrmAdapter()
 	await orm.init(input.workspace)
+	// a schema without its own observability takes the gateway's (with its own, it decides)
+	if (input.observability && !orm.infrastructure()?.observability) orm.observe(input.observability)
 	let queue: KafkaQueueAdapter | undefined
 	try {
 		if (input.checkConnections) await orm.checkConnections(Math.min(input.settings.server.timeout, 30000))
@@ -75,22 +83,32 @@ export const composeSchema = async (input: SchemaCompositionInput, deps: { logge
 	}
 	const { settings } = input
 	const auditor = new Auditor(deps.audit, deps.clock, input.path, input.audit)
-	const queries = new QueryUseCases(orm, auditor)
+	// the view of each caller (docs/VIEWS_BY_IDENTITY.md); one the schema doesn't have is said now and refused later
+	const views = new ViewResolver(() => orm.views(), settings.view)
+	const missing = views.missing(settings.namedViews ?? [])
+	if (missing.length) logger.warn(`schema "${input.path || '/'}": the views ${missing.join(', ')} of the configuration are not in its lambdaORM.yaml: a request with one is refused (403)`)
+	const queries = new QueryUseCases(orm, auditor, views)
+	// the queries of application.queries with their limits (docs/NAMED_QUERIES.md)
+	const named = new NamedQueryUseCases(orm, queries, settings.queries ?? {})
+	const unknownLimits = Object.keys(settings.queries ?? {}).filter(name => !orm.namedQueries().some(q => q.name === name))
+	if (unknownLimits.length) logger.warn(`schema "${input.path || '/'}": orm.schemas[].queries names ${unknownLimits.join(', ')}, not in its application.queries`)
 	const gateway = new DataGateway({
 		queries,
-		script: new ScriptUseCase(orm, settings.scripts, auditor),
+		script: new ScriptUseCase(orm, settings.scripts, auditor, views),
 		queue: new QueueUseCase(queue, queries, auditor, deps.queueEvents),
-		schema: new SchemaUseCases(orm),
-		stages: new StageUseCases(orm, auditor)
+		schema: new SchemaUseCases(orm, views),
+		stages: new StageUseCases(orm, auditor),
+		named
 	}, orm, deps.clock, input.version, settings.server.timeout)
 	const commands = new CommandUseCases(orm, auditor)
-	const tools = [...gatewayTools(gateway), ...(input.admin ? adminTools(workspaceAdminTools(file, commands)) : [])]
+	// mcp.freeQueries false: an agent only with the named queries (and the tools of the schema)
+	const tools = [...curatedTools(gatewayTools(gateway), settings.mcp.freeQueries !== false), ...(input.admin ? adminTools(workspaceAdminTools(file, commands)) : [])]
 	const mcp = new DataGatewayMcpServer(new ToolCatalog(tools, settings.mcp.tools), orm, {
 		name: input.path ? `${input.mcpName} ${input.path}` : input.mcpName,
 		version: input.version,
 		pageSize: input.pageSize,
 		maxRows: settings.mcp.maxRows
-	})
+	}, views, namedQueryTools(gateway))
 	return {
 		gateway,
 		mcp,

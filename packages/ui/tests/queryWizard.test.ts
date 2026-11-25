@@ -1,7 +1,7 @@
 // The query wizard as logic: the tables joined by their relations (to one: columns; to many: include), the fields,
 // the filter, the order and the page; what is empty is not applied.
 import { describe, expect, test } from 'vitest'
-import { columnsOf, emptyWizard, joinOf, queryOf, WizardState, wizardOf, withoutTable } from '../src/domain/queryWizard'
+import { columnsOf, emptyWizard, filterExample, joinOf, queryOf, WizardState, wizardFromQuery, wizardOf, withoutTable } from '../src/domain/queryWizard'
 import { DomainInfo } from '../src/domain/diagram'
 
 // λORM names a relation to one oneToMany (this entity has the key) and a relation to many manyToOne
@@ -26,6 +26,15 @@ const add = (state: WizardState, entity: string): WizardState => {
 }
 
 describe('the query wizard', () => {
+	test('the example of a filter is of the entity: its fields and the text of a relation', () => {
+		expect(filterExample(domain, 'Products')).toBe('p.category.name == name')
+		expect(filterExample(domain, 'Orders')).toBe('p.customer.name == name')
+		expect(filterExample(domain, 'Customers')).toBe('p.name == name')
+		const priced: DomainInfo = { entities: [{ name: 'Items', primaryKey: ['code'], properties: [{ name: 'code' }, { name: 'price', type: 'decimal' }, { name: 'title' }] }] }
+		expect(filterExample(priced, 'Items')).toBe('p.price > 10 && p.title == title')
+		expect(filterExample(domain, 'Nope')).toBeUndefined()
+	})
+
 	test('only the entity: the query reads it all; what is empty is not applied', () => {
 		expect(queryOf(emptyWizard('Orders'), domain)).toBe('Orders')
 		expect(queryOf({ ...emptyWizard('Orders'), filter: '  ', page: { number: '2', size: '' } }, domain)).toBe('Orders')
@@ -97,5 +106,59 @@ describe('the query wizard', () => {
 		expect(wizardOf(JSON.parse(JSON.stringify(state)))).toEqual(state)
 		expect(wizardOf({ root: '' })).toBeUndefined()
 		expect(wizardOf('nope')).toBeUndefined()
+	})
+
+	test('a query it wrote is read back as the same wizard', () => {
+		let state = add(emptyWizard('Orders'), 'Customers')
+		state = add(state, 'Orders.details')
+		state = add(state, 'Products')
+		state = { ...state, fields: { Orders: ['id', 'orderDate'], Customers: ['name'], Products: ['name'] }, filter: 'p.orderDate > from && p.customer.country == "AR"',
+			sort: [{ column: 'orderDate', desc: true }, { column: 'id', desc: false }], page: { number: '2', size: '20' } }
+		const reading = wizardFromQuery(queryOf(state, domain), domain)
+		expect(reading?.unread).toEqual([])
+		expect(reading?.state).toEqual(state)
+	})
+
+	test('a query written by hand: other variables, one line, asc and desc as methods', () => {
+		const reading = wizardFromQuery('Orders.details.include(x => x.product.map(y => ({ name: y.name }))).filter(o => o.quantity > 5 && o.product.name.startsWith("Ch")).map(d => ({ productId: d.productId, quantity: d.quantity })).sort(d => [d.quantity.desc(), asc(d.productId)]).page(1,10)', domain)
+		expect(reading?.unread).toEqual([])
+		expect(reading?.state).toEqual({
+			root: 'Orders.details', tables: [{ entity: 'Products', from: 'Orders.details', relation: 'product' }],
+			fields: { Products: ['name'], 'Orders.details': ['productId', 'quantity'] }, filter: 'p.quantity > 5 && p.product.name.startsWith("Ch")',
+			sort: [{ column: 'quantity', desc: true }, { column: 'productId', desc: false }], page: { number: '1', size: '10' }
+		})
+	})
+
+	test('what the wizard can\'t show is told, and the rest is read', () => {
+		const reading = wizardFromQuery('Orders.include(p => [p.customer.filter(q => q.country == "AR"), p.details]).map(p => ({ id: p.id, customerName: p.customer.name })).sort(p => p.total).groupBy(p => p.id)', domain)
+		expect(reading?.state.tables.map(t => t.entity)).toEqual(['Customers', 'Orders.details'])
+		expect(reading?.state.fields).toEqual({ Orders: ['id'] })
+		expect(reading?.unread).toEqual(['p.customer.filter(q => q.country == "AR")', '.map(p => ({ customerName: p.customer.name }))', '.groupBy(p => p.id)', '.sort(p => p.total)'])
+	})
+
+	test('the query of the issue: the fields of a relation in the map of the root are told, the rest is read', () => {
+		const devices: DomainInfo = { entities: [
+			{ name: 'DeviceModels', properties: [{ name: 'id' }, { name: 'brand' }, { name: 'model' }, { name: 'deviceTypeId' }],
+				relations: [{ name: 'devices', type: 'manyToOne', from: 'id', entity: 'Devices', to: 'deviceModelId' }, { name: 'deviceType', type: 'oneToMany', from: 'deviceTypeId', entity: 'DeviceTypes', to: 'id' }] },
+			{ name: 'Devices', properties: [{ name: 'id' }, { name: 'name' }, { name: 'serialNumber' }, { name: 'deviceModelId' }], relations: [] },
+			{ name: 'DeviceTypes', properties: [{ name: 'id' }, { name: 'name' }], relations: [] }
+		] }
+		const reading = wizardFromQuery('DeviceModels\n\t.include(p => p.devices.map(q => ({ name: q.name, serialNumber: q.serialNumber })))\n\t.map(p => ({ brand: p.brand, model: p.model, deviceTypeName: p.deviceType.name }))', devices)
+		expect(reading?.state.tables).toEqual([{ entity: 'Devices', from: 'DeviceModels', relation: 'devices' }])
+		expect(reading?.state.fields).toEqual({ Devices: ['name', 'serialNumber'], DeviceModels: ['brand', 'model'] })
+		expect(reading?.unread).toEqual(['.map(p => ({ deviceTypeName: p.deviceType.name }))'])
+	})
+
+	test('a query that doesn\'t start from an entity is not read', () => {
+		expect(wizardFromQuery('Unknown.map(p => p.id)', domain)).toBeUndefined()
+		expect(wizardFromQuery('', domain)).toBeUndefined()
+		expect(wizardFromQuery('Orders', domain)).toEqual({ state: emptyWizard('Orders'), unread: [] })
+	})
+
+	test('a map with every field of its table is no map: all of them ticked', () => {
+		const reading = wizardFromQuery('Customers.include(p => p.orders.map(q => ({ id: q.id, customerId: q.customerId, orderDate: q.orderDate }))).map(p => ({ id: p.id, name: p.name, country: p.country }))', domain)
+		expect(reading?.state.fields).toEqual({})
+		expect(reading?.state.tables).toEqual([{ entity: 'Orders', from: 'Customers', relation: 'orders' }])
+		expect(reading?.unread).toEqual([])
 	})
 })

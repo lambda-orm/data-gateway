@@ -21,7 +21,8 @@ describe('authenticators', () => {
 		expect([...ok.principal!.permissions]).toEqual(['read', 'write'])
 		for (const authorization of [undefined, '', 'Bearer wrong', 'k-backend', 'Basic k-backend']) {
 			const bad = await auth.authenticate({ authorization })
-			expect(bad).toEqual({ valid: false, reason: 'a valid token is required (Authorization: Bearer <token>)' })
+			// recognized: a bearer token was sent (a wrong one); else another method of authentication.methods may take it
+			expect(bad).toEqual({ valid: false, reason: 'a valid token is required (Authorization: Bearer <token>)', recognized: authorization === 'Bearer wrong' })
 		}
 	})
 

@@ -45,6 +45,16 @@ describe('workbench as files', () => {
 		expect(workbenchContent({ ...item, wizard: undefined })).not.toHaveProperty('wizard')
 		expect(workbenchItemOf('s', 'workbench/q.query.yaml', { query: 'A', wizard: 'x' }, undefined, 'v', 'then')).not.toHaveProperty('wizard')
 	})
+
+	test('a diagram of a stage keeps its stage and how it is shown, in its file and back', () => {
+		const stageView = { orientation: 'left', detail: 'names', positions: { main: { x: 10, y: 20 } } }
+		const item: WorkbenchItem = { id: 'd1', kind: 'diagram', schema: 's', name: 'Stage default', entities: [], stage: 'default', stageView }
+		const content = workbenchContent(item)
+		expect(content).toMatchObject({ stage: 'default', stageView })
+		expect(workbenchItemOf('s', 'workbench/Stage default.diagram.yaml', content, undefined, 'v', 'then')).toMatchObject({ kind: 'diagram', stage: 'default', stageView })
+		// a diagram of entities has neither
+		expect(workbenchItemOf('s', 'workbench/m.diagram.yaml', { entities: ['A'] }, undefined, 'v', 'then')).not.toHaveProperty('stage')
+	})
 })
 
 describe('admin configuration', () => {

@@ -24,10 +24,11 @@ const match = (credentials: CredentialConfig[], test: (credential: CredentialCon
 	return found
 }
 
-const result = (credential: CredentialConfig | undefined, reason: string): AuthenticationResult =>
+/** recognized: the request brought a credential of its kind (another method of authentication.methods may take it if not) */
+const result = (credential: CredentialConfig | undefined, reason: string, recognized: boolean): AuthenticationResult =>
 	credential
-		? { valid: true, principal: principal(credential.name, credential.permissions) }
-		: { valid: false, reason }
+		? { valid: true, principal: credential.view ? { ...principal(credential.name, credential.permissions), view: credential.view } : principal(credential.name, credential.permissions) }
+		: { valid: false, reason, recognized }
 
 /** adapter: none — open access, every permission. */
 export class NoneAuthenticator implements AuthenticatorPort {
@@ -46,7 +47,7 @@ export class BearerAuthenticator implements AuthenticatorPort {
 	public async authenticate (headers: Headers): Promise<AuthenticationResult> {
 		const authorization = header(headers, 'authorization')
 		const token = authorization.startsWith('Bearer ') ? authorization.substring(7) : ''
-		return result(match(this.credentials, c => secretEquals(token, c.value ?? '')), 'a valid token is required (Authorization: Bearer <token>)')
+		return result(match(this.credentials, c => secretEquals(token, c.value ?? '')), 'a valid token is required (Authorization: Bearer <token>)', token !== '')
 	}
 
 	public scheme (): CredentialScheme { return { type: 'bearer' } }
@@ -59,7 +60,7 @@ export class ApiKeyAuthenticator implements AuthenticatorPort {
 
 	public async authenticate (headers: Headers): Promise<AuthenticationResult> {
 		const key = header(headers, this.headerName)
-		return result(match(this.credentials, c => secretEquals(key, c.value ?? '')), `a valid API key is required (${this.headerName})`)
+		return result(match(this.credentials, c => secretEquals(key, c.value ?? '')), `a valid API key is required (${this.headerName})`, key !== '')
 	}
 
 	public scheme (): CredentialScheme { return { type: 'apikey', header: this.headerName } }
@@ -78,9 +79,34 @@ export class BasicAuthenticator implements AuthenticatorPort {
 		const password = separator >= 0 ? decoded.substring(separator + 1) : ''
 		return result(
 			match(this.credentials, c => secretEquals(username, c.username ?? '') && secretEquals(password, c.password ?? '')),
-			'a valid user and password are required (Authorization: Basic)'
+			'a valid user and password are required (Authorization: Basic)',
+			authorization.startsWith('Basic ')
 		)
 	}
 
 	public scheme (): CredentialScheme { return { type: 'basic' } }
+}
+
+/**
+ * authentication.methods (docs/JWT.md): several, in order. The first whose kind of credential the request brings decides
+ * (valid or not: a wrong API key is not tried as a token); with none, the reasons of all of them.
+ */
+export class MethodsAuthenticator implements AuthenticatorPort {
+	// eslint-disable-next-line no-useless-constructor
+	constructor (private readonly methods: AuthenticatorPort[]) {}
+
+	public async authenticate (headers: Headers): Promise<AuthenticationResult> {
+		const reasons: string[] = []
+		let challenge: string | undefined
+		for (const method of this.methods) {
+			const result = await method.authenticate(headers)
+			if (result.valid || result.recognized !== false) return result
+			if (result.reason) reasons.push(result.reason)
+			challenge ??= result.challenge
+		}
+		return { valid: false, recognized: false, reason: reasons.join('; or ') || 'a valid credential is required', ...(challenge ? { challenge } : {}) }
+	}
+
+	/** how the first method takes the credential (what Swagger's Authorize offers) */
+	public scheme (): CredentialScheme { return this.methods[0]?.scheme?.() ?? { type: 'none' } }
 }

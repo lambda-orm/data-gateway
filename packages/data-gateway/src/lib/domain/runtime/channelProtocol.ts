@@ -1,9 +1,15 @@
+import { Actor } from '@lambdaorm/base'
 import { Permission } from '../auth/permission'
 
 /** Who asks, as it crosses the channel (a Set doesn't) */
 export interface WirePrincipal {
 	name: string
 	permissions: Permission[]
+	actor?: Actor
+	/** the context of λORM of who calls (from its identity: the claims of its token) */
+	context?: Record<string, unknown>
+	/** the view of λORM of who calls (its key or its roles) */
+	view?: string
 }
 
 /** edge → schema worker: one operation of DataGatewayPort ('gateway') or McpServerPort ('mcp') */
@@ -18,6 +24,8 @@ export interface ChannelRequest {
 	transport: string
 	/** epoch ms after which the edge stopped waiting: the worker may skip it */
 	deadline: number
+	/** W3C Trace Context of the request in the edge (traceparent, tracestate): the spans of the worker are its children */
+	trace?: Record<string, string>
 }
 
 /**
@@ -57,7 +65,7 @@ export type ChannelMessage = ChannelRequest | ChannelResponse | ChannelEvent
 /** Operations a schema worker answers: anything else is refused (the channel is not an eval) */
 export const GATEWAY_OPERATIONS = [
 	'version', 'health', 'ping', 'plan', 'metadata', 'model', 'parameters', 'constraints', 'execute', 'executeScript',
-	'executeQueued', 'schema', 'schemaVersion', 'domain', 'sources', 'source', 'entities', 'entity', 'enums', 'enum',
+	'executeQueued', 'queries', 'query', 'schema', 'schemaVersion', 'domain', 'sources', 'source', 'entities', 'entity', 'enums', 'enum',
 	'mappings', 'mapping', 'entityMapping', 'stages', 'stage', 'views', 'typings', 'search', 'describe', 'stageExists', 'stageExport', 'stageImport'
 ] as const
 
@@ -72,5 +80,8 @@ export const MCP_OPERATIONS = ['listTools', 'callTool', 'listResources', 'listRe
  * (docs/DATA_GATEWAY_ADMIN_PLAN.md §4): the ones that read (fetch, export) and the ones that change the databases, each
  * with the sentences it would run first (push, drop).
  */
-export const COMMAND_OPERATIONS = ['stages', 'fetch', 'pushSentences', 'push', 'dropSentences', 'drop', 'export', 'import', 'pullSchema', 'pull', 'introspectSchema'] as const
+export const COMMAND_OPERATIONS = [
+	'stages', 'fetch', 'pushSentences', 'push', 'dropSentences', 'drop', 'export', 'import', 'pullSchema', 'pull', 'introspectSchema',
+	'migrations', 'migrateSentences', 'migrate', 'seedFiles', 'seed'
+] as const
 export type CommandOperation = typeof COMMAND_OPERATIONS[number]

@@ -1,6 +1,7 @@
+import { ObservabilityConfig } from '@lambdaorm/base'
 import { ALL_PERMISSIONS, isPermission, KNOWN_PERMISSIONS, Permission } from '../auth/permission'
 import {
-	AuthenticationConfig, AuthenticationType, ConfigReading, CredentialConfig, DataGatewayConfig, LoggerConfig, McpConfig,
+	AuthenticationConfig, AuthenticationType, ConfigReading, CredentialConfig, DataGatewayConfig, JwtConfig, RoleConfig, LoggerConfig, McpConfig,
 	OrmConfig, RuntimeConfig, RuntimeMode, SchemaConfig, SessionsConfig, TransportConfig, TransportName, TransportsConfig, WatchConfig
 } from './dataGatewayConfig'
 import { parseDuration } from './durations'
@@ -10,7 +11,7 @@ import { parseSize } from './sizes'
 /** Transports of the design that this version does not serve yet (docs/DATA_GATEWAY_PLAN.md). */
 const LATER_TRANSPORTS: string[] = []
 const TRANSPORTS = ['http', 'mcpHttp', 'mcpWebSocket', 'webSocket', 'management']
-const KNOWN_SECTIONS = ['orm', 'admin', 'server', 'logger', 'metrics', 'audit', 'authentication', 'rateLimit', 'scripts', 'mcp', 'runtime', 'transports']
+const KNOWN_SECTIONS = ['orm', 'admin', 'server', 'logger', 'metrics', 'observability', 'audit', 'authentication', 'rateLimit', 'scripts', 'mcp', 'runtime', 'transports']
 const SCHEMA_KEYS = ['path', 'workspace', 'transports', 'authentication', 'env', 'scripts', 'mcp', 'server', 'runtime']
 /** The tools of docs/DATA_GATEWAY.md §5.1: mcp.tools.include / exclude must name them */
 export const TOOL_NAMES = [
@@ -61,6 +62,7 @@ export class ConfigReader {
 			},
 			logger: this.logger(raw.logger),
 			metrics: { enabled: this.bool(raw.metrics?.enabled, true, 'metrics.enabled') },
+			observability: this.observability(raw.observability),
 			audit: {
 				enabled: this.bool(raw.audit?.enabled, true, 'audit.enabled'),
 				includeData: this.bool(raw.audit?.includeData, false, 'audit.includeData')
@@ -154,6 +156,24 @@ export class ConfigReader {
 		}
 		const authentication = this.authentication(entry.authentication, `${key}.authentication`)
 		if (authentication) schema.authentication = authentication
+		if (entry.view !== undefined) {
+			const view = this.viewName(entry.view, `${key}.view`)
+			if (view) schema.view = view
+		}
+		if (entry.queries !== undefined) {
+			if (!isObject(entry.queries)) this.issues.push(`${key}.queries must be an object (the name of a query: its limits)`)
+			else {
+				schema.queries = {}
+				for (const [name, limits] of Object.entries(entry.queries)) {
+					const at = `${key}.queries.${name}`
+					if (!isObject(limits)) { this.issues.push(`${at} must be { maxRows, timeout }`); continue }
+					schema.queries[name] = {
+						...(limits.maxRows !== undefined ? { maxRows: this.int(limits.maxRows, 0, `${at}.maxRows`, 1) } : {}),
+						...(limits.timeout !== undefined ? { timeoutMs: this.duration(limits.timeout, 0, `${at}.timeout`) } : {})
+					}
+				}
+			}
+		}
 		if (entry.env !== undefined) {
 			if (!isObject(entry.env)) {
 				this.issues.push(`${key}.env must be an object`)
@@ -173,6 +193,7 @@ export class ConfigReader {
 		if (isObject(entry.mcp)) {
 			schema.mcp = {}
 			if (entry.mcp.maxRows !== undefined) schema.mcp.maxRows = this.int(entry.mcp.maxRows, 500, `${key}.mcp.maxRows`, 0)
+			if (entry.mcp.freeQueries !== undefined) schema.mcp.freeQueries = this.bool(entry.mcp.freeQueries, true, `${key}.mcp.freeQueries`)
 			if (entry.mcp.tools !== undefined) {
 				schema.mcp.tools = {
 					include: this.toolNames(entry.mcp.tools?.include, `${key}.mcp.tools.include`),
@@ -242,6 +263,19 @@ export class ConfigReader {
 		}
 	}
 
+	/** checked in full (with its trace rules) when the gateway starts, where 3xpr is: here only its form */
+	private observability (raw: unknown): ObservabilityConfig | undefined {
+		if (raw === undefined || raw === null) return undefined
+		if (typeof raw !== 'object' || Array.isArray(raw)) {
+			this.issues.push('observability must be an object (the same shape as infrastructure.observability of a lambdaORM.yaml)')
+			return undefined
+		}
+		if ((raw as any).exporter?.headers !== undefined) {
+			this.issues.push('observability.exporter.headers is not allowed: the headers carry tokens; use OTEL_EXPORTER_OTLP_HEADERS')
+		}
+		return raw as ObservabilityConfig
+	}
+
 	private logger (raw: Raw | undefined): LoggerConfig {
 		const adapter = this.str(raw?.adapter, 'console')
 		const level = this.str(raw?.level, 'info')
@@ -260,7 +294,8 @@ export class ConfigReader {
 				exclude: this.toolNames(section.tools?.exclude, 'mcp.tools.exclude')
 			},
 			pageSize: this.int(section.pageSize, 50, 'mcp.pageSize', 1),
-			maxRows: this.int(section.maxRows, 500, 'mcp.maxRows', 0)
+			maxRows: this.int(section.maxRows, 500, 'mcp.maxRows', 0),
+			freeQueries: this.bool(section.freeQueries, true, 'mcp.freeQueries')
 		}
 	}
 
@@ -270,9 +305,11 @@ export class ConfigReader {
 			this.issues.push(`${key} must be a list`)
 			return []
 		}
-		const unknown = raw.filter(name => !TOOL_NAMES.includes(String(name)))
+		// query_<name>: a query of application.queries (docs/NAMED_QUERIES.md), checked when the schema loads
+		const known = (name: string) => TOOL_NAMES.includes(name) || /^query_[A-Za-z_][A-Za-z0-9_]*$/.test(name)
+		const unknown = raw.filter(name => !known(String(name)))
 		if (unknown.length) this.issues.push(`${key}: unknown tools ${unknown.join(', ')}`)
-		return raw.map(String).filter(name => TOOL_NAMES.includes(name))
+		return raw.map(String).filter(known)
 	}
 
 	private transports (raw: unknown): TransportsConfig {
@@ -420,10 +457,15 @@ export class ConfigReader {
 			this.issues.push(`${key} must be an object`)
 			return undefined
 		}
+		if (raw.methods !== undefined) return this.methods(raw, key)
 		const adapter = this.str(raw.adapter, 'none')
 		if (adapter === 'none') return { adapter: 'none', credentials: [] }
+		if (adapter === 'jwt') {
+			const jwt = this.jwt(raw, key)
+			return jwt ? { adapter: 'jwt', credentials: [], jwt } : undefined
+		}
 		if (adapter !== 'local') {
-			this.issues.push(`${key}.adapter "${adapter}" is not none or local`)
+			this.issues.push(`${key}.adapter "${adapter}" is not none, local or jwt`)
 			return undefined
 		}
 		const type = this.str(raw.type, '') as AuthenticationType
@@ -463,6 +505,113 @@ export class ConfigReader {
 		return { adapter: 'local', type, header, credentials }
 	}
 
+	/** methods: several authentications in order (jwt for the users, local keys for the services); none is not one */
+	private methods (raw: Raw, key: string): AuthenticationConfig | undefined {
+		if (raw.adapter !== undefined && raw.adapter !== 'methods') {
+			this.issues.push(`${key}: adapter and methods together; use methods alone`)
+			return undefined
+		}
+		if (!Array.isArray(raw.methods) || raw.methods.length === 0) {
+			this.issues.push(`${key}.methods must be a non empty list`)
+			return undefined
+		}
+		const methods: AuthenticationConfig[] = []
+		raw.methods.forEach((entry: unknown, i: number) => {
+			const at = `${key}.methods[${i}]`
+			if (isObject(entry) && (entry.methods !== undefined || this.str(entry.adapter, 'none') === 'none')) {
+				this.issues.push(`${at}: a method is local or jwt (none would let everyone in; methods don't nest)`)
+				return
+			}
+			const method = this.authentication(entry, at)
+			if (method) methods.push(method)
+		})
+		return methods.length === raw.methods.length ? { adapter: 'methods', credentials: [], methods } : undefined
+	}
+
+	/** adapter: jwt (docs/JWT.md): the tokens of an issuer, their roles mapped to permissions and their claims to the context */
+	private jwt (raw: Raw, key: string): JwtConfig | undefined {
+		const before = this.issues.length
+		const url = (value: unknown, at: string): string | undefined => {
+			if (value === undefined) return undefined
+			try {
+				const parsed = new URL(String(value))
+				if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') throw new Error(parsed.protocol)
+				return String(value)
+			} catch {
+				this.issues.push(`${at} "${value}" is not an http(s) URL`)
+				return undefined
+			}
+		}
+		const issuer = url(raw.issuer, `${key}.issuer`)
+		if (raw.issuer === undefined) this.issues.push(`${key}.issuer is required (the iss of the tokens)`)
+		const audience = raw.audience === undefined ? [] : (Array.isArray(raw.audience) ? raw.audience : [raw.audience]).map(String).filter(Boolean)
+		const jwksUri = url(raw.jwksUri, `${key}.jwksUri`)
+		const secret = raw.secret === undefined || raw.secret === null || raw.secret === '' ? undefined : String(raw.secret)
+		if (raw.secret !== undefined && !secret) this.issues.push(`${key}.secret is empty (a variable not given?)`)
+		if (secret && jwksUri) this.issues.push(`${key}: secret and jwksUri together; a secret (HS256) is for development, the keys of the issuer for the rest`)
+		const algorithms = raw.algorithms === undefined
+			? (secret ? ['HS256'] : ['RS256', 'ES256', 'PS256'])
+			: (Array.isArray(raw.algorithms) ? raw.algorithms.map(String) : [])
+		if (!algorithms.length) this.issues.push(`${key}.algorithms must be a non empty list`)
+		for (const algorithm of algorithms) {
+			const shared = algorithm.startsWith('HS')
+			if (!/^(RS|PS|ES|HS)(256|384|512)$|^EdDSA$/.test(algorithm)) this.issues.push(`${key}.algorithms: "${algorithm}" is not RS, PS, ES or HS 256/384/512, nor EdDSA`)
+			else if (shared !== !!secret) this.issues.push(`${key}.algorithms: ${algorithm} ${shared ? 'needs a secret' : 'is for the keys of the issuer, not a secret'}`)
+		}
+		const clockToleranceSec = raw.clockTolerance === undefined ? 30 : Math.round((parseDuration(raw.clockTolerance as string | number) ?? -1) / 1000)
+		if (clockToleranceSec < 0 || clockToleranceSec > 300) this.issues.push(`${key}.clockTolerance "${raw.clockTolerance}" is not a duration up to 5m (30s)`)
+		const principalRaw = raw.principal === undefined ? {} : raw.principal
+		if (!isObject(principalRaw)) this.issues.push(`${key}.principal must be an object`)
+		const p = isObject(principalRaw) ? principalRaw : {}
+		const name = this.str(p.name, 'sub')
+		let permissions: JwtConfig['principal']['permissions']
+		if (p.permissions !== undefined) {
+			const at = `${key}.principal.permissions`
+			if (!isObject(p.permissions) || !this.str(p.permissions.claim, '') || !isObject(p.permissions.roles)) {
+				this.issues.push(`${at} needs claim (where the roles are) and roles (role → permissions)`)
+			} else {
+				const roles: Record<string, RoleConfig> = {}
+				for (const [role, value] of Object.entries(p.permissions.roles)) {
+					// a role says its permissions (a list, or { permissions, view }): one without them must not end up with all
+					const list = isObject(value) ? value.permissions : value
+					if (!Array.isArray(list)) { this.issues.push(`${at}.roles.${role} must be a list of permissions, or { permissions, view }`); continue }
+					const view = isObject(value) && value.view !== undefined ? this.viewName(value.view, `${at}.roles.${role}.view`) : undefined
+					roles[role] = { permissions: this.permissions(list, `${at}.roles.${role}`), ...(view ? { view } : {}) }
+					if (view) this.stageWithView(roles[role].permissions, `${at}.roles.${role}`)
+				}
+				permissions = { claim: String(p.permissions.claim), roles }
+			}
+		}
+		const context: Record<string, string> = {}
+		if (raw.context !== undefined) {
+			if (!isObject(raw.context)) this.issues.push(`${key}.context must be an object (variable: claim)`)
+			else {
+				for (const [variable, path] of Object.entries(raw.context)) {
+					if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(variable)) this.issues.push(`${key}.context: "${variable}" is not a name of a variable`)
+					else if (typeof path !== 'string' || !path) this.issues.push(`${key}.context.${variable} must be the claim it takes`)
+					else context[variable] = path
+				}
+			}
+		}
+		if (this.issues.length > before || !issuer) return undefined
+		return { issuer, audience, ...(jwksUri ? { jwksUri } : {}), ...(secret ? { secret } : {}), algorithms, clockToleranceSec, principal: { name, ...(permissions ? { permissions } : {}) }, context }
+	}
+
+	/** the name of a view of λORM (it is checked against the schema when it loads) */
+	private viewName (value: unknown, key: string): string | undefined {
+		if (typeof value !== 'string' || !/^[A-Za-z_][A-Za-z0-9_-]*$/.test(value)) {
+			this.issues.push(`${key} must be the name of a view of the schema`)
+			return undefined
+		}
+		return value
+	}
+
+	/** the commands of stage see the whole schema, whatever the view (docs/VIEWS_BY_IDENTITY.md §4): said, not stopped */
+	private stageWithView (permissions: Permission[], key: string): void {
+		const whole = permissions.filter(p => p === 'stageImport' || p === 'ddl')
+		if (whole.length) this.warnings.push(`${key} has a view and ${whole.join(', ')}: the commands of stage see the whole schema, not the view`)
+	}
+
 	private credential (type: AuthenticationType, entry: Raw, at: string, name: string, listed: boolean): CredentialConfig | undefined {
 		const secret = type === 'bearer' ? (entry.token ?? entry.value) : type === 'apikey' ? entry.value : entry.password
 		const secretKey = type === 'bearer' ? (listed ? 'value' : 'token') : type === 'apikey' ? 'value' : 'password'
@@ -476,6 +625,13 @@ export class ConfigReader {
 		}
 		const permissions = this.permissions(entry.permissions, `${at}.permissions`)
 		const credential: CredentialConfig = { name, permissions }
+		if (entry.view !== undefined) {
+			const view = this.viewName(entry.view, `${at}.view`)
+			if (view) {
+				credential.view = view
+				this.stageWithView(permissions, at)
+			}
+		}
 		if (type === 'basic') {
 			credential.username = String(entry.username)
 			credential.password = String(secret)

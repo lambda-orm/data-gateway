@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useState } from 'react'
-import { AdminApiPort, CommandName, CommandPreview, CommandsSummary, Job } from '../application/ports'
+import { AdminApiPort, CommandName, CommandPreview, CommandsSummary, Job, Migration } from '../application/ports'
 import { adminMessagesOf, format } from '../domain/adminI18n'
 import { toYaml } from '../domain/results'
 import { Icons, Modal } from './dialogs'
+import { BuildDialog } from './BuildDialog'
 
 export interface CommandsPanelProps {
 	admin: AdminApiPort
@@ -20,12 +21,12 @@ export interface CommandsPanelProps {
 	children?: React.ReactNode
 }
 
-const PREVIEWED: CommandName[] = ['push', 'drop', 'import', 'pull', 'introspect', 'incorporate']
+const PREVIEWED: CommandName[] = ['push', 'drop', 'import', 'pull', 'introspect', 'incorporate', 'migrate', 'seed']
 
-/** The sentences of a preview as lines: push gives them by source, drop as a list */
-const sentencesOf = (preview: CommandPreview): { source?: string, sentences: string[] }[] => {
+/** The sentences of a preview as lines: push gives them by source, migrate by source and migration, drop as a list */
+const sentencesOf = (preview: CommandPreview): { source?: string, version?: string, sentences: string[] }[] => {
 	const list = preview.sentences ?? []
-	if (list.every(s => s && typeof s === 'object' && 'source' in (s as any))) return list as { source: string, sentences: string[] }[]
+	if (list.every(s => s && typeof s === 'object' && 'source' in (s as any))) return list as { source: string, version?: string, sentences: string[] }[]
 	return [{ sentences: list.map(s => typeof s === 'string' ? s : (s as any)?.sentence ?? JSON.stringify(s)) }]
 }
 
@@ -46,7 +47,6 @@ const download = (name: string, value: unknown) => {
  * exactly that. The last jobs, with their result.
  */
 export const CommandsPanel: React.FC<CommandsPanelProps> = ({ admin, schema, canSave = false, locale, pollMs = 1000, canBuild = false, title, children }) => {
-	const [language, setLanguage] = useState<'node' | 'client-node'>('node')
 	// the form of a command that needs a file (import, introspect, incorporate) or a choice (build)
 	const [form, setForm] = useState<'import' | 'introspect' | 'incorporate' | 'build'>()
 	const [built, setBuilt] = useState<{ path: string, written?: string }[]>()
@@ -57,6 +57,8 @@ export const CommandsPanel: React.FC<CommandsPanelProps> = ({ admin, schema, can
 	const [open, setOpen] = useState<Job>()
 	const [preview, setPreview] = useState<CommandPreview>()
 	const [force, setForce] = useState(false)
+	// push, migrate: the changes that can lose data run only when the user allows them
+	const [allowDestructive, setAllowDestructive] = useState(false)
 	const [typed, setTyped] = useState('')
 	const [data, setData] = useState<unknown>()
 	// introspect, incorporate: the data to read the entities from, and their entity
@@ -107,10 +109,11 @@ export const CommandsPanel: React.FC<CommandsPanelProps> = ({ admin, schema, can
 		}
 	})
 
-	const ask = (command: CommandName) => attempt(async () => {
-		const body = command === 'import' ? { data } : command === 'introspect' || command === 'incorporate' ? { data: source, name: entity.trim() } : {}
+	const ask = (command: CommandName, extra: { version?: string } = {}) => attempt(async () => {
+		const body = command === 'import' ? { data } : command === 'introspect' || command === 'incorporate' ? { data: source, name: entity.trim() } : extra
 		setPreview(await admin.previewCommand(schema, command, { stage: stage || undefined, ...body }))
 		setForce(false)
+		setAllowDestructive(false)
 		setTyped('')
 	})
 
@@ -123,24 +126,15 @@ export const CommandsPanel: React.FC<CommandsPanelProps> = ({ admin, schema, can
 	const chooseFile = readFile(setData)
 
 	const can = (command: CommandName) => !!summary?.can[command] && !busy && !anyRunning
-	const confirmable = preview && (preview.command !== 'drop' || typed === preview.stage)
+	const destructive = preview?.destructive ?? []
+	const confirmable = preview && (preview.command !== 'drop' || typed === preview.stage) && (destructive.length === 0 || allowDestructive) &&
+		(preview.command !== 'seed' || (preview.files ?? []).length > 0)
 
 	// a command of the toolbar: its icon, its name to be read, its description on hover
 	const tool = (command: string, label: string, icon: React.ReactNode, enabled: boolean, onClick: () => void) => (
 		<button type="button" className="lw-tool" aria-label={label} title={`${label} — ${(m as any)[`cmd_${command}`] ?? ''}`} disabled={!enabled} onClick={onClick}>{icon}</button>
 	)
-	const downloadZip = () => attempt(async () => {
-		const blob = await admin.buildZip(schema, language)
-		const url = URL.createObjectURL(blob)
-		const link = document.createElement('a')
-		link.href = url
-		link.download = `${schema.replace(/\//g, '_') || 'root'}-${language}.zip`
-		document.body.appendChild(link)
-		link.click()
-		link.remove()
-		setTimeout(() => URL.revokeObjectURL(url), 1000)
-		setForm(undefined)
-	})
+
 
 	return (
 		<section className="lw-commands" aria-label={`${m.commands} — ${schema || '/'}`}>
@@ -163,6 +157,10 @@ export const CommandsPanel: React.FC<CommandsPanelProps> = ({ admin, schema, can
 					{tool('drop', 'drop…', <Icons.drop size={18} />, can('drop'), () => ask('drop'))}
 				</span>
 				<span className="lw-tool-group">
+					{tool('migrations', 'migrations', <Icons.migrations size={18} />, can('migrations'), () => start('migrations'))}
+					{tool('seed', 'seed…', <Icons.seed size={18} />, can('seed'), () => ask('seed'))}
+				</span>
+				<span className="lw-tool-group">
 					{tool('introspect', 'introspect…', <Icons.introspect size={18} />, can('introspect'), () => setForm('introspect'))}
 					{tool('incorporate', 'incorporate…', <Icons.incorporate size={18} />, can('incorporate'), () => setForm('incorporate'))}
 				</span>
@@ -172,8 +170,9 @@ export const CommandsPanel: React.FC<CommandsPanelProps> = ({ admin, schema, can
 				</span>
 			</div>
 			{children}
-			{form && (
-				<Modal title={form === 'build' ? m.build : `${form}…`} onClose={() => setForm(undefined)}>
+			{form === 'build' && <BuildDialog admin={admin} schema={schema} locale={locale} onClose={() => setForm(undefined)} onBuilt={setBuilt} />}
+			{form && form !== 'build' && (
+				<Modal title={`${form}…`} onClose={() => setForm(undefined)}>
 					<div className="lw-form">
 						{form === 'import' && (
 							<label>{m.chooseExport}<input type="file" accept="application/json,.json" aria-label={m.chooseExport} onChange={chooseFile} /></label>
@@ -185,28 +184,11 @@ export const CommandsPanel: React.FC<CommandsPanelProps> = ({ admin, schema, can
 								{form === 'incorporate' && <small className="lw-type">{m.incorporateNote}</small>}
 							</>
 						)}
-						{form === 'build' && (
-							<label>language
-								<select aria-label="language" value={language} onChange={e => setLanguage(e.target.value as 'node' | 'client-node')}>
-									<option value="node">node (@lambdaorm/lib)</option>
-									<option value="client-node">client-node (@lambdaorm/client)</option>
-								</select>
-							</label>
-						)}
 						<div className="lw-form-actions">
 							<button type="button" onClick={() => setForm(undefined)}>{m.cancel}</button>
-							{form === 'build'
-								? (
-									<>
-										<button type="button" disabled={busy} onClick={downloadZip}>{m.buildZip}</button>
-										<button type="button" className="lw-primary" disabled={busy} onClick={() => attempt(async () => { setBuilt((await admin.build(schema, language)).files); setForm(undefined) })}>{m.buildWrite}</button>
-									</>
-									)
-								: (
-									<button type="button" className="lw-primary"
-										disabled={busy || (form === 'import' ? data === undefined : source === undefined || !entity.trim())}
-										onClick={() => { const command = form; setForm(undefined); ask(command) }}>{m.preview}</button>
-									)}
+							<button type="button" className="lw-primary"
+								disabled={busy || (form === 'import' ? data === undefined : source === undefined || !entity.trim())}
+								onClick={() => { const command = form; setForm(undefined); ask(command) }}>{m.preview}</button>
 						</div>
 					</div>
 				</Modal>
@@ -232,7 +214,10 @@ export const CommandsPanel: React.FC<CommandsPanelProps> = ({ admin, schema, can
 						</>
 					)}
 					{preview.command === 'incorporate' && <p className="lw-type">{m.incorporateNote}</p>}
-					{preview.diff && !preview.rows ? null : preview.rows
+					{preview.command === 'seed' && ((preview.files ?? []).length
+						? <><p>{m.seedFiles}</p><ul>{preview.files!.map(f => <li key={f}><code>{f}</code></li>)}</ul></>
+						: <p>{m.noSeed}</p>)}
+					{(preview.diff && !preview.rows) || preview.command === 'seed' ? null : preview.rows
 						? (
 							<table className="lw-table"><caption>{m.rowsToWrite}</caption><tbody>
 								{Object.entries(preview.rows).map(([entity, n]) => <tr key={entity}><td>{entity}</td><td>{n}</td></tr>)}
@@ -242,16 +227,23 @@ export const CommandsPanel: React.FC<CommandsPanelProps> = ({ admin, schema, can
 							? <p>{m.nothingToRun}</p>
 							: sentencesOf(preview).map((group, i) => (
 								<div key={i}>
-									{group.source && <div className="lw-type">{group.source}</div>}
+									{group.source && <div className="lw-type">{group.source}{group.version ? ` · ${group.version}` : ''}</div>}
 									<pre className="lw-sentences">{group.sentences.join(';\n\n')}{group.sentences.length ? ';' : ''}</pre>
 								</div>
 							))}
+					{destructive.length > 0 && (
+						<div className="lw-notice" role="alert">
+							<p>{m.destructive}</p>
+							<ul>{destructive.map((d, i) => <li key={i}><span className="lw-type">{d.source}</span> {d.reason}</li>)}</ul>
+							<label><input type="checkbox" checked={allowDestructive} onChange={e => setAllowDestructive(e.target.checked)} /> {m.allowDestructive}</label>
+						</div>
+					)}
 					{['push', 'drop'].includes(preview.command) && <label className="lw-type"><input type="checkbox" checked={force} onChange={e => setForce(e.target.checked)} /> {m.force}</label>}
 					{preview.command === 'drop' && <label>{format(m.typeStage, { name: preview.stage })} <input aria-label="confirm stage" value={typed} onChange={e => setTyped(e.target.value)} /></label>}
 					<div className="lw-actions">
 						<button type="button" onClick={() => setPreview(undefined)}>{m.cancel}</button>
 						<button type="button" className="lw-danger" disabled={!confirmable || busy}
-							onClick={() => start(preview.command, { previewId: preview.previewId, force, stage: preview.stage })}>{format(m.runNamed, { name: preview.command })}</button>
+							onClick={() => start(preview.command, { previewId: preview.previewId, force, stage: preview.stage, ...(destructive.length ? { allowDestructive } : {}) })}>{format(m.runNamed, { name: preview.command })}</button>
 					</div>
 				</div>
 			)}
@@ -267,7 +259,32 @@ export const CommandsPanel: React.FC<CommandsPanelProps> = ({ admin, schema, can
 					</p>
 					{open.error && <div className="lw-notice" role="alert">{open.error.name}: {open.error.message}</div>}
 					{open.status === 'done' && open.command === 'fetch' && Array.isArray(open.result) && open.result.every((x: any) => !x?.entities?.length) && <p>{m.inStep}</p>}
-					{open.status === 'done' && open.result !== undefined && <pre className="lw-sentences">{toYaml(open.result).slice(0, 20000)}</pre>}
+					{open.status === 'done' && open.command === 'migrations' && Array.isArray(open.result) && (
+						open.result.length === 0
+							? <p>{m.noMigrations}</p>
+							: (
+								<table className="lw-table" aria-label="migrations">
+									<thead><tr><th>{m.migrationVersion}</th><th>{m.migrationSource}</th><th>{m.migrationStatus}</th><th>{m.historyWhen}</th><th>{m.historyWho}</th><th /></tr></thead>
+									<tbody>
+										{(open.result as Migration[]).map((mig, i, all) => (
+											<tr key={`${mig.version}-${mig.source}`}>
+												<td><code>{mig.version}</code></td>
+												<td>{mig.source}</td>
+												<td>{mig.status}</td>
+												<td>{new Date(mig.time).toLocaleString()}</td>
+												<td>{mig.actor?.credential ?? ''}</td>
+												<td>
+													{/* back to an applied version that has a later one applied (the first row of each version) */}
+													{mig.status === 'applied' && all.findIndex(x => x.version === mig.version) === i && all.some(x => x.status === 'applied' && x.version > mig.version) &&
+														<button type="button" disabled={!can('migrate')} title={m.cmd_migrate} onClick={() => ask('migrate', { version: mig.version })}>{m.migrateTo}</button>}
+												</td>
+											</tr>
+										))}
+									</tbody>
+								</table>
+								)
+					)}
+					{open.status === 'done' && open.result !== undefined && open.command !== 'migrations' && <pre className="lw-sentences">{toYaml(open.result).slice(0, 20000)}</pre>}
 				</div>
 			)}
 			<h4>{m.jobs}</h4>

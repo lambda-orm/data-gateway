@@ -75,7 +75,7 @@ Then open the IDE (its own image, next to the gateway: see [The IDE](#the-ide)),
 claude mcp add --transport http northwind http://localhost:8081/mcp --header "X-Api-Key: reader-demo-key"
 ```
 
-![The UI](https://raw.githubusercontent.com/lambda-orm/wiki/main/docs/data-gateway/images/ui-diagram.png)
+![The UI](https://raw.githubusercontent.com/lambda-orm/wiki/main/docs/ide/images/ide-wizard.png)
 
 ## From any language
 
@@ -176,7 +176,7 @@ and logs: [Operations](https://lambda-orm.github.io/wiki/data-gateway/Operations
 | `mcpHttp` | MCP Streamable HTTP (`/mcp`) for AI agents | [MCP](https://lambda-orm.github.io/wiki/data-gateway/Mcp/) |
 | `mcpWebSocket` | MCP over WebSocket | [MCP](https://lambda-orm.github.io/wiki/data-gateway/Mcp/) |
 | `webSocket` | the same API as JSON-RPC over one connection, with notifications | [WebSocket API](https://lambda-orm.github.io/wiki/data-gateway/WebSocket/) |
-| `management` | the routes of `http` for every schema and the administration (`/admin`), for the IDE; keep it on an internal network | [UI](https://lambda-orm.github.io/wiki/data-gateway/Ui/) |
+| `management` | the routes of `http` for every schema and the administration (`/admin`), for the IDE; keep it on an internal network | [IDE](https://lambda-orm.github.io/wiki/ide/) |
 
 No transport answers CORS: a web app calls the gateway from its backend.
 

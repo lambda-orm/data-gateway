@@ -16,7 +16,17 @@ const OPERATIONS: Record<CommandOperation, Operation> = {
 	import: 'stageImport',
 	pullSchema: 'stageFetch',
 	pull: 'stagePull',
-	introspectSchema: 'schema'
+	introspectSchema: 'schema',
+	migrations: 'stageFetch',
+	migrateSentences: 'stageFetch',
+	migrate: 'stagePush',
+	seedFiles: 'stageFetch',
+	seed: 'stageImport'
+}
+
+const versionOf = (value: unknown): string => {
+	if (typeof value !== 'string' || !/^\d{12}$/.test(value)) throw badRequest('ValidationError', 'version is the one of a migration (yyMMddHHmmss, as the list of the migrations shows it)')
+	return value
 }
 
 /**
@@ -51,11 +61,19 @@ export class CommandUseCases {
 		case 'pushSentences': return this.orm.pushSentences(stage)
 		case 'dropSentences': return this.orm.dropSentences(stage)
 		case 'export': return this.orm.export(stage)
-		case 'push': return this.auditor.track(ctx, { operation: 'stagePush', stage }, () => this.orm.push(stage, force))
-		case 'drop': return this.auditor.track(ctx, { operation: 'stageDrop', stage }, () => this.orm.drop(stage, force))
-		case 'import': return this.auditor.track(ctx, { operation: 'stageImport', stage, data: args[1] }, () => this.orm.import(stage, args[1]))
+		case 'push': return this.auditor.track(ctx, { operation: 'stagePush', stage }, () => this.orm.push(stage, force, ctx.principal.actor, args[2] === true))
+		case 'migrations': return this.orm.migrations(stage)
+		case 'migrateSentences': return this.orm.migrateSentences(stage, versionOf(args[1]))
+		case 'migrate': {
+			const version = versionOf(args[1])
+			return this.auditor.track(ctx, { operation: 'stageMigrate', stage }, () => this.orm.migrate(stage, version, ctx.principal.actor, args[2] === true))
+		}
+		case 'seedFiles': return this.orm.seedFiles(stage)
+		case 'seed': return this.auditor.track(ctx, { operation: 'stageSeed', stage }, () => this.orm.seed(stage, ctx.principal.actor))
+		case 'drop': return this.auditor.track(ctx, { operation: 'stageDrop', stage }, () => this.orm.drop(stage, force, ctx.principal.actor))
+		case 'import': return this.auditor.track(ctx, { operation: 'stageImport', stage, data: args[1] }, () => this.orm.import(stage, args[1], ctx.principal.actor))
 		case 'pullSchema': return this.orm.pullSchema(stage)
-		case 'pull': return this.orm.pull(stage)
+		case 'pull': return this.orm.pull(stage, ctx.principal.actor)
 		}
 	}
 }
