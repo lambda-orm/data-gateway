@@ -2,5 +2,5 @@
 '@lambdaorm/ui': patch
 ---
 
-The heading of a connection in the tree is one line, as a row of the tree (24 px): `name: url` from the left, without
-the box the buttons of the app drew around them.
+A connection in the tree is a card (a soft border, rounded, its explorer inside) with its heading on one line: the
+name, and its URL smaller and muted.

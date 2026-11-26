@@ -2,8 +2,8 @@
 
 ### Unreleased
 
-- **The tree:** a connection is one line, as the other rows (`name: url` from the left), without a box around its
-  name and its URL.
+- **The tree:** each connection is a card, its explorer inside, with its heading on one line: the name, and its URL
+  smaller and muted.
 - **The data of an entity as a backoffice:** with a credential that writes, a double click changes a cell (only while
   it still has what was read: if someone changed it, the table says so), **Add a row** and **Delete the row**; any
   credential sorts by a column, filters with a condition and exports the page or everything (up to 100 000 rows, with
