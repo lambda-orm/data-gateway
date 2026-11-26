@@ -4,6 +4,7 @@ import { GatewayError, notFound } from '../../domain/errors/gatewayError'
 import { RequestContext } from '../ports/input/dataGatewayPort'
 import { OrmQueryPort } from '../ports/output/ormPorts'
 import { QueryUseCases } from './queryUseCases'
+import { readEntities, RelatedEntity } from '../../domain/query/readEntities'
 
 /** A query of application.queries as who calls sees it: never its text (docs/NAMED_QUERIES.md §2) */
 export interface NamedQueryInfo {
@@ -13,6 +14,8 @@ export interface NamedQueryInfo {
 	model: MetadataModel[]
 	/** it writes: it needs the write permission */
 	writes: boolean
+	/** the entities it reads (its sentences and the relations it goes through): what a subscription to it waits for */
+	reads: string[]
 }
 
 /** The limits of a named query, on top of the gateway's (orm.schemas[].queries in data-gateway.config.yaml) */
@@ -36,7 +39,8 @@ export class NamedQueryUseCases {
 	constructor (
 		private readonly orm: OrmQueryPort,
 		private readonly queries: QueryUseCases,
-		private readonly limits: Record<string, NamedQueryLimits> = {}
+		private readonly limits: Record<string, NamedQueryLimits> = {},
+		private readonly domain: () => RelatedEntity[] = () => []
 	) {}
 
 	public async list (ctx: RequestContext): Promise<NamedQueryInfo[]> {
@@ -62,7 +66,14 @@ export class NamedQueryUseCases {
 					this.orm.model(query.query, options),
 					this.queries.classify(query.query, ctx)
 				])
-				infos.push({ name: query.name, ...(query.description ? { description: query.description } : {}), parameters, model, writes: classification.writes })
+				infos.push({
+					name: query.name,
+					...(query.description ? { description: query.description } : {}),
+					parameters,
+					model,
+					writes: classification.writes,
+					reads: readEntities(query.query, classification.entities, this.domain())
+				})
 			} catch {
 				// it uses what this view excludes: not this caller's
 			}

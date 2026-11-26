@@ -7,7 +7,7 @@ export type Operation =
 	| 'schema' | 'schemaVersion' | 'domain' | 'entities' | 'entity' | 'search' | 'describe' | 'enums' | 'enum' | 'sources' | 'source'
 	| 'mappings' | 'mapping' | 'entityMapping' | 'stages' | 'stage' | 'views'
 	| 'stageExists' | 'stageExport' | 'stageImport' | 'version' | 'health' | 'whoami'
-	| 'queries' | 'query'
+	| 'queries' | 'query' | 'subscribeEntity' | 'subscribeQuery' | 'unsubscribe'
 
 export type Args = Record<string, any>
 type Route<T> = (args: Args) => T
@@ -85,7 +85,10 @@ export const RPC: Partial<Record<Operation, Route<[string, Args]>>> = {
 	version: () => ['general.version', {}],
 	health: () => ['general.health', {}],
 	queries: () => ['queries.list', {}],
-	query: a => ['queries.execute', { name: a.name, data: a.data ?? {}, options: a.options }]
+	query: a => ['queries.execute', { name: a.name, data: a.data ?? {}, options: a.options }],
+	subscribeEntity: a => ['subscribe.entity', { entity: a.entity }],
+	subscribeQuery: a => ['subscribe.query', a.name ? { name: a.name, data: a.data ?? {} } : { query: a.query, data: a.data ?? {} }],
+	unsubscribe: a => ['unsubscribe', { subscription: a.subscription }]
 }
 
 /** [tool, arguments] */
@@ -127,7 +130,10 @@ export const MCP: Partial<Record<Operation, Route<[string, Args]>>> = {
 /** where an operation that a transport doesn't have can be found */
 export const WHERE: Partial<Record<Operation, string>> = {
 	whoami: 'use an http(s):// connection',
-	queries: 'use an http(s):// or ws(s):// connection (on MCP they are the tools query_<name> of tools/list)'
+	queries: 'use an http(s):// or ws(s):// connection (on MCP they are the tools query_<name> of tools/list)',
+	subscribeEntity: 'use a ws(s):// connection (or the SSE of GET /subscribe)',
+	subscribeQuery: 'use a ws(s):// connection (or the SSE of GET /subscribe)',
+	unsubscribe: 'use a ws(s):// connection'
 }
 
 /** drops what is undefined (options not given), as JSON would */

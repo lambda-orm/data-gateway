@@ -6,6 +6,49 @@ All notable changes to this project will be documented in this file.
 
 ### Unreleased
 
+**The dispatcher of the outbox** (`docs/OUTBOX_DISPATCHER.md`, G5):
+
+- **`outbox.destinations`** (global or by schema): the events λORM writes with the data (`infrastructure.outbox` of
+  the `lambdaORM.yaml`) are delivered every `interval`, `batch` at a time, to **webhooks** (a `POST` per event, its id
+  in `X-Data-Gateway-Event`, signed `X-Data-Gateway-Signature: sha256=…` of `timestamp.body` with its `secret`) and to
+  **Kafka** (its `topic`, the brokers of `infrastructure.queue`, keyed by the entity and the keys of the row); never
+  the data written. An event goes when every destination that takes it accepted it; else λORM retries it (1, 2, 4…
+  s) and leaves it `dead` after its `maxAttempts`.
+- **The administration:** `GET /admin/workspaces/{schema}/outbox?status=dead` (`schemaRead`) and `POST
+  …/outbox/{id}/retry` (`ddl`).
+- **One replica dispatches:** `outbox.dispatch: false`, or `DATA_GATEWAY_OUTBOX_DISPATCH=false`, on the others.
+- `data_gateway_outbox_events{result="delivered|failed"}` in `/metrics`.
+
+**Subscriptions** (`docs/SUBSCRIPTIONS.md`, G4):
+
+- **Over WebSocket:** `subscribe.entity { entity }` (each write of it: `data.changed` with its action, the keys its view
+  sees and its count, never the data), `subscribe.query { query, data }` or `{ name, data }` (its result now, and
+  `query.changed` with the new one when something it reads is written, only if it changed, at most once in 200 ms) and
+  `unsubscribe`. Up to 100 a connection; they end with it.
+- **Over SSE:** `GET /subscribe?entity=…`, `?query=…&data=…` or `?name=…` on `http`: the same events.
+- **With the identity of who subscribes:** its permissions, its view and its context; with a view, a write of rows it
+  can't see doesn't reach it (its keys are read in its view).
+- The writes of this replica (across replicas, later).
+
+**The cache of the reads** (`docs/RESULT_CACHE.md`, G3):
+
+- **`cache`** (global or by schema, off by default): the result of an `execute` that only reads (and of a named query
+  that only reads) is kept in memory (LRU, `maxEntries`, `maxRowBytes`) until its `ttl`, or the `ttl` of an entity it
+  reads (`entities: { Prices: { ttl: 5s }, AuditLogs: { enabled: false } }`). Its key has the query, its data, the
+  stage, the view and the context of who reads: two identities never share a result.
+- **A write through λORM drops** at once every result that reads its entities (`orm.onDataChange`), also those reached
+  through a relation; what another application writes is bounded by the `ttl`.
+- **REST answers `ETag`** (and `Cache-Control: private, no-cache`) on `execute` and `/queries/{name}`: the same
+  `If-None-Match` is `304` without body.
+- `data_gateway_cache_requests{result}`, `data_gateway_cache_invalidations` and `data_gateway_cache_entries` in
+  `/metrics`.
+
+**Fixes:**
+
+- `view`, `queries` and `cache` of a schema no longer warn `unknown key … ignored` (they were read anyway).
+
+Needs `@lambdaorm/base` 3.11.1 and `@lambdaorm/lib` 3.15.0.
+
 ### 4.1.0 (2026-11-25)
 
 With `@lambdaorm/base` 3.11.1 and `@lambdaorm/lib` 3.15.0, the exact versions the image installs.

@@ -166,6 +166,11 @@ recomendación, tests por transporte y la conformidad.
 
 ### G3. Caché de resultados (brecha 2.1)
 
+> **Estado (2026-11-25): fases 1 a 3 hechas** en `feature/result-cache` ([`RESULT_CACHE.md`](RESULT_CACHE.md),
+> decisiones cerradas): caché en memoria (LRU, TTL, por entidad), clave con la vista y el contexto, invalidación por
+> `orm.onDataChange`, `ETag`/`304` en REST, métricas. **Falta:** Redis (varias réplicas) y la wiki. De paso: `view`,
+> `queries` y `cache` de un schema ya no dan el aviso *unknown key* (falso en 4.1.0).
+
 - Por schema o entidad, en memoria o Redis, con `ETag`/`Cache-Control` en REST.
 - La clave incluye la consulta, los datos, la vista y el contexto (dos identidades no comparten un resultado).
 - La invalidan los eventos de escritura (C4, `orm.onDataChange`): las entidades que la consulta lee, incluidas las de
@@ -173,6 +178,11 @@ recomendación, tests por transporte y la conformidad.
 - Métricas de aciertos y fallos.
 
 ### G4. Suscripciones (brecha 2.2)
+
+> **Estado (2026-11-25): fases 1 a 4 hechas** en `feature/subscriptions` ([`SUBSCRIPTIONS.md`](SUBSCRIPTIONS.md),
+> decisiones cerradas): `subscribe.entity`, `subscribe.query` (también una consulta con nombre) y `unsubscribe` por
+> WebSocket, `GET /subscribe` (SSE), con la identidad de quien se suscribe (una vista con filtro de fila: solo las
+> claves que ve); el cliente Node (`client.subscribe`). **Falta:** entre réplicas (Redis) y la wiki.
 
 - `subscribe`/`unsubscribe` por WebSocket (JSON-RPC) y SSE: a una entidad (sus cambios) o a una consulta (se vuelve a
   correr cuando cambia una entidad que lee).
@@ -182,6 +192,11 @@ recomendación, tests por transporte y la conformidad.
 
 ### G5. Despachador del outbox (brecha 3.3)
 
+> **Estado (2026-11-25): hecho** en `feature/outbox-dispatcher` ([`OUTBOX_DISPATCHER.md`](OUTBOX_DISPATCHER.md),
+> decisiones cerradas): webhooks firmados (HMAC) y Kafka (los brokers de `infrastructure.queue`), por schema; los
+> reintentos y `dead` de λORM; `GET …/outbox?status=dead` y `POST …/outbox/{id}/retry` en la administración; una réplica
+> despacha (`outbox.dispatch`, `DATA_GATEWAY_OUTBOX_DISPATCH`). **Falta:** la wiki.
+
 - Lee el outbox (C8: `LambdaOrmOutbox`, `OutboxService.pending/done/failed/dispatch`) y entrega a webhooks HTTP o a
   Kafka, con reintentos exponenciales y una cola de fallidos (DLQ).
 - Configuración por schema: destinos, firmas de los webhooks (HMAC), concurrencia, reintentos.
@@ -189,6 +204,11 @@ recomendación, tests por transporte y la conformidad.
 - La `queue` actual queda como envío explícito.
 
 ### G6. Backoffice en el IDE (brecha 5.1)
+
+> **Estado (2026-11-25): hecho** (la tabla editable y exportar) en `feature/backoffice` ([`BACKOFFICE.md`](BACKOFFICE.md),
+> decisiones cerradas): en **Data** de una entidad, con `write`, editar una celda (chequeo optimista), agregar y borrar
+> filas, ordenar y filtrar; exportar la página o todo (hasta 100 000 filas) en CSV, JSON y Excel. **Falta:** la wiki y
+> G6b (archivos S3/Blob y paneles).
 
 - Tabla con edición en línea (sobre `update` por clave), exportar CSV/Excel/JSON, archivos (S3/Blob) y paneles
   simples.

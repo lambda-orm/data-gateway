@@ -3,6 +3,7 @@
 // rows it will write, and the permissions. Needs DATA_GATEWAY_TEST_POSTGRES, the connection of an empty database
 // ({"host":"127.0.0.1","port":55432,"user":"postgres","password":"…","database":"shop"}); skipped without it.
 import fs from 'fs'
+import http from 'http'
 import os from 'os'
 import path from 'path'
 import { startGateway } from '../../src/lib/infrastructure/build/main'
@@ -378,4 +379,109 @@ transports:
 		// the rows are still there
 		expect((await call(base, '/shop/execute', { body: { query: 'Categories.map(p => p.name).sort(p => p.name)' }, headers: ADMIN })).body).toEqual([{ name: 'Beverages' }, { name: 'Condiments' }])
 	}, 120000)
+})
+
+;(POSTGRES ? describe : describe.skip)('the dispatcher of the outbox (PostgreSQL, docs/OUTBOX_DISPATCHER.md)', () => {
+	let supervisor: Supervisor
+	let base: string
+	let hook: http.Server
+	let hookStatus = 500
+	const received: { id: string, body: any }[] = []
+	const outbox = '/admin/workspaces/shop/outbox'
+
+	beforeAll(async () => {
+		hook = http.createServer((req, res) => {
+			let body = ''
+			req.on('data', chunk => { body += chunk })
+			req.on('end', () => { received.push({ id: String(req.headers['x-data-gateway-event']), body: JSON.parse(body) }); res.writeHead(hookStatus).end() })
+		})
+		await new Promise<void>(resolve => hook.listen(0, '127.0.0.1', resolve))
+		const hookUrl = `http://127.0.0.1:${(hook.address() as any).port}/hooks`
+		const root = fs.mkdtempSync(path.join(os.tmpdir(), 'data-gateway-outbox-'))
+		const connection = { ...JSON.parse(POSTGRES!), database: 'shop4' }
+		const server = new Client(JSON.parse(POSTGRES!))
+		await server.connect()
+		try {
+			await server.query('DROP DATABASE IF EXISTS shop4 WITH (FORCE)')
+			await server.query('CREATE DATABASE shop4')
+		} finally { await server.end() }
+		fs.mkdirSync(path.join(root, 'shop'))
+		fs.writeFileSync(path.join(root, 'shop/lambdaORM.yaml'), `domain:
+  entities:
+    - name: Categories
+      primaryKey: [id]
+      properties:
+        - { name: id, type: integer, required: true }
+        - { name: name, type: string, length: 80, required: true }
+infrastructure:
+  outbox: { entities: [Categories], maxAttempts: 1 }
+  mappings:
+    - name: default
+  sources:
+    - { name: main, dialect: PostgreSQL, mapping: default, connection: '${JSON.stringify(connection)}' }
+  stages:
+    - name: default
+      sources:
+        - name: main
+`)
+		const port = await freePort()
+		const file = path.join(root, 'data-gateway.config.yaml')
+		fs.writeFileSync(file, `
+orm: { workspacePath: ${root}, watch: false }
+logger: { level: error }
+audit: { enabled: false }
+rateLimit: { max: 0 }
+runtime: { checkConnections: false, heartbeat: { intervalMs: 200, timeoutMs: 3000 }, restart: { initialDelayMs: 200, maxDelayMs: 1000 } }
+outbox:
+  interval: 1s
+  destinations:
+    - { type: webhook, url: ${hookUrl}, secret: hook-secret, timeout: 2s }
+authentication:
+  adapter: local
+  type: apikey
+  keys:
+    - { name: admin, value: admin-key, permissions: [ read, write, stageImport, ddl, schemaRead, schemaWrite ] }
+transports:
+  management: { port: ${port}, host: 127.0.0.1 }
+`)
+		supervisor = await startSupervisor({ source: new YamlFileConfigSource(file, process.env), bootLogger: new ConsoleLogger('error') })
+		base = `http://127.0.0.1:${port}`
+		for (let i = 0; i < 100; i++) {
+			const states = await call(base, '/schemas').then(r => r.body).catch(() => [])
+			if (Array.isArray(states) && states[0]?.status === 'ready') break
+			await sleep(100)
+		}
+		Object.assign(ADMIN, await login(base, ADMIN_KEY))
+	}, 60000)
+	afterAll(async () => {
+		await supervisor?.stop()
+		await new Promise<void>(resolve => { hook.closeAllConnections(); hook.close(() => resolve()) })
+	}, 30000)
+
+	const until = async (test: () => Promise<boolean> | boolean, ms = 10000) => {
+		const end = Date.now() + ms
+		while (Date.now() < end) { if (await test()) return true; await sleep(100) }
+		return false
+	}
+
+	test('a write leaves its event; the webhook fails, it is dead; listed, retried, delivered', async () => {
+		const preview = await call(base, '/admin/workspaces/shop/commands/push/preview', { body: {}, headers: ADMIN })
+		const started = await call(base, '/admin/workspaces/shop/commands/push', { body: { previewId: preview.body.previewId }, headers: ADMIN })
+		expect(await until(async () => (await call(base, `/admin/workspaces/shop/jobs/${started.body.id}`, { headers: ADMIN })).body.status === 'done')).toBe(true)
+		expect((await call(base, '/shop/execute', { body: { query: 'Categories.insert()', data: { id: 1, name: 'Beverages' } }, headers: ADMIN })).status).toBe(200)
+
+		expect(await until(() => received.length >= 1)).toBe(true)
+		expect(received[0].body).toMatchObject({ entity: 'Categories', action: 'insert', keys: [{ id: 1 }] })
+		expect(received[0].body).not.toHaveProperty('name')
+		let dead: any[] = []
+		expect(await until(async () => { dead = (await call(base, `${outbox}?status=dead`, { headers: ADMIN })).body; return Array.isArray(dead) && dead.length === 1 })).toBe(true)
+		expect(dead[0]).toMatchObject({ entity: 'Categories', status: 'dead', error: expect.stringContaining('answered 500') })
+
+		hookStatus = 200
+		expect((await call(base, `${outbox}/${dead[0].id}/retry`, { method: 'POST', body: {}, headers: ADMIN })).body).toEqual({ id: dead[0].id, status: 'pending' })
+		expect(await until(async () => (await call(base, `${outbox}?status=done`, { headers: ADMIN })).body.length === 1)).toBe(true)
+		expect(received.filter(r => r.id === dead[0].id).length).toBeGreaterThanOrEqual(2)
+		expect((await call(base, `${outbox}?status=dead`, { headers: ADMIN })).body).toEqual([])
+		expect((await call(base, `${outbox}/nope/retry`, { method: 'POST', body: {}, headers: ADMIN })).status).toBe(404)
+	}, 60000)
 })

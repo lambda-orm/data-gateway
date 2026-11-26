@@ -2,6 +2,15 @@
 
 ### Unreleased
 
+### 1.2.0 (2026-11-26)
+
+Works with any data-gateway 4.x: the table uses `execute`, with the credential of the connection.
+
+- **The data of an entity as a backoffice:** with a credential that writes, a double click changes a cell (only while
+  it still has what was read: if someone changed it, the table says so), **Add a row** and **Delete the row**; any
+  credential sorts by a column, filters with a condition and exports the page or everything (up to 100 000 rows, with
+  progress) as CSV, JSON or Excel (.xlsx).
+
 ### 1.1.0 (2026-11-25)
 
 For the data-gateway 4.1.0; what needs it says so (an older gateway doesn't offer it).

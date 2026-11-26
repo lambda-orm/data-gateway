@@ -23,8 +23,8 @@ describe('named queries', () => {
 		const { gateway } = setup()
 		const list = await gateway.queries(ctx(['read']))
 		expect(list).toEqual([
-			{ name: 'productById', description: 'a product by its id', parameters: [{ name: 'id', type: 'integer' }], model: [{ name: 'id', type: 'integer' }], writes: false },
-			{ name: 'renameProduct', parameters: [{ name: 'id', type: 'integer' }], model: [{ name: 'id', type: 'integer' }], writes: true }
+			{ name: 'productById', description: 'a product by its id', parameters: [{ name: 'id', type: 'integer' }], model: [{ name: 'id', type: 'integer' }], writes: false, reads: ['Products'] },
+			{ name: 'renameProduct', parameters: [{ name: 'id', type: 'integer' }], model: [{ name: 'id', type: 'integer' }], writes: true, reads: ['Products'] }
 		])
 		expect(JSON.stringify(list)).not.toContain('Products.filter')
 	})

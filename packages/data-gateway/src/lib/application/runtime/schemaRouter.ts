@@ -1,6 +1,6 @@
 import { TransportName } from '../../domain/config/dataGatewayConfig'
 import { GatewayError, timeout, unavailable } from '../../domain/errors/gatewayError'
-import { CONTEXT_FREE_OPERATIONS, GATEWAY_OPERATIONS, MCP_OPERATIONS } from '../../domain/runtime/channelProtocol'
+import { CONTEXT_FREE_OPERATIONS, GATEWAY_OPERATIONS, MCP_OPERATIONS, DataChangeSummary } from '../../domain/runtime/channelProtocol'
 import { SchemaState } from '../../domain/runtime/policies'
 import { WorkspaceChange } from '../../domain/runtime/workspaces'
 import { DataGatewayPort, RequestContext } from '../ports/input/dataGatewayPort'
@@ -38,6 +38,7 @@ class RoutedSchema {
 	public info: McpServerInfo | undefined
 	public inFlight = 0
 	public readonly queueOutcomes = new Listeners<QueueOutcome>()
+	public readonly dataChanges = new Listeners<DataChangeSummary[]>()
 
 	constructor (public readonly settings: RoutedSchemaSettings, now: string) {
 		this.state = { path: settings.path, status: 'starting', since: now, restarts: 0 }
@@ -144,7 +145,10 @@ export class SchemaRouter implements SchemaDirectoryPort {
 		if (old) setTimeout(() => old.close(), route.settings.timeout + CHANNEL_MARGIN_MS).unref?.()
 		route.channel = channel
 		route.info = info
-		channel.onEvent(event => { if (event.event === 'queue') route.queueOutcomes.emit(event.outcome) })
+		channel.onEvent(event => {
+			if (event.event === 'queue') route.queueOutcomes.emit(event.outcome)
+			else if (event.event === 'data') route.dataChanges.emit(event.changes)
+		})
 	}
 
 	public onStateChange (listener: (state: SchemaState) => void): () => void {
@@ -245,6 +249,7 @@ export class SchemaRouter implements SchemaDirectoryPort {
 			mcp: mcp as unknown as McpServerPort,
 			features: { scripts: settings.scriptsEnabled ?? false },
 			onQueueOutcome: listener => this.route(path).queueOutcomes.subscribe(listener),
+			onDataChange: listener => this.route(path).dataChanges.subscribe(listener),
 			exposedOn: transport => settings.transports.includes(transport),
 			authenticator: transport => {
 				const authenticator = settings.authenticators[transport]

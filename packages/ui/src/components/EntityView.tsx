@@ -1,14 +1,13 @@
 import React, { useEffect, useMemo, useState } from 'react'
+import { DataTable } from './DataTable'
 import { AdminApiPort, QueryApiPort } from '../application/ports'
 import { adminMessagesOf } from '../domain/adminI18n'
 import { HistoryView } from './HistoryView'
 import { cardinalityOf, constraintsOf, DomainInfo, edgesOf, EntityInfo, EXPRESSION_HELP, expressionsOf, propertiesIn, referencesTo } from '../domain/diagram'
 import { explorerMessagesOf, format } from '../domain/explorerI18n'
 import { Locale } from '../domain/i18n'
-import { measure, failure, QueryResult } from '../domain/results'
 import { DomainDiagram } from './DomainDiagram'
 import { ExpressionView } from './ExpressionView'
-import { ResultViewer } from './ResultViewer'
 
 export interface EntityViewProps {
 	api: QueryApiPort
@@ -51,16 +50,16 @@ const Check: React.FC<{ on?: boolean }> = ({ on }) => <>{on ? '✓' : ''}</>
 /**
  * The form of an entity, as a database IDE shows a table: its properties (type, length, required, primary key,
  * auto, default, enum, what each foreign key references, expressions), its relations and what references it, its
- * keys, indexes and constraints, its rows (read only, by pages) and its diagram with its neighbours.
+ * keys, indexes and constraints, its rows (a backoffice: editable with write, exported) and its diagram with its neighbours.
  */
-export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: name, domain: loadDomain, theme = 'light', locale, onOpenEntity, onQuery, onQueryText, onEdit, culture, editLabel = 'Edit', onRemove, removeLabel = 'Remove', pageSize = 50, admin, tracesUrl, revision }) => {
+export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: name, domain: loadDomain, theme = 'light', locale, onOpenEntity, onQuery, onQueryText, onEdit, editLabel = 'Edit', onRemove, removeLabel = 'Remove', pageSize = 50, admin, tracesUrl, revision }) => {
 	const m = explorerMessagesOf(locale)
 	const a = adminMessagesOf(locale)
 	const [domain, setDomain] = useState<DomainInfo>()
 	const [error, setError] = useState<string>()
 	const [section, setSection] = useState<Section>('properties')
-	const [page, setPage] = useState(1)
-	const [result, setResult] = useState<QueryResult>()
+	// the credential may write: the data of the entity is editable (docs/BACKOFFICE.md)
+	const [canWrite, setCanWrite] = useState(false)
 	// the property whose expressions are shown under the table
 	const [expressionsShown, setExpressionsShown] = useState<string>()
 
@@ -80,17 +79,11 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 	const names = useMemo(() => (entity?.properties ?? []).map(p => p.name), [entity])
 
 	useEffect(() => {
-		if (section !== 'data' || !entity || entity.abstract) return
+		if (section !== 'data') return
 		let live = true
-		const query = `${name}.page(${page}, ${pageSize})`
-		const started = performance.now()
-		setResult(undefined)
-		api.execute(schema, query).then(
-			value => { if (live) setResult(measure('execute', value, performance.now() - started)) },
-			e => { if (live) setResult(failure('execute', { name: e?.name ?? 'Error', message: e?.message ?? String(e), status: e?.status, code: e?.code }, performance.now() - started)) }
-		)
+		api.whoami(schema).then(who => { if (live) setCanWrite(who.permissions.includes('write')) }, () => { if (live) setCanWrite(false) })
 		return () => { live = false }
-	}, [section, page, entity, name, schema, api, pageSize])
+	}, [section, schema, api])
 
 	if (error) return <div className={`lw-workbench lw-${theme}`}><div className="lw-notice" role="alert">{error}</div></div>
 	if (!domain) return <div className={`lw-workbench lw-${theme}`}><span className="lw-muted">{m.loading}</span></div>
@@ -100,7 +93,6 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 	const unique = new Set(entity.uniqueKey ?? [])
 	const link = (target: string) => <button className="lw-link" onClick={() => onOpenEntity(schema, target)}>{target}</button>
 	const shown = entity.properties?.find(p => p.name === expressionsShown)
-	const rows = Array.isArray(result?.value) ? (result!.value as unknown[]).length : 0
 
 	return (
 		<div className={`lw-entity-view lw-workbench lw-${theme}`}>
@@ -237,15 +229,8 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 			)}
 
 			{section === 'data' && (
-				<>
-					<div className="lw-header">
-						<button onClick={() => setPage(page - 1)} disabled={page === 1}>◀ {m.previous}</button>
-						<span>{format(m.page, { n: page })}</span>
-						<button onClick={() => setPage(page + 1)} disabled={!result?.ok || rows < pageSize}>{m.next} ▶</button>
-						<span className="lw-muted">{m.readOnlyData}</span>
-					</div>
-					{result ? <ResultViewer key={page} result={result} locale={locale} theme={theme} culture={culture} maxRows={pageSize} fileName={`${name}-page-${page}`} initialView="table" /> : <span className="lw-muted">{m.loading}</span>}
-				</>
+				// the data as a backoffice (docs/BACKOFFICE.md): editable with write, exported as CSV, JSON or Excel
+				<DataTable api={api} schema={schema} entity={entity} canWrite={canWrite} locale={locale} pageSize={pageSize} />
 			)}
 
 			{section === 'diagram' && (

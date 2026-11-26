@@ -28,6 +28,8 @@ authentication:
       keys:
         - { name: reader,  value: conformance-reader-key,  permissions: [ read ] }
         - { name: backend, value: conformance-backend-key, permissions: [ read, write, script, queue, stageImport ] }
+# the cache of the reads on (docs/RESULT_CACHE.md): every case that writes and then reads checks its invalidation
+cache: { enabled: true, ttl: 60s }
 rateLimit: { windowMs: 30000, max: 0 }
 scripts:
   enabled: true
