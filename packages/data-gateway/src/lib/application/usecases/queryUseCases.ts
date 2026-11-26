@@ -1,3 +1,4 @@
+import { ApprovalGate } from '../approval/approvals'
 import { Metadata, MetadataConstraint, MetadataModel, MetadataParameter, QueryPlan } from '@lambdaorm/base'
 import { authorize } from '../../domain/auth/authorizationPolicy'
 import { badRequest } from '../../domain/errors/gatewayError'
@@ -30,8 +31,15 @@ export class QueryUseCases {
 		private readonly orm: OrmQueryPort,
 		private readonly auditor: Auditor,
 		private readonly views: ViewResolver = NO_VIEWS,
-		private readonly cache?: ReadsCache
+		private readonly cache?: ReadsCache,
+		/** the writes that wait for a person (docs/MUTATION_APPROVAL.md) */
+		private readonly approvals?: ApprovalGate
 	) {}
+
+	/** its writes wait for a person (docs/MUTATION_APPROVAL.md) */
+	public needsApproval (ctx: RequestContext): boolean {
+		return !!this.approvals?.needs(ctx)
+	}
 
 	/** the view of λORM of who calls (docs/VIEWS_BY_IDENTITY.md) */
 	public viewOf (ctx: RequestContext): string | undefined {
@@ -83,6 +91,8 @@ export class QueryUseCases {
 		const classification = await this.classify(query, ctx)
 		authorize(ctx.principal, 'execute', classification.writes)
 		const options = requestOptions(request.options, ctx, this.viewOf(ctx))
+		// a write that waits for a person: nothing runs now (docs/MUTATION_APPROVAL.md §3)
+		if (classification.writes && this.approvals?.needs(ctx)) return this.approvals.request(ctx, 'execute', query, request.data, request.options as Record<string, unknown> | undefined, named, options as Record<string, unknown>)
 		const run = () => this.orm.execute(query, request.data, options)
 		if (!classification.writes) return this.cache ? this.cached(query, request.data, options, classification.entities, run) : run()
 		return this.auditor.track(ctx, {

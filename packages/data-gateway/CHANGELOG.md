@@ -6,6 +6,19 @@ All notable changes to this project will be documented in this file.
 
 ### Unreleased
 
+**Writes that wait for a person** (`docs/MUTATION_APPROVAL.md`):
+
+- **`mcp.approval: writes`** (also per schema; `mcp.approvalExpires`, 1 h): every write by MCP waits, answered at once
+  with `{ approval, status: "pending", expiresAt }` (REST: `202`); nothing changes yet. **`approval: writes`** on a key
+  or a role of a token: its writes wait on every transport. A script always waits (it may write); a queued write can't.
+- **`approve`**, a new permission: `GET /admin/workspaces/{schema}/approvals` (with the plan of each write: the sentences
+  it would run), `POST …/approvals/{id}/approve` and `…/reject { reason }`. Never the own write (four eyes); an approved
+  write runs once, as who asked for it (its view, its context), audited with `approvedBy`.
+- **Who asked** sees it with the MCP tool `approval_status`, `GET /{schema}/approvals/{id}` or `approvals.status` by
+  WebSocket: pending, done (its result), failed, rejected (its reason) or expired.
+- They live in the SQLite of the volume (`.data-gateway/state.sqlite`, shared by the replicas), in memory without
+  `orm.workspacePath`.
+
 **Replicas together** (`docs/REPLICAS.md`):
 
 - **`cluster.valkey`** (`url`: `valkey://`, `valkeys://`, also `redis://`, `rediss://`; `prefix`): the replicas share

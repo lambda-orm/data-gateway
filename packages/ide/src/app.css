@@ -217,3 +217,11 @@ div.dg-error { border: 1px solid var(--bad); border-radius: 6px; padding: 6px 10
 .lw-connections-root:has(> .dg-app-menu) > .lw-icon-button, .lw-connections-root:has(> .dg-app-menu) .lw-connection-actions .lw-icon-button { width: 24px; min-width: 24px; padding: 0; justify-content: center; }
 .lw-connections-root:has(> .dg-app-menu) .lw-connections-title { font-size: 13px; }
 .lw-connections-root:has(> .dg-app-menu) > .lw-type { margin-left: 2px; }
+/* the writes that wait for a person (approvals.tsx): each one a card with what it would run */
+.dg-approvals h3 .dg-chip { margin-left: 8px; }
+.dg-approval { border: 1px solid var(--border); border-radius: 8px; padding: 10px 12px; margin: 10px 0; }
+.dg-approval header { margin-bottom: 6px; }
+.dg-approval pre.dg-code { margin: 6px 0; max-height: 220px; white-space: pre-wrap; word-break: break-word; }
+.dg-approval .dg-form-actions { display: flex; gap: 6px; justify-content: flex-end; align-items: center; }
+.dg-approval .dg-form-actions input { flex: 1; min-width: 0; }
+.dg-warning { color: var(--warning, #b45309); margin: 6px 0; }

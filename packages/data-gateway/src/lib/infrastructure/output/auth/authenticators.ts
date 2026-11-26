@@ -27,7 +27,7 @@ const match = (credentials: CredentialConfig[], test: (credential: CredentialCon
 /** recognized: the request brought a credential of its kind (another method of authentication.methods may take it if not) */
 const result = (credential: CredentialConfig | undefined, reason: string, recognized: boolean): AuthenticationResult =>
 	credential
-		? { valid: true, principal: credential.view ? { ...principal(credential.name, credential.permissions), view: credential.view } : principal(credential.name, credential.permissions) }
+		? { valid: true, principal: { ...principal(credential.name, credential.permissions), ...(credential.view ? { view: credential.view } : {}), ...(credential.approval ? { approval: credential.approval } : {}) } }
 		: { valid: false, reason, recognized }
 
 /** adapter: none — open access, every permission. */

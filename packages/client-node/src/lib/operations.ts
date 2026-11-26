@@ -7,7 +7,7 @@ export type Operation =
 	| 'schema' | 'schemaVersion' | 'domain' | 'entities' | 'entity' | 'search' | 'describe' | 'enums' | 'enum' | 'sources' | 'source'
 	| 'mappings' | 'mapping' | 'entityMapping' | 'stages' | 'stage' | 'views'
 	| 'stageExists' | 'stageExport' | 'stageImport' | 'version' | 'health' | 'whoami'
-	| 'queries' | 'query' | 'subscribeEntity' | 'subscribeQuery' | 'unsubscribe'
+	| 'queries' | 'query' | 'subscribeEntity' | 'subscribeQuery' | 'unsubscribe' | 'approval'
 
 export type Args = Record<string, any>
 type Route<T> = (args: Args) => T
@@ -49,7 +49,8 @@ export const REST: Partial<Record<Operation, Route<[string, string, unknown?]>>>
 	health: () => ['GET', '/health'],
 	whoami: () => ['GET', '/whoami'],
 	queries: () => ['GET', '/queries'],
-	query: a => ['POST', `/queries/${enc(a.name)}`, { data: a.data ?? {}, options: a.options }]
+	query: a => ['POST', `/queries/${enc(a.name)}`, { data: a.data ?? {}, options: a.options }],
+	approval: a => ['GET', `/approvals/${enc(a.id)}`]
 }
 
 /** [method, params] */
@@ -86,6 +87,7 @@ export const RPC: Partial<Record<Operation, Route<[string, Args]>>> = {
 	health: () => ['general.health', {}],
 	queries: () => ['queries.list', {}],
 	query: a => ['queries.execute', { name: a.name, data: a.data ?? {}, options: a.options }],
+	approval: a => ['approvals.status', { id: a.id }],
 	subscribeEntity: a => ['subscribe.entity', { entity: a.entity }],
 	subscribeQuery: a => ['subscribe.query', a.name ? { name: a.name, data: a.data ?? {} } : { query: a.query, data: a.data ?? {} }],
 	unsubscribe: a => ['unsubscribe', { subscription: a.subscription }]
@@ -124,7 +126,8 @@ export const MCP: Partial<Record<Operation, Route<[string, Args]>>> = {
 	version: () => ['gateway_version', {}],
 	health: () => ['gateway_health', {}],
 	// a named query is the tool query_<name>, its parameters as its arguments
-	query: a => [`query_${a.name}`, a.data ?? {}]
+	query: a => [`query_${a.name}`, a.data ?? {}],
+	approval: a => ['approval_status', { id: a.id }]
 }
 
 /** where an operation that a transport doesn't have can be found */

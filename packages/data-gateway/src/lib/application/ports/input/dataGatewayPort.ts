@@ -1,3 +1,4 @@
+import { Approval } from '../../../domain/approval/approval'
 import { DescribedEntities, DomainSearch } from '../../usecases/domainText'
 import { NamedQueryInfo, NamedQueryRequest } from '../../usecases/namedQueryUseCases'
 import {
@@ -10,6 +11,8 @@ import { Principal } from '../../../domain/auth/principal'
 export interface RequestContext {
 	principal: Principal
 	transport: string
+	/** a write a person approved (docs/MUTATION_APPROVAL.md): who; it runs without waiting again */
+	approvedBy?: string
 }
 
 export interface QueryRequest { query: string, options?: QueryOptions }
@@ -39,6 +42,8 @@ export interface DataGatewayPort {
 	queries (ctx: RequestContext): Promise<NamedQueryInfo[]>
 	/** one of them, by its name */
 	query (ctx: RequestContext, name: string, request: NamedQueryRequest): Promise<unknown>
+	/** a write that waits for a person (docs/MUTATION_APPROVAL.md): its state, for who asked or who approves */
+	approval (ctx: RequestContext, id: string): Promise<Approval>
 
 	schema (ctx: RequestContext): Promise<Schema>
 	schemaVersion (ctx: RequestContext): Promise<{ version: string }>

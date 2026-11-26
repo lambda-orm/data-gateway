@@ -1,12 +1,15 @@
 import { authorize, Operation } from '../../domain/auth/authorizationPolicy'
 import { badRequest, notFound } from '../../domain/errors/gatewayError'
 import { OutboxPort } from '../outbox/outboxDispatcher'
+import { ApprovalUseCases } from '../approval/approvals'
+
+type ApprovalOperation = 'approvalsList' | 'approve' | 'reject'
 import { CommandOperation } from '../../domain/runtime/channelProtocol'
 import { RequestContext } from '../ports/input/dataGatewayPort'
 import { OrmCommandPort } from '../ports/output/ormPorts'
 import { Auditor } from './auditor'
 
-const OPERATIONS: Record<CommandOperation, Operation> = {
+const OPERATIONS: Record<Exclude<CommandOperation, ApprovalOperation>, Operation> = {
 	stages: 'schema',
 	fetch: 'stageFetch',
 	pushSentences: 'stageFetch',
@@ -38,7 +41,15 @@ const versionOf = (value: unknown): string => {
  */
 export class CommandUseCases {
 	// eslint-disable-next-line no-useless-constructor
-	constructor (private readonly orm: OrmCommandPort, private readonly auditor: Auditor, private readonly outbox?: OutboxPort) {}
+	constructor (private readonly orm: OrmCommandPort, private readonly auditor: Auditor, private readonly outbox?: OutboxPort, private readonly approvals?: ApprovalUseCases) {}
+
+	/** the writes that wait (docs/MUTATION_APPROVAL.md §4): approve authorizes them, not the permissions of the stage */
+	private approvalOp (ctx: RequestContext, op: ApprovalOperation, args: unknown[]): Promise<unknown> {
+		if (!this.approvals) throw badRequest('ValidationError', 'the schema has no approvals')
+		if (op === 'approvalsList') return this.approvals.list(ctx, args[0], args[1])
+		if (typeof args[0] !== 'string' || !args[0]) throw badRequest('ValidationError', 'id is the one of an approval')
+		return op === 'approve' ? this.approvals.approve(ctx, args[0]) : this.approvals.reject(ctx, args[0], args[1])
+	}
 
 	/** the outbox of the schema (docs/OUTBOX_DISPATCHER.md §5): its events by state, and a dead one back to pending */
 	private outboxOp (op: 'outboxList' | 'outboxRetry', args: unknown[]): Promise<unknown> {
@@ -68,6 +79,7 @@ export class CommandUseCases {
 	}
 
 	public async run (ctx: RequestContext, op: CommandOperation, args: unknown[]): Promise<unknown> {
+		if (op === 'approvalsList' || op === 'approve' || op === 'reject') return this.approvalOp(ctx, op, args)
 		authorize(ctx.principal, OPERATIONS[op])
 		if (op === 'stages') return this.orm.stageNames()
 		if (op === 'outboxList' || op === 'outboxRetry') return this.outboxOp(op, args)

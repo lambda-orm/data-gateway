@@ -15,7 +15,7 @@ const KNOWN_SECTIONS = ['orm', 'admin', 'server', 'logger', 'metrics', 'observab
 const SCHEMA_KEYS = ['path', 'workspace', 'transports', 'authentication', 'env', 'scripts', 'mcp', 'server', 'runtime', 'view', 'queries', 'cache', 'outbox']
 /** The tools of docs/DATA_GATEWAY.md §5.1: mcp.tools.include / exclude must name them */
 export const TOOL_NAMES = [
-	'orm_execute', 'orm_execute_script', 'orm_execute_queued', 'orm_plan', 'orm_metadata', 'orm_model', 'orm_parameters',
+	'orm_execute', 'orm_execute_script', 'orm_execute_queued', 'approval_status', 'orm_plan', 'orm_metadata', 'orm_model', 'orm_parameters',
 	'orm_constraints', 'schema_get', 'schema_version', 'schema_domain', 'schema_entities', 'schema_search', 'schema_describe', 'schema_enums', 'schema_sources',
 	'schema_mappings', 'schema_views', 'schema_stages', 'stage_exists', 'stage_export', 'stage_import', 'gateway_version',
 	'gateway_health', 'admin_schema_get', 'admin_schema_validate', 'admin_stage_fetch'
@@ -199,6 +199,9 @@ export class ConfigReader {
 			schema.mcp = {}
 			if (entry.mcp.maxRows !== undefined) schema.mcp.maxRows = this.int(entry.mcp.maxRows, 500, `${key}.mcp.maxRows`, 0)
 			if (entry.mcp.freeQueries !== undefined) schema.mcp.freeQueries = this.bool(entry.mcp.freeQueries, true, `${key}.mcp.freeQueries`)
+			const approval = this.approvalMode(entry.mcp.approval, `${key}.mcp.approval`)
+			if (approval) schema.mcp.approval = approval
+			if (entry.mcp.approvalExpires !== undefined) schema.mcp.approvalExpiresMs = this.duration(entry.mcp.approvalExpires, 3600000, `${key}.mcp.approvalExpires`)
 			if (entry.mcp.tools !== undefined) {
 				schema.mcp.tools = {
 					include: this.toolNames(entry.mcp.tools?.include, `${key}.mcp.tools.include`),
@@ -300,7 +303,9 @@ export class ConfigReader {
 			},
 			pageSize: this.int(section.pageSize, 50, 'mcp.pageSize', 1),
 			maxRows: this.int(section.maxRows, 500, 'mcp.maxRows', 0),
-			freeQueries: this.bool(section.freeQueries, true, 'mcp.freeQueries')
+			freeQueries: this.bool(section.freeQueries, true, 'mcp.freeQueries'),
+			approval: this.approvalMode(section.approval, 'mcp.approval') ?? 'none',
+			approvalExpiresMs: this.duration(section.approvalExpires, 3600000, 'mcp.approvalExpires')
 		}
 	}
 
@@ -581,7 +586,8 @@ export class ConfigReader {
 					const list = isObject(value) ? value.permissions : value
 					if (!Array.isArray(list)) { this.issues.push(`${at}.roles.${role} must be a list of permissions, or { permissions, view }`); continue }
 					const view = isObject(value) && value.view !== undefined ? this.viewName(value.view, `${at}.roles.${role}.view`) : undefined
-					roles[role] = { permissions: this.permissions(list, `${at}.roles.${role}`), ...(view ? { view } : {}) }
+					const approval = isObject(value) ? this.approvalMode(value.approval, `${at}.roles.${role}.approval`) : undefined
+					roles[role] = { permissions: this.permissions(list, `${at}.roles.${role}`), ...(view ? { view } : {}), ...(approval === 'writes' ? { approval } : {}) }
 					if (view) this.stageWithView(roles[role].permissions, `${at}.roles.${role}`)
 				}
 				permissions = { claim: String(p.permissions.claim), roles }
@@ -638,6 +644,14 @@ export class ConfigReader {
 			batch: this.int(raw.batch, none.batch, `${key}.batch`, 1),
 			destinations
 		}
+	}
+
+	/** none or writes (docs/MUTATION_APPROVAL.md §2); not given, undefined */
+	private approvalMode (raw: unknown, key: string): 'none' | 'writes' | undefined {
+		if (raw === undefined || raw === null) return undefined
+		if (raw === 'none' || raw === 'writes') return raw
+		this.issues.push(`${key} must be none or writes`)
+		return undefined
 	}
 
 	/** cluster (docs/REPLICAS.md §2): a Valkey shared by the replicas; without it, each replica on its own */
@@ -721,6 +735,7 @@ export class ConfigReader {
 		}
 		const permissions = this.permissions(entry.permissions, `${at}.permissions`)
 		const credential: CredentialConfig = { name, permissions }
+		if (this.approvalMode(entry.approval, `${at}.approval`) === 'writes') credential.approval = 'writes'
 		if (entry.view !== undefined) {
 			const view = this.viewName(entry.view, `${at}.view`)
 			if (view) {

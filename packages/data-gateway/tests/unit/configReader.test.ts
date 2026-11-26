@@ -167,7 +167,7 @@ describe('config reader', () => {
 
 	test('mcp: tools must be names of tools; maxRows 0 = no limit', () => {
 		const { config } = read({ ...base, mcp: { tools: { exclude: ['orm_execute_script'] }, maxRows: '0', name: 'iot' } })
-		expect(config?.mcp).toEqual({ name: 'iot', tools: { include: [], exclude: ['orm_execute_script'] }, pageSize: 50, maxRows: 0, freeQueries: true })
+		expect(config?.mcp).toEqual({ name: 'iot', tools: { include: [], exclude: ['orm_execute_script'] }, pageSize: 50, maxRows: 0, freeQueries: true, approval: 'none', approvalExpiresMs: 3600000 })
 		expect(read({ ...base, mcp: { tools: { include: ['orm_nope'] } } }).issues).toEqual(['mcp.tools.include: unknown tools orm_nope'])
 		// a named query (docs/NAMED_QUERIES.md): query_<name>; freeQueries false leaves an agent only with them
 		const named = read({ ...base, mcp: { freeQueries: false, tools: { exclude: ['query_internalReport'] } } })
@@ -191,5 +191,22 @@ describe('config reader', () => {
 		expect(warnings[0]).toMatch(/runtime.transports "thread" is not available/)
 		expect(read({ ...base, runtime: { heartbeat: { intervalMs: 100, timeoutMs: 50 } } }).issues).toEqual(['runtime.heartbeat.timeoutMs must be greater than intervalMs'])
 		expect(read({ ...base, server: { maxResponseBytes: 'huge' } }).issues).toEqual(['server.maxResponseBytes "huge" must be a size (bytes, or like 256MB)'])
+	})
+
+	test('approval (docs/MUTATION_APPROVAL.md): mcp.approval and its expiry, per schema; of a key or a role; approve', () => {
+		const { config, issues } = read({
+			...base,
+			mcp: { approval: 'writes', approvalExpires: '30m' },
+			orm: { workspacePath: '/workspace', schemas: [{ path: 'shop', mcp: { approval: 'none' } }] },
+			authentication: { adapter: 'local', type: 'apikey', keys: [{ name: 'agent', value: 'k', permissions: ['read', 'write'], approval: 'writes' }, { name: 'ops', value: 'o', permissions: ['read', 'approve'] }] }
+		})
+		expect(issues).toEqual([])
+		expect(config!.mcp).toMatchObject({ approval: 'writes', approvalExpiresMs: 1800000 })
+		expect(config!.orm.schemas[0].mcp).toEqual({ approval: 'none' })
+		expect(config!.authentication.credentials).toEqual([
+			{ name: 'agent', value: 'k', permissions: ['read', 'write'], approval: 'writes' },
+			{ name: 'ops', value: 'o', permissions: ['read', 'approve'] }
+		])
+		expect(read({ ...base, mcp: { approval: 'always' } }).issues).toContain('mcp.approval must be none or writes')
 	})
 })

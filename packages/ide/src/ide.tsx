@@ -6,6 +6,7 @@ import { ConnectionPage, ConnectionTools, Credential, CredentialFields, getJson,
 import { AppMenu } from './appMenu'
 import { ManagementClient, ManagementState, testConnection } from './management'
 import { SessionsPanel } from './sessions'
+import { ApprovalsPanel } from './approvals'
 import { endpointsOf, McpTab, SwaggerTab, useTransports, WebSocketTab } from './tools'
 import { forbiddenTarget, unreachable, viaProxy } from './proxy'
 
@@ -132,7 +133,8 @@ const ConnectionEditor: React.FC<{
 	return initial
 		? <ConnectionPage name={initial.name} url={urlOf(initial)} credential={credentialOf(initial, { [initial.id]: givenSecret })} who={who}
 			tools={onOpenTool && <ToolsOf connection={initial} onOpen={onOpenTool} />}
-			sessions={client && who && <SessionsPanel client={client} who={who} />}>{form}</ConnectionPage>
+			sessions={client && who && <SessionsPanel client={client} who={who} />}
+			approvals={client && who && who.permissions.includes('approve') && <ApprovalsPanel client={client} self={who.name} />}>{form}</ConnectionPage>
 		: <div className="dg-pane"><h2>{t.newConnection}</h2>{form}</div>
 }
 

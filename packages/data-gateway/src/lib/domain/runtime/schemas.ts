@@ -52,7 +52,7 @@ export const resolveSchemas = (config: DataGatewayConfig, discovered: Discovered
 export interface SchemaSettings {
 	transports: TransportName[]
 	scripts: ScriptsConfig
-	mcp: { maxRows: number, tools: { include: string[], exclude: string[] }, freeQueries: boolean }
+	mcp: { maxRows: number, tools: { include: string[], exclude: string[] }, freeQueries: boolean, approval: 'none' | 'writes', approvalExpiresMs: number }
 	/** the limits of its named queries (docs/NAMED_QUERIES.md §4) */
 	queries: Record<string, NamedQueryLimitsConfig>
 	/** the cache of its reads (docs/RESULT_CACHE.md) */
@@ -61,6 +61,8 @@ export interface SchemaSettings {
 	outbox: OutboxConfig
 	/** the Valkey of the replicas (docs/REPLICAS.md): its changes to the others, theirs to it, the lock of its outbox */
 	valkey?: ValkeyConfig
+	/** the SQLite of the volume (<orm.workspacePath>/.data-gateway/state.sqlite): the writes that wait (docs/MUTATION_APPROVAL.md §5) */
+	stateFile?: string
 	server: { timeout: number, maxConcurrent: number, maxResponseBytes: number }
 	runtime: { mode: RuntimeMode, maxMemoryMb: number, checkConnections: boolean }
 	/** the view of a caller without one (orm.schemas[].view) */
@@ -79,6 +81,9 @@ export const viewsOf = (authentication: AuthenticationConfig | undefined): strin
 	].filter((v): v is string => typeof v === 'string')
 }
 
+/** The SQLite of the volume, shared by the replicas that mount it (the sessions of management, the writes that wait) */
+export const stateFileOf = (workspacePath: string): string => `${workspacePath.replace(/[\\/]+$/, '')}/.data-gateway/state.sqlite`
+
 /** The most specific value replaces (they are not merged): a schema's tools replace the global tools */
 export const effectiveSettings = (config: DataGatewayConfig, schema: SchemaDescriptor): SchemaSettings => {
 	const o = schema.overrides
@@ -87,11 +92,18 @@ export const effectiveSettings = (config: DataGatewayConfig, schema: SchemaDescr
 		// management (the IDE) serves every schema, whatever its transports say
 		transports: o.transports ? exposed.filter(t => t === 'management' || o.transports!.includes(t)) : exposed,
 		scripts: { ...config.scripts, ...o.scripts },
-		mcp: { maxRows: o.mcp?.maxRows ?? config.mcp.maxRows, tools: o.mcp?.tools ?? config.mcp.tools, freeQueries: o.mcp?.freeQueries ?? config.mcp.freeQueries ?? true },
+		mcp: {
+			maxRows: o.mcp?.maxRows ?? config.mcp.maxRows,
+			tools: o.mcp?.tools ?? config.mcp.tools,
+			freeQueries: o.mcp?.freeQueries ?? config.mcp.freeQueries ?? true,
+			approval: o.mcp?.approval ?? config.mcp.approval ?? 'none',
+			approvalExpiresMs: o.mcp?.approvalExpiresMs ?? config.mcp.approvalExpiresMs ?? 3600000
+		},
 		queries: o.queries ?? {},
 		cache: o.cache ?? config.cache,
 		outbox: o.outbox ?? config.outbox,
 		...(config.cluster?.valkey ? { valkey: config.cluster.valkey } : {}),
+		...(config.orm.workspacePath ? { stateFile: stateFileOf(config.orm.workspacePath) } : {}),
 		server: {
 			timeout: o.server?.timeout ?? config.server.timeout,
 			maxConcurrent: o.server?.maxConcurrent ?? config.server.maxConcurrent,

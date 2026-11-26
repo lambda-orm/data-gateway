@@ -2,6 +2,9 @@
 
 ### Unreleased
 
+- **Writes that wait:** with `approve`, the page of a connection has the tab of the writes of agents that wait for a
+  person (data-gateway 4.3): what each would run, its data and who asked; approve it (it runs as who asked) or reject it
+  with a reason.
 - **Vectors and points** (λORM 3.15): the forms of the schema offer `vector` (its dimensions) and `point`, and the
   indexes `hnsw`, `ivfflat` and `spatial`; in **Data**, a point shows as longitude, latitude with a link to a map and
   is edited in two fields; a vector shows its first numbers and how many, and is written in the form of a row.

@@ -68,12 +68,13 @@ describe('schemas and their settings', () => {
 		expect(effectiveSettings(c, iot1)).toEqual({
 			transports: ['mcpHttp'],
 			scripts: { enabled: true, maxLength: 20000, timeoutMs: 30000, maxIterations: 100000 },
-			mcp: { maxRows: 500, tools: { include: [], exclude: ['orm_execute_script'] }, freeQueries: true },
+			mcp: { maxRows: 500, tools: { include: [], exclude: ['orm_execute_script'] }, freeQueries: true, approval: 'none', approvalExpiresMs: 3600000 },
 			queries: {},
 			cache: { enabled: false, ttlMs: 60000, maxEntries: 10000, maxBytes: 1048576, entities: {} },
 			outbox: { dispatch: true, intervalMs: 1000, batch: 100, destinations: [] },
 			server: { timeout: 5000, maxConcurrent: 4, maxResponseBytes: 268435456 },
 			runtime: { mode: 'thread', maxMemoryMb: 512, checkConnections: true },
+			stateFile: '/w/.data-gateway/state.sqlite',
 			namedViews: []
 		})
 		expect(effectiveSettings(c, iot2).transports).toEqual(['http', 'mcpHttp'])
