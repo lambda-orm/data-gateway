@@ -115,6 +115,12 @@ Después: `scripts/ci-local.sh check`, `clients` y `lab`.
 
 ### R4. Liberar 4.1.0 y el IDE 1.1.0
 
+> **Estado (2026-11-25):** ramas `release/data-gateway-4.1.0` y `release/ide-1.1.0` listas para `main` (los workflows
+> publican las imágenes; el PR de versiones de Changesets, `@lambdaorm/ui` y `@lambdaorm/data-gateway-client`). La wiki
+> de la 4.1.0 en `lambda-orm/wiki` → `feature/data-gateway-4.1.0`. **Después de publicar:** llevar `main` a `develop`,
+> la guía de la wiki a `flaviorita/data-gateway:4.1.0` (y el IDE 1.1.0), y quitar sus marcas *"not in the image
+> 4.0.0"*. La corrección de core de R3 (validación entre fuentes, `IOrm.observeWith`, typings) sale en una 4.1.1.
+
 Con R1–R3: `release/data-gateway-4.1.0` y `release/ide-1.1.0` desde `develop` (como dice `DEPLOY.md`), y el PR de
 versiones de Changesets para `@lambdaorm/ui` (17 changesets). La wiki ya documenta todo lo de la 4.1.0: después de
 publicar, quitar las marcas *"not in the image 4.0.0"* de sus páginas de la gateway y del IDE.
