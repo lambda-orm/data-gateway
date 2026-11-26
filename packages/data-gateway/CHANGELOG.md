@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### Unreleased
 
+### 4.3.0 (2026-11-26)
+
+With `@lambdaorm/base` 3.11.1 and `@lambdaorm/lib` 3.15.0, the exact versions the image installs.
+
 **Tested against Keycloak** (`docs/OIDC_LOGIN.md`): `scripts/ci-local.sh oidc` and its job of CI take the tokens of a
 real Keycloak on the five transports (its roles, a view by its claim `country`, another audience or a changed token
 refused, the rotation of the key of the realm without a restart).
