@@ -125,6 +125,15 @@ Con R1–R3: `release/data-gateway-4.1.0` y `release/ide-1.1.0` desde `develop` 
 versiones de Changesets para `@lambdaorm/ui` (17 changesets). La wiki ya documenta todo lo de la 4.1.0: después de
 publicar, quitar las marcas *"not in the image 4.0.0"* de sus páginas de la gateway y del IDE.
 
+### R5. Liberar 4.2.0 y el IDE 1.2.0
+
+> **Estado (2026-11-26):** G3–G6 en `develop`; `main` llevado a `develop` (`chore/main-into-develop-4.1.0`, los
+> CHANGELOG). Ramas `release/data-gateway-4.2.0` y `release/ide-1.2.0` sobre esa, listas para `main`. La wiki en
+> `lambda-orm/wiki` → `feature/data-gateway-4.2.0` (la página nueva *Data changes*, el caché en *Configuration*, la
+> pestaña *Data* del IDE; ya con las imágenes `4.2.0` / `1.2.0`: mergearla **después** de publicarlas). Changesets:
+> `@lambdaorm/ui` (la tabla) y `@lambdaorm/data-gateway-client` (`subscribe`). Fuera: caché y suscripciones entre
+> réplicas (Redis), G6b.
+
 ## 3. Las features (G1–G7)
 
 El orden de §5. Cada una con su documento de diseño (`docs/<FEATURE>.md` y su plan), decisiones de a una con una
