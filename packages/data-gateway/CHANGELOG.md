@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### Unreleased
 
+### 4.2.0 (2026-11-26)
+
+With `@lambdaorm/base` 3.11.1 and `@lambdaorm/lib` 3.15.0, the exact versions the image installs.
+
 **The dispatcher of the outbox** (`docs/OUTBOX_DISPATCHER.md`, G5):
 
 - **`outbox.destinations`** (global or by schema): the events λORM writes with the data (`infrastructure.outbox` of
