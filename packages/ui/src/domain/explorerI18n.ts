@@ -86,6 +86,18 @@ export interface ExplorerMessages {
 	extendsEntity: string
 	openEntity: string
 	readOnlyData: string
+	dataEditHint: string
+	dataNoKey: string
+	addRow: string
+	deleteRow: string
+	confirmDeleteRow: string
+	changedMeanwhile: string
+	rowFilter: string
+	applyFilter: string
+	exportPage: string
+	exportAll: string
+	exportingRows: string
+	exportLimit: string
 	search: string
 	addNeighbours: string
 	clearSelection: string
@@ -192,6 +204,18 @@ const ROWS: Row[] = [
 	['extendsEntity', 'extends {name}', 'extiende {name}', 'estende {name}', 'étend {name}', 'estende {name}', 'erweitert {name}', 'breidt {name} uit', 'estén {name}', 'estende {name}', '{name} hedatzen du'],
 	['openEntity', 'double click: open its form', 'doble clic: abrir su formulario', 'duplo clique: abrir o formulário', 'double clic : ouvrir son formulaire', 'doppio clic: apri la scheda', 'Doppelklick: Formular öffnen', 'dubbelklik: formulier openen', 'doble clic: obre el formulari', 'dobre clic: abrir o formulario', 'klik bikoitza: ireki inprimakia'],
 	['readOnlyData', 'Read only: rows are not changed here.', 'Solo lectura: acá no se modifican filas.', 'Somente leitura: aqui não se alteram linhas.', 'Lecture seule : les lignes ne sont pas modifiées ici.', 'Sola lettura: qui non si modificano righe.', 'Nur lesen: Zeilen werden hier nicht geändert.', 'Alleen-lezen: rijen worden hier niet gewijzigd.', 'Només lectura: aquí no es modifiquen files.', 'Só lectura: aquí non se modifican filas.', 'Irakurtzeko soilik: hemen ez dira errenkadak aldatzen.'],
+	['dataEditHint', 'Double click a cell to change it (Enter saves, Esc cancels).', 'Doble clic en una celda para cambiarla (Enter guarda, Esc cancela).', 'Clique duas vezes numa célula para alterá-la (Enter salva, Esc cancela).', 'Double-cliquez sur une cellule pour la modifier (Entrée enregistre, Échap annule).', 'Doppio clic su una cella per modificarla (Invio salva, Esc annulla).', 'Doppelklick auf eine Zelle, um sie zu ändern (Enter speichert, Esc bricht ab).', 'Dubbelklik op een cel om die te wijzigen (Enter bewaart, Esc annuleert).', 'Doble clic en una cel·la per canviar-la (Enter desa, Esc cancel·la).', 'Dobre clic nunha cela para cambiala (Enter garda, Esc cancela).', 'Klik bikoitza gelaxka batean aldatzeko (Enter gordetzen du, Esc bertan behera uzten du).'],
+	['dataNoKey', 'Read only: the entity has no primary key.', 'Solo lectura: la entidad no tiene clave primaria.', 'Somente leitura: a entidade não tem chave primária.', 'Lecture seule : l’entité n’a pas de clé primaire.', 'Sola lettura: l’entità non ha una chiave primaria.', 'Nur lesen: die Entität hat keinen Primärschlüssel.', 'Alleen-lezen: de entiteit heeft geen primaire sleutel.', 'Només lectura: l’entitat no té clau primària.', 'Só lectura: a entidade non ten clave primaria.', 'Irakurtzeko soilik: entitateak ez du gako nagusirik.'],
+	['addRow', 'Add a row', 'Agregar una fila', 'Adicionar uma linha', 'Ajouter une ligne', 'Aggiungi una riga', 'Zeile hinzufügen', 'Rij toevoegen', 'Afegeix una fila', 'Engadir unha fila', 'Gehitu errenkada bat'],
+	['deleteRow', 'Delete the row', 'Borrar la fila', 'Excluir a linha', 'Supprimer la ligne', 'Elimina la riga', 'Zeile löschen', 'Rij verwijderen', 'Esborra la fila', 'Borrar a fila', 'Ezabatu errenkada'],
+	['confirmDeleteRow', 'Delete this row? It can’t be undone.', '¿Borrar esta fila? No se puede deshacer.', 'Excluir esta linha? Não pode ser desfeito.', 'Supprimer cette ligne ? C’est irréversible.', 'Eliminare questa riga? Non si può annullare.', 'Diese Zeile löschen? Das kann nicht rückgängig gemacht werden.', 'Deze rij verwijderen? Dit kan niet ongedaan worden.', 'Esborrar aquesta fila? No es pot desfer.', 'Borrar esta fila? Non se pode desfacer.', 'Errenkada hau ezabatu? Ezin da desegin.'],
+	['changedMeanwhile', 'Someone changed it meanwhile: the table shows it now.', 'Alguien la cambió mientras tanto: la tabla la muestra ahora.', 'Alguém a alterou nesse meio-tempo: a tabela a mostra agora.', 'Quelqu’un l’a modifiée entre-temps : le tableau l’affiche maintenant.', 'Qualcuno l’ha cambiata nel frattempo: la tabella ora la mostra.', 'Jemand hat sie inzwischen geändert: die Tabelle zeigt sie jetzt.', 'Iemand heeft het intussen gewijzigd: de tabel toont het nu.', 'Algú l’ha canviada mentrestant: la taula la mostra ara.', 'Alguén a cambiou mentres tanto: a táboa móstraa agora.', 'Norbaitek aldatu du bitartean: taulak orain erakusten du.'],
+	['rowFilter', 'filter (on p)', 'filtro (sobre p)', 'filtro (sobre p)', 'filtre (sur p)', 'filtro (su p)', 'Filter (auf p)', 'filter (op p)', 'filtre (sobre p)', 'filtro (sobre p)', 'iragazkia (p-ren gainean)'],
+	['applyFilter', 'Apply', 'Aplicar', 'Aplicar', 'Appliquer', 'Applica', 'Anwenden', 'Toepassen', 'Aplica', 'Aplicar', 'Aplikatu'],
+	['exportPage', 'Export the page', 'Exportar la página', 'Exportar a página', 'Exporter la page', 'Esporta la pagina', 'Seite exportieren', 'Pagina exporteren', 'Exporta la pàgina', 'Exportar a páxina', 'Esportatu orria'],
+	['exportAll', 'Export all', 'Exportar todo', 'Exportar tudo', 'Tout exporter', 'Esporta tutto', 'Alles exportieren', 'Alles exporteren', 'Exporta-ho tot', 'Exportar todo', 'Esportatu dena'],
+	['exportingRows', 'Exporting… {n} rows', 'Exportando… {n} filas', 'Exportando… {n} linhas', 'Export… {n} lignes', 'Esportazione… {n} righe', 'Export… {n} Zeilen', 'Exporteren… {n} rijen', 'Exportant… {n} files', 'Exportando… {n} filas', 'Esportatzen… {n} errenkada'],
+	['exportLimit', 'Only the first {n} rows: narrow it with a filter.', 'Solo las primeras {n} filas: acótelo con un filtro.', 'Só as primeiras {n} linhas: restrinja com um filtro.', 'Seulement les {n} premières lignes : réduisez avec un filtre.', 'Solo le prime {n} righe: restringi con un filtro.', 'Nur die ersten {n} Zeilen: mit einem Filter eingrenzen.', 'Alleen de eerste {n} rijen: beperk met een filter.', 'Només les primeres {n} files: acoteu-ho amb un filtre.', 'Só as primeiras {n} filas: acoteo cun filtro.', 'Lehen {n} errenkadak soilik: mugatu iragazki batekin.'],
 	['search', 'search…', 'buscar…', 'buscar…', 'rechercher…', 'cerca…', 'suchen…', 'zoeken…', 'cerca…', 'buscar…', 'bilatu…'],
 	['addNeighbours', 'Add their neighbours', 'Agregar sus vecinas', 'Adicionar as vizinhas', 'Ajouter leurs voisines', 'Aggiungi le vicine', 'Nachbarn hinzufügen', 'Buren toevoegen', 'Afegeix les veïnes', 'Engadir as veciñas', 'Gehitu auzokideak'],
 	['clearSelection', 'Clear', 'Limpiar', 'Limpar', 'Effacer', 'Pulisci', 'Leeren', 'Wissen', 'Neteja', 'Limpar', 'Garbitu'],
