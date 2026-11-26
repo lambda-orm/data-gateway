@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { QueryApiPort } from '../application/ports'
+import { FileProperty, QueryApiPort } from '../application/ports'
 import { EntityInfo, PropertyInfo } from '../domain/diagram'
-import { deleteRow, insertRow, pageQuery, textOf, updateCell, valueOf } from '../domain/dataEditing'
+import { cellOf, deleteRow, insertRow, isPoint, mapUrlOf, pageQuery, pointOf, textOf, updateCell, valueOf } from '../domain/dataEditing'
 import { columnsOf, toCsv, toXlsx } from '../domain/exporters'
 import { explorerMessagesOf, format } from '../domain/explorerI18n'
 import { Modal } from './dialogs'
@@ -20,9 +20,16 @@ export interface DataTableProps {
 
 type Row = Record<string, unknown>
 
-/** what can't be edited in a cell: the key, what is calculated (view, readExp) */
+/** what can't be edited in a cell: the key, what is calculated (view, readExp), a vector (in the form of the row) */
 const editable = (property: PropertyInfo, primaryKey: string[]): boolean =>
-	!primaryKey.includes(property.name) && !property.view && !property.readExp && !property.autoIncrement
+	!primaryKey.includes(property.name) && !property.view && !property.readExp && !property.autoIncrement && property.type !== 'vector'
+
+/** The value of a property from its input (a point: its longitude and latitude) */
+const parse = (property: PropertyInfo | undefined, text: string, lat?: string) =>
+	property?.type === 'point' ? pointOf(text, lat ?? '') : valueOf(text, property?.type, property?.length)
+
+/** What an input of a point starts with: its longitude and latitude */
+const coordinatesOf = (value: unknown): [string, string] => isPoint(value) ? [String(value.coordinates[0]), String(value.coordinates[1])] : ['', '']
 
 const save = (data: BlobPart, name: string, type: string) => {
 	const url = URL.createObjectURL(new Blob([data], { type }))
@@ -53,11 +60,19 @@ export const DataTable: React.FC<DataTableProps> = ({ api, schema, entity, canWr
 	const [rows, setRows] = useState<Row[]>()
 	const [error, setError] = useState<string>()
 	const [notice, setNotice] = useState<string>()
-	const [editing, setEditing] = useState<{ row: number, field: string, text: string }>()
+	const [editing, setEditing] = useState<{ row: number, field: string, text: string, lat?: string }>()
 	const [adding, setAdding] = useState<Record<string, string>>()
 	const [deleting, setDeleting] = useState<Row>()
 	const [exporting, setExporting] = useState<{ rows: number }>()
 	const exportCancel = React.useRef(false)
+	// the properties that keep files (docs/FILES_AND_PANELS.md): their value is the key of an object of a storage
+	const [files, setFiles] = useState<Record<string, FileProperty>>({})
+	const [uploading, setUploading] = useState<string>()
+	useEffect(() => {
+		let live = true
+		api.files?.(schema).then(list => { if (live) setFiles(Object.fromEntries(list.filter(f => f.entity === entity.name).map(f => [f.property, f]))) }).catch(() => undefined)
+		return () => { live = false }
+	}, [api, schema, entity.name])
 
 	const load = useCallback(async () => {
 		setError(undefined)
@@ -78,11 +93,46 @@ export const DataTable: React.FC<DataTableProps> = ({ api, schema, entity, canWr
 
 	const run = async (query: { query: string, data: Record<string, unknown> }): Promise<unknown> => api.execute(schema, query.query, query.data)
 
+	/** the file a row keeps, in another tab: a URL signed for it, of short life */
+	const openFile = async (field: string, key: string) => {
+		try {
+			const { url } = await api.fileUrl!(schema, entity.name, field, key)
+			window.open(url, '_blank', 'noopener,noreferrer')
+		} catch (e: any) { setError(e?.message ?? String(e)) }
+	}
+
+	/** a file to the storage (a URL signed by the gateway, the bytes straight to it), then its key in the row */
+	const uploadFile = async (row: Row, field: string, file: File) => {
+		const id = `${primaryKey.map(k => textOf(row[k])).join('|')}:${field}`
+		setUploading(id)
+		setError(undefined)
+		try {
+			const signed = await api.fileUpload!(schema, entity.name, field, { name: file.name, type: file.type || 'application/octet-stream', size: file.size })
+			const put = await fetch(signed.url, { method: 'PUT', headers: signed.headers, body: file })
+			if (!put.ok) throw new Error(`the storage answered ${put.status} ${put.statusText}`)
+			const changed = await run(updateCell(entity.name, primaryKey, row, field, signed.key))
+			setNotice(Number(changed) === 0 ? m.changedMeanwhile : undefined)
+			await load()
+		} catch (e: any) {
+			setError(e?.message ?? String(e))
+		} finally {
+			setUploading(undefined)
+		}
+	}
+
+	const removeFile = async (row: Row, field: string) => {
+		try {
+			const changed = await run(updateCell(entity.name, primaryKey, row, field, null))
+			setNotice(Number(changed) === 0 ? m.changedMeanwhile : undefined)
+			await load()
+		} catch (e: any) { setError(e?.message ?? String(e)) }
+	}
+
 	const commit = async () => {
 		if (!editing || !rows) return
 		const row = rows[editing.row]
 		const property = properties.find(p => p.name === editing.field)
-		const parsed = valueOf(editing.text, property?.type)
+		const parsed = parse(property, editing.text, editing.lat)
 		if (parsed.error) { setError(`${editing.field}: ${parsed.error}`); return }
 		setEditing(undefined)
 		try {
@@ -99,8 +149,9 @@ export const DataTable: React.FC<DataTableProps> = ({ api, schema, entity, canWr
 		const row: Row = {}
 		for (const property of properties) {
 			const text = adding[property.name] ?? ''
-			if (text === '') continue
-			const parsed = valueOf(text, property.type)
+			const lat = adding[`${property.name}.lat`] ?? ''
+			if (text === '' && (property.type !== 'point' || lat === '')) continue
+			const parsed = parse(property, text, lat)
 			if (parsed.error) { setError(`${property.name}: ${parsed.error}`); return }
 			row[property.name] = parsed.value
 		}
@@ -207,17 +258,50 @@ export const DataTable: React.FC<DataTableProps> = ({ api, schema, entity, canWr
 									{columns.map(column => {
 										const property = properties.find(p => p.name === column)
 										const canEdit = writable && !!property && editable(property, primaryKey)
+										const keys = (e: React.KeyboardEvent) => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(undefined) }
 										if (editing?.row === r && editing.field === column) {
 											return (
 												<td key={column}>
-													<input autoFocus aria-label={`${column} value`} value={editing.text} onChange={e => setEditing({ ...editing, text: e.target.value })}
-														onKeyDown={e => { if (e.key === 'Enter') commit(); if (e.key === 'Escape') setEditing(undefined) }} onBlur={() => setEditing(undefined)} />
+													{property?.type === 'point'
+														? (
+															<span className="lw-point-input" onBlur={e => { if (!e.currentTarget.contains(e.relatedTarget as Node)) setEditing(undefined) }}>
+																<input autoFocus aria-label={`${column} ${m.longitude}`} placeholder={m.longitude} value={editing.text} onChange={e => setEditing({ ...editing, text: e.target.value })} onKeyDown={keys} />
+																<input aria-label={`${column} ${m.latitude}`} placeholder={m.latitude} value={editing.lat ?? ''} onChange={e => setEditing({ ...editing, lat: e.target.value })} onKeyDown={keys} />
+															</span>
+															)
+														: <input autoFocus aria-label={`${column} value`} value={editing.text} onChange={e => setEditing({ ...editing, text: e.target.value })} onKeyDown={keys} onBlur={() => setEditing(undefined)} />}
 												</td>
 											)
 										}
+										const value = row[column]
+										if (files[column]) {
+											const key = typeof value === 'string' && value ? value : undefined
+											const id = `${primaryKey.map(k => textOf(row[k])).join('|')}:${column}`
+											const accept = files[column].types?.join(',')
+											return (
+												<td key={column} className="lw-file-cell">
+													{key && <button type="button" className="lw-link" title={key} aria-label={`${column} ${m.openFile}`} onClick={() => openFile(column, key)}>📎 {key.split('/').pop()}</button>}
+													{writable && canEdit && (uploading === id
+														? <span className="lw-muted"> {m.uploading}</span>
+														: (
+															<>
+																<label className="lw-file-upload" title={m.uploadFile}>
+																	<input type="file" aria-label={`${column} ${m.uploadFile}`} accept={accept} onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) uploadFile(row, column, f) }} />
+																	⤒
+																</label>
+																{key && <button type="button" className="lw-link" aria-label={`${column} ${m.removeFile}`} title={m.removeFile} onClick={() => removeFile(row, column)}>✕</button>}
+															</>
+															))}
+												</td>
+											)
+										}
+										const start = () => {
+											if (property?.type === 'point') { const [lng, lat] = coordinatesOf(value); setEditing({ row: r, field: column, text: lng, lat }) } else setEditing({ row: r, field: column, text: textOf(value) })
+										}
 										return (
-											<td key={column} className={canEdit ? 'lw-editable' : undefined} onDoubleClick={canEdit ? () => setEditing({ row: r, field: column, text: textOf(row[column]) }) : undefined}>
-												{textOf(row[column])}
+											<td key={column} className={canEdit ? 'lw-editable' : undefined} onDoubleClick={canEdit ? start : undefined} title={property?.type === 'vector' && Array.isArray(value) ? textOf(value) : undefined}>
+												{cellOf(value, property?.type)}
+												{isPoint(value) && <> <a className="lw-map-link" href={mapUrlOf(value)} target="_blank" rel="noopener noreferrer" title={m.onMap} aria-label={`${column} ${m.onMap}`} onDoubleClick={e => e.stopPropagation()}>↗</a></>}
 											</td>
 										)
 									})}
@@ -231,8 +315,17 @@ export const DataTable: React.FC<DataTableProps> = ({ api, schema, entity, canWr
 				<Modal title={`${m.addRow} · ${entity.name}`} onClose={() => setAdding(undefined)}>
 					<div className="lw-form">
 						{properties.filter(p => !p.view && !p.autoIncrement).map(p => (
-							<label key={p.name}>{p.name}{p.required ? ' *' : ''} <span className="lw-type">{p.type ?? 'string'}</span>
-								<input aria-label={p.name} value={adding[p.name] ?? ''} onChange={e => setAdding({ ...adding, [p.name]: e.target.value })} />
+							<label key={p.name}>{p.name}{p.required ? ' *' : ''} <span className="lw-type">{p.type ?? 'string'}{p.type === 'vector' && p.length ? `(${p.length})` : ''}</span>
+								{p.type === 'point'
+									? (
+										<span className="lw-point-input">
+											<input aria-label={`${p.name} ${m.longitude}`} placeholder={m.longitude} value={adding[p.name] ?? ''} onChange={e => setAdding({ ...adding, [p.name]: e.target.value })} />
+											<input aria-label={`${p.name} ${m.latitude}`} placeholder={m.latitude} value={adding[`${p.name}.lat`] ?? ''} onChange={e => setAdding({ ...adding, [`${p.name}.lat`]: e.target.value })} />
+										</span>
+										)
+									: p.type === 'vector'
+										? <textarea aria-label={p.name} rows={3} spellCheck={false} placeholder={format(m.vectorHint, { n: p.length ?? 'n' })} value={adding[p.name] ?? ''} onChange={e => setAdding({ ...adding, [p.name]: e.target.value })} />
+										: <input aria-label={p.name} value={adding[p.name] ?? ''} onChange={e => setAdding({ ...adding, [p.name]: e.target.value })} />}
 							</label>
 						))}
 						<div className="lw-form-actions">

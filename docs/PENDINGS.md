@@ -88,8 +88,8 @@ que un `view`/`context` del cliente no llega a λORM.
 > - `cosineDistance`, `l2Distance`, `innerProduct`, `distance`, `within`, `inside`, `jsonSet` no están en el
 >   `queryable.d.ts` de `base`: el autocompletado del IDE no los conoce hasta que core los declare.
 >
-> **Sin hacer de esta tabla:** formularios del IDE para `vector` y `point`; SQLite (sql.js) para el gateway de
-> desarrollo; lo que depende de G1–G7 (consultas con nombre, eventos, outbox, `forward` con la identidad, límites por
+> **Hecho después (2026-11-26, [`VECTOR_POINT_SQLJS.md`](VECTOR_POINT_SQLJS.md)):** formularios del IDE para `vector` y
+> `point`; SQLite (sql.js) para el gateway de desarrollo. **Sin hacer de esta tabla:** lo que depende de G1–G7 (consultas con nombre, eventos, outbox, `forward` con la identidad, límites por
 > credencial). **Fuera de este repo:** el lab falla en *model ilusor*, que lee el modelo real de Ilusor
 > (`~/ilusor/…`): 8 relaciones compuestas que no emparejan `locationId` (aviso para Ilusor, no de λORM).
 
@@ -134,6 +134,14 @@ publicar, quitar las marcas *"not in the image 4.0.0"* de sus páginas de la gat
 > `@lambdaorm/ui` (la tabla) y `@lambdaorm/data-gateway-client` (`subscribe`). Fuera: caché y suscripciones entre
 > réplicas (Redis), G6b.
 
+### R6. Liberar 4.3.0 y el IDE 1.3.0
+
+> **Estado (2026-11-26):** réplicas con Valkey, archivos y paneles (G6b), escrituras que esperan aprobación (G7b),
+> Keycloak y el login con PKCE, vectores y puntos en el IDE y SQLite para desarrollo, en `develop` (#36–#40). Ramas
+> `release/data-gateway-4.3.0` y `release/ide-1.3.0`, listas para `main`. La wiki en `lambda-orm/wiki` →
+> `feature/data-gateway-4.3.0` (mergearla **después** de publicar las imágenes). Changesets: `@lambdaorm/ui` (vectores
+> y puntos, archivos, paneles, la fila de la connection) y `@lambdaorm/data-gateway-client` (`approval`).
+
 ## 3. Las features (G1–G7)
 
 El orden de §5. Cada una con su documento de diseño (`docs/<FEATURE>.md` y su plan), decisiones de a una con una
@@ -145,7 +153,7 @@ recomendación, tests por transporte y la conformidad.
 > jwt` y `methods`, roles → permisos, claims → contexto (llega a λORM por el worker), 401 con motivo y
 > `WWW-Authenticate`, 503 si el emisor no responde, sesiones y WebSockets que terminan con el token, el cliente Node con
 > un token que se renueva, y cuatro casos JWT en la conformidad. **Falta:** la wiki (fase 6) y probarlo contra un IdP
-> real (Keycloak); el login con PKCE desde el IDE quedó para después (decisión 5). El efecto del contexto en las filas
+> real (Keycloak) y el login con PKCE desde el IDE: hechos el 2026-11-26, [`OIDC_LOGIN.md`](OIDC_LOGIN.md). El efecto del contexto en las filas
 > se prueba con G2 (hoy la gateway no elige vista).
 
 - Un autenticador `jwt`: `issuer`, `audience`, `jwksUri` (con caché y rotación de claves), algoritmos permitidos,
@@ -177,7 +185,7 @@ recomendación, tests por transporte y la conformidad.
 
 > **Estado (2026-11-25): fases 1 a 3 hechas** en `feature/result-cache` ([`RESULT_CACHE.md`](RESULT_CACHE.md),
 > decisiones cerradas): caché en memoria (LRU, TTL, por entidad), clave con la vista y el contexto, invalidación por
-> `orm.onDataChange`, `ETag`/`304` en REST, métricas. **Falta:** Redis (varias réplicas) y la wiki. De paso: `view`,
+> `orm.onDataChange`, `ETag`/`304` en REST, métricas. Entre réplicas, con Valkey: [`REPLICAS.md`](REPLICAS.md) (2026-11-26). De paso: `view`,
 > `queries` y `cache` de un schema ya no dan el aviso *unknown key* (falso en 4.1.0).
 
 - Por schema o entidad, en memoria o Redis, con `ETag`/`Cache-Control` en REST.
@@ -191,7 +199,7 @@ recomendación, tests por transporte y la conformidad.
 > **Estado (2026-11-25): fases 1 a 4 hechas** en `feature/subscriptions` ([`SUBSCRIPTIONS.md`](SUBSCRIPTIONS.md),
 > decisiones cerradas): `subscribe.entity`, `subscribe.query` (también una consulta con nombre) y `unsubscribe` por
 > WebSocket, `GET /subscribe` (SSE), con la identidad de quien se suscribe (una vista con filtro de fila: solo las
-> claves que ve); el cliente Node (`client.subscribe`). **Falta:** entre réplicas (Redis) y la wiki.
+> claves que ve); el cliente Node (`client.subscribe`). Entre réplicas, con Valkey: [`REPLICAS.md`](REPLICAS.md) (2026-11-26).
 
 - `subscribe`/`unsubscribe` por WebSocket (JSON-RPC) y SSE: a una entidad (sus cambios) o a una consulta (se vuelve a
   correr cuando cambia una entidad que lee).
@@ -217,7 +225,7 @@ recomendación, tests por transporte y la conformidad.
 > **Estado (2026-11-25): hecho** (la tabla editable y exportar) en `feature/backoffice` ([`BACKOFFICE.md`](BACKOFFICE.md),
 > decisiones cerradas): en **Data** de una entidad, con `write`, editar una celda (chequeo optimista), agregar y borrar
 > filas, ordenar y filtrar; exportar la página o todo (hasta 100 000 filas) en CSV, JSON y Excel. **Falta:** la wiki y
-> G6b (archivos S3/Blob y paneles).
+> G6b (archivos S3/Blob y paneles): hecho el 2026-11-26, [`FILES_AND_PANELS.md`](FILES_AND_PANELS.md).
 
 - Tabla con edición en línea (sobre `update` por clave), exportar CSV/Excel/JSON, archivos (S3/Blob) y paneles
   simples.
@@ -238,6 +246,8 @@ recomendación, tests por transporte y la conformidad.
 - Límites por herramienta (filas, tiempo, costo) además de `mcp.maxRows`.
 - Confirmación de mutaciones (*human-in-the-loop*) para agentes: una escritura de un agente queda pendiente hasta que
   alguien la aprueba (desde el IDE o un endpoint), o se limita a herramientas de escritura curadas.
+  **Hecho (2026-11-26):** [`MUTATION_APPROVAL.md`](MUTATION_APPROVAL.md) (`mcp.approval`, `approval: writes`, el permiso
+  `approve`, `approval_status`, la pestaña del IDE).
 - El cliente Node (`lambdaorm build -l client-node` ya genera `queries.ts` desde `/model` y `/parameters`): cuando
   existan las rutas de consultas con nombre, que el código generado las use en vez de mandar el texto.
 
@@ -284,3 +294,11 @@ actualizarla al final de la serie, como se hizo con core.
 - Un cambio que necesita λORM se hace y se libera primero en `lambda-orm/core`, y después se sube la versión acá.
 - En pruebas con navegador o con el gateway de desarrollo: nunca borrar ni pisar la sesión del usuario
   (`/admin/session`, `.data-gateway/state.sqlite`); usar un workspace y puertos propios, y detener procesos por PID.
+
+## 7. Visto en core (para lambda-orm/core)
+
+- **SQLjs, `year()` y el agrupamiento (2026-11-26):** `Orders.map(p => ({ year: year(p.orderDate), n: count(1) }))`
+  genera `EXTRACT(YEAR FROM …)`, que SQLite no tiene (`strftime('%Y', …)`), y agrupa por `o.OrderDate` en vez de por la
+  expresión del año (`GROUP BY` de la columna y no de lo que el `map` calcula). Visto en un panel del IDE sobre el
+  Northwind de desarrollo.
+

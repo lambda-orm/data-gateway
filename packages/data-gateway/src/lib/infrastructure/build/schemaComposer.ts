@@ -1,5 +1,5 @@
 import { DataChangeSummary } from '../../domain/runtime/channelProtocol'
-import { createHash } from 'crypto'
+import { createHash, randomUUID } from 'crypto'
 import { ResolvedObservability } from '@lambdaorm/base'
 import fs from 'fs'
 import path from 'path'
@@ -32,6 +32,14 @@ import { CommandUseCases } from '../../application/usecases/commandUseCases'
 import { adminTools } from '../../application/mcp/adminTools'
 import { workspaceAdminTools } from '../output/admin/workspaceAdminTools'
 import { KafkaQueueAdapter } from '../output/queue/kafkaQueueAdapter'
+import { SchemaChanges, shareChanges } from '../../application/cluster/clusterChanges'
+import { LeaderLease } from '../../application/cluster/leaderLease'
+import { ClusterBusPort } from '../../application/ports/output/clusterPorts'
+import { ValkeyClusterBus } from '../output/cluster/valkeyClusterBus'
+import { ApprovalGate, ApprovalUseCases } from '../../application/approval/approvals'
+import { MemoryApprovalStore, SqliteApprovalStore } from '../output/approval/approvalStores'
+import { FileStorage, FilesUseCases } from '../../application/files/files'
+import { AzureBlobUrlSigner, S3UrlSigner } from '../output/files/urlSigners'
 
 export interface SchemaCompositionInput {
 	path: string
@@ -95,33 +103,49 @@ export const composeSchema = async (input: SchemaCompositionInput, deps: { logge
 	const views = new ViewResolver(() => orm.views(), settings.view)
 	const missing = views.missing(settings.namedViews ?? [])
 	if (missing.length) logger.warn(`schema "${input.path || '/'}": the views ${missing.join(', ')} of the configuration are not in its lambdaORM.yaml: a request with one is refused (403)`)
-	const queries = new QueryUseCases(orm, auditor, views, readsCache(input, orm, deps.metrics))
-	// its writes, to the subscriptions of the edge (docs/SUBSCRIPTIONS.md): what changed, never the data
+	// the changes of its data, its own and those of the other replicas (docs/REPLICAS.md §3): what changed, never the data
+	const changes = new SchemaChanges()
+	orm.onDataChange(list => changes.emit(list.map((c: any) => ({
+		entity: c.entity,
+		action: c.action,
+		...(c.keys ? { keys: c.keys } : {}),
+		...(c.count !== undefined ? { count: c.count } : {})
+	}))))
+	const cluster = await joinCluster(input, changes, logger, deps.metrics)
+	// the writes that wait for a person (docs/MUTATION_APPROVAL.md): in the SQLite of the volume, or in memory
+	const approvalStore = settings.stateFile ? new SqliteApprovalStore(path.resolve(settings.stateFile)) : new MemoryApprovalStore()
+	const gate = new ApprovalGate(approvalStore, { mcp: settings.mcp.approval, expiresMs: settings.mcp.approvalExpiresMs }, input.path, deps.clock, randomUUID,
+		(query, options) => orm.plan(query, options as any))
+	const queries = new QueryUseCases(orm, auditor, views, readsCache(input, orm, changes, deps.metrics), gate)
+	// to the subscriptions of the edge (docs/SUBSCRIPTIONS.md)
 	if (deps.dataEvents) {
 		const tell = deps.dataEvents
-		orm.onDataChange(changes => tell(changes.map((c: any) => ({
-			entity: c.entity,
-			action: c.action,
-			...(c.keys ? { keys: c.keys } : {}),
-			...(c.count !== undefined ? { count: c.count } : {})
-		}))))
+		changes.on(list => tell(list))
 	}
 	// the queries of application.queries with their limits (docs/NAMED_QUERIES.md)
 	const named = new NamedQueryUseCases(orm, queries, settings.queries ?? {}, () => orm.entities() as any)
 	const unknownLimits = Object.keys(settings.queries ?? {}).filter(name => !orm.namedQueries().some(q => q.name === name))
 	if (unknownLimits.length) logger.warn(`schema "${input.path || '/'}": orm.schemas[].queries names ${unknownLimits.join(', ')}, not in its application.queries`)
+	const script = new ScriptUseCase(orm, settings.scripts, auditor, views, gate)
+	const schemaUseCases = new SchemaUseCases(orm, views)
+	const approvals = new ApprovalUseCases(approvalStore, input.path, { execute: (ctx, request, named) => queries.execute(ctx, request, named), executeScript: (ctx, request) => script.execute(ctx, request) }, deps.clock)
 	const gateway = new DataGateway({
 		queries,
-		script: new ScriptUseCase(orm, settings.scripts, auditor, views),
+		script,
 		queue: new QueueUseCase(queue, queries, auditor, deps.queueEvents),
-		schema: new SchemaUseCases(orm, views),
+		schema: schemaUseCases,
 		stages: new StageUseCases(orm, auditor),
-		named
+		named,
+		approvals,
+		files: filesOf(input, deps.clock, (ctx, entity) => schemaUseCases.entity(ctx, entity).then((e: any) => (e?.properties ?? []).map((p: any) => p.name)), (ctx, query, data) => queries.execute(ctx, { query, data }))
 	}, orm, deps.clock, input.version, settings.server.timeout)
 	const outbox = new LambdaOrmOutboxAdapter(orm.orm as Orm)
-	const commands = new CommandUseCases(orm, auditor, outbox)
+	const commands = new CommandUseCases(orm, auditor, outbox, approvals)
 	const dispatcher = outboxDispatcher(input, orm, outbox, logger, deps.metrics)
-	dispatcher?.start()
+	// with a cluster, the replica that holds its lease dispatches (docs/REPLICAS.md §4); without one, this one
+	const leader = dispatcher && cluster ? outboxLeader(input, cluster, dispatcher, logger, deps.metrics) : undefined
+	if (leader) leader.start()
+	else dispatcher?.start()
 	// mcp.freeQueries false: an agent only with the named queries (and the tools of the schema)
 	const tools = [...curatedTools(gatewayTools(gateway), settings.mcp.freeQueries !== false), ...(input.admin ? adminTools(workspaceAdminTools(file, commands)) : [])]
 	const mcp = new DataGatewayMcpServer(new ToolCatalog(tools, settings.mcp.tools), orm, {
@@ -135,9 +159,12 @@ export const composeSchema = async (input: SchemaCompositionInput, deps: { logge
 		mcp,
 		commands,
 		stop: async () => {
+			await leader?.stop().catch(error => logger.error(error))
 			await dispatcher?.stop().catch(error => logger.error(error))
+			await cluster?.leave().catch(error => logger.error(error))
 			await queue?.stop().catch(error => logger.error(error))
 			await orm.end().catch(error => logger.error(error))
+			if (approvalStore instanceof SqliteApprovalStore) approvalStore.close()
 		}
 	}
 }
@@ -146,11 +173,12 @@ export const composeSchema = async (input: SchemaCompositionInput, deps: { logge
  * The cache of the reads of a schema, when its configuration turns it on (docs/RESULT_CACHE.md): a write of λORM (its
  * DataChange) drops what reads its entities; its hits, misses, invalidations and entries in /metrics.
  */
-const readsCache = (input: SchemaCompositionInput, orm: LambdaOrmAdapter, metrics?: MetricsPort): ReadsCache | undefined => {
+const readsCache = (input: SchemaCompositionInput, orm: LambdaOrmAdapter, changes: SchemaChanges, metrics?: MetricsPort): ReadsCache | undefined => {
 	const settings = input.settings.cache
 	if (!settings?.enabled) return undefined
 	const results = new ResultCache(settings, text => createHash('sha256').update(text).digest('base64url'))
-	orm.onDataChange(changes => results.invalidate(changes.map(c => c.entity)))
+	// its writes and, with a cluster, those of the other replicas
+	changes.on(list => results.invalidate(list.map(c => c.entity)))
 	const schema = input.path || '/'
 	metrics?.gauge('data_gateway_cache_requests', 'Reads asked of the result cache, by result (hit, miss)', ['schema', 'result'], () => [
 		{ labels: { schema, result: 'hit' }, value: results.snapshot.hits },
@@ -193,4 +221,51 @@ const outboxDispatcher = (input: SchemaCompositionInput, orm: LambdaOrmAdapter, 
 	])
 	logger.info(`schema "${schema}": the outbox goes to ${destinations.map(d => d.name).join(', ')}`)
 	return dispatcher
+}
+
+/** This schema among the replicas (docs/REPLICAS.md): its bus, who it is, and how it leaves */
+interface ClusterMembership { bus: ClusterBusPort, replica: string, prefix: string, leave: () => Promise<void> }
+
+const channelSchema = (input: SchemaCompositionInput) => input.path || '/'
+
+/**
+ * With cluster.valkey: the changes of this schema to the other replicas and theirs to it (its cache and its
+ * subscriptions hear them); data_gateway_cluster_connected in /metrics. A Valkey down at the start doesn't stop it.
+ */
+const joinCluster = async (input: SchemaCompositionInput, changes: SchemaChanges, logger: LoggerPort, metrics?: MetricsPort): Promise<ClusterMembership | undefined> => {
+	const valkey = input.settings.valkey
+	if (!valkey) return undefined
+	const schema = channelSchema(input)
+	const bus = new ValkeyClusterBus(valkey.url, logger, `data-gateway ${schema}`)
+	await bus.connect()
+	const replica = randomUUID()
+	const stop = await shareChanges(bus, `${valkey.prefix}:${schema}:changes`, replica, changes, logger)
+	metrics?.gauge('data_gateway_cluster_connected', 'The schema reaches the Valkey of the replicas (1) or not (0)', ['schema'], () => [{ labels: { schema }, value: bus.connected ? 1 : 0 }])
+	logger.info(`schema "${schema}": with the other replicas through the Valkey (${bus.connected ? 'connected' : 'not reached yet'})`)
+	return { bus, replica, prefix: valkey.prefix, leave: async () => { await stop(); await bus.close() } }
+}
+
+/** The dispatcher of the outbox runs only on the replica that holds its lease; data_gateway_outbox_leader in /metrics */
+const outboxLeader = (input: SchemaCompositionInput, cluster: ClusterMembership, dispatcher: OutboxDispatcher, logger: LoggerPort, metrics?: MetricsPort): LeaderLease => {
+	const schema = channelSchema(input)
+	const lease = new LeaderLease(cluster.bus, `${cluster.prefix}:${schema}:outbox`, cluster.replica, { lead: () => dispatcher.start(), follow: () => dispatcher.pause() }, logger)
+	metrics?.gauge('data_gateway_outbox_leader', 'This replica dispatches the outbox of the schema (1) or another does (0)', ['schema'], () => [{ labels: { schema }, value: lease.isLeader ? 1 : 0 }])
+	return lease
+}
+
+/**
+ * The files of some properties of a schema (docs/FILES_AND_PANELS.md): a signer per storage (S3 SigV4, the SAS of Azure
+ * Blob); without files.properties, none.
+ */
+const filesOf = (input: SchemaCompositionInput, clock: ClockPort, propertiesOf: (ctx: any, entity: string) => Promise<string[]>, read: (ctx: any, query: string, data: Record<string, unknown>) => Promise<unknown>): FilesUseCases | undefined => {
+	const files = input.settings.files
+	if (!files || Object.keys(files.properties).length === 0) return undefined
+	const storages: Record<string, FileStorage> = {}
+	for (const [name, config] of Object.entries(files.storages)) {
+		const signer = config.type === 's3'
+			? new S3UrlSigner({ bucket: config.bucket, region: config.region, ...(config.endpoint ? { endpoint: config.endpoint } : {}), accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey })
+			: new AzureBlobUrlSigner({ account: config.account, container: config.container, accountKey: config.accountKey, ...(config.endpoint ? { endpoint: config.endpoint } : {}) })
+		storages[name] = { signer, prefix: config.prefix, maxBytes: config.maxBytes, ...(config.types ? { types: config.types } : {}), expiresMs: config.expiresMs }
+	}
+	return new FilesUseCases(storages, files.properties, { propertiesOf, read }, clock, randomUUID)
 }

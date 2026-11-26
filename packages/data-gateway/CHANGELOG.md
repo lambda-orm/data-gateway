@@ -6,6 +6,55 @@ All notable changes to this project will be documented in this file.
 
 ### Unreleased
 
+### 4.3.0 (2026-11-26)
+
+With `@lambdaorm/base` 3.11.1 and `@lambdaorm/lib` 3.15.0, the exact versions the image installs.
+
+**Tested against Keycloak** (`docs/OIDC_LOGIN.md`): `scripts/ci-local.sh oidc` and its job of CI take the tokens of a
+real Keycloak on the five transports (its roles, a view by its claim `country`, another audience or a changed token
+refused, the rotation of the key of the realm without a restart).
+
+**Files of some properties** (`docs/FILES_AND_PANELS.md`):
+
+- **`files.storages`** (S3 — AWS, or another with `endpoint` — and Azure Blob) and **`files.properties`**
+  (`Entity.property: storage`), globally or per schema: the property keeps the key of an object, the gateway signs URLs
+  of short life and the bytes go straight between the client and the storage (SigV4 and the SAS of Azure, signed
+  without the SDKs).
+- `GET /{schema}/files` (which properties, in the view of the caller), `POST /files/{Entity}/{property}/upload`
+  `{ name, type, size }` (write: within the `types` and `maxBytes` of the storage; the key is made by the gateway) and
+  `GET /files/{Entity}/{property}/url?key=` (read: only a key that a row of the view of the caller keeps); by WebSocket
+  `files.list`, `files.upload`, `files.url`. The storage must allow the origin of the IDE (CORS).
+- The workbench keeps panels too (`<name>.panel.yaml`).
+
+**Writes that wait for a person** (`docs/MUTATION_APPROVAL.md`):
+
+- **`mcp.approval: writes`** (also per schema; `mcp.approvalExpires`, 1 h): every write by MCP waits, answered at once
+  with `{ approval, status: "pending", expiresAt }` (REST: `202`); nothing changes yet. **`approval: writes`** on a key
+  or a role of a token: its writes wait on every transport. A script always waits (it may write); a queued write can't.
+- **`approve`**, a new permission: `GET /admin/workspaces/{schema}/approvals` (with the plan of each write: the sentences
+  it would run), `POST …/approvals/{id}/approve` and `…/reject { reason }`. Never the own write (four eyes); an approved
+  write runs once, as who asked for it (its view, its context), audited with `approvedBy`.
+- **Who asked** sees it with the MCP tool `approval_status`, `GET /{schema}/approvals/{id}` or `approvals.status` by
+  WebSocket: pending, done (its result), failed, rejected (its reason) or expired.
+- They live in the SQLite of the volume (`.data-gateway/state.sqlite`, shared by the replicas), in memory without
+  `orm.workspacePath`.
+
+**Replicas together** (`docs/REPLICAS.md`):
+
+- **`cluster.valkey`** (`url`: `valkey://`, `valkeys://`, also `redis://`, `rediss://`; `prefix`): the replicas share
+  the changes of the data through a Valkey (or a Redis), with `iovalkey`. A write through any replica drops the cached
+  results that read it in every replica, and reaches the subscribers (WebSocket, SSE) of every replica, each through
+  its view. Only entity, action, keys and count travel, never the rows.
+- **The outbox** is dispatched by the replica that holds its lease in the Valkey (renewed every 5 s, 15 s to expire):
+  when it goes, another takes it; `outbox.dispatch: false` still keeps a replica out.
+- **The Valkey down:** each replica goes on with its own changes (the cache bounded by its `ttl`), said once in the
+  log; nobody dispatches the outbox until it is back. `/metrics`: `data_gateway_cluster_connected`,
+  `data_gateway_outbox_leader`.
+- The log of the configuration hides the password of a URL, and `secret`, `secretAccessKey` and `accountKey`.
+
+**Development:** `npm run dev` (and the task of VS Code) seeds `dev/workspace` once with northwind on SQLite (sql.js)
+and its data: the dev gateway needs no database server. A `dev/workspace` that is there is left as it is.
+
 ### 4.2.0 (2026-11-26)
 
 With `@lambdaorm/base` 3.11.1 and `@lambdaorm/lib` 3.15.0, the exact versions the image installs.

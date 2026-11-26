@@ -102,7 +102,10 @@ const SECTIONS: { key: Section, at: string[] }[] = [
 	{ key: 'stages', at: ['infrastructure', 'stages'] }
 ]
 
-const TYPES = ['string', 'text', 'integer', 'decimal', 'number', 'boolean', 'date', 'dateTime', 'time', 'uuid']
+const TYPES = ['string', 'text', 'integer', 'decimal', 'number', 'boolean', 'date', 'dateTime', 'time', 'uuid', 'json', 'vector', 'point']
+/** the kinds of an index of the engine (docs/VECTOR_POINT_SQLJS.md §1): vectors (hnsw, ivfflat) and points (spatial) */
+const INDEX_TYPES = ['hnsw', 'ivfflat', 'spatial']
+const INDEX_DISTANCES = ['cosine', 'l2', 'ip']
 const DIALECTS = ['PostgreSQL', 'MySQL', 'MariaDB', 'SqlServer', 'Oracle', 'MongoDB', 'SQLjs']
 const RELATION_TYPES = ['oneToMany', 'manyToOne', 'oneToOne']
 
@@ -445,7 +448,7 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, theme, schema, 
 									<>
 										{text('primaryKey', { fields: true })}
 										{text('uniqueKey', { fields: true })}
-										{rows('indexes', [{ key: 'name' }, { key: 'fields', kind: 'fields' }], undefined, false)}
+										{rows('indexes', [{ key: 'name' }, { key: 'fields', kind: 'fields' }, { key: 'type', kind: 'select', options: INDEX_TYPES }, { key: 'distance', kind: 'select', options: INDEX_DISTANCES }], undefined, false)}
 									</>
 								)}
 								{entityTab === 'constraints' && rows('constraints', [{ key: 'message' }, { key: 'condition', kind: 'expressions', keys: ['condition'] }], constraintCondition, false)}

@@ -1,7 +1,7 @@
 import { ObservabilityConfig } from '@lambdaorm/base'
 import { ALL_PERMISSIONS, isPermission, KNOWN_PERMISSIONS, Permission } from '../auth/permission'
 import {
-	AuthenticationConfig, AuthenticationType, ConfigReading, CredentialConfig, DataGatewayConfig, JwtConfig, RoleConfig, CacheConfig, OutboxConfig, OutboxDestinationConfig, LoggerConfig, McpConfig,
+	AuthenticationConfig, AuthenticationType, ConfigReading, CredentialConfig, DataGatewayConfig, JwtConfig, RoleConfig, CacheConfig, ClusterConfig, FilesConfig, FileStorageConfig, OutboxConfig, OutboxDestinationConfig, LoggerConfig, McpConfig,
 	OrmConfig, RuntimeConfig, RuntimeMode, SchemaConfig, SessionsConfig, TransportConfig, TransportName, TransportsConfig, WatchConfig
 } from './dataGatewayConfig'
 import { parseDuration } from './durations'
@@ -11,11 +11,11 @@ import { parseSize } from './sizes'
 /** Transports of the design that this version does not serve yet (docs/DATA_GATEWAY_PLAN.md). */
 const LATER_TRANSPORTS: string[] = []
 const TRANSPORTS = ['http', 'mcpHttp', 'mcpWebSocket', 'webSocket', 'management']
-const KNOWN_SECTIONS = ['orm', 'admin', 'server', 'logger', 'metrics', 'observability', 'audit', 'authentication', 'rateLimit', 'scripts', 'mcp', 'runtime', 'transports', 'cache', 'outbox']
-const SCHEMA_KEYS = ['path', 'workspace', 'transports', 'authentication', 'env', 'scripts', 'mcp', 'server', 'runtime', 'view', 'queries', 'cache', 'outbox']
+const KNOWN_SECTIONS = ['orm', 'admin', 'server', 'logger', 'metrics', 'observability', 'audit', 'authentication', 'rateLimit', 'scripts', 'mcp', 'runtime', 'transports', 'cache', 'outbox', 'cluster', 'files']
+const SCHEMA_KEYS = ['path', 'workspace', 'transports', 'authentication', 'env', 'scripts', 'mcp', 'server', 'runtime', 'view', 'queries', 'cache', 'outbox', 'files']
 /** The tools of docs/DATA_GATEWAY.md §5.1: mcp.tools.include / exclude must name them */
 export const TOOL_NAMES = [
-	'orm_execute', 'orm_execute_script', 'orm_execute_queued', 'orm_plan', 'orm_metadata', 'orm_model', 'orm_parameters',
+	'orm_execute', 'orm_execute_script', 'orm_execute_queued', 'approval_status', 'orm_plan', 'orm_metadata', 'orm_model', 'orm_parameters',
 	'orm_constraints', 'schema_get', 'schema_version', 'schema_domain', 'schema_entities', 'schema_search', 'schema_describe', 'schema_enums', 'schema_sources',
 	'schema_mappings', 'schema_views', 'schema_stages', 'stage_exists', 'stage_export', 'stage_import', 'gateway_version',
 	'gateway_health', 'admin_schema_get', 'admin_schema_validate', 'admin_stage_fetch'
@@ -81,6 +81,8 @@ export class ConfigReader {
 			mcp: this.mcp(raw.mcp),
 			cache: this.cache(raw.cache, 'cache'),
 			outbox: this.outbox(raw.outbox, 'outbox'),
+			cluster: this.cluster(raw.cluster),
+			files: this.files(raw.files, 'files'),
 			runtime: this.runtime(raw.runtime),
 			transports: this.transports(raw.transports)
 		}
@@ -164,6 +166,7 @@ export class ConfigReader {
 		}
 		if (entry.cache !== undefined) schema.cache = this.cache(entry.cache, `${key}.cache`)
 		if (entry.outbox !== undefined) schema.outbox = this.outbox(entry.outbox, `${key}.outbox`)
+		if (entry.files !== undefined) schema.files = this.files(entry.files, `${key}.files`)
 		if (entry.queries !== undefined) {
 			if (!isObject(entry.queries)) this.issues.push(`${key}.queries must be an object (the name of a query: its limits)`)
 			else {
@@ -198,6 +201,9 @@ export class ConfigReader {
 			schema.mcp = {}
 			if (entry.mcp.maxRows !== undefined) schema.mcp.maxRows = this.int(entry.mcp.maxRows, 500, `${key}.mcp.maxRows`, 0)
 			if (entry.mcp.freeQueries !== undefined) schema.mcp.freeQueries = this.bool(entry.mcp.freeQueries, true, `${key}.mcp.freeQueries`)
+			const approval = this.approvalMode(entry.mcp.approval, `${key}.mcp.approval`)
+			if (approval) schema.mcp.approval = approval
+			if (entry.mcp.approvalExpires !== undefined) schema.mcp.approvalExpiresMs = this.duration(entry.mcp.approvalExpires, 3600000, `${key}.mcp.approvalExpires`)
 			if (entry.mcp.tools !== undefined) {
 				schema.mcp.tools = {
 					include: this.toolNames(entry.mcp.tools?.include, `${key}.mcp.tools.include`),
@@ -299,7 +305,9 @@ export class ConfigReader {
 			},
 			pageSize: this.int(section.pageSize, 50, 'mcp.pageSize', 1),
 			maxRows: this.int(section.maxRows, 500, 'mcp.maxRows', 0),
-			freeQueries: this.bool(section.freeQueries, true, 'mcp.freeQueries')
+			freeQueries: this.bool(section.freeQueries, true, 'mcp.freeQueries'),
+			approval: this.approvalMode(section.approval, 'mcp.approval') ?? 'none',
+			approvalExpiresMs: this.duration(section.approvalExpires, 3600000, 'mcp.approvalExpires')
 		}
 	}
 
@@ -580,7 +588,8 @@ export class ConfigReader {
 					const list = isObject(value) ? value.permissions : value
 					if (!Array.isArray(list)) { this.issues.push(`${at}.roles.${role} must be a list of permissions, or { permissions, view }`); continue }
 					const view = isObject(value) && value.view !== undefined ? this.viewName(value.view, `${at}.roles.${role}.view`) : undefined
-					roles[role] = { permissions: this.permissions(list, `${at}.roles.${role}`), ...(view ? { view } : {}) }
+					const approval = isObject(value) ? this.approvalMode(value.approval, `${at}.roles.${role}.approval`) : undefined
+					roles[role] = { permissions: this.permissions(list, `${at}.roles.${role}`), ...(view ? { view } : {}), ...(approval === 'writes' ? { approval } : {}) }
 					if (view) this.stageWithView(roles[role].permissions, `${at}.roles.${role}`)
 				}
 				permissions = { claim: String(p.permissions.claim), roles }
@@ -637,6 +646,78 @@ export class ConfigReader {
 			batch: this.int(raw.batch, none.batch, `${key}.batch`, 1),
 			destinations
 		}
+	}
+
+	/** files (docs/FILES_AND_PANELS.md §1): its storages (s3, azureBlob) and the properties that keep their keys */
+	private files (raw: unknown, key: string): FilesConfig {
+		const none: FilesConfig = { storages: {}, properties: {} }
+		if (raw === undefined) return none
+		if (!isObject(raw)) { this.issues.push(`${key} must be an object: { storages, properties }`); return none }
+		const storages: Record<string, FileStorageConfig> = {}
+		for (const [name, entry] of Object.entries(isObject(raw.storages) ? raw.storages : {})) {
+			const at = `${key}.storages.${name}`
+			if (!isObject(entry)) { this.issues.push(`${at} must be an object`); continue }
+			const need = (field: string): string => {
+				const value = typeof entry[field] === 'string' ? entry[field].trim() : ''
+				if (!value) this.issues.push(`${at}.${field} is required (a variable not given?)`)
+				return value
+			}
+			const endpoint = entry.endpoint === undefined ? undefined : String(entry.endpoint)
+			if (endpoint !== undefined) {
+				try { if (!/^https?:$/.test(new URL(endpoint).protocol)) throw new Error() } catch { this.issues.push(`${at}.endpoint "${endpoint}" is not an http(s) URL`) }
+			}
+			const types = entry.types === undefined ? undefined : Array.isArray(entry.types) ? entry.types.map(String) : (this.issues.push(`${at}.types must be a list (image/png)`), undefined)
+			const common = {
+				prefix: this.str(entry.prefix, '').replace(/^\/+/, ''),
+				maxBytes: this.size(entry.maxBytes, 10 * 1024 * 1024, `${at}.maxBytes`),
+				...(types ? { types } : {}),
+				expiresMs: this.duration(entry.expires, 5 * 60000, `${at}.expires`)
+			}
+			if (entry.type === 's3') {
+				storages[name] = { type: 's3', bucket: need('bucket'), region: this.str(entry.region, 'us-east-1'), ...(endpoint ? { endpoint } : {}), accessKeyId: need('accessKeyId'), secretAccessKey: need('secretAccessKey'), ...common }
+			} else if (entry.type === 'azureBlob') {
+				storages[name] = { type: 'azureBlob', account: need('account'), container: need('container'), accountKey: need('accountKey'), ...(endpoint ? { endpoint } : {}), ...common }
+			} else {
+				this.issues.push(`${at}.type must be s3 or azureBlob`)
+			}
+		}
+		const properties: Record<string, string> = {}
+		for (const [property, storage] of Object.entries(isObject(raw.properties) ? raw.properties : {})) {
+			if (!/^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$/.test(property)) { this.issues.push(`${key}.properties: "${property}" must be Entity.property`); continue }
+			if (typeof storage !== 'string' || !storages[storage]) { this.issues.push(`${key}.properties.${property}: "${storage}" is not one of its storages`); continue }
+			properties[property] = storage
+		}
+		return { storages, properties }
+	}
+
+	/** none or writes (docs/MUTATION_APPROVAL.md §2); not given, undefined */
+	private approvalMode (raw: unknown, key: string): 'none' | 'writes' | undefined {
+		if (raw === undefined || raw === null) return undefined
+		if (raw === 'none' || raw === 'writes') return raw
+		this.issues.push(`${key} must be none or writes`)
+		return undefined
+	}
+
+	/** cluster (docs/REPLICAS.md §2): a Valkey shared by the replicas; without it, each replica on its own */
+	private cluster (raw: unknown): ClusterConfig {
+		if (raw === undefined) return {}
+		if (!isObject(raw)) { this.issues.push('cluster must be an object'); return {} }
+		for (const key of Object.keys(raw)) if (key !== 'valkey') this.warnings.push(`unknown key "cluster.${key}" ignored`)
+		if (raw.valkey === undefined) return {}
+		if (!isObject(raw.valkey)) { this.issues.push('cluster.valkey must be an object: { url, prefix }'); return {} }
+		const url = typeof raw.valkey.url === 'string' ? raw.valkey.url.trim() : ''
+		// a url whose variable is not defined: not set, as a transport without its port
+		if (!url) { this.warnings.push('cluster.valkey has no url (a variable not given?): each replica on its own'); return {} }
+		try {
+			const protocol = new URL(url).protocol
+			if (!['valkey:', 'valkeys:', 'redis:', 'rediss:'].includes(protocol)) throw new Error(protocol)
+		} catch {
+			this.issues.push('cluster.valkey.url must be valkey://, valkeys://, redis:// or rediss://')
+			return {}
+		}
+		const prefix = this.str(raw.valkey.prefix, 'data-gateway')
+		if (!/^[A-Za-z0-9_.:-]+$/.test(prefix)) this.issues.push('cluster.valkey.prefix: letters, digits and _ . : - only')
+		return { valkey: { url, prefix } }
 	}
 
 	/** cache (docs/RESULT_CACHE.md §2): off unless enabled; ttl, maxEntries, maxRowBytes and its entities */
@@ -698,6 +779,7 @@ export class ConfigReader {
 		}
 		const permissions = this.permissions(entry.permissions, `${at}.permissions`)
 		const credential: CredentialConfig = { name, permissions }
+		if (this.approvalMode(entry.approval, `${at}.approval`) === 'writes') credential.approval = 'writes'
 		if (entry.view !== undefined) {
 			const view = this.viewName(entry.view, `${at}.view`)
 			if (view) {

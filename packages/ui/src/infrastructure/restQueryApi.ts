@@ -6,7 +6,7 @@ import { QueryParameter } from '../domain/workspace'
 const namesOf = (list: unknown): string[] => Array.isArray(list)
 	? list.map(item => typeof item === 'string' ? item : (item as { name?: unknown })?.name).filter((name): name is string => typeof name === 'string')
 	: []
-import { Options, QueryApiPort, SchemaInfo } from '../application/ports'
+import { Options, QueryApiPort, SchemaInfo, FileProperty, SignedUpload } from '../application/ports'
 
 export type HeadersProvider = () => Record<string, string> | Promise<Record<string, string>>
 
@@ -65,4 +65,14 @@ export class RestQueryApi implements QueryApiPort {
 	}
 
 	public executeScript (schema: string, script: string, data?: unknown, options?: Options) { return this.request(this.url(schema, '/script'), { script, data, options }) }
+
+	// the files of some properties (docs/FILES_AND_PANELS.md): URLs signed for the storage, never the bytes
+	public files (schema: string): Promise<FileProperty[]> { return this.request(this.url(schema, '/files')) }
+	public fileUpload (schema: string, entity: string, property: string, file: { name: string, type: string, size: number }): Promise<SignedUpload> {
+		return this.request(this.url(schema, `/files/${encodeURIComponent(entity)}/${encodeURIComponent(property)}/upload`), file)
+	}
+
+	public fileUrl (schema: string, entity: string, property: string, key: string): Promise<{ url: string, expiresAt: string }> {
+		return this.request(this.url(schema, `/files/${encodeURIComponent(entity)}/${encodeURIComponent(property)}/url?key=${encodeURIComponent(key)}`))
+	}
 }

@@ -68,7 +68,9 @@ export const buildLogger = (config: Pick<DataGatewayConfig, 'logger'>, label = '
 
 /** The configuration as it can be logged: secrets and the variables given to the schemas masked */
 export const maskSecrets = (config: DataGatewayConfig): unknown => JSON.parse(JSON.stringify(config, (key, value) =>
-	['value', 'password', 'token'].includes(key) && typeof value === 'string' ? '***'
+	['value', 'password', 'token', 'secret', 'secretAccessKey', 'accountKey'].includes(key) && typeof value === 'string' ? '***'
+		// a url with a password (cluster.valkey.url): without it
+		: key === 'url' && typeof value === 'string' && /^[a-z]+:\/\/[^/]*@/i.test(value) ? value.replace(/\/\/[^/]*@/, '//***@')
 		: key === 'env' && value && typeof value === 'object' && !Array.isArray(value) && !('isolate' in value)
 			? Object.fromEntries(Object.keys(value).map(k => [k, '***']))
 			: value))

@@ -1,3 +1,4 @@
+import { GatewayError } from '../../domain/errors/gatewayError'
 import { authorize } from '../../domain/auth/authorizationPolicy'
 import { badRequest, unavailable } from '../../domain/errors/gatewayError'
 import { QueuedRequest, RequestContext } from '../ports/input/dataGatewayPort'
@@ -20,6 +21,9 @@ export class QueueUseCase {
 		const query = requireQuery(request.query)
 		const classification = await this.queries.classify(query, ctx)
 		authorize(ctx.principal, 'executeQueued', classification.writes)
+		if (classification.writes && this.queries.needsApproval(ctx)) {
+			throw new GatewayError(403, 'ApprovalRequiredError', 'this write waits for a person to approve it: a queued execution can\'t wait, use execute (docs/MUTATION_APPROVAL.md)')
+		}
 		if (!this.queue || !this.queue.available) {
 			throw unavailable('QueueUnavailableError', 'this schema has no queue (infrastructure.queue)')
 		}

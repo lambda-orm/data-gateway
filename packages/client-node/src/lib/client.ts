@@ -97,6 +97,15 @@ export class DataGatewayClient {
 	 */
 	public queries (): Promise<{ name: string, description?: string, parameters: MetadataParameter[], model: MetadataModel[], writes: boolean }[]> { return this.call('queries') }
 
+	/**
+	 * A write that waits for a person to approve it (gateway 4.3, docs/MUTATION_APPROVAL.md): execute, query or
+	 * executeScript answered { approval, status: 'pending', expiresAt } (isApprovalPending); its state now: pending, done
+	 * (with its result), failed, rejected (with the reason) or expired. Every transport.
+	 */
+	public approval (id: string): Promise<{ id: string, status: 'pending' | 'approved' | 'done' | 'failed' | 'rejected' | 'expired', result?: unknown, error?: string, reason?: string, expiresAt: string, [key: string]: unknown }> {
+		return this.call('approval', { id })
+	}
+
 	/** runs a query of application.queries by its name, with its parameters: every transport */
 	public query<T = any> (name: string, data: any = {}, options?: QueryOptions): Promise<T> {
 		return this.call('query', { name, data, options: this.options(options) })
@@ -201,3 +210,9 @@ export const connect = async (connection?: string, options: ConnectOptions = {})
 	await transport.open()
 	return new DataGatewayClient(transport, target)
 }
+
+/** What a write that waits for a person answers at once (gateway 4.3): nothing changed yet; client.approval(id) tells */
+export interface ApprovalPending { approval: string, status: 'pending', expiresAt: string, message: string }
+
+export const isApprovalPending = (value: unknown): value is ApprovalPending =>
+	!!value && typeof value === 'object' && typeof (value as any).approval === 'string' && (value as any).status === 'pending'

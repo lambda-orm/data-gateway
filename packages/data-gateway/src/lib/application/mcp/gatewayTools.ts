@@ -80,6 +80,17 @@ const SPECS: ToolSpec[] = [
 		run: (gw, ctx, a) => gw.executeQueued(ctx, { topic: a.topic, query: a.query, data: a.data, chunk: a.chunk, options: a.options })
 	},
 	{
+		name: 'approval_status',
+		title: 'State of a write that waits',
+		description: 'A write that waits for a person to approve it (orm_execute, a query_<name> or orm_execute_script answered { approval, status: "pending" }): whether it is still pending, approved and done (with its result), failed (with its error), rejected (with the reason) or expired. Ask again later while it is pending; never repeat the write.',
+		properties: { id: { type: 'string', description: 'The approval the write answered' } },
+		required: ['id'],
+		// who may write (or asks to): its writes may wait
+		permissions: ['read', 'write', 'script'],
+		annotations: READ_ONLY,
+		run: (gw, ctx, a) => gw.approval(ctx, a.id)
+	},
+	{
 		name: 'orm_plan',
 		title: 'Query plan',
 		description: 'Returns the sentences (SQL or the database equivalent) a query would run, without running it: use it to check a query.',

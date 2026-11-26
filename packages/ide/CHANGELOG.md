@@ -2,6 +2,29 @@
 
 ### Unreleased
 
+- **Sign in with the identity provider:** a connection can authenticate with **OpenID Connect (sign in)**: its issuer,
+  a public client with PKCE and its scopes. **Sign in** opens the login of the provider (a window of its own; in the
+  desktop app, the browser of the system, back to a loopback of the app); its token stays in the tab and is renewed
+  before it ends. The backend of the IDE reaches the provider: its origin goes in `DATA_GATEWAY_IDE_TARGETS`.
+- `DATA_GATEWAY_IDE_CONNECT_SRC`: the storages of the files the page may reach itself (the bytes go straight to them);
+  the desktop app allows `https:`.
+- **Files:** in **Data**, a property that keeps files (data-gateway 4.3) opens its file, and with `write` uploads
+  another (straight to the storage) or removes it.
+- **Panels:** **New panel** in the workbench: cards of queries shown as a number, a table, bars, lines or a pie;
+  refreshed by hand or every so often; saved in the workbench.
+- **Writes that wait:** with `approve`, the page of a connection has the tab of the writes of agents that wait for a
+  person (data-gateway 4.3): what each would run, its data and who asked; approve it (it runs as who asked) or reject it
+  with a reason.
+- **Vectors and points** (λORM 3.15): the forms of the schema offer `vector` (its dimensions) and `point`, and the
+  indexes `hnsw`, `ivfflat` and `spatial`; in **Data**, a point shows as longitude, latitude with a link to a map and
+  is edited in two fields; a vector shows its first numbers and how many, and is written in the form of a row.
+- **Its icon:** λORM on a blue rounded square, only the λ where λORM can't be read (a tab of the browser, 16 to 48
+  px); in the browser (favicon) and as the icon of the desktop app.
+- **The desktop app** has no bar of a menu on Windows and Linux (the page has its own); on macOS only the menu of the
+  app and Edit.
+- **The tree:** each connection is a card, its explorer inside, with its heading on one line: the name, and its URL
+  smaller and muted.
+
 ### 1.2.0 (2026-11-26)
 
 Works with any data-gateway 4.x: the table uses `execute`, with the credential of the connection.

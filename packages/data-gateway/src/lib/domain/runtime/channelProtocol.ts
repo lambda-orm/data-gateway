@@ -10,6 +10,8 @@ export interface WirePrincipal {
 	context?: Record<string, unknown>
 	/** the view of λORM of who calls (its key or its roles) */
 	view?: string
+	/** its writes wait for a person (docs/MUTATION_APPROVAL.md) */
+	approval?: 'writes'
 }
 
 /** edge → schema worker: one operation of DataGatewayPort ('gateway') or McpServerPort ('mcp') */
@@ -73,7 +75,7 @@ export type ChannelMessage = ChannelRequest | ChannelResponse | ChannelEvent
 /** Operations a schema worker answers: anything else is refused (the channel is not an eval) */
 export const GATEWAY_OPERATIONS = [
 	'version', 'health', 'ping', 'plan', 'metadata', 'model', 'parameters', 'constraints', 'execute', 'executeScript',
-	'executeQueued', 'queries', 'query', 'schema', 'schemaVersion', 'domain', 'sources', 'source', 'entities', 'entity', 'enums', 'enum',
+	'executeQueued', 'queries', 'query', 'approval', 'files', 'fileUpload', 'fileUrl', 'schema', 'schemaVersion', 'domain', 'sources', 'source', 'entities', 'entity', 'enums', 'enum',
 	'mappings', 'mapping', 'entityMapping', 'stages', 'stage', 'views', 'typings', 'search', 'describe', 'stageExists', 'stageExport', 'stageImport'
 ] as const
 
@@ -91,6 +93,8 @@ export const MCP_OPERATIONS = ['listTools', 'callTool', 'listResources', 'listRe
 export const COMMAND_OPERATIONS = [
 	'stages', 'fetch', 'pushSentences', 'push', 'dropSentences', 'drop', 'export', 'import', 'pullSchema', 'pull', 'introspectSchema',
 	'migrations', 'migrateSentences', 'migrate', 'seedFiles', 'seed',
-	'outboxList', 'outboxRetry'
+	'outboxList', 'outboxRetry',
+	// the writes that wait for a person (docs/MUTATION_APPROVAL.md §4): authorized by approve in the worker
+	'approvalsList', 'approve', 'reject'
 ] as const
 export type CommandOperation = typeof COMMAND_OPERATIONS[number]

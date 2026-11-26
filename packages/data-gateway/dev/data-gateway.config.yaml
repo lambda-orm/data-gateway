@@ -1,5 +1,7 @@
-# The gateway for local development and debugging (.vscode/launch.json "data-gateway (dev)"), run from the sources with
-# tsx. The workspace is dev/workspace (not in git), seeded with the northwind schema of the tests on the first launch.
+# The gateway for local development and debugging (.vscode/launch.json "data-gateway (dev)", or npm run dev in
+# packages/data-gateway), run from the sources with tsx. The workspace is dev/workspace (not in git): dev/seed.mjs
+# creates it the first time with northwind on SQLite (sql.js) and its data, so it needs no database server; delete
+# dev/workspace/northwind to seed it again. sql.js writes its file when the gateway stops (SIGTERM, Ctrl+C).
 # The keys are for this machine only.
 orm:
   workspacePath: ./workspace
@@ -7,6 +9,7 @@ logger: { level: info }
 audit: { enabled: true }
 scripts: { enabled: true }
 rateLimit: { max: 0 }
+# false: a workspace seeded before SQLite (a PostgreSQL that isn't there) still starts
 runtime: { checkConnections: false }
 authentication:
   adapter: local

@@ -1,5 +1,5 @@
 // What each transport makes of an answer, with a fake gateway: no network, no Docker.
-import { GatewayError, parseConnection, queryText } from '../../src/lib'
+import { GatewayError, isApprovalPending, parseConnection, queryText } from '../../src/lib'
 import { RestTransport } from '../../src/lib/transports/rest'
 import { McpHttpTransport } from '../../src/lib/transports/mcp'
 
@@ -57,6 +57,19 @@ describe('REST', () => {
 
 	test('notifications and unknown operations are not on REST', async () => {
 		expect(await error(rest().call('nope' as any, {}))).toMatchObject({ code: 'unsupported' })
+	})
+})
+
+describe('a write that waits for a person (gateway 4.3)', () => {
+	test('REST answers 202 with its approval; GET /approvals/{id} its state', async () => {
+		const rest = new RestTransport(parseConnection('http://gw/northwind', { apiKey: 'k' }, {}))
+		fakeFetch(answer(202, { approval: 'a-1', status: 'pending', expiresAt: '2026-11-26T13:00:00.000Z', message: 'waits' }), answer(200, { id: 'a-1', status: 'done', result: 1 }))
+		const pending = await rest.call('execute', { query: 'Categories.update(p => ({ name: n })).filter(p => p.id == 1)', data: { n: 'x' } })
+		expect(isApprovalPending(pending)).toBe(true)
+		expect(isApprovalPending([{ name: 'Chai' }])).toBe(false)
+		expect(await rest.call('approval', { id: 'a-1' })).toEqual({ id: 'a-1', status: 'done', result: 1 })
+		expect(requests[1].url).toBe('http://gw/northwind/approvals/a-1')
+		expect(requests[1].init.method).toBe('GET')
 	})
 })
 

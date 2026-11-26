@@ -3,6 +3,7 @@
 // 127.0.0.1 with a token of this run (server.mjs in its desktop mode). The same code as the web image.
 import { app, BrowserWindow, ipcMain, Menu, net, protocol, shell } from 'electron'
 import crypto from 'node:crypto'
+import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
@@ -31,7 +32,8 @@ const TYPES = {
 
 /** The page of the app: nothing from elsewhere; it talks to its own proxy only (and ws to it) */
 const securityHeaders = (proxyOrigin) => ({
-	'Content-Security-Policy': `default-src 'self'; connect-src 'self' ${proxyOrigin} ${proxyOrigin.replace('http:', 'ws:')} data: blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'none'`,
+	// https: the storages of the files of the properties take and give the bytes straight (docs/FILES_AND_PANELS.md)
+	'Content-Security-Policy': `default-src 'self'; connect-src 'self' ${proxyOrigin} ${proxyOrigin.replace('http:', 'ws:')} https: data: blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'none'`,
 	'X-Content-Type-Options': 'nosniff',
 	'Referrer-Policy': 'no-referrer'
 })
@@ -76,6 +78,8 @@ const createWindow = (proxy) => {
 		// in development its icon; packaged, the one electron-builder gives the app
 		icon: fs.existsSync(path.join(here, '..', 'build', 'icon.png')) ? path.join(here, '..', 'build', 'icon.png') : undefined,
 		show: false,
+		// no bar of a menu on Windows and Linux (applicationMenu)
+		autoHideMenuBar: true,
 		webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false }
 	})
 	if (kept.maximized) win.maximize()
@@ -89,6 +93,17 @@ const createWindow = (proxy) => {
 	win.once('ready-to-show', () => { if (!smokeTest) win.show() })
 	win.loadURL(`${APP_ORIGIN}/`)
 	return win
+}
+
+/**
+ * The menu of the app: none on Windows and Linux once packaged (the page has its own menu: the documentation, the
+ * updates, the version); on macOS only the menu of the app and Edit (the bar is the system's, and without Edit its
+ * shortcuts, copy and paste, don't work); in development (npm start) the whole one, with the DevTools.
+ */
+const applicationMenu = () => {
+	if (!app.isPackaged) return menu()
+	if (process.platform === 'darwin') return Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }])
+	return null
 }
 
 const menu = () => Menu.buildFromTemplate([
@@ -117,6 +132,29 @@ const menu = () => Menu.buildFromTemplate([
 ])
 
 let updates
+let oidcLoopback
+
+/** One answer of the identity provider on 127.0.0.1 (any free port): its query string to the page, the window back */
+const startOidcLoopback = async () => {
+	oidcLoopback?.server.close()
+	let answered
+	const answer = new Promise(resolve => { answered = resolve })
+	const server = http.createServer((req, res) => {
+		const url = new URL(req.url ?? '/', 'http://127.0.0.1')
+		if (url.pathname !== '/oidc-callback') { res.writeHead(404).end(); return }
+		res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
+		res.end('<!doctype html><meta charset="utf-8"><title>λORM Data Gateway</title><body style="font: 14px system-ui, sans-serif; text-align: center; padding-top: 40px">You can close this tab and go back to the IDE.</body>')
+		answered(url.search)
+		server.close()
+		const win = BrowserWindow.getAllWindows()[0]
+		if (win) { if (win.isMinimized()) win.restore(); win.focus() }
+	})
+	await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+	const timer = setTimeout(() => { answered('?error=timeout&error_description=the%20login%20took%20too%20long'); server.close() }, 10 * 60000)
+	timer.unref?.()
+	oidcLoopback = { server, answer, redirectUri: `http://127.0.0.1:${server.address().port}/oidc-callback` }
+	return { redirectUri: oidcLoopback.redirectUri }
+}
 
 app.whenReady().then(async () => {
 	const proxy = await startProxy()
@@ -124,14 +162,23 @@ app.whenReady().then(async () => {
 	ipcMain.on('ide:config', event => { event.returnValue = { proxyBase: proxy.base, version, platform: process.platform } })
 	// the menu of the page asks for the check of updates (its native dialogs answer)
 	ipcMain.handle('ide:check-updates', () => updates?.check(true))
+	// the login of a connection with its identity provider (docs/OIDC_LOGIN.md §2): the browser of the system, back to a
+	// loopback of this run (RFC 8252) that takes one answer and closes
+	ipcMain.handle('ide:oidc-start', () => startOidcLoopback())
+	ipcMain.handle('ide:oidc-wait', () => oidcLoopback?.answer ?? '?error=no_login')
+	ipcMain.handle('ide:oidc-open', (_event, url) => {
+		const parsed = new URL(String(url))
+		if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') throw new Error('only an http(s) URL')
+		return shell.openExternal(parsed.toString())
+	})
 	protocol.handle('app', serveApp(proxy.origin))
-	Menu.setApplicationMenu(menu())
+	Menu.setApplicationMenu(applicationMenu())
 	const win = createWindow(proxy)
 	app.on('second-instance', () => { if (win.isMinimized()) win.restore(); win.focus() })
 	app.on('before-quit', () => proxy.server.close())
 	if (smokeTest) return runSmokeTest(win, proxy)
 	updates = setupUpdates({ version, window: win })
-	Menu.setApplicationMenu(menu())
+	Menu.setApplicationMenu(applicationMenu())
 })
 
 app.on('window-all-closed', () => app.quit())

@@ -1,6 +1,7 @@
 import { WizardState, wizardOf } from './queryWizard'
+import { PanelCard, PANEL_FORMS } from './panels'
 /** What a person keeps in a schema: folders to organise, queries (and diagrams) with a name and a description */
-export type SavedKind = 'folder' | 'query' | 'diagram'
+export type SavedKind = 'folder' | 'query' | 'diagram' | 'panel'
 
 interface SavedBase {
 	id: string
@@ -50,7 +51,29 @@ export interface SavedDiagram extends SavedBase {
 	stageView?: { orientation?: 'top' | 'left', detail?: 'tables' | 'names', positions?: Record<string, { x: number, y: number }> }
 }
 
-export type SavedItem = SavedFolder | SavedQuery | SavedDiagram
+/** A panel: cards of queries shown as a number, a table or a chart (docs/FILES_AND_PANELS.md §2) */
+export interface SavedPanel extends SavedBase {
+	kind: 'panel'
+	cards: PanelCard[]
+	/** seconds between two refreshes; none, by hand */
+	refresh?: number
+}
+
+export type SavedItem = SavedFolder | SavedQuery | SavedDiagram | SavedPanel
+
+/** The cards of a panel as they come (an export, a file written by hand), checked */
+export const cardsOf = (raw: unknown): PanelCard[] => (Array.isArray(raw) ? raw : []).filter(c => c && typeof c === 'object' && isString(c.id) && isString(c.query)).map((c: any) => ({
+	id: c.id,
+	title: isString(c.title) ? c.title : '',
+	query: c.query,
+	...(isString(c.data) ? { data: c.data } : {}),
+	form: PANEL_FORMS.includes(c.form) ? c.form : 'table',
+	...(isString(c.label) ? { label: c.label } : {}),
+	...(Array.isArray(c.values) ? { values: c.values.filter(isString) } : {}),
+	...(c.width === 2 ? { width: 2 as const } : {})
+}))
+
+function isString (value: unknown): value is string { return typeof value === 'string' }
 
 export const newId = (): string => {
 	const crypto = (globalThis as any).crypto
@@ -111,7 +134,6 @@ export interface WorkspaceExport {
 	items: SavedItem[]
 }
 
-const isString = (value: unknown): value is string => typeof value === 'string'
 
 /** The items of an export file, checked; undefined when the file isn't one */
 export const parseExport = (text: string): SavedItem[] | undefined => {
@@ -120,7 +142,7 @@ export const parseExport = (text: string): SavedItem[] | undefined => {
 	if (!file || file.format !== EXPORT_FORMAT || !Array.isArray(file.items)) return undefined
 	const items: SavedItem[] = []
 	for (const raw of file.items) {
-		if (!raw || !isString(raw.id) || !isString(raw.schema) || !isString(raw.name) || !['folder', 'query', 'diagram'].includes(raw.kind)) return undefined
+		if (!raw || !isString(raw.id) || !isString(raw.schema) || !isString(raw.name) || !['folder', 'query', 'diagram', 'panel'].includes(raw.kind)) return undefined
 		if (raw.parentId !== undefined && !isString(raw.parentId)) return undefined
 		const base = {
 			id: raw.id,
@@ -132,6 +154,7 @@ export const parseExport = (text: string): SavedItem[] | undefined => {
 			updatedAt: isString(raw.updatedAt) ? raw.updatedAt : new Date().toISOString()
 		}
 		if (raw.kind === 'folder') items.push({ ...base, kind: 'folder' })
+		else if (raw.kind === 'panel') items.push({ ...base, kind: 'panel', cards: cardsOf(raw.cards), ...(typeof raw.refresh === 'number' && raw.refresh > 0 ? { refresh: raw.refresh } : {}) })
 		else if (raw.kind === 'query') {
 			items.push({
 				...base,

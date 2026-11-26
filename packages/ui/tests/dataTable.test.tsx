@@ -17,6 +17,7 @@ class DataApi extends FakeApi {
 }
 
 const table = () => screen.getByRole('table', { name: 'Products' })
+const stores = () => screen.getByRole('table', { name: 'Stores' })
 
 describe('the data table', () => {
 	test('its rows; a column sorts it (asc, desc, none); a filter narrows it', async () => {
@@ -101,6 +102,67 @@ describe('the data table', () => {
 		fireEvent.click(screen.getByRole('button', { name: 'Export all csv' }))
 		await waitFor(() => expect(saved.at(-1)?.name).toBe('Products.csv'))
 		expect(api.executed.filter(e => e.query.includes('1000)')).map(e => e.query)).toEqual(['Products.page(1, 1000)', 'Products.page(2, 1000)'])
+		vi.restoreAllMocks()
+	})
+
+	test('a point: shown with its map, edited as longitude and latitude; a vector: summarized, only in the form of a row', async () => {
+		const STORES = { name: 'Stores', primaryKey: ['id'], properties: [{ name: 'id', type: 'integer', required: true }, { name: 'location', type: 'point' }, { name: 'embedding', type: 'vector', length: 3 }] }
+		const api = new DataApi()
+		api.answer = () => [{ id: 1, location: { type: 'Point', coordinates: [-58.38, -34.6] }, embedding: [0.1, 0.2, 0.3] }]
+		render(<DataTable api={api} schema="shop" entity={STORES as any} canWrite={true} locale="en" />)
+		await waitFor(() => expect(within(stores()).getAllByRole('row')).toHaveLength(2))
+		expect(within(stores()).getByText('[0.1, 0.2, 0.3] (3)')).toBeTruthy()
+		expect((screen.getByRole('link', { name: 'location See it on a map' }) as HTMLAnchorElement).href).toContain('mlat=-34.6&mlon=-58.38')
+		// a vector is not edited in its cell
+		fireEvent.doubleClick(within(stores()).getByText('[0.1, 0.2, 0.3] (3)'))
+		expect(screen.queryByLabelText('embedding value')).toBeNull()
+		// a point: its longitude and latitude
+		fireEvent.doubleClick(within(stores()).getByText('-58.38, -34.6'))
+		expect((screen.getByLabelText('location Longitude') as HTMLInputElement).value).toBe('-58.38')
+		fireEvent.change(screen.getByLabelText('location Latitude'), { target: { value: '-34.7' } })
+		api.answer = query => query.includes('update') ? 1 : []
+		fireEvent.keyDown(screen.getByLabelText('location Latitude'), { key: 'Enter' })
+		await waitFor(() => expect(api.executed.some(e => e.query.includes('update'))).toBe(true))
+		expect(api.executed.find(e => e.query.includes('update'))!.data).toEqual({ v_new: { type: 'Point', coordinates: [-58.38, -34.7] }, v_old: { type: 'Point', coordinates: [-58.38, -34.6] }, k_id: 1 })
+		// a new row: the point by its two fields, the vector as JSON checked against its dimensions
+		fireEvent.click(screen.getByRole('button', { name: '+ Add a row' }))
+		const dialog = await screen.findByRole('dialog')
+		fireEvent.change(within(dialog).getByLabelText('id'), { target: { value: '2' } })
+		fireEvent.change(within(dialog).getByLabelText('location Longitude'), { target: { value: '2.35' } })
+		fireEvent.change(within(dialog).getByLabelText('location Latitude'), { target: { value: '48.85' } })
+		fireEvent.change(within(dialog).getByLabelText('embedding'), { target: { value: '[1, 2]' } })
+		fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
+		expect(await screen.findByText('embedding: 3 numbers (it has 2)')).toBeTruthy()
+		fireEvent.change(within(dialog).getByLabelText('embedding'), { target: { value: '[1, 2, 3]' } })
+		fireEvent.click(within(dialog).getByRole('button', { name: 'Create' }))
+		await waitFor(() => expect(api.executed.some(e => e.query === 'Stores.insert()')).toBe(true))
+		expect(api.executed.find(e => e.query === 'Stores.insert()')!.data).toEqual({ id: 2, location: { type: 'Point', coordinates: [2.35, 48.85] }, embedding: [1, 2, 3] })
+	})
+
+	test('a property that keeps files: its name opens it (a signed URL); upload to the storage, then its key in the row; remove', async () => {
+		const DOCS = { name: 'Docs', primaryKey: ['id'], properties: [{ name: 'id', type: 'integer', required: true }, { name: 'photo', type: 'string' }] }
+		const api = new DataApi() as any
+		api.answer = (query: string) => query.includes('update') ? 1 : [{ id: 1, photo: 'shop/Docs/photo/a.png' }]
+		api.files = async () => [{ entity: 'Docs', property: 'photo', storage: 'images', maxBytes: 1024, types: ['image/png'] }]
+		api.fileUrl = vi.fn(async () => ({ url: 'https://s3/a.png?sig', expiresAt: 'x' }))
+		api.fileUpload = vi.fn(async () => ({ key: 'shop/Docs/photo/b.png', url: 'https://s3/b.png?sig', method: 'PUT', headers: { 'Content-Type': 'image/png' }, expiresAt: 'x' }))
+		const opened = vi.spyOn(window, 'open').mockImplementation(() => null)
+		const put = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(null, { status: 200 }))
+		render(<DataTable api={api} schema="shop" entity={DOCS as any} canWrite={true} locale="en" />)
+		const button = await screen.findByRole('button', { name: 'photo Open' })
+		expect(button.textContent).toContain('a.png')
+		fireEvent.click(button)
+		await waitFor(() => expect(opened).toHaveBeenCalledWith('https://s3/a.png?sig', '_blank', 'noopener,noreferrer'))
+		expect(api.fileUrl).toHaveBeenCalledWith('shop', 'Docs', 'photo', 'shop/Docs/photo/a.png')
+		const file = new File([new Uint8Array([1, 2, 3])], 'b.png', { type: 'image/png' })
+		fireEvent.change(screen.getByLabelText('photo Upload'), { target: { files: [file] } })
+		await waitFor(() => expect(api.executed.some((e: any) => e.query.includes('update'))).toBe(true))
+		expect(api.fileUpload).toHaveBeenCalledWith('shop', 'Docs', 'photo', { name: 'b.png', type: 'image/png', size: 3 })
+		expect(put).toHaveBeenCalledWith('https://s3/b.png?sig', { method: 'PUT', headers: { 'Content-Type': 'image/png' }, body: file })
+		expect(api.executed.find((e: any) => e.query.includes('update')).data).toEqual({ v_new: 'shop/Docs/photo/b.png', v_old: 'shop/Docs/photo/a.png', k_id: 1 })
+		fireEvent.click(screen.getByRole('button', { name: 'photo Remove the file' }))
+		await waitFor(() => expect(api.executed.filter((e: any) => e.query.includes('update'))).toHaveLength(2))
+		expect(api.executed.filter((e: any) => e.query.includes('update'))[1].data.v_new).toBeNull()
 		vi.restoreAllMocks()
 	})
 })

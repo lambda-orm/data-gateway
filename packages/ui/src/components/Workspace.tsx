@@ -1,4 +1,5 @@
 import { HistoryView } from './HistoryView'
+import { PanelView } from './PanelView'
 import React, { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { QueryApiPort, SchemaInfo, SessionStorePort, WorkspaceStore, WorkspaceChangeEvent } from '../application/ports'
 import { readSession, WorkspaceSession } from '../domain/session'
@@ -113,7 +114,7 @@ const writeFlag = (key: string): void => { try { globalThis.localStorage?.setIte
 /** What tells that the schemas changed: their routes, states and the version each serves */
 const revisionOf = (schemas: SchemaInfo[]): string => schemas.map(s => `${s.path}|${s.status}|${s.since ?? ''}|${s.pending ?? ''}|${s.reason ?? ''}`).join('\n')
 
-type TabKind = 'query' | 'domain' | 'entity' | 'diagram' | 'schemaFile' | 'schema' | 'element' | 'file' | 'page' | 'stageDiagram'
+type TabKind = 'query' | 'domain' | 'entity' | 'diagram' | 'schemaFile' | 'schema' | 'element' | 'file' | 'page' | 'stageDiagram' | 'panel'
 
 interface DiagramDraft { entities: string[], positions?: Record<string, { x: number, y: number }>, bends?: Record<string, number>, compact: boolean, detail?: DiagramDetail, relationNames: boolean }
 
@@ -219,6 +220,7 @@ interface Openers {
 	entity: (conn: string, schema: string, entity: string) => void
 	newQuery: (conn: string, schema: string, parentId?: string) => void
 	newDiagram: (conn: string, schema: string, parentId?: string) => void
+	newPanel: (conn: string, schema: string, parentId?: string) => void
 	schemaFile: (conn: string, schema: string) => void
 	schema: (conn: string, schema: string) => void
 	element: (conn: string, schema: string, focus: FormFocus, edit?: boolean) => void
@@ -380,8 +382,9 @@ const ConnectionSection: React.FC<{
 					{(() => {
 						const name = (
 							<>
-								<strong>{spec.name}</strong>{spec.current && <span className="lw-badge">{a.current}</span>}
-								{spec.description && <span className="lw-type lw-connection-url">{spec.description}</span>}
+								<strong>{spec.name}</strong>
+								{spec.description && <><span className="lw-connection-sep" aria-hidden="true">:</span><span className="lw-type lw-connection-url">{spec.description}</span></>}
+								{spec.current && <span className="lw-badge">{a.current}</span>}
 							</>
 						)
 						return spec.onOpen
@@ -418,6 +421,7 @@ const ConnectionSection: React.FC<{
 						loadDomain={domainOf} onOpen={item => open.saved(id, item)} onOpenDomain={schema => open.domain(id, schema)} onOpenEntity={(schema, entity) => open.entity(id, schema, entity)}
 						onNewQuery={(schema, parentId) => open.newQuery(id, schema, parentId)}
 						onNewDiagram={(schema, parentId) => open.newDiagram(id, schema, parentId)}
+						onNewPanel={(schema, parentId) => open.newPanel(id, schema, parentId)}
 						admin={adminApi && can ? {
 							can,
 							onOpenSchemaFile: schema => open.schemaFile(id, schema),
@@ -636,6 +640,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 	const same = (conn: string, t: Tab) => connOf(t) === conn
 	const openSaved = (conn: string, item: SavedItem) => {
 		if (item.kind === 'folder' || reuse(t => same(conn, t) && t.savedId === item.id)) return
+		if (item.kind === 'panel') { add({ kind: 'panel', title: item.name, schema: item.schema, savedId: item.id, connection: conn }); return }
 		if (item.kind === 'query') add({ kind: 'query', title: item.name, schema: item.schema, savedId: item.id, initial: contentOf(item), wizard: item.wizard, connection: conn })
 		else if (item.stage) add({ kind: 'stageDiagram', title: item.name, schema: item.schema, stage: item.stage, stageView: item.stageView, savedId: item.id, connection: conn })
 		else add({ kind: 'diagram', title: item.name, schema: item.schema, savedId: item.id, draft: draftOf(item), connection: conn })
@@ -709,6 +714,15 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 		entity: openEntity,
 		newQuery: (conn, schema, parentId) => newQuery(conn, schema, parentId),
 		newDiagram: (conn, schema, parentId) => setCreatingDiagram({ conn, schema, parentId }),
+		// a panel is made at once with a name of its own (renamed from the explorer) and opened
+		newPanel: (conn, schema, parentId) => {
+			const controller = rt(conn)?.controller
+			if (!controller) return
+			const taken = new Set((rt(conn)?.state.items ?? []).filter(i => i.kind === 'panel' && i.schema === schema && i.parentId === parentId).map(i => i.name))
+			let name = x.newPanel
+			for (let n = 2; taken.has(name); n++) name = `${x.newPanel} ${n}`
+			controller.createPanel({ schema, parentId, name }, { cards: [] }).then(panel => openSaved(conn, panel)).catch(() => undefined)
+		},
 		schemaFile: openSchemaFile,
 		schema: openSchema,
 		element: openElement,
@@ -820,7 +834,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 		if (e.key === 'Enter') { e.preventDefault(); fitWidth() }
 	}
 
-	const iconOf = (tab: Tab) => tab.kind === 'page' ? pages?.[tab.page ?? '']?.icon ?? null : tab.kind === 'element' ? <Icons.edit /> : tab.kind === 'stageDiagram' ? <Icons.stages /> : tab.kind === 'schema' ? <Icons.terminal /> : tab.kind === 'file' ? <Icons.query /> : tab.kind === 'domain' || tab.kind === 'schemaFile' ? <Icons.yaml /> : tab.kind === 'entity' ? <Icons.entity /> : tab.kind === 'diagram' ? <Icons.diagram /> : savedOf(tab) ? <Icons.query /> : null
+	const iconOf = (tab: Tab) => tab.kind === 'page' ? pages?.[tab.page ?? '']?.icon ?? null : tab.kind === 'element' ? <Icons.edit /> : tab.kind === 'stageDiagram' ? <Icons.stages /> : tab.kind === 'schema' ? <Icons.terminal /> : tab.kind === 'file' ? <Icons.query /> : tab.kind === 'domain' || tab.kind === 'schemaFile' ? <Icons.yaml /> : tab.kind === 'entity' ? <Icons.entity /> : tab.kind === 'diagram' ? <Icons.diagram /> : tab.kind === 'panel' ? <Icons.dashboard /> : savedOf(tab) ? <Icons.query /> : null
 	const activeTab = tabs.find(t => t.id === active)
 	const saveKeys = (tab: Tab) => (e: React.KeyboardEvent) => { if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save(tab) } }
 	const texts = { ...x, entities: x.entities }
@@ -976,6 +990,11 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 										onRemove={adminApi && can?.schemaWrite ? (schema, entity) => openElement(conn, schema, { section: 'entities', name: entity }, false, true) : undefined} removeLabel={a.remove}
 										admin={adminApi && can?.schemaRead ? adminApi : undefined} revision={sinceOf(conn, tab.schema)}
 										tracesUrl={connections.find(c => c.id === conn)?.tracesUrl?.(tab.schema ?? '', tab.entity ?? '')} />
+								)}
+								{r && tab.kind === 'panel' && saved?.kind === 'panel' && (
+									<PanelView key={saved.id} api={r.api} schema={tab.schema ?? ''} locale={workbench.locale} culture={workbench.culture}
+										content={{ cards: saved.cards, ...(saved.refresh ? { refresh: saved.refresh } : {}) }}
+										onSave={async content => { await r.controller.update(saved.id, { cards: content.cards, refresh: content.refresh }) }} />
 								)}
 								{r && tab.kind === 'diagram' && tab.draft && (
 									<div tabIndex={-1} className="lw-diagram-tab">

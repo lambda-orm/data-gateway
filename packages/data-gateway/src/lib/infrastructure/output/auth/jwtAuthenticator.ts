@@ -122,6 +122,7 @@ export class JwtAuthenticator implements AuthenticatorPort {
 			return { valid: false, reason: `the token is not valid: ${reason}`, challenge: `Bearer error="invalid_token", error_description="${reason}"` }
 		}
 		const permissions = new Set<Permission>()
+		let approval = false
 		const views = new Set<string>()
 		const mapping = this.config.principal.permissions
 		if (mapping) {
@@ -132,6 +133,7 @@ export class JwtAuthenticator implements AuthenticatorPort {
 				if (!config) continue
 				for (const permission of config.permissions) permissions.add(permission)
 				if (config.view) views.add(config.view)
+				if (config.approval) approval = true
 			}
 		}
 		// one view per request, never guessed (docs/VIEWS_BY_IDENTITY.md, decision 2)
@@ -148,6 +150,7 @@ export class JwtAuthenticator implements AuthenticatorPort {
 				...who,
 				...(Object.keys(context).length ? { context } : {}),
 				...(views.size ? { view: [...views][0] } : {}),
+				...(approval ? { approval: 'writes' as const } : {}),
 				...(typeof payload.exp === 'number' ? { expiresAt: payload.exp * 1000 } : {})
 			}
 		}

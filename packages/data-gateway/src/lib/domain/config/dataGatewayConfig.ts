@@ -10,12 +10,15 @@ export interface CredentialConfig {
 	permissions: Permission[]
 	/** the view of λORM of its requests (docs/VIEWS_BY_IDENTITY.md); none, the one of the schema */
 	view?: string
+	/** its writes wait for a person to approve them, on every transport (docs/MUTATION_APPROVAL.md) */
+	approval?: 'writes'
 }
 
-/** A role of the tokens of an issuer: its permissions, and the view of λORM of who has it */
+/** A role of the tokens of an issuer: its permissions, the view of λORM of who has it, and whether its writes wait */
 export interface RoleConfig {
 	permissions: Permission[]
 	view?: string
+	approval?: 'writes'
 }
 
 export type AuthenticationType = 'bearer' | 'apikey' | 'basic'
@@ -68,9 +71,10 @@ export interface SchemaOverrides {
 	/** Variables its worker receives on top of its .env and the base variables */
 	env?: Record<string, string>
 	scripts?: Partial<ScriptsConfig>
-	mcp?: { maxRows?: number, tools?: { include: string[], exclude: string[] }, freeQueries?: boolean }
+	mcp?: { maxRows?: number, tools?: { include: string[], exclude: string[] }, freeQueries?: boolean, approval?: ApprovalMode, approvalExpiresMs?: number }
 	/** its outbox dispatcher: replaces the global one */
 	outbox?: OutboxConfig
+	files?: FilesConfig
 	/** its cache: replaces the global one */
 	cache?: CacheConfig
 	/** the limits of its named queries, by name */
@@ -214,6 +218,9 @@ export interface ManagementTransportConfig extends TransportConfig {
 	trustedProxies: string[]
 }
 
+/** none: writes run at once; writes: they wait for a person to approve them (docs/MUTATION_APPROVAL.md) */
+export type ApprovalMode = 'none' | 'writes'
+
 export interface McpConfig {
 	/** Name the MCP server gives in initialize */
 	name: string
@@ -227,6 +234,10 @@ export interface McpConfig {
 	 * orm_execute, orm_execute_script, orm_execute_queued nor orm_plan (docs/NAMED_QUERIES.md §3)
 	 */
 	freeQueries: boolean
+	/** writes: every write by MCP waits for a person to approve it (docs/MUTATION_APPROVAL.md) */
+	approval: ApprovalMode
+	/** how long a write waits before it expires */
+	approvalExpiresMs: number
 }
 
 /** The cache of the results of the reads (docs/RESULT_CACHE.md) */
@@ -251,6 +262,51 @@ export interface OutboxConfig {
 	intervalMs: number
 	batch: number
 	destinations: OutboxDestinationConfig[]
+}
+
+/** Where the files of a property live (docs/FILES_AND_PANELS.md §1): an S3 or an Azure Blob, and what it takes */
+export type FileStorageConfig = ({
+	type: 's3'
+	bucket: string
+	region: string
+	/** another S3 (MinIO, R2, versitygw…): its URL, the bucket in the path */
+	endpoint?: string
+	accessKeyId: string
+	secretAccessKey: string
+} | {
+	type: 'azureBlob'
+	account: string
+	container: string
+	accountKey: string
+	/** another Blob service (Azurite) */
+	endpoint?: string
+}) & {
+	/** the keys it creates go under this */
+	prefix: string
+	maxBytes: number
+	/** the types it takes (image/png); none, any */
+	types?: string[]
+	/** the life of a URL it signs */
+	expiresMs: number
+}
+
+/** The storages, and the properties whose value is the key of an object of one (Entity.property: storage) */
+export interface FilesConfig {
+	storages: Record<string, FileStorageConfig>
+	properties: Record<string, string>
+}
+
+/** A Valkey (or Redis) shared by the replicas (docs/REPLICAS.md): the changes of the data and the lock of the outbox */
+export interface ValkeyConfig {
+	/** valkey://, valkeys:// (TLS), redis:// or rediss:// */
+	url: string
+	/** what its channels and keys start with: to share a Valkey with other things */
+	prefix: string
+}
+
+/** The replicas of a gateway together (docs/REPLICAS.md) */
+export interface ClusterConfig {
+	valkey?: ValkeyConfig
 }
 
 /** The limits of a query of application.queries (docs/NAMED_QUERIES.md §4) */
@@ -294,6 +350,10 @@ export interface DataGatewayConfig {
 	mcp: McpConfig
 	cache: CacheConfig
 	outbox: OutboxConfig
+	/** the files of some properties in S3 or Azure Blob (docs/FILES_AND_PANELS.md) */
+	files: FilesConfig
+	/** the replicas together, by a Valkey (docs/REPLICAS.md) */
+	cluster: ClusterConfig
 	runtime: RuntimeConfig
 	/** Only the transports with a port (docs/DATA_GATEWAY.md §2.1) */
 	transports: TransportsConfig

@@ -1,4 +1,5 @@
 import { tracesOfEntity } from './observability'
+import { OidcSettings, OidcTokens, renew, signIn, signOut as oidcSignOut } from './oidc'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { BrowserSessionStore, Workspace } from '@lambdaorm/ui'
 import { Cable, Plus, Settings } from 'lucide-react'
@@ -6,6 +7,7 @@ import { ConnectionPage, ConnectionTools, Credential, CredentialFields, getJson,
 import { AppMenu } from './appMenu'
 import { ManagementClient, ManagementState, testConnection } from './management'
 import { SessionsPanel } from './sessions'
+import { ApprovalsPanel } from './approvals'
 import { endpointsOf, McpTab, SwaggerTab, useTransports, WebSocketTab } from './tools'
 import { forbiddenTarget, unreachable, viaProxy } from './proxy'
 
@@ -36,10 +38,16 @@ export interface IdeConnection {
 	/** where its traces are seen: Grafana, with a Tempo datasource (its uid; tempo by default) */
 	grafanaUrl?: string
 	tempoDatasource?: string
+	/** OpenID Connect (kind oidc, docs/OIDC_LOGIN.md): its identity provider and its public client */
+	issuer?: string
+	clientId?: string
+	scopes?: string
 }
 
 const CONNECTIONS = 'data-gateway-ide.connections'
 const SECRETS = 'data-gateway-ide.secrets'
+/** the tokens of the logins of the connections (OpenID Connect): in the tab only */
+const OIDC_TOKENS = 'data-gateway-ide.oidc'
 const read = <T, >(storage: () => Storage, key: string, empty: T): T => { try { const text = storage().getItem(key); return text ? JSON.parse(text) : empty } catch { return empty } }
 const write = (storage: () => Storage, key: string, value: unknown) => { try { storage().setItem(key, JSON.stringify(value)) } catch { /* private window */ } }
 const local = () => window.localStorage
@@ -66,7 +74,9 @@ const ConnectionEditor: React.FC<{
 	onOpenTool?: (tool: 'swagger' | 'websocket' | 'mcp') => void
 	/** its session of management: its lists of sessions */
 	client?: ManagementClient
-}> = ({ initial, secret: givenSecret, who, problem, onSave, onRemove, onOpenTool, client }) => {
+	/** OpenID Connect: who signed in and until when; sign in, sign out */
+	oidc?: { user?: string, expiresAt?: number, signIn: () => Promise<void>, signOut: () => void }
+}> = ({ initial, secret: givenSecret, who, problem, onSave, onRemove, onOpenTool, client, oidc }) => {
 	const { t } = usePrefs()
 	const [draft, setDraft] = useState<IdeConnection>(initial ?? { id: '', name: '', protocol: 'http', address: '', kind: 'apikey', header: 'X-Api-Key', user: '', remember: false })
 	const [secret, setSecret] = useState(givenSecret)
@@ -86,7 +96,16 @@ const ConnectionEditor: React.FC<{
 			setTested({ ok: false, text: problemOf(e, t) })
 		} finally { setBusy(false) }
 	}
-	const valid = draft.name.trim() && draft.address.trim()
+	const valid = draft.name.trim() && draft.address.trim() && (draft.kind !== 'oidc' || (!!draft.issuer?.trim() && !!draft.clientId?.trim()))
+	const [signing, setSigning] = useState(false)
+	const [signError, setSignError] = useState<string>()
+	const { culture } = usePrefs()
+	const signIn = async () => {
+		if (!oidc) return
+		setSigning(true)
+		setSignError(undefined)
+		try { await oidc.signIn() } catch (e: any) { setSignError(t.signInFailed.replace('{error}', e?.message ?? String(e))) } finally { setSigning(false) }
+	}
 	const form = (
 		<section className="dg-card">
 			<form className="dg-form dg-connection-form" onSubmit={e => { e.preventDefault(); if (valid) onSave({ ...draft, name: draft.name.trim() }, secret) }}>
@@ -100,8 +119,26 @@ const ConnectionEditor: React.FC<{
 					</label>
 					<label>{t.address}<input aria-label={t.address} value={draft.address} onChange={e => set({ address: e.target.value })} placeholder="host:port/base-path" spellCheck={false} /></label>
 				</span>
-				<CredentialFields credential={credential} onChange={patch => { if (patch.secret !== undefined) { setSecret(patch.secret); setTested(undefined) } else set(patch as Partial<IdeConnection>) }} />
-				{draft.kind !== 'none' && <label className="dg-check"><input type="checkbox" checked={draft.remember} onChange={e => set({ remember: e.target.checked })} /> {t.rememberKey}</label>}
+				<CredentialFields allowOidc credential={credential} onChange={patch => { if (patch.secret !== undefined) { setSecret(patch.secret); setTested(undefined) } else set(patch as Partial<IdeConnection>) }} />
+				{draft.kind === 'oidc' && (
+					<>
+						<label>{t.issuer}<input aria-label={t.issuer} value={draft.issuer ?? ''} onChange={e => set({ issuer: e.target.value.trim() || undefined })} placeholder="https://idp.example.com/realms/shop" spellCheck={false} /></label>
+						<span className="dg-url">
+							<label>{t.clientId}<input aria-label={t.clientId} value={draft.clientId ?? ''} onChange={e => set({ clientId: e.target.value.trim() || undefined })} placeholder="data-gateway-ide" spellCheck={false} /></label>
+							<label>{t.scopes}<input aria-label={t.scopes} value={draft.scopes ?? ''} onChange={e => set({ scopes: e.target.value || undefined })} placeholder="openid profile" spellCheck={false} /></label>
+						</span>
+						<span className="dg-muted">{t.oidcNote}</span>
+						{initial && oidc && (
+							<span className="dg-form-actions dg-signin">
+								{oidc.user
+									? <><span className="dg-ok">{t.signedInAs.replace('{name}', oidc.user).replace('{time}', new Date(oidc.expiresAt ?? Date.now()).toLocaleTimeString(culture, { timeStyle: 'short' }))}</span><button type="button" onClick={oidc.signOut}>{t.signOut}</button></>
+									: <><span className="dg-muted">{t.notSignedIn}</span><button type="button" className="dg-primary" disabled={signing} onClick={signIn}>{t.signIn}</button></>}
+							</span>
+						)}
+						{signError && <div className="dg-error" role="alert">{signError}</div>}
+					</>
+				)}
+				{draft.kind !== 'none' && draft.kind !== 'oidc' && <label className="dg-check"><input type="checkbox" checked={draft.remember} onChange={e => set({ remember: e.target.checked })} /> {t.rememberKey}</label>}
 				<details className="dg-advanced">
 					<summary>{t.publicUrls}</summary>
 					<span className="dg-muted">{t.publicUrlsNote}</span>
@@ -132,7 +169,8 @@ const ConnectionEditor: React.FC<{
 	return initial
 		? <ConnectionPage name={initial.name} url={urlOf(initial)} credential={credentialOf(initial, { [initial.id]: givenSecret })} who={who}
 			tools={onOpenTool && <ToolsOf connection={initial} onOpen={onOpenTool} />}
-			sessions={client && who && <SessionsPanel client={client} who={who} />}>{form}</ConnectionPage>
+			sessions={client && who && <SessionsPanel client={client} who={who} />}
+			approvals={client && who && who.permissions.includes('approve') && <ApprovalsPanel client={client} self={who.name} />}>{form}</ConnectionPage>
 		: <div className="dg-pane"><h2>{t.newConnection}</h2>{form}</div>
 }
 
@@ -154,6 +192,8 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 	const { t, locale, culture } = usePrefs()
 	const [connections, setConnections] = useState<IdeConnection[]>(() => read(local, CONNECTIONS, []))
 	const [secrets, setSecrets] = useState<Record<string, string>>(() => read(tab, SECRETS, {}))
+	const [oidcTokens, setOidcTokens] = useState<Record<string, OidcTokens>>(() => read(tab, OIDC_TOKENS, {}))
+	useEffect(() => { write(tab, OIDC_TOKENS, oidcTokens) }, [oidcTokens])
 	const [openPage, setOpenPage] = useState<{ key: string, at: number }>(() => ({ key: read<IdeConnection[]>(local, CONNECTIONS, []).length ? '' : 'connection:new', at: Date.now() }))
 	const openOf = (key: string) => setOpenPage({ key, at: Date.now() })
 	// the connection about to be removed (its confirmation)
@@ -188,7 +228,8 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 		const seen = new Set<string>()
 		for (const c of connections) {
 			seen.add(c.id)
-			const signature = `${urlOf(c)}|${c.kind}|${c.header}|${c.user}|${hasSecret(c, secrets) ? credentialOf(c, secrets).secret : ''}`
+			// a token of a login renewed is the same credential: its next login (when its session ends) takes the new one
+			const signature = `${urlOf(c)}|${c.kind}|${c.header}|${c.user}|${hasSecret(c, secrets) ? (c.kind === 'oidc' ? 'signed in' : credentialOf(c, secrets).secret) : ''}`
 			const existing = clients.current.get(c.id)
 			if (existing && existing.signature === signature) {
 				if (reconnecting.current.delete(c.id)) existing.client.reconnect().catch(() => undefined)
@@ -201,7 +242,7 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 				const current = now.current.connections.find(x => x.id === c.id)
 				return current && hasSecret(current, now.current.secrets) ? credentialOf(current, now.current.secrets) : undefined
 			}
-			const client = new ManagementClient(c.id, urlOf(c), credential, { invalid: t.invalid, unreachable: t.unreachable, needsKey: t.needsKey, sessionEnded: t.sessionEnded })
+			const client = new ManagementClient(c.id, urlOf(c), credential, { invalid: t.invalid, unreachable: t.unreachable, needsKey: c.kind === 'oidc' ? t.notSignedIn : t.needsKey, sessionEnded: t.sessionEnded })
 			client.subscribe(state => setStates(all => ({ ...all, [c.id]: state })))
 			clients.current.set(c.id, { client, signature })
 			for (const resolve of waiting.current.get(c.id) ?? []) resolve(client)
@@ -221,16 +262,45 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 	const problems = useMemo(() => Object.fromEntries(Object.entries(states).map(([id, state]) => [id, state.problem ?? (state.expiring ? t.sessionExpiring : undefined)])), [states, t])
 	const save = (existing: IdeConnection | undefined) => (connection: IdeConnection, secret: string) => {
 		const id = existing?.id ?? `c${Date.now().toString(36)}`
-		const kept: IdeConnection = { ...connection, id, secret: connection.remember && secret ? secret : undefined }
+		// a token of a login never stays beyond the tab
+		const kept: IdeConnection = { ...connection, id, ...(connection.kind === 'oidc' ? { remember: false } : {}), secret: connection.kind !== 'oidc' && connection.remember && secret ? secret : undefined }
 		setConnections(all => existing ? all.map(c => c.id === id ? kept : c) : [...all, kept])
-		setSecrets(s => ({ ...s, [id]: secret }))
+		if (connection.kind !== 'oidc') setSecrets(s => ({ ...s, [id]: secret }))
 		if (existing) reconnecting.current.add(id)
 		if (!existing) openOf(`connection:${id}`)
 	}
 	const remove = (id: string) => {
 		setConnections(all => all.filter(c => c.id !== id))
 		setSecrets(s => { const n = { ...s }; delete n[id]; return n })
+		setOidcTokens(s => { const n = { ...s }; delete n[id]; return n })
 	}
+	// OpenID Connect (docs/OIDC_LOGIN.md §2): the tokens of a login in the tab, its access token the secret of the connection
+	const oidcSettingsOf = (c: IdeConnection): OidcSettings => ({ issuer: c.issuer ?? '', clientId: c.clientId ?? '', scopes: c.scopes })
+	const keepTokens = (id: string, tokens: OidcTokens | undefined) => {
+		setOidcTokens(all => { const n = { ...all }; if (tokens) n[id] = tokens; else delete n[id]; return n })
+		setSecrets(s => { const n = { ...s }; if (tokens) n[id] = tokens.access; else delete n[id]; return n })
+	}
+	const oidcOf = (c: IdeConnection) => c.kind !== 'oidc' ? undefined : {
+		user: oidcTokens[c.id]?.user,
+		expiresAt: oidcTokens[c.id]?.expiresAt,
+		signIn: async () => { keepTokens(c.id, await signIn(oidcSettingsOf(c))) },
+		signOut: () => {
+			const tokens = oidcTokens[c.id]
+			keepTokens(c.id, undefined)
+			if (tokens) oidcSignOut(oidcSettingsOf(c), tokens).catch(() => undefined)
+		}
+	}
+	// a minute before its access token ends, the refresh token renews it; when it can't, sign in again
+	useEffect(() => {
+		const timers = Object.entries(oidcTokens).map(([id, tokens]) => {
+			const c = connections.find(x => x.id === id)
+			if (!c || c.kind !== 'oidc') return undefined
+			return setTimeout(() => {
+				renew(oidcSettingsOf(c), tokens).then(renewed => keepTokens(id, renewed), () => keepTokens(id, undefined))
+			}, Math.max(5000, tokens.expiresAt - Date.now() - 60000))
+		})
+		return () => { for (const timer of timers) if (timer) clearTimeout(timer) }
+	}, [oidcTokens, connections])
 	const specs = useMemo(() => connections.map(c => {
 		return {
 			id: c.id,
@@ -260,7 +330,7 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 			title: `${t.connection}: ${c.name}`,
 			icon: <Cable size={14} aria-hidden="true" />,
 			render: () => <ConnectionEditor key={c.id} initial={c} secret={credentialOf(c, secrets).secret} who={whos[c.id]} problem={problems[c.id]} onSave={save(c)} onRemove={() => remove(c.id)}
-				onOpenTool={tool => openOf(`${tool}:${c.id}`)} client={clients.current.get(c.id)?.client} />
+				onOpenTool={tool => openOf(`${tool}:${c.id}`)} client={clients.current.get(c.id)?.client} oidc={oidcOf(c)} />
 		}])),
 		// its tools, with its credential
 		...Object.fromEntries(connections.flatMap(c => (['swagger', 'websocket', 'mcp'] as const).map(tool => [`${tool}:${c.id}`, {
@@ -268,7 +338,7 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 			icon: <Cable size={14} aria-hidden="true" />,
 			render: () => <ToolTab connection={c} tool={tool} headers={() => headersOf(credentialOf(c, secrets))} theme={dark ? 'dark' : 'light'} />
 		}])))
-	}), [connections, secrets, whos, problems, t, dark])
+	}), [connections, secrets, whos, problems, t, dark, oidcTokens])
 	// where the IDE was (its tabs across the connections): in this browser; its active tab, told to the gateways as what
 	// the person is looking at (session.activity)
 	const session = useMemo(() => {

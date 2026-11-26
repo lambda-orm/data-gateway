@@ -5,6 +5,9 @@
 //
 // DATA_GATEWAY_IDE_TARGETS: the origins it may reach, separated by commas (http://data-gateway:9292), or * for any (a
 // local IDE). Without it, none: an open proxy would reach any host of the network of the IDE.
+// DATA_GATEWAY_IDE_CONNECT_SRC: other origins the page may reach itself, separated by spaces: the storages of the files
+// of the properties (https://shop-images.s3.eu-west-1.amazonaws.com), which take and give the bytes straight
+// (docs/FILES_AND_PANELS.md). The identity provider of a connection goes through the proxy: add it to the targets.
 // PORT (8080), HOST (0.0.0.0), DATA_GATEWAY_IDE_DIST (./dist next to this folder).
 import http from 'node:http'
 import https from 'node:https'
@@ -134,10 +137,15 @@ const upgrade = (req, socket, head, allowed) => {
 	upstream.end()
 }
 
+/** the origins of DATA_GATEWAY_IDE_CONNECT_SRC that are origins (anything else, ignored: a CSP can't be broken by it) */
+const connectSources = (raw = '') => raw.split(/[\s,]+/).filter(Boolean).flatMap(part => {
+	try { const url = new URL(part); return /^https?:$/.test(url.protocol) ? [url.origin] : [] } catch { return [] }
+})
+
 // the app: nothing from elsewhere (Monaco and its workers are bundled), never framed; it talks only to its own origin
 const SECURITY = {
 	// api.github.com: the latest version of the IDE (its menu λORM → Update), read by the browser
-	'Content-Security-Policy': "default-src 'self'; connect-src 'self' https://api.github.com data: blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'none'",
+	'Content-Security-Policy': `default-src 'self'; connect-src 'self' https://api.github.com ${connectSources(process.env.DATA_GATEWAY_IDE_CONNECT_SRC).join(' ')} data: blob:; img-src 'self' data: blob:; style-src 'self' 'unsafe-inline'; font-src 'self' data:; worker-src 'self' blob:; frame-ancestors 'none'; base-uri 'self'; form-action 'none'`,
 	'X-Frame-Options': 'DENY',
 	'Referrer-Policy': 'no-referrer',
 	'X-Content-Type-Options': 'nosniff'

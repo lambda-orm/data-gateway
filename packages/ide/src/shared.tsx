@@ -6,7 +6,8 @@ import { Texts, textsOf } from './texts'
 import { ADMIN_PERMISSIONS, DATA_PERMISSIONS, permissionTextsOf } from './permissions'
 
 /** How a credential authenticates to a data-gateway (the IDE: each connection its own; the gateway's UI: its login) */
-export type Kind = 'bearer' | 'apikey' | 'basic' | 'none'
+/** oidc: the token of a login with the identity provider of the gateway (docs/OIDC_LOGIN.md), sent as a Bearer token */
+export type Kind = 'bearer' | 'apikey' | 'basic' | 'none' | 'oidc'
 export type Theme = string
 export interface Credential { kind: Kind, header: string, user: string, secret: string }
 export interface Who { name: string, permissions: string[] }
@@ -20,7 +21,7 @@ export const OUT = { target: '_blank', rel: 'noopener noreferrer' } as const
 
 export const headersOf = (c: Credential): Record<string, string> => {
 	switch (c.kind) {
-	case 'bearer': return { Authorization: `Bearer ${c.secret}` }
+	case 'bearer': case 'oidc': return { Authorization: `Bearer ${c.secret}` }
 	case 'apikey': return { [c.header]: c.secret }
 	case 'basic': return { Authorization: `Basic ${btoa(`${c.user}:${c.secret}`)}` }
 	default: return {}
@@ -82,7 +83,7 @@ const cultureName = (culture: string, locale: string): string => {
 
 /** How a credential authenticates, without its secret */
 export const authenticationOf = (c: Credential, t: Texts): string =>
-	c.kind === 'apikey' ? `${t.apikey} (${t.headerName} ${c.header})` : c.kind === 'basic' ? `${t.basic} (${c.user})` : c.kind === 'bearer' ? t.bearer : t.none
+	c.kind === 'apikey' ? `${t.apikey} (${t.headerName} ${c.header})` : c.kind === 'basic' ? `${t.basic} (${c.user})` : c.kind === 'bearer' ? t.bearer : c.kind === 'oidc' ? t.oidc : t.none
 
 /** A theme previewed with its own colors (not those of the page): a card with a text, a muted line and a button */
 const ThemeSwatch: React.FC<{ label: string, selected: boolean, colors: ThemeColors, split?: ThemeColors, onPick: () => void }> = ({ label, selected, colors, split, onPick }) => {
@@ -180,14 +181,16 @@ export const PermissionsOf: React.FC<{ who: Who }> = ({ who }) => {
  * A connection to a data-gateway: where it is, how it authenticates, who that credential is and what it may do (its
  * roles). The IDE puts its form above (children); the gateway's UI shows its current connection.
  */
-export const ConnectionPage: React.FC<{ name: string, url: string, credential: Credential, who?: Who, current?: boolean, children?: React.ReactNode, tools?: React.ReactNode, sessions?: React.ReactNode }> = ({ name, url, credential, who, current, children, tools, sessions }) => {
+export const ConnectionPage: React.FC<{ name: string, url: string, credential: Credential, who?: Who, current?: boolean, children?: React.ReactNode, tools?: React.ReactNode, sessions?: React.ReactNode, approvals?: React.ReactNode }> = ({ name, url, credential, who, current, children, tools, sessions, approvals }) => {
 	const { t } = usePrefs()
 	// its sections in tabs: the connection (its form and who it is), its tools, its roles, its sessions
 	const sections = [
 		{ key: 'connection', label: t.connection, show: true },
 		{ key: 'tools', label: t.tools, show: !!tools },
 		{ key: 'roles', label: t.roles, show: !!who },
-		{ key: 'sessions', label: t.sessions, show: !!sessions }
+		{ key: 'sessions', label: t.sessions, show: !!sessions },
+		// the writes that wait for a person (docs/MUTATION_APPROVAL.md), with approve
+		{ key: 'approvals', label: t.approvals, show: !!approvals }
 	].filter(s => s.show)
 	const [section, setSection] = useState('connection')
 	const active = sections.some(s => s.key === section) ? section : 'connection'
@@ -217,6 +220,7 @@ export const ConnectionPage: React.FC<{ name: string, url: string, credential: C
 			{active === 'tools' && tools}
 			{active === 'roles' && who && <PermissionsOf who={who} />}
 			{active === 'sessions' && sessions}
+			{active === 'approvals' && approvals}
 		</div>
 	)
 }
@@ -332,7 +336,7 @@ export const AppShell: React.FC<{ children: (dark: boolean) => React.ReactNode }
 }
 
 /** How a credential authenticates: its kind, its header or user, and its secret (shown on demand) */
-export const CredentialFields: React.FC<{ credential: Credential, onChange: (patch: Partial<Credential>) => void, autoFocus?: boolean }> = ({ credential, onChange, autoFocus }) => {
+export const CredentialFields: React.FC<{ credential: Credential, onChange: (patch: Partial<Credential>) => void, autoFocus?: boolean, allowOidc?: boolean }> = ({ credential, onChange, autoFocus, allowOidc }) => {
 	const { t } = usePrefs()
 	const [visible, setVisible] = useState(false)
 	return (
@@ -341,13 +345,14 @@ export const CredentialFields: React.FC<{ credential: Credential, onChange: (pat
 				<select aria-label="authentication" value={credential.kind} onChange={e => onChange({ kind: e.target.value as Kind })}>
 					<option value="apikey">{t.apikey}</option>
 					<option value="bearer">{t.bearer}</option>
+					{allowOidc && <option value="oidc">{t.oidc}</option>}
 					<option value="basic">{t.basic}</option>
 					<option value="none">{t.none}</option>
 				</select>
 			</label>
 			{credential.kind === 'apikey' && <label>{t.header}<input aria-label="header" value={credential.header} onChange={e => onChange({ header: e.target.value })} /></label>}
 			{credential.kind === 'basic' && <label>{t.user}<input aria-label="user" value={credential.user} onChange={e => onChange({ user: e.target.value })} autoComplete="username" /></label>}
-			{credential.kind !== 'none' && (
+			{credential.kind !== 'none' && credential.kind !== 'oidc' && (
 				<label>{credential.kind === 'basic' ? t.password : credential.kind === 'apikey' ? t.key : t.token}
 					<span className="dg-secret">
 						<input aria-label="secret" type={visible ? 'text' : 'password'} value={credential.secret} onChange={e => onChange({ secret: e.target.value.trim() })} autoComplete="current-password" autoFocus={autoFocus} spellCheck={false} />

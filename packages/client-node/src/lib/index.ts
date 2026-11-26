@@ -1,4 +1,4 @@
-export { connect, DataGatewayClient, SchemaOperations, StageOperations, GeneralOperations, queryText, Query, Whoami, DomainSearch, DescribedEntities } from './client'
+export { connect, DataGatewayClient, SchemaOperations, StageOperations, GeneralOperations, queryText, Query, Whoami, DomainSearch, DescribedEntities, ApprovalPending, isApprovalPending } from './client'
 export { ConnectOptions, ConnectionTarget, parseConnection } from './connection'
 export { GatewayError, GatewayErrorCode, GatewayErrorInfo, TransportName, errorCode } from './errors'
 export { Operation } from './operations'

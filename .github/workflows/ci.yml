@@ -56,6 +56,22 @@ jobs:
       - name: The suite against the gateway from source
         run: scripts/ci-local.sh clients
 
+  oidc:
+    name: OIDC (Keycloak)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24.16.0
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      # the tokens of a real Keycloak on the five transports, and the rotation of its key (docs/OIDC_LOGIN.md §1)
+      - name: Keycloak and the gateway from source
+        run: scripts/ci-local.sh oidc
+
   commits:
     name: Commit messages
     if: github.event_name == 'pull_request'

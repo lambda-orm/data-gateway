@@ -1,9 +1,11 @@
 /* the palette (light, then dark) and the design tokens: one scale of spaces, text sizes, radii, heights and shadows for
    every root of the library (a workbench, the tabs, the workspace, a dialog) */
 .lw-workbench, .lw-tabs, .lw-space {
-  --lw-bg: #fff; --lw-fg: #1d1f23; --lw-muted: #6b7280; --lw-border: #d6d9de; --lw-accent: #2563eb; --lw-panel: #f6f7f9; --lw-error: #b42318; --lw-warning: #b45309; --lw-ok: #067647; }
+  --lw-bg: #fff; --lw-fg: #1d1f23; --lw-muted: #6b7280; --lw-border: #d6d9de; --lw-accent: #2563eb; --lw-panel: #f6f7f9; --lw-error: #b42318; --lw-warning: #b45309; --lw-ok: #067647;
+  --lw-series-1: #2563eb; --lw-series-2: #0891b2; --lw-series-3: #ca8a04; --lw-series-4: #c026d3; --lw-series-5: #16a34a; --lw-series-6: #dc2626; }
 .lw-workbench.lw-dark, .lw-tabs.lw-dark, .lw-space.lw-dark {
-  --lw-bg: #16181d; --lw-fg: #e6e8eb; --lw-muted: #9aa1ab; --lw-border: #2e323a; --lw-accent: #6ea0ff; --lw-panel: #1e2128; --lw-error: #ff8a80; --lw-warning: #f0b45a; --lw-ok: #6fdc8c; }
+  --lw-bg: #16181d; --lw-fg: #e6e8eb; --lw-muted: #9aa1ab; --lw-border: #2e323a; --lw-accent: #6ea0ff; --lw-panel: #1e2128; --lw-error: #ff8a80; --lw-warning: #f0b45a; --lw-ok: #6fdc8c;
+  --lw-series-1: #6ea0ff; --lw-series-2: #22d3ee; --lw-series-3: #facc15; --lw-series-4: #e879f9; --lw-series-5: #4ade80; --lw-series-6: #f87171; }
 .lw-workbench, .lw-tabs, .lw-space {
   --lw-space-1: 4px; --lw-space-2: 8px; --lw-space-3: 12px; --lw-space-4: 16px; --lw-space-5: 24px;
   --lw-text-xs: 11px; --lw-text-sm: 12px; --lw-text-md: 13px; --lw-text-lg: 16px;
@@ -316,14 +318,20 @@
 .lw-lambda .suggest-widget .codicon-symbol-function::before { color: var(--lw-k-any); }
 .lw-exp { display: block; }
 .lw-exp + .lw-exp { margin-top: 2px; }
-/* a data-gateway of the workspace: its heading (name, url, actions) above its explorer */
-.lw-connection { display: flex; flex-direction: column; }
-.lw-connection + .lw-connection { border-top: 1px solid var(--lw-border); margin-top: 4px; padding-top: 4px; }
-.lw-connection-head { display: flex; align-items: center; gap: 4px; padding: 6px 4px; background: var(--lw-panel); border-bottom: 1px solid var(--lw-border); }
-.lw-connection-name { display: flex; flex-direction: column; min-width: 0; flex: 1; }
-.lw-connection-name strong { display: inline-flex; gap: 6px; align-items: center; }
-.lw-connection-url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
-.lw-connection-actions { display: inline-flex; gap: 2px; }
+/* a data-gateway of the workspace: a card, its heading (name: url, actions) on one line above its explorer */
+.lw-connection { display: flex; flex-direction: column; border: 1px solid var(--lw-border); border-radius: var(--lw-radius-lg); background: var(--lw-bg); box-shadow: 0 1px 2px rgba(15, 23, 42, .05); overflow: hidden; }
+.lw-connection + .lw-connection { margin-top: 8px; }
+.lw-connection-head { display: flex; align-items: center; gap: 4px; min-height: 30px; padding: 0 6px 0 4px; white-space: nowrap; background: var(--lw-panel); border-bottom: 1px solid var(--lw-border); }
+.lw-connection-head:last-child { border-bottom: 0; }
+.lw-connection-name { display: flex; align-items: baseline; justify-content: flex-start; min-width: 0; flex: 1; overflow: hidden; text-align: left; }
+.lw-connection-name strong { flex-shrink: 0; font-size: var(--lw-text-md); font-weight: 600; letter-spacing: .01em; }
+.lw-connection-name .lw-badge { margin-left: 6px; align-self: center; flex-shrink: 0; }
+.lw-connection-sep { flex-shrink: 0; margin-right: 6px; color: var(--lw-muted); }
+.lw-connection .lw-connection-url { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--lw-text-xs); color: var(--lw-muted); font-weight: 400; }
+.lw-connection-actions { display: inline-flex; gap: 2px; margin-left: 4px; }
+.lw-connection-actions .lw-icon-button { color: var(--lw-muted); }
+.lw-connection-actions .lw-icon-button:hover { color: var(--lw-fg); }
+.lw-connection > .lw-notice { margin: 6px; }
 .lw-chevron { display: inline-flex; transition: transform .1s; }
 .lw-chevron.lw-open { transform: rotate(90deg); }
 .lw-tab-connection { color: var(--lw-muted); font-size: 11px; }
@@ -331,7 +339,7 @@
 .lw-connection-name .lw-badge { display: inline-block; width: auto; font-size: 10px; font-weight: 600; padding: 0 6px; border-radius: 8px; line-height: 16px; }
 .lw-connections-root { display: flex; align-items: center; gap: 6px; padding: 6px 4px; border-bottom: 1px solid var(--lw-border); }
 .lw-connections-root .lw-spacer { flex: 1; }
-.lw-connections-list { padding-left: 10px; }
+.lw-connections-list { padding: 6px 4px 6px 6px; }
 .lw-connection-icon { display: inline-flex; color: var(--lw-accent); }
 .lw-connection-icon.lw-problem { color: var(--lw-warning); }
 
@@ -469,5 +477,32 @@
 .lw-form-inline .lw-form-field { grid-template-columns: 120px auto; }
 .lw-form-inline .lw-form-field + .lw-form-field { grid-template-columns: auto auto; }
 /* the name of a connection opens its page */
-.lw-workbench button.lw-connection-open { background: none; border: 0; padding: 0; text-align: left; cursor: pointer; color: inherit; font: inherit; }
-.lw-workbench button.lw-connection-open:hover strong { text-decoration: underline; }
+/* (the tree is not inside .lw-workbench: no box from the buttons of the app around it, also on hover) */
+.lw-connection .lw-connection-head button.lw-connection-open, .lw-connection .lw-connection-head button.lw-connection-open:hover { background: none; border: 0; border-radius: 0; padding: 0; margin: 0; box-shadow: none; text-align: left; cursor: pointer; color: inherit; font: inherit; line-height: inherit; }
+.lw-connection .lw-connection-head button.lw-connection-open:hover strong { text-decoration: underline; }
+.lw-connection .lw-connection-head button.lw-icon-button { width: 22px; height: 22px; min-width: 22px; padding: 0; justify-content: center; }
+/* a point in the data table and in the form of a row: its longitude and latitude side by side */
+.lw-point-input { display: inline-flex; gap: 4px; }
+.lw-point-input input { width: 9em; min-width: 0; }
+.lw-map-link { text-decoration: none; font-size: var(--lw-text-xs); }
+/* a file of a property in the data table: its name opens it, ⤒ uploads another (docs/FILES_AND_PANELS.md) */
+.lw-file-cell { white-space: nowrap; }
+.lw-file-cell .lw-link { margin-right: 4px; }
+.lw-file-upload { cursor: pointer; padding: 0 4px; }
+.lw-file-upload input { display: none; }
+/* a panel (PanelView, docs/FILES_AND_PANELS.md §2): its cards in a grid, a wide card takes two columns */
+.lw-panel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--lw-space-3); margin-top: var(--lw-space-3); }
+.lw-card { border: 1px solid var(--lw-border); border-radius: var(--lw-radius-lg); background: var(--lw-bg); padding: var(--lw-space-3); min-width: 0; box-shadow: 0 1px 2px rgba(15, 23, 42, .05); }
+.lw-card-wide { grid-column: span 2; }
+.lw-card > header { display: flex; align-items: center; gap: 6px; margin-bottom: var(--lw-space-2); }
+.lw-card-number { font-size: 34px; font-weight: 600; letter-spacing: -.01em; padding: var(--lw-space-2) 0; }
+.lw-card-table { max-height: 260px; overflow: auto; }
+.lw-card-form textarea { font-family: var(--lw-mono, ui-monospace, monospace); width: 100%; box-sizing: border-box; }
+.lw-chart { margin: 0; }
+.lw-chart svg { width: 100%; height: auto; display: block; }
+.lw-chart-axis line { stroke: var(--lw-border); stroke-width: 1; }
+.lw-chart-axis text, .lw-chart-label { fill: var(--lw-muted); font-size: 11px; }
+.lw-chart-legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: var(--lw-text-xs); color: var(--lw-muted); }
+.lw-chart-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+@media (max-width: 720px) { .lw-card-wide { grid-column: auto; } }
+.lw-pie .lw-chart-label { font-size: 15px; }

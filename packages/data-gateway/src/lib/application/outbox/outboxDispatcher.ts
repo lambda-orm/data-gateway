@@ -88,11 +88,16 @@ export class OutboxDispatcher {
 
 	public get snapshot (): OutboxDispatcherStats { return { ...this.stats } }
 
-	/** the round running ends; no other starts */
-	public async stop (): Promise<void> {
+	/** the round running ends and no other starts, its destinations stay open (another replica took the outbox) */
+	public async pause (): Promise<void> {
 		this.stopped = true
 		if (this.timer) clearTimeout(this.timer)
 		await this.running?.catch(() => undefined)
+	}
+
+	/** the round running ends; no other starts; its destinations close */
+	public async stop (): Promise<void> {
+		await this.pause()
 		await Promise.all(this.destinations.map(d => d.close?.().catch(() => undefined)))
 	}
 }
