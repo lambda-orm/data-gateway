@@ -1,7 +1,14 @@
 # Keycloak real y login con PKCE en el IDE (G1b)
 
-> **Estado (2026-11-26): diseño; decisiones de §4 por cerrar.** Lo que quedó de [`JWT.md`](JWT.md): la prueba contra
-> un IdP real (criterio de aceptación de §10) y el login desde el IDE (decisión 5).
+> **Estado (2026-11-26): decisiones de §4 cerradas (las recomendadas, el usuario); fases 1 a 4 hechas** (rama
+> `feature/oidc-login`). Lo que quedó de [`JWT.md`](JWT.md): la prueba contra un IdP real (criterio de aceptación de
+> §10) y el login desde el IDE (decisión 5). `scripts/ci-local.sh oidc` (y su job de CI): 31 chequeos contra Keycloak
+> 26.4 en los cinco transportes, la rotación incluida. El login, de punta a punta en el IDE (Chrome, el formulario de
+> Keycloak en su ventana, la gateway lo ve como carla); renovar con el refresh token no se ejercitó en vivo. Cambios
+> respecto del diseño: el IDE llega al IdP **por su backend** (su CSP no deja a la página hablar con otro origen): en la
+> imagen web, el origen del IdP va en `DATA_GATEWAY_IDE_TARGETS` y el IdP no necesita CORS; la ventana del login se abre
+> en el clic (después de un `await` el navegador la bloquea). De paso, `DATA_GATEWAY_IDE_CONNECT_SRC` suma a la CSP de
+> la imagen web los almacenamientos de los archivos (G6b); la app de escritorio permite `https:`.
 
 ## 1. Keycloak en la conformidad
 
@@ -24,8 +31,8 @@
 - **Los tokens:** en la memoria de la pestaña (y `sessionStorage` para sobrevivir un recargar); el *refresh token*
   renueva el de acceso antes de que venza; sin él, al vencer se pide iniciar sesión otra vez. **Cerrar sesión** llama
   al `end_session_endpoint` del IdP.
-- Las llamadas al IdP (descubrimiento, token) van desde el navegador: el IdP debe permitir el origen del IDE (en
-  Keycloak, *Web origins*).
+- Las llamadas al IdP (descubrimiento, token) van por el backend del IDE (`/gw/…`, como las de la gateway): en la imagen
+  web, su origen va en `DATA_GATEWAY_IDE_TARGETS`.
 
 ## 3. Lo que no
 

@@ -145,7 +145,7 @@ recomendación, tests por transporte y la conformidad.
 > jwt` y `methods`, roles → permisos, claims → contexto (llega a λORM por el worker), 401 con motivo y
 > `WWW-Authenticate`, 503 si el emisor no responde, sesiones y WebSockets que terminan con el token, el cliente Node con
 > un token que se renueva, y cuatro casos JWT en la conformidad. **Falta:** la wiki (fase 6) y probarlo contra un IdP
-> real (Keycloak); el login con PKCE desde el IDE quedó para después (decisión 5). El efecto del contexto en las filas
+> real (Keycloak) y el login con PKCE desde el IDE: hechos el 2026-11-26, [`OIDC_LOGIN.md`](OIDC_LOGIN.md). El efecto del contexto en las filas
 > se prueba con G2 (hoy la gateway no elige vista).
 
 - Un autenticador `jwt`: `issuer`, `audience`, `jwksUri` (con caché y rotación de claves), algoritmos permitidos,
