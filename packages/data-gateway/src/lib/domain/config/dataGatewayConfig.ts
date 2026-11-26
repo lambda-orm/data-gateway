@@ -253,6 +253,19 @@ export interface OutboxConfig {
 	destinations: OutboxDestinationConfig[]
 }
 
+/** A Valkey (or Redis) shared by the replicas (docs/REPLICAS.md): the changes of the data and the lock of the outbox */
+export interface ValkeyConfig {
+	/** valkey://, valkeys:// (TLS), redis:// or rediss:// */
+	url: string
+	/** what its channels and keys start with: to share a Valkey with other things */
+	prefix: string
+}
+
+/** The replicas of a gateway together (docs/REPLICAS.md) */
+export interface ClusterConfig {
+	valkey?: ValkeyConfig
+}
+
 /** The limits of a query of application.queries (docs/NAMED_QUERIES.md §4) */
 export interface NamedQueryLimitsConfig {
 	maxRows?: number
@@ -294,6 +307,8 @@ export interface DataGatewayConfig {
 	mcp: McpConfig
 	cache: CacheConfig
 	outbox: OutboxConfig
+	/** the replicas together, by a Valkey (docs/REPLICAS.md) */
+	cluster: ClusterConfig
 	runtime: RuntimeConfig
 	/** Only the transports with a port (docs/DATA_GATEWAY.md §2.1) */
 	transports: TransportsConfig

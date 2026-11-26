@@ -52,6 +52,7 @@
     "express": "^5.1.0",
     "express-rate-limit": "^7.0.2",
     "h3lp": "^5.0.0",
+    "iovalkey": "0.4.0",
     "jose": "6.2.18",
     "js-yaml": "^4.1.0",
     "kafkajs": "^2.2.4",
