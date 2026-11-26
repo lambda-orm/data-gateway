@@ -1,6 +1,13 @@
 # Los roles: sus vistas, sus stages y lo que pueden hacer
 
-> **Estado (2026-11-26): diseño, decisiones de §9 abiertas.** Sobre el estado de la gateway
+> **Estado (2026-11-26): decisiones de §9 cerradas (las recomendadas, el usuario); fases 1 a 4 hechas** (rama
+> `feature/gateway-state`): `authorization.roles`, `orm.schemas[].roles` y `.stage`, `roles` en las claves; la vista y
+> el stage elegidos en la fachada de cada schema (el edge pone los grants del principal: sabe el schema); `/whoami` con
+> lo que puede elegir; `allowDestructive` es el permiso `destructive`; las rutas `/admin/roles` y el panel **Roles de la
+> gateway** del IDE; en sus opciones, la vista cuando hay más de una. Un detalle que cambió: primero se elige el stage y
+> después la vista entre los roles que permiten ese stage (si no, un rol de otro stage podía decidir la vista y dejar el
+> pedido sin permisos). Probado de punta a punta (`tests/integration/roleScopes.test.ts`, el IDE en Chrome). Sobre el
+> estado de la gateway
 > ([`GATEWAY_STATE.md`](GATEWAY_STATE.md)): los roles del YAML, extendidos desde la administración. Cierra lo que R2
 > ([`PENDINGS.md`](PENDINGS.md)) dejó sin decidir: si el cliente elige `stage`, `maxRows` y `allowDestructive`.
 
