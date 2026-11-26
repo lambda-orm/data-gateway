@@ -76,6 +76,8 @@ const createWindow = (proxy) => {
 		// in development its icon; packaged, the one electron-builder gives the app
 		icon: fs.existsSync(path.join(here, '..', 'build', 'icon.png')) ? path.join(here, '..', 'build', 'icon.png') : undefined,
 		show: false,
+		// no bar of a menu on Windows and Linux (applicationMenu)
+		autoHideMenuBar: true,
 		webPreferences: { preload: path.join(here, 'preload.cjs'), contextIsolation: true, sandbox: true, nodeIntegration: false }
 	})
 	if (kept.maximized) win.maximize()
@@ -89,6 +91,17 @@ const createWindow = (proxy) => {
 	win.once('ready-to-show', () => { if (!smokeTest) win.show() })
 	win.loadURL(`${APP_ORIGIN}/`)
 	return win
+}
+
+/**
+ * The menu of the app: none on Windows and Linux once packaged (the page has its own menu: the documentation, the
+ * updates, the version); on macOS only the menu of the app and Edit (the bar is the system's, and without Edit its
+ * shortcuts, copy and paste, don't work); in development (npm start) the whole one, with the DevTools.
+ */
+const applicationMenu = () => {
+	if (!app.isPackaged) return menu()
+	if (process.platform === 'darwin') return Menu.buildFromTemplate([{ role: 'appMenu' }, { role: 'editMenu' }, { role: 'windowMenu' }])
+	return null
 }
 
 const menu = () => Menu.buildFromTemplate([
@@ -125,13 +138,13 @@ app.whenReady().then(async () => {
 	// the menu of the page asks for the check of updates (its native dialogs answer)
 	ipcMain.handle('ide:check-updates', () => updates?.check(true))
 	protocol.handle('app', serveApp(proxy.origin))
-	Menu.setApplicationMenu(menu())
+	Menu.setApplicationMenu(applicationMenu())
 	const win = createWindow(proxy)
 	app.on('second-instance', () => { if (win.isMinimized()) win.restore(); win.focus() })
 	app.on('before-quit', () => proxy.server.close())
 	if (smokeTest) return runSmokeTest(win, proxy)
 	updates = setupUpdates({ version, window: win })
-	Menu.setApplicationMenu(menu())
+	Menu.setApplicationMenu(applicationMenu())
 })
 
 app.on('window-all-closed', () => app.quit())

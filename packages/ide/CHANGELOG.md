@@ -2,6 +2,10 @@
 
 ### Unreleased
 
+- **Its icon:** λORM on a blue rounded square, only the λ where λORM can't be read (a tab of the browser, 16 to 48
+  px); in the browser (favicon) and as the icon of the desktop app.
+- **The desktop app** has no bar of a menu on Windows and Linux (the page has its own); on macOS only the menu of the
+  app and Edit.
 - **The tree:** each connection is a card, its explorer inside, with its heading on one line: the name, and its URL
   smaller and muted.
 - **The data of an entity as a backoffice:** with a credential that writes, a double click changes a cell (only while

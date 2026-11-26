@@ -19,11 +19,13 @@ module.exports = {
 		category: 'Development',
 		executableName: 'data-gateway-ide',
 		maintainer: 'lambda-orm (https://github.com/lambda-orm/data-gateway)',
-		synopsis: 'The IDE of the λORM Data Gateway'
+		synopsis: 'The IDE of the λORM Data Gateway',
+		// a size each (scripts/icons/make-icons.py): the λ alone up to 48 px, λORM above
+		icon: 'build/icons'
 	},
-	win: { target: ['nsis'] },
+	win: { target: ['nsis'], icon: 'build/icon.ico' },
 	nsis: { oneClick: true, perMachine: false },
-	mac: { target: ['dmg', 'zip'], category: 'public.app-category.developer-tools' },
+	mac: { target: ['dmg', 'zip'], category: 'public.app-category.developer-tools', icon: 'build/icon.png' },
 	// the updater reads latest*.yml of the latest release of this repository (always the IDE's: §4.5)
 	publish: { provider: 'github', owner: 'lambda-orm', repo: 'data-gateway', releaseType: 'release' }
 }
