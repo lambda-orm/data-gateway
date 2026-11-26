@@ -253,3 +253,28 @@ describe('http transport with JWT (docs/JWT.md)', () => {
 		expect((await call(base, '/execute', { body: { query: 'Products' } })).headers.get('www-authenticate')).toBe('Bearer')
 	})
 })
+
+describe('http transport: ETag of a result (docs/RESULT_CACHE.md §5)', () => {
+	let fixture: GatewayFixture
+	let transport: HttpTransport
+	let base: string
+	beforeAll(async () => {
+		fixture = fakeGateway()
+		;({ transport, base } = await start(fixture))
+	})
+	afterAll(() => transport.stop())
+
+	test('execute answers its ETag; the same If-None-Match is 304 without body; another result, another ETag', async () => {
+		const first = await call(base, '/execute', { body: { query: 'Products' }, headers: agent })
+		const etag = first.headers.get('etag')!
+		expect(etag).toMatch(/^W\/".+"$/)
+		expect(first.headers.get('cache-control')).toBe('private, no-cache')
+		const again = await call(base, '/execute', { body: { query: 'Products' }, headers: { ...agent, 'If-None-Match': etag } })
+		expect(again.status).toBe(304)
+		expect(again.body).toBeUndefined()
+		fixture.orm.executeResult = [{ id: 2 }]
+		const changed = await call(base, '/execute', { body: { query: 'Products' }, headers: { ...agent, 'If-None-Match': etag } })
+		expect(changed.status).toBe(200)
+		expect(changed.headers.get('etag')).not.toBe(etag)
+	})
+})

@@ -6,6 +6,23 @@ All notable changes to this project will be documented in this file.
 
 ### Unreleased
 
+**The cache of the reads** (`docs/RESULT_CACHE.md`, G3):
+
+- **`cache`** (global or by schema, off by default): the result of an `execute` that only reads (and of a named query
+  that only reads) is kept in memory (LRU, `maxEntries`, `maxRowBytes`) until its `ttl`, or the `ttl` of an entity it
+  reads (`entities: { Prices: { ttl: 5s }, AuditLogs: { enabled: false } }`). Its key has the query, its data, the
+  stage, the view and the context of who reads: two identities never share a result.
+- **A write through λORM drops** at once every result that reads its entities (`orm.onDataChange`), also those reached
+  through a relation; what another application writes is bounded by the `ttl`.
+- **REST answers `ETag`** (and `Cache-Control: private, no-cache`) on `execute` and `/queries/{name}`: the same
+  `If-None-Match` is `304` without body.
+- `data_gateway_cache_requests{result}`, `data_gateway_cache_invalidations` and `data_gateway_cache_entries` in
+  `/metrics`.
+
+**Fixes:**
+
+- `view`, `queries` and `cache` of a schema no longer warn `unknown key … ignored` (they were read anyway).
+
 Needs `@lambdaorm/base` 3.11.1 and `@lambdaorm/lib` 3.15.0.
 
 **Named queries** (`docs/NAMED_QUERIES.md`, G7):

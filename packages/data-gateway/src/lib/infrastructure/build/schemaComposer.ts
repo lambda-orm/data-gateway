@@ -1,3 +1,4 @@
+import { createHash } from 'crypto'
 import { ResolvedObservability } from '@lambdaorm/base'
 import fs from 'fs'
 import path from 'path'
@@ -10,6 +11,9 @@ import { McpServerPort } from '../../application/ports/input/mcpServerPort'
 import { AuditPort, ClockPort, LoggerPort, QueueEventsPort } from '../../application/ports/output/supportPorts'
 import { Auditor } from '../../application/usecases/auditor'
 import { ViewResolver } from '../../application/usecases/viewResolver'
+import { ResultCache } from '../../application/cache/resultCache'
+import { ReadsCache } from '../../application/usecases/queryUseCases'
+import { MetricsPort } from '../../application/ports/output/supportPorts'
 import { NamedQueryUseCases } from '../../application/usecases/namedQueryUseCases'
 import { curatedTools, namedQueryTools } from '../../application/mcp/namedQueryTools'
 import { QueryUseCases } from '../../application/usecases/queryUseCases'
@@ -58,7 +62,7 @@ export const workspaceFile = (workspace: string): string =>
  * One schema, in the thread that calls it: λORM on its workspace, its queue, its use cases, facade and MCP server. The
  * schema worker runs one; the inline runtime (tests, one process) runs them all.
  */
-export const composeSchema = async (input: SchemaCompositionInput, deps: { logger: LoggerPort, audit: AuditPort, clock: ClockPort, queueEvents?: QueueEventsPort }): Promise<ComposedSchema> => {
+export const composeSchema = async (input: SchemaCompositionInput, deps: { logger: LoggerPort, audit: AuditPort, clock: ClockPort, queueEvents?: QueueEventsPort, metrics?: MetricsPort }): Promise<ComposedSchema> => {
 	const { logger } = deps
 	const file = workspaceFile(input.workspace)
 	if (!fs.existsSync(file)) throw new ConfigError([`schema "${input.path || '/'}": ${file} not found (the workspace must have its lambdaORM.yaml)`])
@@ -87,7 +91,7 @@ export const composeSchema = async (input: SchemaCompositionInput, deps: { logge
 	const views = new ViewResolver(() => orm.views(), settings.view)
 	const missing = views.missing(settings.namedViews ?? [])
 	if (missing.length) logger.warn(`schema "${input.path || '/'}": the views ${missing.join(', ')} of the configuration are not in its lambdaORM.yaml: a request with one is refused (403)`)
-	const queries = new QueryUseCases(orm, auditor, views)
+	const queries = new QueryUseCases(orm, auditor, views, readsCache(input, orm, deps.metrics))
 	// the queries of application.queries with their limits (docs/NAMED_QUERIES.md)
 	const named = new NamedQueryUseCases(orm, queries, settings.queries ?? {})
 	const unknownLimits = Object.keys(settings.queries ?? {}).filter(name => !orm.namedQueries().some(q => q.name === name))
@@ -118,4 +122,23 @@ export const composeSchema = async (input: SchemaCompositionInput, deps: { logge
 			await orm.end().catch(error => logger.error(error))
 		}
 	}
+}
+
+/**
+ * The cache of the reads of a schema, when its configuration turns it on (docs/RESULT_CACHE.md): a write of λORM (its
+ * DataChange) drops what reads its entities; its hits, misses, invalidations and entries in /metrics.
+ */
+const readsCache = (input: SchemaCompositionInput, orm: LambdaOrmAdapter, metrics?: MetricsPort): ReadsCache | undefined => {
+	const settings = input.settings.cache
+	if (!settings?.enabled) return undefined
+	const results = new ResultCache(settings, text => createHash('sha256').update(text).digest('base64url'))
+	orm.onDataChange(changes => results.invalidate(changes.map(c => c.entity)))
+	const schema = input.path || '/'
+	metrics?.gauge('data_gateway_cache_requests', 'Reads asked of the result cache, by result (hit, miss)', ['schema', 'result'], () => [
+		{ labels: { schema, result: 'hit' }, value: results.snapshot.hits },
+		{ labels: { schema, result: 'miss' }, value: results.snapshot.misses }
+	])
+	metrics?.gauge('data_gateway_cache_invalidations', 'Writes of an entity that dropped cached results', ['schema'], () => [{ labels: { schema }, value: results.snapshot.invalidations }])
+	metrics?.gauge('data_gateway_cache_entries', 'Results kept in the cache', ['schema'], () => [{ labels: { schema }, value: results.snapshot.entries }])
+	return { results, domain: () => orm.entities() as any }
 }

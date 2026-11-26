@@ -7,6 +7,14 @@ import { OrmQueryPort } from '../ports/output/ormPorts'
 import { Auditor } from './auditor'
 import { requestOptions } from './requestOptions'
 import { NO_VIEWS, ViewResolver } from './viewResolver'
+import { ResultCache } from '../cache/resultCache'
+import { readEntities, RelatedEntity } from '../../domain/query/readEntities'
+
+/** The cache of the reads of a schema (docs/RESULT_CACHE.md), and its domain (the relations a read goes through) */
+export interface ReadsCache {
+	results: ResultCache
+	domain: () => RelatedEntity[]
+}
 
 export const requireQuery = (query: unknown): string => {
 	if (typeof query !== 'string' || query.trim() === '') {
@@ -18,7 +26,12 @@ export const requireQuery = (query: unknown): string => {
 /** What λORM answers about a query, and its execution: authorized with the query's classification, writes audited. */
 export class QueryUseCases {
 	// eslint-disable-next-line no-useless-constructor
-	constructor (private readonly orm: OrmQueryPort, private readonly auditor: Auditor, private readonly views: ViewResolver = NO_VIEWS) {}
+	constructor (
+		private readonly orm: OrmQueryPort,
+		private readonly auditor: Auditor,
+		private readonly views: ViewResolver = NO_VIEWS,
+		private readonly cache?: ReadsCache
+	) {}
 
 	/** the view of λORM of who calls (docs/VIEWS_BY_IDENTITY.md) */
 	public viewOf (ctx: RequestContext): string | undefined {
@@ -69,8 +82,9 @@ export class QueryUseCases {
 		const query = requireQuery(request.query)
 		const classification = await this.classify(query, ctx)
 		authorize(ctx.principal, 'execute', classification.writes)
-		const run = () => this.orm.execute(query, request.data, requestOptions(request.options, ctx, this.viewOf(ctx)))
-		if (!classification.writes) return run()
+		const options = requestOptions(request.options, ctx, this.viewOf(ctx))
+		const run = () => this.orm.execute(query, request.data, options)
+		if (!classification.writes) return this.cache ? this.cached(query, request.data, options, classification.entities, run) : run()
 		return this.auditor.track(ctx, {
 			operation: 'execute',
 			actions: classification.actions,
@@ -80,4 +94,24 @@ export class QueryUseCases {
 			data: request.data
 		}, run)
 	}
+
+	/**
+	 * A read through the cache: its key is the query, its data and its options (the stage, the view and the context of
+	 * who calls; never the actor), so two identities never share a result. A read of an entity the cache doesn't keep
+	 * goes to the database.
+	 */
+	private async cached (query: string, data: unknown, options: object, sentences: string[], run: () => Promise<unknown>): Promise<unknown> {
+		const cache = this.cache!
+		const entities = readEntities(query, sentences, cache.domain())
+		if (cache.results.ttlFor(entities) === undefined) return run()
+		const relevant: Record<string, unknown> = { ...options }
+		delete relevant.actor
+		const key = cache.results.keyOf({ query, data: data ?? null, options: relevant })
+		const hit = cache.results.get(key)
+		if (hit) return hit.value
+		const value = await run()
+		cache.results.set(key, value, entities)
+		return value
+	}
+
 }

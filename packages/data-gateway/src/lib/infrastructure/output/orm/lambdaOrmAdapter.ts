@@ -77,6 +77,10 @@ export class LambdaOrmAdapter implements OrmQueryPort, OrmScriptPort, OrmSchemaP
 	public async constraints (query: string, options?: QueryOptions) { return this.orm.constraints(query, options) }
 	public executeScript (script: string, data?: unknown, options?: ScriptOptions) { return this.orm.executeScript(script, data, options) }
 	public namedQueries () { return this.orm.state.schema?.application?.queries ?? [] }
+	/** the writes of this λORM, after their commit (a DataChange each, those of one transaction together) */
+	public onDataChange (listener: (changes: { entity: string }[]) => void): () => void {
+		return (this.orm as Orm).onDataChange(async changes => listener(changes))
+	}
 
 	// ─── schema ──────────────────────────────────────────────────────────────
 

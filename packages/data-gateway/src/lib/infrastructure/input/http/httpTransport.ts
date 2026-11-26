@@ -1,3 +1,4 @@
+import { createHash } from 'crypto'
 import { requestTracer } from '../telemetry/requestTracer'
 import express from 'express'
 import http from 'http'
@@ -298,7 +299,11 @@ export class HttpTransport implements Transport {
 		}
 	}
 
-	private handle (handler: Handler) {
+	/**
+	 * validators: the answer carries an ETag (the hash of its JSON) and Cache-Control private, no-cache; a request whose
+	 * If-None-Match is that ETag gets 304 without body (docs/RESULT_CACHE.md §5). Express does it only for GET.
+	 */
+	private handle (handler: Handler, validators = false) {
 		return async (req: express.Request, res: express.Response) => {
 			try {
 				const ctx: RequestContext = { principal: res.locals.principal as Principal, transport: this.name }
@@ -306,6 +311,16 @@ export class HttpTransport implements Transport {
 				if (payload === undefined) {
 					res.status(204).end()
 					return
+				}
+				if (validators) {
+					const etag = `W/"${createHash('sha1').update(JSON.stringify(payload)).digest('base64url')}"`
+					res.setHeader('ETag', etag)
+					res.setHeader('Cache-Control', 'private, no-cache')
+					const sent = String(req.headers['if-none-match'] ?? '').split(',').map(tag => tag.trim())
+					if (sent.includes(etag) || sent.includes(etag.slice(2))) {
+						res.status(304).end()
+						return
+					}
 				}
 				// JSON for every value, also numbers (affected rows), 0, strings, booleans and null
 				res.status(200).json(payload)
@@ -333,10 +348,10 @@ export class HttpTransport implements Transport {
 		router.post('/model', this.handle((req, ctx) => gw.model(ctx, body(req))))
 		router.post('/parameters', this.handle((req, ctx) => gw.parameters(ctx, body(req))))
 		router.post('/plan', this.handle((req, ctx) => gw.plan(ctx, body(req))))
-		router.post('/execute', this.handle((req, ctx) => gw.execute(ctx, body(req))))
+		router.post('/execute', this.handle((req, ctx) => gw.execute(ctx, body(req)), true))
 		// the queries of application.queries, by their name (docs/NAMED_QUERIES.md)
 		router.get('/queries', this.handle((_req, ctx) => gw.queries(ctx)))
-		router.post('/queries/:name', this.handle((req, ctx) => gw.query(ctx, String(req.params.name), { data: body(req).data, options: body(req).options })))
+		router.post('/queries/:name', this.handle((req, ctx) => gw.query(ctx, String(req.params.name), { data: body(req).data, options: body(req).options }), true))
 		router.post('/script', this.handle((req, ctx) => gw.executeScript(ctx, body(req))))
 		// answers the id of the execution as a string, like the former service
 		router.post('/execute-queued', this.handle(async (req, ctx) => (await gw.executeQueued(ctx, body(req))).queueId))
