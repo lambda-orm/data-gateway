@@ -319,10 +319,13 @@
 /* a data-gateway of the workspace: its heading (name, url, actions) above its explorer */
 .lw-connection { display: flex; flex-direction: column; }
 .lw-connection + .lw-connection { border-top: 1px solid var(--lw-border); margin-top: 4px; padding-top: 4px; }
-.lw-connection-head { display: flex; align-items: center; gap: 4px; padding: 6px 4px; background: var(--lw-panel); border-bottom: 1px solid var(--lw-border); }
-.lw-connection-name { display: flex; flex-direction: column; min-width: 0; flex: 1; }
-.lw-connection-name strong { display: inline-flex; gap: 6px; align-items: center; }
-.lw-connection-url { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }
+/* one line, as a row of the tree: chevron, icon, "name: url" from the left, its actions */
+.lw-connection-head { display: flex; align-items: center; gap: 4px; min-height: 24px; padding: 0 4px 0 0; white-space: nowrap; }
+.lw-connection-name { display: flex; align-items: baseline; justify-content: flex-start; gap: 0; min-width: 0; flex: 1; overflow: hidden; text-align: left; }
+.lw-connection-name strong { flex-shrink: 0; }
+.lw-connection-name .lw-badge { margin-left: 6px; align-self: center; flex-shrink: 0; }
+.lw-connection-sep { flex-shrink: 0; margin-right: 4px; }
+.lw-connection-url { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lw-connection-actions { display: inline-flex; gap: 2px; }
 .lw-chevron { display: inline-flex; transition: transform .1s; }
 .lw-chevron.lw-open { transform: rotate(90deg); }
@@ -469,5 +472,7 @@
 .lw-form-inline .lw-form-field { grid-template-columns: 120px auto; }
 .lw-form-inline .lw-form-field + .lw-form-field { grid-template-columns: auto auto; }
 /* the name of a connection opens its page */
-.lw-workbench button.lw-connection-open { background: none; border: 0; padding: 0; text-align: left; cursor: pointer; color: inherit; font: inherit; }
-.lw-workbench button.lw-connection-open:hover strong { text-decoration: underline; }
+/* (the tree is not inside .lw-workbench: no box from the buttons of the app around it, also on hover) */
+.lw-connection .lw-connection-head button.lw-connection-open, .lw-connection .lw-connection-head button.lw-connection-open:hover { background: none; border: 0; border-radius: 0; padding: 0; margin: 0; box-shadow: none; text-align: left; cursor: pointer; color: inherit; font: inherit; line-height: inherit; }
+.lw-connection .lw-connection-head button.lw-connection-open:hover strong { text-decoration: underline; }
+.lw-connection .lw-connection-head button.lw-icon-button { width: 22px; height: 22px; min-width: 22px; padding: 0; justify-content: center; }
