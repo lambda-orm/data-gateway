@@ -1,7 +1,7 @@
 // The queries of the editable table and its exports (docs/BACKOFFICE.md): every value in data, the change of a cell
 // only while it has what was read, CSV with a BOM and a real .xlsx (a stored zip of XML).
 import { describe, expect, test } from 'vitest'
-import { deleteRow, insertRow, pageQuery, textOf, updateCell, valueOf } from '../src/domain/dataEditing'
+import { cellOf, deleteRow, insertRow, mapUrlOf, pageQuery, pointOf, textOf, updateCell, valueOf } from '../src/domain/dataEditing'
 import { columnsOf, crc32, toCsv, toXlsx } from '../src/domain/exporters'
 
 describe('the queries of the table', () => {
@@ -55,5 +55,29 @@ describe('the exports', () => {
 		expect(text).toContain('<c r="D2" t="b"><v>1</v></c>')
 		expect(text).toContain('Côte de Blaye, &quot;red&quot;')
 		expect(crc32(new TextEncoder().encode('123456789'))).toBe(0xCBF43926)
+	})
+})
+
+describe('a point and a vector (docs/VECTOR_POINT_SQLJS.md)', () => {
+	test('a point: its longitude and latitude as GeoJSON, in range; shown as "longitude, latitude", on a map', () => {
+		expect(pointOf('-58.38', '-34.6')).toEqual({ value: { type: 'Point', coordinates: [-58.38, -34.6] } })
+		expect(pointOf('', '')).toEqual({ value: null })
+		expect(pointOf('190', '0').error).toBe('a longitude (-180 to 180)')
+		expect(pointOf('0', '-91').error).toBe('a latitude (-90 to 90)')
+		expect(pointOf('x', '0').error).toBeTruthy()
+		expect(valueOf('-58.38, -34.6', 'point')).toEqual({ value: { type: 'Point', coordinates: [-58.38, -34.6] } })
+		const point = { type: 'Point', coordinates: [-58.38, -34.6] }
+		expect(textOf(point)).toBe('-58.38, -34.6')
+		expect(mapUrlOf(point as any)).toBe('https://www.openstreetmap.org/?mlat=-34.6&mlon=-58.38#map=15/-34.6/-58.38')
+	})
+
+	test('a vector: a list of numbers of its dimensions; a cell shows its first numbers and how many', () => {
+		expect(valueOf('[0.1, 0.2, 0.3]', 'vector', 3)).toEqual({ value: [0.1, 0.2, 0.3] })
+		expect(valueOf('[0.1, 0.2]', 'vector', 3).error).toBe('3 numbers (it has 2)')
+		expect(valueOf('[0.1, "a"]', 'vector').error).toBe('a list of numbers: [0.1, 0.2, …]')
+		expect(valueOf('{', 'vector').error).toBe('a list of numbers: [0.1, 0.2, …]')
+		expect(cellOf([0.123456, -0.03, 0.5, 0.9, 1], 'vector')).toBe('[0.1235, -0.03, 0.5, …] (5)')
+		expect(cellOf([1, 2], 'vector')).toBe('[1, 2] (2)')
+		expect(cellOf('Chai')).toBe('Chai')
 	})
 })

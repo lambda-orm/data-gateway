@@ -99,6 +99,8 @@
     "doc": "npx grunt doc",
     "dist": "npx grunt dist",
     "release": "npx grunt release",
-    "test:integration": "npx jest --config ./jest-integration-config.json --runInBand --detectOpenHandles"
+    "test:integration": "npx jest --config ./jest-integration-config.json --runInBand --detectOpenHandles",
+    "dev:seed": "node dev/seed.mjs",
+    "dev": "node dev/seed.mjs && cd dev && DATA_GATEWAY_CONFIG_PATH=data-gateway.config.yaml tsx ../src/lib/index.ts"
   }
 }
