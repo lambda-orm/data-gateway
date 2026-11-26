@@ -6,6 +6,7 @@ import { toHttpError } from './httpErrors'
 import { zipOf } from '../../shared/zip'
 import { notFound } from '../../../domain/errors/gatewayError'
 import { SchemaDirectoryPort } from '../../../application/ports/input/schemaDirectoryPort'
+import { RoleAdmin } from '../../../application/auth/roleAdmin'
 
 /** A route in a URL path segment: iot%2Fv1, and ~ for the schema at the root */
 export const schemaParam = (raw: string | string[]): string => { const value = Array.isArray(raw) ? raw.join("/") : raw; return value === "~" ? "" : value }
@@ -15,7 +16,7 @@ export const schemaParam = (raw: string | string[]): string => { const value = A
  * the authentication of the http transport. A workspace is named by its route, encoded in one segment (iot%2Fv1; ~ is
  * the root). Every read answers its version (ETag), every write says the one it changes (If-Match).
  */
-export const adminRouter = (admin: AdminService, authenticate: express.RequestHandler, commands?: CommandService, directory?: SchemaDirectoryPort): express.Router => {
+export const adminRouter = (admin: AdminService, authenticate: express.RequestHandler, commands?: CommandService, directory?: SchemaDirectoryPort, roles?: RoleAdmin): express.Router => {
 	const router = express.Router()
 	router.use(authenticate)
 	const principal = (res: express.Response) => res.locals.principal as Principal
@@ -30,6 +31,18 @@ export const adminRouter = (admin: AdminService, authenticate: express.RequestHa
 				res.status(httpError.status).json(httpError.body)
 			}
 		}
+
+	// the roles kept in the state of the gateway (docs/ROLE_SCOPES.md §5), with those of the configuration
+	if (roles) {
+		const schemaOf = (req: express.Request): string | undefined => typeof req.query.schema === 'string' ? schemaParam(req.query.schema) : undefined
+		router.get('/roles', handle(async (_req, res) => roles.list(principal(res))))
+		router.get('/roles/changes', handle(async (req, res) => roles.changes(principal(res), Number(req.query.limit ?? 100))))
+		router.put('/roles/:name', handle(async (req, res) => roles.put(principal(res), String(req.params.name), req.body?.schema ? schemaParam(String(req.body.schema)) : schemaOf(req), req.body?.config ?? req.body, req.body?.reason)))
+		router.delete('/roles/:name', handle(async (req, res) => {
+			await roles.remove(principal(res), String(req.params.name), schemaOf(req), typeof req.query.reason === 'string' ? req.query.reason : undefined)
+			return { removed: String(req.params.name) }
+		}))
+	}
 
 	// what this credential may do here: the UI shows the actions with it
 	router.get('/', handle(async (_req, res) => ({ enabled: true, can: admin.can(principal(res)) })))

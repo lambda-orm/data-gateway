@@ -2,6 +2,7 @@ import {
 	AuthenticationConfig, CacheConfig, DataGatewayConfig, OutboxConfig, ValkeyConfig, FilesConfig, NamedQueryLimitsConfig, RuntimeMode, SchemaOverrides, ScriptsConfig, TransportName
 } from '../config/dataGatewayConfig'
 import { schemaPathsIssues } from './schemaPath'
+import { StateSource, stateFileOf, stateSourceOf } from '../config/stateSource'
 
 /** A schema to serve: its route, its workspace and what it overrides */
 export interface SchemaDescriptor {
@@ -65,10 +66,16 @@ export interface SchemaSettings {
 	valkey?: ValkeyConfig
 	/** the SQLite of the volume (<orm.workspacePath>/.data-gateway/state.sqlite): the writes that wait (docs/MUTATION_APPROVAL.md §5) */
 	stateFile?: string
+	/** where the state of the gateway lives (docs/GATEWAY_STATE.md): the writes that wait */
+	state?: StateSource
 	server: { timeout: number, maxConcurrent: number, maxResponseBytes: number }
 	runtime: { mode: RuntimeMode, maxMemoryMb: number, checkConnections: boolean }
 	/** the view of a caller without one (orm.schemas[].view) */
 	view?: string
+	/** the stage of a caller without one (orm.schemas[].stage); none, the first of the schema */
+	stage?: string
+	/** authorization.stages open: a stage no role names may be chosen (docs/ROLE_SCOPES.md §8) */
+	openStages?: boolean
 	/** the views the credentials that reach it name (their keys, their roles): checked when it loads */
 	namedViews: string[]
 }
@@ -78,13 +85,11 @@ export const viewsOf = (authentication: AuthenticationConfig | undefined): strin
 	if (!authentication) return []
 	return [
 		...authentication.credentials.map(c => c.view),
-		...Object.values(authentication.jwt?.principal.permissions?.roles ?? {}).map(r => r.view),
+		...Object.values(authentication.jwt?.principal.permissions?.roles ?? {}).flatMap(r => r.views ?? [r.view]),
 		...(authentication.methods ?? []).flatMap(viewsOf)
 	].filter((v): v is string => typeof v === 'string')
 }
 
-/** The SQLite of the volume, shared by the replicas that mount it (the sessions of management, the writes that wait) */
-export const stateFileOf = (workspacePath: string): string => `${workspacePath.replace(/[\\/]+$/, '')}/.data-gateway/state.sqlite`
 
 /** The most specific value replaces (they are not merged): a schema's tools replace the global tools */
 export const effectiveSettings = (config: DataGatewayConfig, schema: SchemaDescriptor): SchemaSettings => {
@@ -107,6 +112,7 @@ export const effectiveSettings = (config: DataGatewayConfig, schema: SchemaDescr
 		files: o.files ?? config.files ?? { storages: {}, properties: {} },
 		...(config.cluster?.valkey ? { valkey: config.cluster.valkey } : {}),
 		...(config.orm.workspacePath ? { stateFile: stateFileOf(config.orm.workspacePath) } : {}),
+		...(config.state?.source ? { state: stateSourceOf(config.state, config.orm.workspacePath) } : {}),
 		server: {
 			timeout: o.server?.timeout ?? config.server.timeout,
 			maxConcurrent: o.server?.maxConcurrent ?? config.server.maxConcurrent,
@@ -118,6 +124,8 @@ export const effectiveSettings = (config: DataGatewayConfig, schema: SchemaDescr
 			checkConnections: o.runtime?.checkConnections ?? config.runtime.checkConnections
 		},
 		...(o.view ? { view: o.view } : {}),
+		...(o.stage ? { stage: o.stage } : {}),
+		...(config.authorization?.stages === 'open' ? { openStages: true } : {}),
 		namedViews: [...new Set([
 			...viewsOf(o.authentication ?? config.authentication),
 			...Object.values(config.transports).flatMap(t => viewsOf((t as { authentication?: AuthenticationConfig } | undefined)?.authentication))

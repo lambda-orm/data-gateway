@@ -1,5 +1,5 @@
 import { authorize, Operation } from '../../domain/auth/authorizationPolicy'
-import { badRequest, notFound } from '../../domain/errors/gatewayError'
+import { badRequest, forbidden, notFound } from '../../domain/errors/gatewayError'
 import { OutboxPort } from '../outbox/outboxDispatcher'
 import { ApprovalUseCases } from '../approval/approvals'
 
@@ -89,6 +89,8 @@ export class CommandUseCases {
 		}
 		const stage = this.stageOf(args[0])
 		const force = args[1] === true
+		// a push or a migration that loses data: with the permission destructive (docs/ROLE_SCOPES.md §3)
+		if ((op === 'push' || op === 'migrate') && args[2] === true && !ctx.principal.permissions.has('destructive')) throw forbidden(ctx.principal.name, 'destructive')
 		switch (op) {
 		case 'fetch': return this.orm.fetch(stage)
 		case 'pushSentences': return this.orm.pushSentences(stage)

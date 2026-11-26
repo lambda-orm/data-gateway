@@ -1,7 +1,6 @@
-import { principal } from '../../domain/auth/principal'
 import { GatewayError } from '../../domain/errors/gatewayError'
 import {
-	ChannelRequest, ChannelResponse, COMMAND_OPERATIONS, CommandOperation, CONTEXT_FREE_OPERATIONS, GATEWAY_OPERATIONS, MCP_OPERATIONS, WireError
+	ChannelRequest, ChannelResponse, COMMAND_OPERATIONS, CommandOperation, CONTEXT_FREE_OPERATIONS, fromWire, GATEWAY_OPERATIONS, MCP_OPERATIONS, WireError
 } from '../../domain/runtime/channelProtocol'
 import { DataGatewayPort, RequestContext } from '../ports/input/dataGatewayPort'
 import { McpServerPort } from '../ports/input/mcpServerPort'
@@ -63,17 +62,7 @@ export class ChannelDispatcher {
 	}
 
 	private run (request: ChannelRequest): Promise<unknown> {
-		const ctx: RequestContext | undefined = request.principal
-			? {
-				principal: {
-					...principal(request.principal.name, request.principal.permissions, request.principal.actor),
-					...(request.principal.context ? { context: request.principal.context } : {}),
-					...(request.principal.view ? { view: request.principal.view } : {}),
-					...(request.principal.approval ? { approval: request.principal.approval } : {})
-				},
-				transport: request.transport
-			}
-			: undefined
+		const ctx: RequestContext | undefined = request.principal ? { principal: fromWire(request.principal), transport: request.transport } : undefined
 		if (request.target === 'gateway' && (GATEWAY_OPERATIONS as readonly string[]).includes(request.op)) {
 			const method = (this.gateway as any)[request.op] as (...args: unknown[]) => Promise<unknown>
 			if (CONTEXT_FREE_OPERATIONS.includes(request.op)) return method.apply(this.gateway, request.args)

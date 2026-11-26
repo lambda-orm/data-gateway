@@ -1,7 +1,7 @@
 import { ObservabilityConfig } from '@lambdaorm/base'
 import { ALL_PERMISSIONS, isPermission, KNOWN_PERMISSIONS, Permission } from '../auth/permission'
 import {
-	AuthenticationConfig, AuthenticationType, ConfigReading, CredentialConfig, DataGatewayConfig, JwtConfig, RoleConfig, CacheConfig, ClusterConfig, FilesConfig, FileStorageConfig, OutboxConfig, OutboxDestinationConfig, LoggerConfig, McpConfig,
+	AuthenticationConfig, AuthenticationType, AuthorizationConfig, StateConfig, StateDialect, STATE_DIALECTS, ConfigReading, CredentialConfig, DataGatewayConfig, JwtConfig, RoleConfig, CacheConfig, ClusterConfig, FilesConfig, FileStorageConfig, OutboxConfig, OutboxDestinationConfig, LoggerConfig, McpConfig,
 	OrmConfig, RuntimeConfig, RuntimeMode, SchemaConfig, SessionsConfig, TransportConfig, TransportName, TransportsConfig, WatchConfig
 } from './dataGatewayConfig'
 import { parseDuration } from './durations'
@@ -11,8 +11,8 @@ import { parseSize } from './sizes'
 /** Transports of the design that this version does not serve yet (docs/DATA_GATEWAY_PLAN.md). */
 const LATER_TRANSPORTS: string[] = []
 const TRANSPORTS = ['http', 'mcpHttp', 'mcpWebSocket', 'webSocket', 'management']
-const KNOWN_SECTIONS = ['orm', 'admin', 'server', 'logger', 'metrics', 'observability', 'audit', 'authentication', 'rateLimit', 'scripts', 'mcp', 'runtime', 'transports', 'cache', 'outbox', 'cluster', 'files']
-const SCHEMA_KEYS = ['path', 'workspace', 'transports', 'authentication', 'env', 'scripts', 'mcp', 'server', 'runtime', 'view', 'queries', 'cache', 'outbox', 'files']
+const KNOWN_SECTIONS = ['orm', 'admin', 'server', 'logger', 'metrics', 'observability', 'audit', 'authentication', 'rateLimit', 'scripts', 'mcp', 'runtime', 'transports', 'cache', 'outbox', 'cluster', 'files', 'authorization', 'state']
+const SCHEMA_KEYS = ['path', 'workspace', 'transports', 'authentication', 'env', 'scripts', 'mcp', 'server', 'runtime', 'view', 'stage', 'roles', 'queries', 'cache', 'outbox', 'files']
 /** The tools of docs/DATA_GATEWAY.md §5.1: mcp.tools.include / exclude must name them */
 export const TOOL_NAMES = [
 	'orm_execute', 'orm_execute_script', 'orm_execute_queued', 'approval_status', 'orm_plan', 'orm_metadata', 'orm_model', 'orm_parameters',
@@ -83,6 +83,8 @@ export class ConfigReader {
 			outbox: this.outbox(raw.outbox, 'outbox'),
 			cluster: this.cluster(raw.cluster),
 			files: this.files(raw.files, 'files'),
+			authorization: this.authorization(raw.authorization),
+			state: this.state(raw.state),
 			runtime: this.runtime(raw.runtime),
 			transports: this.transports(raw.transports)
 		}
@@ -90,6 +92,11 @@ export class ConfigReader {
 			for (const transport of schema.transports ?? []) {
 				if (!TRANSPORTS.includes(transport)) this.issues.push(`orm.schemas "${schema.path}": unknown transport "${transport}"`)
 			}
+		}
+		this.rolesTogether(config)
+		// several replicas on one SQLite lose data (docs/GATEWAY_STATE.md §2)
+		if (config.cluster.valkey && (config.state.source?.dialect ?? 'SQLite') === 'SQLite' && config.orm.workspacePath) {
+			this.issues.push('cluster.valkey (several replicas) with the state of the gateway in SQLite: give state.source another database (PostgreSQL)')
 		}
 		// since 4.0.0 the administration is on when its transport is exposed
 		config.admin.enabled = config.transports.management !== undefined
@@ -163,6 +170,20 @@ export class ConfigReader {
 		if (entry.view !== undefined) {
 			const view = this.viewName(entry.view, `${key}.view`)
 			if (view) schema.view = view
+		}
+		if (entry.stage !== undefined) {
+			if (typeof entry.stage !== 'string' || !entry.stage) this.issues.push(`${key}.stage must be the name of a stage of the schema`)
+			else schema.stage = entry.stage
+		}
+		if (entry.roles !== undefined) {
+			if (!isObject(entry.roles)) this.issues.push(`${key}.roles must be an object (a role: what it adds in this schema)`)
+			else {
+				schema.roles = {}
+				for (const [name, value] of Object.entries(entry.roles)) {
+					const role = this.role(value, `${key}.roles.${name}`, true)
+					if (role) schema.roles[name] = role
+				}
+			}
 		}
 		if (entry.cache !== undefined) schema.cache = this.cache(entry.cache, `${key}.cache`)
 		if (entry.outbox !== undefined) schema.outbox = this.outbox(entry.outbox, `${key}.outbox`)
@@ -579,18 +600,14 @@ export class ConfigReader {
 		let permissions: JwtConfig['principal']['permissions']
 		if (p.permissions !== undefined) {
 			const at = `${key}.principal.permissions`
-			if (!isObject(p.permissions) || !this.str(p.permissions.claim, '') || !isObject(p.permissions.roles)) {
-				this.issues.push(`${at} needs claim (where the roles are) and roles (role → permissions)`)
+			// the roles may be in authorization.roles (docs/ROLE_SCOPES.md): here only the claim
+			if (!isObject(p.permissions) || !this.str(p.permissions.claim, '') || (p.permissions.roles !== undefined && !isObject(p.permissions.roles))) {
+				this.issues.push(`${at} needs claim (where the roles are); its roles (role → permissions) here or in authorization.roles`)
 			} else {
 				const roles: Record<string, RoleConfig> = {}
-				for (const [role, value] of Object.entries(p.permissions.roles)) {
-					// a role says its permissions (a list, or { permissions, view }): one without them must not end up with all
-					const list = isObject(value) ? value.permissions : value
-					if (!Array.isArray(list)) { this.issues.push(`${at}.roles.${role} must be a list of permissions, or { permissions, view }`); continue }
-					const view = isObject(value) && value.view !== undefined ? this.viewName(value.view, `${at}.roles.${role}.view`) : undefined
-					const approval = isObject(value) ? this.approvalMode(value.approval, `${at}.roles.${role}.approval`) : undefined
-					roles[role] = { permissions: this.permissions(list, `${at}.roles.${role}`), ...(view ? { view } : {}), ...(approval === 'writes' ? { approval } : {}) }
-					if (view) this.stageWithView(roles[role].permissions, `${at}.roles.${role}`)
+				for (const [role, value] of Object.entries(p.permissions.roles ?? {})) {
+					const config = this.role(value, `${at}.roles.${role}`, false)
+					if (config) roles[role] = config as RoleConfig
 				}
 				permissions = { claim: String(p.permissions.claim), roles }
 			}
@@ -698,6 +715,110 @@ export class ConfigReader {
 		return undefined
 	}
 
+	/**
+	 * A role (docs/ROLE_SCOPES.md §2): a list of permissions, or { permissions, views, stages, maxRows, approval, scope,
+	 * locked } (view: one, as before 4.4). partial: of a schema, what it adds (no permissions needed).
+	 */
+	private role (value: unknown, at: string, partial: boolean): Partial<RoleConfig> | undefined {
+		const known = ['permissions', 'view', 'views', 'stages', 'maxRows', 'approval', 'scope', 'locked']
+		// a role says its permissions: one without them must not end up with all
+		const list = isObject(value) ? value.permissions : value
+		if (!Array.isArray(list) && !(partial && isObject(value) && list === undefined)) {
+			this.issues.push(`${at} must be a list of permissions, or { permissions, views, stages }`)
+			return undefined
+		}
+		const role: Partial<RoleConfig> = Array.isArray(list) ? { permissions: this.permissions(list, at) } : {}
+		if (!isObject(value)) return role
+		for (const key of Object.keys(value)) if (!known.includes(key)) this.warnings.push(`${at}: unknown key "${key}" ignored`)
+		const names = (raw: unknown, key: string): string[] | undefined => {
+			if (raw === undefined) return undefined
+			const items = Array.isArray(raw) ? raw : [raw]
+			if (!items.length || items.some(v => typeof v !== 'string' || !v)) { this.issues.push(`${at}.${key} must be a list of names`); return undefined }
+			return [...new Set(items.map(String))]
+		}
+		if (value.view !== undefined && value.views !== undefined) this.issues.push(`${at}: view or views, not both`)
+		const views = names(value.views ?? value.view, value.views !== undefined ? 'views' : 'view')
+		if (views) role.views = views
+		const stages = names(value.stages, 'stages')
+		if (stages) role.stages = stages
+		if (value.maxRows !== undefined) role.maxRows = this.int(value.maxRows, 0, `${at}.maxRows`, 1)
+		const approval = this.approvalMode(value.approval, `${at}.approval`)
+		if (approval === 'writes') role.approval = approval
+		if (value.scope !== undefined) {
+			if (value.scope !== 'any') this.issues.push(`${at}.scope must be any`)
+			else role.scope = 'any'
+		}
+		if (value.locked !== undefined) role.locked = this.bool(value.locked, false, `${at}.locked`)
+		if (views && role.permissions) this.stageWithView(role.permissions, at)
+		return role
+	}
+
+	/** authorization (docs/ROLE_SCOPES.md §2) */
+	private authorization (raw: unknown): AuthorizationConfig {
+		const authorization: AuthorizationConfig = { roles: {}, stages: 'restricted' }
+		if (raw === undefined || raw === null) return authorization
+		if (!isObject(raw)) { this.issues.push('authorization must be an object: { roles, stages }'); return authorization }
+		for (const key of Object.keys(raw)) if (key !== 'roles' && key !== 'stages') this.warnings.push(`unknown key "authorization.${key}" ignored`)
+		if (raw.stages !== undefined) {
+			if (raw.stages !== 'restricted' && raw.stages !== 'open') this.issues.push('authorization.stages must be restricted or open')
+			else authorization.stages = raw.stages
+		}
+		if (raw.roles !== undefined) {
+			if (!isObject(raw.roles)) this.issues.push('authorization.roles must be an object (a role: its permissions, views and stages)')
+			else {
+				for (const [name, value] of Object.entries(raw.roles)) {
+					const role = this.role(value, `authorization.roles.${name}`, false)
+					if (role) authorization.roles[name] = role as RoleConfig
+				}
+			}
+		}
+		return authorization
+	}
+
+	/** the roles of the methods jwt (as before 4.4) and of authorization.roles are one catalog: a name in both, an issue */
+	private rolesTogether (config: DataGatewayConfig): void {
+		const methods = config.authentication.adapter === 'methods' ? config.authentication.methods ?? [] : [config.authentication]
+		for (const method of methods) {
+			for (const name of Object.keys(method.jwt?.principal.permissions?.roles ?? {})) {
+				if (config.authorization.roles[name]) this.issues.push(`the role "${name}" is in authorization.roles and in a method jwt: keep it in one`)
+			}
+		}
+		const known = new Set([...Object.keys(config.authorization.roles), ...methods.flatMap(m => Object.keys(m.jwt?.principal.permissions?.roles ?? {}))])
+		for (const method of methods) {
+			for (const credential of method.credentials ?? []) {
+				for (const role of credential.roles ?? []) {
+					if (!known.has(role)) this.warnings.push(`the key "${credential.name}" has the role "${role}", which authorization.roles doesn't have (it may come from the state of the gateway)`)
+				}
+			}
+		}
+	}
+
+	/** state (docs/GATEWAY_STATE.md §2): where the gateway keeps its own; none, a SQLite of the volume */
+	private state (raw: unknown): StateConfig {
+		const state: StateConfig = { refreshMs: 30000, required: false }
+		if (raw === undefined || raw === null) return state
+		if (!isObject(raw)) { this.issues.push('state must be an object: { source, refresh, required }'); return state }
+		for (const key of Object.keys(raw)) if (!['source', 'refresh', 'required'].includes(key)) this.warnings.push(`unknown key "state.${key}" ignored`)
+		state.refreshMs = this.duration(raw.refresh, 30000, 'state.refresh')
+		state.required = this.bool(raw.required, false, 'state.required')
+		if (raw.source !== undefined) {
+			const source = raw.source
+			if (!isObject(source)) { this.issues.push('state.source must be { dialect, connection }'); return state }
+			const dialect = source.dialect === 'SQLjs' || source.dialect === 'SqlLite' ? source.dialect : String(source.dialect ?? '')
+			if (dialect === 'SQLjs') {
+				// sql.js keeps the database in memory and writes it when it ends: a crash loses the state, two workers overwrite it
+				this.issues.push('state.source: SQLjs keeps the database in memory until it ends; for the state use SQLite (a file) or a server')
+			} else if (!(STATE_DIALECTS as readonly string[]).includes(dialect === 'SqlLite' ? 'SQLite' : dialect)) {
+				this.issues.push(`state.source.dialect must be one of ${STATE_DIALECTS.join(', ')}`)
+			} else if (source.connection === undefined || source.connection === null || source.connection === '') {
+				this.warnings.push('state.source has no connection (a variable not given?): the state in a SQLite of the volume')
+			} else {
+				state.source = { dialect: (dialect === 'SqlLite' ? 'SQLite' : dialect) as StateDialect, connection: source.connection }
+			}
+		}
+		return state
+	}
+
 	/** cluster (docs/REPLICAS.md §2): a Valkey shared by the replicas; without it, each replica on its own */
 	private cluster (raw: unknown): ClusterConfig {
 		if (raw === undefined) return {}
@@ -777,8 +898,14 @@ export class ConfigReader {
 			this.issues.push(`${at}: username is required`)
 			return undefined
 		}
-		const permissions = this.permissions(entry.permissions, `${at}.permissions`)
-		const credential: CredentialConfig = { name, permissions }
+		if (entry.roles !== undefined && (!Array.isArray(entry.roles) || entry.roles.some((r: unknown) => typeof r !== 'string' || !r))) {
+			this.issues.push(`${at}.roles must be a list of the names of roles of authorization.roles`)
+		}
+		const roles: string[] | undefined = Array.isArray(entry.roles) ? entry.roles.map(String) : undefined
+		if (roles && (entry.permissions !== undefined || entry.view !== undefined)) this.issues.push(`${at}: roles or its own permissions and view, not both`)
+		// with roles, its permissions are theirs (the role catalog fills them): none of its own
+		const permissions = roles ? [] : this.permissions(entry.permissions, `${at}.permissions`)
+		const credential: CredentialConfig = { name, permissions, ...(roles ? { roles } : {}) }
 		if (this.approvalMode(entry.approval, `${at}.approval`) === 'writes') credential.approval = 'writes'
 		if (entry.view !== undefined) {
 			const view = this.viewName(entry.view, `${at}.view`)

@@ -15,6 +15,12 @@ export interface WhoAmI {
 	scripts: boolean
 	/** the view of λORM of the credential (gateway 4.1.0): what of the domain it sees */
 	view?: string
+	/** data-gateway 4.4 (docs/ROLE_SCOPES.md): its stage without choosing, and the views and stages it may choose */
+	stage?: string
+	views?: string[]
+	stages?: string[]
+	roles?: string[]
+	maxRows?: number
 }
 
 export interface Availability {

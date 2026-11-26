@@ -6,6 +6,41 @@ All notable changes to this project will be documented in this file.
 
 ### Unreleased
 
+### 4.4.0 (2026-11-26)
+
+With `@lambdaorm/base` 3.11.1 and `@lambdaorm/lib` 3.15.0, the exact versions the image installs.
+
+**Roles with their views and stages** (`docs/ROLE_SCOPES.md`):
+
+- **`authorization.roles`**: a role says its `permissions`, the `views` and the `stages` it may use (the first of each,
+  the one of who doesn't choose; none, the one of the schema), `maxRows`, `approval`, `scope: any` (its permissions
+  whatever was chosen) and `locked`. Tokens name them by their claim (`principal.permissions.claim`), keys by `roles`.
+  `orm.schemas[].roles` extends them in a schema; `orm.schemas[].stage` is the stage of who doesn't choose.
+- **The client chooses** `options.view` and `options.stage` only among those of its roles (`403` outside them);
+  `options.maxRows` only lower than its role's. The permissions of a request are those of the roles that allow the view
+  and the stage chosen (not the sum of all of them); the commands of a stage (`push`, `migrate`, `export`, `import`…)
+  only in the stages of their role. `/whoami` says the view and stage it got and every one it may choose.
+- **Roles from the administration:** `GET /admin/roles`, `PUT /admin/roles/{name}` `{ schema, config, reason }`,
+  `DELETE /admin/roles/{name}?schema=`, `GET /admin/roles/changes`, with the new permission `roles`: a new role, or one of
+  the configuration extended (more views, stages, permissions; never one `locked`); nobody gives a permission it doesn't
+  have; each change recorded (who, when, before and after). It applies at once, in the other replicas within
+  `state.refresh`.
+
+**The state of the gateway** (`docs/GATEWAY_STATE.md`): **`state.source`** says where the gateway keeps its own state
+(the sessions of management, the state of the UI, the writes that wait, the roles): `SQLite` (a file, as before:
+`.data-gateway/state.sqlite` of the volume when it isn't said) for one instance, or a database through λORM
+(`PostgreSQL`, `MySQL`, `MariaDB`, `SqlServer`, `Oracle`) for several replicas; its tables (`dg_*`) are created when it
+starts. `state.refresh` (30 s), `state.required` (without it the gateway doesn't start; else it starts with the roles of
+the configuration alone).
+
+**Breaking:**
+
+- A client can't choose a stage its roles don't name (before, any of the schema): `authorization.stages: open` keeps the
+  old behavior for this version.
+- A push or a migration that loses data (`allowDestructive`) needs the permission `destructive` besides `ddl`.
+- `cluster.valkey` (several replicas) with the state in SQLite is an error: give `state.source` a database.
+- A token whose roles give two views is no longer refused when it authenticates: the request chooses one (or is told to).
+
 ### 4.3.0 (2026-11-26)
 
 With `@lambdaorm/base` 3.11.1 and `@lambdaorm/lib` 3.15.0, the exact versions the image installs.

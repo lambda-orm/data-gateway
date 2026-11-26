@@ -53,6 +53,9 @@ que no existe en Docker Hub: hoy falla para cualquiera que la siga.
 > **Estado (2026-11-25): hecho** (#14). `requestOptions` borra `view` y `context` en los casos de uso de todos los
 > transportes; `plan` lleva el actor; el IDE ya no ofrece la vista. **Sin decidir:** si el cliente puede elegir
 > `stage`, `maxRows` y `allowDestructive`.
+> **Hecho (2026-11-26, `feature/gateway-state`):** [`ROLE_SCOPES.md`](ROLE_SCOPES.md): el rol dice las vistas y los
+> stages permitidos (y los defaults), el cliente elige dentro; `maxRows` solo menor; `allowDestructive` es el permiso
+> `destructive`. Sobre el estado de la gateway ([`GATEWAY_STATE.md`](GATEWAY_STATE.md)): SQLite o una base por λORM.
 
 `queryUseCases.execute` pasa a λORM las `options` del pedido tal como llegan, más el actor
 (`application/usecases/actor.ts`, `withActor`); `plan` ni eso. Con λORM ≥ 3.10 eso incluye:
@@ -141,6 +144,13 @@ publicar, quitar las marcas *"not in the image 4.0.0"* de sus páginas de la gat
 > `release/data-gateway-4.3.0` y `release/ide-1.3.0`, listas para `main`. La wiki en `lambda-orm/wiki` →
 > `feature/data-gateway-4.3.0` (mergearla **después** de publicar las imágenes). Changesets: `@lambdaorm/ui` (vectores
 > y puntos, archivos, paneles, la fila de la connection) y `@lambdaorm/data-gateway-client` (`approval`).
+
+### R7. Liberar 4.4.0 y el IDE 1.4.0
+
+> **Estado (2026-11-26):** los roles con sus vistas y stages y el estado de la gateway (#45) en `develop`. Ramas
+> `release/data-gateway-4.4.0` y `release/ide-1.4.0`, listas para `main`. La wiki en `lambda-orm/wiki` →
+> `feature/data-gateway-4.4.0` (mergearla **después** de publicar las imágenes). Changesets: `@lambdaorm/ui` (la vista en
+> las opciones, `WhoAmI`).
 
 ## 3. Las features (G1–G7)
 
@@ -301,4 +311,14 @@ actualizarla al final de la serie, como se hizo con core.
   genera `EXTRACT(YEAR FROM …)`, que SQLite no tiene (`strftime('%Y', …)`), y agrupa por `o.OrderDate` en vez de por la
   expresión del año (`GROUP BY` de la columna y no de lo que el `map` calcula). Visto en un panel del IDE sobre el
   Northwind de desarrollo.
+- **Vistos al usar λORM para el estado de la gateway (2026-11-26, [`GATEWAY_STATE.md`](GATEWAY_STATE.md)), en 3.15.0:**
+  - **SQLjs con `{ file }` escribe el archivo solo en `end()`** del pool: una caída pierde todo lo de la corrida y dos
+    procesos (o workers) sobre el mismo archivo se pisan. Y `SqlLite` está en `Dialect` sin adaptador. Hace falta un
+    SQLite nativo (`node:sqlite`, Node ≥ 22.5) para usar SQLite como base de verdad.
+  - **`type: text` lee como fecha un texto que tiene una fecha adentro**: un JSON con `"2026-11-26T10:00:00.000Z"`
+    vuelve como `"Invalid DateTime"` (SQLjs y PostgreSQL). Con `type: string` sin largo, bien.
+  - **`.page(1, limit)` con una variable** genera `OFFSET NaN LIMIT NaN`: solo toma literales.
+  - **`p.x == null` no encuentra los nulos** (genera `= NULL`); `isNull(p.x)` sí. Lo esperable: `IS NULL`.
+  - **Una propiedad que se llama `context`** no llega en los datos de un `insert` (choca con el contexto de C1).
+  - **SQLjs: `merge` no está soportado** y no da error: el `execute` vuelve sin hacer nada.
 

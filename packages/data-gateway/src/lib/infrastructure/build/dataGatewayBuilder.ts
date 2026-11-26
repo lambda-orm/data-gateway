@@ -27,7 +27,9 @@ import { LambdaSchemaValidator } from '../output/admin/lambdaSchemaValidator'
 import { YamlAdapter } from '../output/admin/yamlAdapter'
 import { NodeCodeGenerator } from '../output/admin/nodeCodeGenerator'
 import { ThreeExprLanguage } from '../output/admin/threeExprLanguage'
-import { SqliteSessionState } from '../output/admin/sqliteSessionState'
+import { uiStateStoreOf } from '../output/state/stateStores'
+import { stateSourceOf } from '../../domain/config/stateSource'
+import { buildGatewayState } from './stateBuilder'
 
 export interface BuildOptions {
 	logger?: LoggerPort
@@ -47,7 +49,9 @@ export class RunningGateway {
 	constructor (
 		public readonly transports: Transport[],
 		private readonly schemas: ComposedSchema[],
-		private readonly logger: LoggerPort
+		private readonly logger: LoggerPort,
+		/** the state of the gateway it holds open (docs/GATEWAY_STATE.md) */
+		private readonly closeState: () => Promise<void> = async () => undefined
 	) {}
 
 	public async start (): Promise<void> {
@@ -58,6 +62,7 @@ export class RunningGateway {
 	public async stop (): Promise<void> {
 		await Promise.all(this.transports.map(transport => transport.stop().catch(error => this.logger.error(error))))
 		await Promise.all(this.schemas.map(schema => schema.stop()))
+		await this.closeState().catch(error => this.logger.error(error))
 		await stopObservability().catch(() => undefined)
 	}
 }
@@ -69,8 +74,8 @@ export const buildLogger = (config: Pick<DataGatewayConfig, 'logger'>, label = '
 /** The configuration as it can be logged: secrets and the variables given to the schemas masked */
 export const maskSecrets = (config: DataGatewayConfig): unknown => JSON.parse(JSON.stringify(config, (key, value) =>
 	['value', 'password', 'token', 'secret', 'secretAccessKey', 'accountKey'].includes(key) && typeof value === 'string' ? '***'
-		// a url with a password (cluster.valkey.url): without it
-		: key === 'url' && typeof value === 'string' && /^[a-z]+:\/\/[^/]*@/i.test(value) ? value.replace(/\/\/[^/]*@/, '//***@')
+		// a url with a password (cluster.valkey.url, state.source.connection): without it
+		: ['url', 'connection', 'connectionString', 'uri'].includes(key) && typeof value === 'string' && /^[a-z]+:\/\/[^/]*@/i.test(value) ? value.replace(/\/\/[^/]*@/, '//***@')
 		: key === 'env' && value && typeof value === 'object' && !Array.isArray(value) && !('isolate' in value)
 			? Object.fromEntries(Object.keys(value).map(k => [k, '***']))
 			: value))
@@ -130,7 +135,7 @@ export const buildAdmin = (config: DataGatewayConfig, directory: SchemaDirectory
 	() => directory.schemas().filter(s => s.workspace !== undefined).map(s => ({ path: s.path, workspace: s.workspace! })),
 	() => directory.states(),
 	store, new LambdaSchemaValidator(), new YamlAdapter(), clock, logger, new NodeCodeGenerator(), new ThreeExprLanguage(),
-	config.orm.workspacePath ? new SqliteSessionState(path.join(path.resolve(config.orm.workspacePath), '.data-gateway', 'state.sqlite')) : undefined,
+	uiStateStoreOf(stateSourceOf(config.state, config.orm.workspacePath)),
 	new FileSchemaHistory(change => directory.workspaceChanged?.(change)))
 	return { service, commands }
 }
@@ -150,7 +155,9 @@ export class DataGatewayBuilder {
 		const clock = options.clock ?? new SystemClock()
 		const audit = options.audit ?? new StdoutAuditAdapter()
 		const version = options.version ?? packageVersion()
-		const authenticators = options.authenticators ?? new AuthenticatorRegistry()
+		// the roles of the YAML and of the state of the gateway (docs/ROLE_SCOPES.md)
+		const state = await buildGatewayState(config, logger, clock)
+		const authenticators = options.authenticators ?? new AuthenticatorRegistry(state.catalog)
 		// the SDK before λORM (inline, one for every schema of this thread)
 		const observability = withPrometheus(resolveObservability(config.observability, process.env), config.metrics.enabled)
 		await startObservability(observability, logger)
@@ -193,15 +200,17 @@ export class DataGatewayBuilder {
 			}
 		} catch (error) {
 			await Promise.all(composed.map(schema => schema.stop()))
+			await state.close()
 			throw error
 		}
 		const inlineDirectory = new InlineSchemaDirectory(inline, clock, version)
+		inlineDirectory.grants = state.catalog
 		const directory = metrics.enabled ? new MeasuredSchemaDirectory(inlineDirectory, metrics) : inlineDirectory
 		const admin = buildAdmin(config, directory, logger, clock)
-		const transports = (options.transports ?? new TransportRegistry()).build({ config, directory, metrics, logger, admin })
+		const transports = (options.transports ?? new TransportRegistry()).build({ config, directory, metrics, logger, admin, state })
 		measureConnections(metrics, transports)
 		logger.info(`[data-gateway] ${version} (inline): schemas ${inline.map(s => `/${s.path}`).join(', ')}; rate limit ${config.rateLimit.max > 0 ? `${config.rateLimit.max} per ${config.rateLimit.windowMs} ms` : 'off'}; ` +
 			`scripts ${config.scripts.enabled ? 'enabled' : 'disabled'}; audit ${config.audit.enabled ? 'on' : 'off'}; authentication ${config.authentication.adapter}`)
-		return new RunningGateway(transports, composed, logger)
+		return new RunningGateway(transports, composed, logger, () => state.close())
 	}
 }

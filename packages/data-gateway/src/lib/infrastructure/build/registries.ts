@@ -15,11 +15,14 @@ import { TransportInfo } from '../input/http/httpTransport'
 import { TransportsConfig } from '../../domain/config/dataGatewayConfig'
 import { AuditPort, ClockPort } from '../../application/ports/output/supportPorts'
 import { SessionService } from '../../application/session/sessionService'
-import { MemorySessionStore, NodeSessionSecrets, SqliteSessionStore } from '../output/session/sessionStores'
+import { NodeSessionSecrets } from '../output/session/sessionStores'
+import { sessionStoreOf } from '../output/state/stateStores'
+import { StateSource, stateSourceOf } from '../../domain/config/stateSource'
+import { GatewayState } from './stateBuilder'
 import { ClientAddress } from '../input/http/clientAddress'
 import { SystemClock } from '../output/clock/systemClock'
 import { StdoutAuditAdapter } from '../output/audit/stdoutAuditAdapter'
-import path from 'path'
+import { RoleLookupPort } from '../../application/auth/roleCatalog'
 
 /** The transports of the configuration as GET /transports tells them */
 export const transportsOf = (t: TransportsConfig): TransportInfo[] => [
@@ -35,12 +38,13 @@ type AuthenticatorFactory = (config: AuthenticationConfig) => AuthenticatorPort
 export class AuthenticatorRegistry {
 	private readonly factories = new Map<string, AuthenticatorFactory>()
 
-	constructor () {
+	/** roles: the catalog of the roles (docs/ROLE_SCOPES.md); without it, those of each method jwt */
+	constructor (roles?: RoleLookupPort) {
 		this.register('none', () => new NoneAuthenticator())
-		this.register('local:bearer', c => new BearerAuthenticator(c.credentials))
-		this.register('local:apikey', c => new ApiKeyAuthenticator(c.credentials, c.header))
-		this.register('local:basic', c => new BasicAuthenticator(c.credentials))
-		this.register('jwt', c => new JwtAuthenticator(c.jwt!))
+		this.register('local:bearer', c => new BearerAuthenticator(c.credentials, roles))
+		this.register('local:apikey', c => new ApiKeyAuthenticator(c.credentials, c.header, roles))
+		this.register('local:basic', c => new BasicAuthenticator(c.credentials, roles))
+		this.register('jwt', c => new JwtAuthenticator(c.jwt!, undefined, undefined, roles))
 		this.register('methods', c => new MethodsAuthenticator((c.methods ?? []).map(m => this.build(m))))
 	}
 
@@ -67,25 +71,25 @@ export interface TransportDeps {
 	clock?: ClockPort
 	/** the audit of the logins and revocations of management; else stdout, when audit.enabled */
 	audit?: AuditPort
+	/** the state of the gateway: the roles and where the sessions live (docs/GATEWAY_STATE.md) */
+	state?: GatewayState
 }
 
 /** The sessions of management: in the SQLite of the volume (shared by the replicas) or, without one, in memory */
 export const buildSessions = ({ config, logger, metrics, clock, audit }: TransportDeps): SessionService => {
 	const management = config.transports.management!
 	const { sessions } = management
-	const file = config.orm.workspacePath && sessions.store === 'auto'
-		? path.join(path.resolve(config.orm.workspacePath), '.data-gateway', 'state.sqlite')
-		: undefined
-	if (!file) logger.warn('[data-gateway] management: the sessions are kept in memory (no orm.workspacePath, or sessions.store: memory): another replica doesn\'t see them, and a restart forgets them')
+	const source: StateSource = sessions.store === 'auto' ? stateSourceOf(config.state, config.orm.workspacePath) : { kind: 'memory' }
+	if (source.kind === 'memory') logger.warn('[data-gateway] management: the sessions are kept in memory (no orm.workspacePath, or sessions.store: memory): another replica doesn\'t see them, and a restart forgets them')
 	const service = new SessionService(
 		{ idleTimeoutMs: sessions.idleTimeoutMs, maxLifetimeMs: sessions.maxLifetimeMs, maxPerCredential: sessions.maxPerCredential },
-		file ? new SqliteSessionStore(file) : new MemorySessionStore(),
+		sessionStoreOf(source),
 		new NodeSessionSecrets(),
 		clock ?? new SystemClock(),
 		logger,
 		audit ?? (config.audit.enabled ? new StdoutAuditAdapter() : undefined))
-	metrics.gauge('data_gateway_management_sessions', 'Sessions of management that can be used now, and those with the IDE connected', ['state'], () => {
-		const { active, connected } = service.count()
+	metrics.gauge('data_gateway_management_sessions', 'Sessions of management that can be used now, and those with the IDE connected', ['state'], async () => {
+		const { active, connected } = await service.count()
 		return [{ labels: { state: 'active' }, value: active }, { labels: { state: 'connected' }, value: connected }]
 	})
 	return service
@@ -116,7 +120,7 @@ export class TransportRegistry {
 		this.register('management', (deps) => {
 			const { config, directory, metrics, logger, admin } = deps
 			const management = config.transports.management!
-			const authenticator = new AuthenticatorRegistry().build(management.authentication ?? config.authentication)
+			const authenticator = new AuthenticatorRegistry(deps.state?.catalog).build(management.authentication ?? config.authentication)
 			return new HttpTransport({
 				name: 'management',
 				port: management.port,
@@ -130,7 +134,7 @@ export class TransportRegistry {
 				directory,
 				metrics,
 				logger,
-				admin: admin ? { ...admin, authenticator } : undefined,
+				admin: admin ? { ...admin, authenticator, ...(deps.state ? { roles: deps.state.roles } : {}) } : undefined,
 				sessions: { service: buildSessions(deps), authenticator, address: new ClientAddress(management.trustedProxies) }
 			})
 		})
@@ -147,7 +151,7 @@ export class TransportRegistry {
 				maxConnections: t.maxConnections
 			}, { directory, metrics, logger })
 		})
-		this.register('webSocket', ({ config, directory, logger }) => {
+		this.register('webSocket', ({ config, directory, logger, state }) => {
 			const t = config.transports.webSocket!
 			return new WebSocketTransport({
 				port: t.port,
@@ -156,7 +160,7 @@ export class TransportRegistry {
 				maxConnections: t.maxConnections,
 				maxPayload: parseSize(config.server.requestBodySize) ?? 14 * 1024 * 1024,
 				asyncapiEnabled: t.asyncapi.enabled
-			}, { directory, logger, rootAuthenticator: new AuthenticatorRegistry().build(t.authentication ?? config.authentication) })
+			}, { directory, logger, rootAuthenticator: new AuthenticatorRegistry(state?.catalog).build(t.authentication ?? config.authentication) })
 		})
 		this.register('mcpWebSocket', ({ config, directory, logger }) => {
 			const t = config.transports.mcpWebSocket!

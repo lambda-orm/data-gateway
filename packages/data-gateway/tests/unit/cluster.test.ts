@@ -133,7 +133,8 @@ describe('one replica leads the outbox', () => {
 })
 
 describe('cluster.valkey', () => {
-	const base = { orm: { workspacePath: '/workspace' }, transports: { http: { port: 8080 } } }
+	// several replicas keep their state in a database (docs/GATEWAY_STATE.md §2)
+	const base = { orm: { workspacePath: '/workspace' }, transports: { http: { port: 8080 } }, state: { source: { dialect: 'PostgreSQL', connection: 'postgres://u:pw@db/gateway' } } }
 	const read = (raw: unknown) => new ConfigReader().read(raw)
 
 	test('its url and prefix; to every schema; without it, each replica on its own', () => {
@@ -153,9 +154,16 @@ describe('cluster.valkey', () => {
 		expect(read({ ...base, cluster: { valkey: { url: 'valkey://v', prefix: 'a b' } } }).issues).toContain('cluster.valkey.prefix: letters, digits and _ . : - only')
 	})
 
+	test('several replicas on the SQLite of the volume: an error (they lose data)', () => {
+		const sqlite = { ...base, state: undefined }
+		expect(read({ ...sqlite, cluster: { valkey: { url: 'valkey://v' } } }).issues).toContain('cluster.valkey (several replicas) with the state of the gateway in SQLite: give state.source another database (PostgreSQL)')
+	})
+
 	test('its password is never in the log of the configuration', () => {
 		const { config } = read({ ...base, cluster: { valkey: { url: 'valkey://user:s3cret@valkey:6379' } } })
 		expect(JSON.stringify(maskSecrets(config!))).not.toContain('s3cret')
 		expect((maskSecrets(config!) as any).cluster.valkey.url).toBe('valkey://***@valkey:6379')
+		// nor the one of the database of the state
+		expect((maskSecrets(config!) as any).state.source.connection).toBe('postgres://***@db/gateway')
 	})
 })

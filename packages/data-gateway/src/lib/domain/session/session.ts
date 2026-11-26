@@ -19,6 +19,8 @@ export interface Session {
 	context?: Record<string, unknown>
 	/** the view of λORM of its credential */
 	view?: string
+	/** the roles of its credential (docs/ROLE_SCOPES.md): each schema chooses with them */
+	roles?: string[]
 	ip?: string
 	client?: SessionClient
 	activity?: { schema?: string, tab?: string }

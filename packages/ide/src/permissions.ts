@@ -2,7 +2,7 @@ import type { Locale } from '@lambdaorm/ui'
 
 /** The permissions of the gateway (docs/DATA_GATEWAY.md §6.2): those of the data and those of the administration */
 export const DATA_PERMISSIONS = ['read', 'write', 'script', 'queue', 'stageImport']
-export const ADMIN_PERMISSIONS = ['schemaRead', 'schemaWrite', 'schemaAdmin', 'workbenchWrite', 'ddl', 'build', 'sessionAdmin']
+export const ADMIN_PERMISSIONS = ['schemaRead', 'schemaWrite', 'schemaAdmin', 'workbenchWrite', 'ddl', 'destructive', 'build', 'sessionAdmin', 'approve', 'roles']
 
 type Descriptions = Record<string, string> & { data: string, admin: string, granted: string, notGranted: string, other: string }
 
@@ -19,7 +19,10 @@ const EN: Descriptions = {
 	workbenchWrite: 'Save queries, scripts and diagrams in the projects of the workspaces.',
 	ddl: 'Change the structure of the databases of a stage (push, drop).',
 	build: 'Generate the code of the domain (model and repositories) in src/ of the workspace.',
-	sessionAdmin: 'See every session of management (who is connected) and revoke those of other credentials.'
+	sessionAdmin: 'See every session of management (who is connected) and revoke those of other credentials.',
+	destructive: 'With ddl, a push or a migration that loses data.',
+	approve: 'Approve or reject the writes of agents that wait for a person (never its own).',
+	roles: 'See and change the roles kept in the state of the gateway: add one, or give one more views, stages or permissions.'
 }
 const ES: Descriptions = {
 	data: 'Datos', admin: 'Administración', granted: 'otorgado', notGranted: 'no otorgado', other: 'Otros',
@@ -34,7 +37,10 @@ const ES: Descriptions = {
 	workbenchWrite: 'Guardar consultas, scripts y diagramas en los proyectos de los workspaces.',
 	ddl: 'Cambiar la estructura de las bases de un stage (push, drop).',
 	build: 'Generar el código del dominio (modelo y repositorios) en src/ del workspace.',
-	sessionAdmin: 'Ver todas las sesiones de management (quién está conectado) y revocar las de otras credenciales.'
+	sessionAdmin: 'Ver todas las sesiones de management (quién está conectado) y revocar las de otras credenciales.',
+	destructive: 'Con ddl, un push o una migración que pierde datos.',
+	approve: 'Aprobar o rechazar las escrituras de agentes que esperan a una persona (nunca las propias).',
+	roles: 'Ver y cambiar los roles guardados en el estado de la gateway: agregar uno, o darle más vistas, stages o permisos.'
 }
 const PT: Descriptions = {
 	data: 'Dados', admin: 'Administração', granted: 'concedida', notGranted: 'não concedida', other: 'Outras',
@@ -49,7 +55,10 @@ const PT: Descriptions = {
 	workbenchWrite: 'Salvar consultas, scripts e diagramas nos projetos dos workspaces.',
 	ddl: 'Alterar a estrutura dos bancos de um stage (push, drop).',
 	build: 'Gerar o código do domínio (modelo e repositórios) em src/ do workspace.',
-	sessionAdmin: 'Ver todas as sessões do management (quem está conectado) e revogar as de outras credenciais.'
+	sessionAdmin: 'Ver todas as sessões do management (quem está conectado) e revogar as de outras credenciais.',
+	destructive: 'Com ddl, um push ou uma migração que perde dados.',
+	approve: 'Aprovar ou recusar as escritas de agentes que aguardam uma pessoa (nunca as próprias).',
+	roles: 'Ver e mudar os papéis guardados no estado do gateway: adicionar um, ou dar a um mais views, stages ou permissões.'
 }
 const FR: Descriptions = {
 	data: 'Données', admin: 'Administration', granted: 'accordée', notGranted: 'non accordée', other: 'Autres',
@@ -64,7 +73,10 @@ const FR: Descriptions = {
 	workbenchWrite: 'Enregistrer requêtes, scripts et diagrammes dans les projets des workspaces.',
 	ddl: 'Modifier la structure des bases d’un stage (push, drop).',
 	build: 'Générer le code du domaine (modèle et dépôts) dans src/ du workspace.',
-	sessionAdmin: 'Voir toutes les sessions de management (qui est connecté) et révoquer celles des autres identifiants.'
+	sessionAdmin: 'Voir toutes les sessions de management (qui est connecté) et révoquer celles des autres identifiants.',
+	destructive: 'Avec ddl, un push ou une migration qui perd des données.',
+	approve: 'Approuver ou rejeter les écritures des agents qui attendent une personne (jamais les siennes).',
+	roles: 'Voir et changer les rôles gardés dans l’état de la gateway : en ajouter un, ou donner à un plus de vues, de stages ou de permissions.'
 }
 const IT: Descriptions = {
 	data: 'Dati', admin: 'Amministrazione', granted: 'concesso', notGranted: 'non concesso', other: 'Altri',
@@ -79,7 +91,10 @@ const IT: Descriptions = {
 	workbenchWrite: 'Salvare query, script e diagrammi nei progetti dei workspace.',
 	ddl: 'Modificare la struttura dei database di uno stage (push, drop).',
 	build: 'Generare il codice del dominio (modello e repository) in src/ del workspace.',
-	sessionAdmin: 'Vedere tutte le sessioni di management (chi è connesso) e revocare quelle di altre credenziali.'
+	sessionAdmin: 'Vedere tutte le sessioni di management (chi è connesso) e revocare quelle di altre credenziali.',
+	destructive: 'Con ddl, un push o una migrazione che perde dati.',
+	approve: 'Approvare o rifiutare le scritture degli agenti che attendono una persona (mai le proprie).',
+	roles: 'Vedere e cambiare i ruoli tenuti nello stato del gateway: aggiungerne uno, o dare a uno più viste, stage o permessi.'
 }
 const DE: Descriptions = {
 	data: 'Daten', admin: 'Verwaltung', granted: 'erteilt', notGranted: 'nicht erteilt', other: 'Weitere',
@@ -94,7 +109,10 @@ const DE: Descriptions = {
 	workbenchWrite: 'Abfragen, Skripte und Diagramme in den Projekten der Workspaces speichern.',
 	ddl: 'Die Struktur der Datenbanken eines Stage ändern (push, drop).',
 	build: 'Den Code der Domäne (Modell und Repositories) in src/ des Workspace erzeugen.',
-	sessionAdmin: 'Alle Sitzungen von management sehen (wer verbunden ist) und die anderer Anmeldedaten widerrufen.'
+	sessionAdmin: 'Alle Sitzungen von management sehen (wer verbunden ist) und die anderer Anmeldedaten widerrufen.',
+	destructive: 'Mit ddl ein Push oder eine Migration, die Daten verliert.',
+	approve: 'Schreibvorgänge von Agenten, die auf eine Person warten, genehmigen oder ablehnen (nie die eigenen).',
+	roles: 'Die im Zustand des Gateways gehaltenen Rollen sehen und ändern: eine hinzufügen oder einer mehr Views, Stages oder Berechtigungen geben.'
 }
 const NL: Descriptions = {
 	data: 'Gegevens', admin: 'Beheer', granted: 'toegekend', notGranted: 'niet toegekend', other: 'Overige',
@@ -109,7 +127,10 @@ const NL: Descriptions = {
 	workbenchWrite: 'Queries, scripts en diagrammen opslaan in de projecten van de workspaces.',
 	ddl: 'De structuur van de databases van een stage wijzigen (push, drop).',
 	build: 'De code van het domein (model en repositories) genereren in src/ van de workspace.',
-	sessionAdmin: 'Alle sessies van management zien (wie verbonden is) en die van andere inloggegevens intrekken.'
+	sessionAdmin: 'Alle sessies van management zien (wie verbonden is) en die van andere inloggegevens intrekken.',
+	destructive: 'Met ddl een push of een migratie die gegevens verliest.',
+	approve: 'Schrijfacties van agents die op een persoon wachten goedkeuren of afwijzen (nooit de eigen).',
+	roles: 'De rollen in de staat van de gateway zien en wijzigen: er een toevoegen, of er een meer views, stages of rechten geven.'
 }
 const CA: Descriptions = {
 	data: 'Dades', admin: 'Administració', granted: 'atorgat', notGranted: 'no atorgat', other: 'Altres',
@@ -124,7 +145,10 @@ const CA: Descriptions = {
 	workbenchWrite: 'Desar consultes, scripts i diagrames als projectes dels workspaces.',
 	ddl: 'Canviar l’estructura de les bases d’un stage (push, drop).',
 	build: 'Generar el codi del domini (model i repositoris) a src/ del workspace.',
-	sessionAdmin: 'Veure totes les sessions de management (qui està connectat) i revocar les d’altres credencials.'
+	sessionAdmin: 'Veure totes les sessions de management (qui està connectat) i revocar les d’altres credencials.',
+	destructive: 'Amb ddl, un push o una migració que perd dades.',
+	approve: 'Aprovar o rebutjar les escriptures d’agents que esperen una persona (mai les pròpies).',
+	roles: 'Veure i canviar els rols desats a l’estat de la gateway: afegir-ne un, o donar-ne a un més vistes, stages o permisos.'
 }
 const GL: Descriptions = {
 	data: 'Datos', admin: 'Administración', granted: 'outorgado', notGranted: 'non outorgado', other: 'Outros',
@@ -139,7 +163,10 @@ const GL: Descriptions = {
 	workbenchWrite: 'Gardar consultas, scripts e diagramas nos proxectos dos workspaces.',
 	ddl: 'Cambiar a estrutura das bases dun stage (push, drop).',
 	build: 'Xerar o código do dominio (modelo e repositorios) en src/ do workspace.',
-	sessionAdmin: 'Ver todas as sesións de management (quen está conectado) e revogar as doutras credenciais.'
+	sessionAdmin: 'Ver todas as sesións de management (quen está conectado) e revogar as doutras credenciais.',
+	destructive: 'Con ddl, un push ou unha migración que perde datos.',
+	approve: 'Aprobar ou rexeitar as escritas de axentes que agardan unha persoa (nunca as propias).',
+	roles: 'Ver e cambiar os roles gardados no estado da gateway: engadir un, ou darlle a un máis vistas, stages ou permisos.'
 }
 const EU: Descriptions = {
 	data: 'Datuak', admin: 'Administrazioa', granted: 'emanda', notGranted: 'eman gabe', other: 'Besteak',
@@ -154,7 +181,10 @@ const EU: Descriptions = {
 	workbenchWrite: 'Kontsultak, scriptak eta diagramak workspaceen proiektuetan gorde.',
 	ddl: 'Stage baten datu-baseen egitura aldatu (push, drop).',
 	build: 'Domeinuaren kodea (eredua eta biltegiak) workspaceko src/ karpetan sortu.',
-	sessionAdmin: 'Management-eko saio guztiak ikusi (nor dagoen konektatuta) eta beste kredentzialenak baliogabetu.'
+	sessionAdmin: 'Management-eko saio guztiak ikusi (nor dagoen konektatuta) eta beste kredentzialenak baliogabetu.',
+	destructive: 'ddl-rekin, datuak galtzen dituen push edo migrazio bat.',
+	approve: 'Pertsona baten zain dauden agenteen idazketak onartu edo baztertu (inoiz ez norberarenak).',
+	roles: 'Gatewayaren egoeran gordetako rolak ikusi eta aldatu: bat gehitu, edo bati view, stage edo baimen gehiago eman.'
 }
 
 const BY_LOCALE: Record<string, Descriptions> = { en: EN, es: ES, pt: PT, fr: FR, it: IT, de: DE, nl: NL, ca: CA, gl: GL, eu: EU }

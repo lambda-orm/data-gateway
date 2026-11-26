@@ -72,6 +72,14 @@ export class DataGateway implements DataGatewayPort {
 		return this.useCases.approvals.status(ctx, String(id ?? ''))
 	}
 
+	/** without a scope (a facade not decorated: tests), what its principal says */
+	public async scope (ctx: RequestContext) {
+		const p = ctx.principal
+		const view = p.view ?? 'default'
+		const stage = p.stage ?? 'default'
+		return { view, stage, views: [view], stages: [stage], permissions: [...p.permissions], roles: [...(p.roles ?? [])], ...(p.maxRows !== undefined ? { maxRows: p.maxRows } : {}) }
+	}
+
 	public async files (ctx: RequestContext) { return this.useCases.files ? this.useCases.files.list(ctx) : [] }
 
 	private filesOf (entity: string, property: string): FilesUseCases {
