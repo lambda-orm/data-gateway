@@ -1,6 +1,6 @@
 {
   "name": "@lambdaorm/data-gateway-ide",
-  "version": "1.2.0",
+  "version": "1.3.0",
   "private": true,
   "description": "λORM data-gateway IDE: connects to data-gateways (their schemas, workspaces and projects stay in them) to write and run queries, model schemas and run commands. Its backend serves the app and reaches the gateways' management port.",
   "license": "MIT",
