@@ -479,3 +479,7 @@
 .lw-connection .lw-connection-head button.lw-connection-open, .lw-connection .lw-connection-head button.lw-connection-open:hover { background: none; border: 0; border-radius: 0; padding: 0; margin: 0; box-shadow: none; text-align: left; cursor: pointer; color: inherit; font: inherit; line-height: inherit; }
 .lw-connection .lw-connection-head button.lw-connection-open:hover strong { text-decoration: underline; }
 .lw-connection .lw-connection-head button.lw-icon-button { width: 22px; height: 22px; min-width: 22px; padding: 0; justify-content: center; }
+/* a point in the data table and in the form of a row: its longitude and latitude side by side */
+.lw-point-input { display: inline-flex; gap: 4px; }
+.lw-point-input input { width: 9em; min-width: 0; }
+.lw-map-link { text-decoration: none; font-size: var(--lw-text-xs); }

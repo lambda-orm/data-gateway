@@ -4,9 +4,9 @@
 	"tasks": [
 		{
 			"label": "data-gateway: dev workspace",
-			"detail": "Seeds packages/data-gateway/dev/workspace with the northwind schema of the tests, once",
+			"detail": "Seeds packages/data-gateway/dev/workspace once: northwind on SQLite (sql.js) with its data",
 			"type": "shell",
-			"command": "test -f packages/data-gateway/dev/workspace/northwind/lambdaORM.yaml || (mkdir -p packages/data-gateway/dev/workspace/northwind && cp packages/data-gateway/tests/fixtures/northwind/lambdaORM.yaml packages/data-gateway/dev/workspace/northwind/)",
+			"command": "node packages/data-gateway/dev/seed.mjs",
 			"presentation": { "reveal": "silent" },
 			"problemMatcher": []
 		},

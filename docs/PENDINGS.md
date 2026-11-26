@@ -88,8 +88,8 @@ que un `view`/`context` del cliente no llega a λORM.
 > - `cosineDistance`, `l2Distance`, `innerProduct`, `distance`, `within`, `inside`, `jsonSet` no están en el
 >   `queryable.d.ts` de `base`: el autocompletado del IDE no los conoce hasta que core los declare.
 >
-> **Sin hacer de esta tabla:** formularios del IDE para `vector` y `point`; SQLite (sql.js) para el gateway de
-> desarrollo; lo que depende de G1–G7 (consultas con nombre, eventos, outbox, `forward` con la identidad, límites por
+> **Hecho después (2026-11-26, [`VECTOR_POINT_SQLJS.md`](VECTOR_POINT_SQLJS.md)):** formularios del IDE para `vector` y
+> `point`; SQLite (sql.js) para el gateway de desarrollo. **Sin hacer de esta tabla:** lo que depende de G1–G7 (consultas con nombre, eventos, outbox, `forward` con la identidad, límites por
 > credencial). **Fuera de este repo:** el lab falla en *model ilusor*, que lee el modelo real de Ilusor
 > (`~/ilusor/…`): 8 relaciones compuestas que no emparejan `locationId` (aviso para Ilusor, no de λORM).
 

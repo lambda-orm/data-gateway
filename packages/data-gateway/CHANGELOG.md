@@ -6,6 +6,9 @@ All notable changes to this project will be documented in this file.
 
 ### Unreleased
 
+**Development:** `npm run dev` (and the task of VS Code) seeds `dev/workspace` once with northwind on SQLite (sql.js)
+and its data: the dev gateway needs no database server. A `dev/workspace` that is there is left as it is.
+
 ### 4.2.0 (2026-11-26)
 
 With `@lambdaorm/base` 3.11.1 and `@lambdaorm/lib` 3.15.0, the exact versions the image installs.

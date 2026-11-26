@@ -2,6 +2,9 @@
 
 ### Unreleased
 
+- **Vectors and points** (λORM 3.15): the forms of the schema offer `vector` (its dimensions) and `point`, and the
+  indexes `hnsw`, `ivfflat` and `spatial`; in **Data**, a point shows as longitude, latitude with a link to a map and
+  is edited in two fields; a vector shows its first numbers and how many, and is written in the form of a row.
 - **Its icon:** λORM on a blue rounded square, only the λ where λORM can't be read (a tab of the browser, 16 to 48
   px); in the browser (favicon) and as the icon of the desktop app.
 - **The desktop app** has no bar of a menu on Windows and Linux (the page has its own); on macOS only the menu of the

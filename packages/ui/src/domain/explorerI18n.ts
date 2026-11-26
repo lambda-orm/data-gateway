@@ -98,6 +98,10 @@ export interface ExplorerMessages {
 	exportAll: string
 	exportingRows: string
 	exportLimit: string
+	longitude: string
+	latitude: string
+	onMap: string
+	vectorHint: string
 	search: string
 	addNeighbours: string
 	clearSelection: string
@@ -215,6 +219,10 @@ const ROWS: Row[] = [
 	['exportPage', 'Export the page', 'Exportar la página', 'Exportar a página', 'Exporter la page', 'Esporta la pagina', 'Seite exportieren', 'Pagina exporteren', 'Exporta la pàgina', 'Exportar a páxina', 'Esportatu orria'],
 	['exportAll', 'Export all', 'Exportar todo', 'Exportar tudo', 'Tout exporter', 'Esporta tutto', 'Alles exportieren', 'Alles exporteren', 'Exporta-ho tot', 'Exportar todo', 'Esportatu dena'],
 	['exportingRows', 'Exporting… {n} rows', 'Exportando… {n} filas', 'Exportando… {n} linhas', 'Export… {n} lignes', 'Esportazione… {n} righe', 'Export… {n} Zeilen', 'Exporteren… {n} rijen', 'Exportant… {n} files', 'Exportando… {n} filas', 'Esportatzen… {n} errenkada'],
+	['longitude', 'Longitude', 'Longitud', 'Longitude', 'Longitude', 'Longitudine', 'Längengrad', 'Lengtegraad', 'Longitud', 'Lonxitude', 'Longitudea'],
+	['latitude', 'Latitude', 'Latitud', 'Latitude', 'Latitude', 'Latitudine', 'Breitengrad', 'Breedtegraad', 'Latitud', 'Latitude', 'Latitudea'],
+	['onMap', 'See it on a map', 'Verlo en un mapa', 'Ver no mapa', 'Voir sur une carte', 'Vedi sulla mappa', 'Auf einer Karte zeigen', 'Bekijk op een kaart', 'Veure-ho en un mapa', 'Velo nun mapa', 'Ikusi mapan'],
+	['vectorHint', 'a list of {n} numbers: [0.1, 0.2, …]', 'una lista de {n} números: [0.1, 0.2, …]', 'uma lista de {n} números: [0.1, 0.2, …]', 'une liste de {n} nombres : [0.1, 0.2, …]', 'un elenco di {n} numeri: [0.1, 0.2, …]', 'eine Liste von {n} Zahlen: [0.1, 0.2, …]', 'een lijst van {n} getallen: [0.1, 0.2, …]', 'una llista de {n} nombres: [0.1, 0.2, …]', 'unha lista de {n} números: [0.1, 0.2, …]', '{n} zenbakiko zerrenda: [0.1, 0.2, …]'],
 	['exportLimit', 'Only the first {n} rows: narrow it with a filter.', 'Solo las primeras {n} filas: acótelo con un filtro.', 'Só as primeiras {n} linhas: restrinja com um filtro.', 'Seulement les {n} premières lignes : réduisez avec un filtre.', 'Solo le prime {n} righe: restringi con un filtro.', 'Nur die ersten {n} Zeilen: mit einem Filter eingrenzen.', 'Alleen de eerste {n} rijen: beperk met een filter.', 'Només les primeres {n} files: acoteu-ho amb un filtre.', 'Só as primeiras {n} filas: acoteo cun filtro.', 'Lehen {n} errenkadak soilik: mugatu iragazki batekin.'],
 	['search', 'search…', 'buscar…', 'buscar…', 'rechercher…', 'cerca…', 'suchen…', 'zoeken…', 'cerca…', 'buscar…', 'bilatu…'],
 	['addNeighbours', 'Add their neighbours', 'Agregar sus vecinas', 'Adicionar as vizinhas', 'Ajouter leurs voisines', 'Aggiungi le vicine', 'Nachbarn hinzufügen', 'Buren toevoegen', 'Afegeix les veïnes', 'Engadir as veciñas', 'Gehitu auzokideak'],

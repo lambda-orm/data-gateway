@@ -8,7 +8,7 @@ export interface SchemaCompletion {
 	detail?: string
 }
 
-const TYPES = ['string', 'text', 'integer', 'decimal', 'number', 'boolean', 'date', 'dateTime', 'time', 'uuid']
+const TYPES = ['string', 'text', 'integer', 'decimal', 'number', 'boolean', 'date', 'dateTime', 'time', 'uuid', 'json', 'vector', 'point']
 const DIALECTS = ['PostgreSQL', 'MySQL', 'MariaDB', 'SqlServer', 'Oracle', 'MongoDB', 'SQLjs']
 const RELATION_TYPES = ['oneToMany', 'manyToOne', 'oneToOne']
 
