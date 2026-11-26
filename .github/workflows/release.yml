@@ -37,7 +37,11 @@ jobs:
           # (its updater and the IDE page of the wiki read it; docs/DATA_GATEWAY_IDE_DESKTOP_PLAN.md §4.5)
           createGithubReleases: false
           title: "chore: version packages"
-          commit: "chore: version packages"
+          # with the ticket in its body, as commitlint.config.js asks of every commit of a pull request
+          commit: |-
+            chore: version packages
+
+            #211
         env:
           GITHUB_TOKEN: ${{ secrets.CHANGESET_TOKEN }}
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
