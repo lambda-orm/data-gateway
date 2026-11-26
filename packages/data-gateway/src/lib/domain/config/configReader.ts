@@ -1,7 +1,7 @@
 import { ObservabilityConfig } from '@lambdaorm/base'
 import { ALL_PERMISSIONS, isPermission, KNOWN_PERMISSIONS, Permission } from '../auth/permission'
 import {
-	AuthenticationConfig, AuthenticationType, ConfigReading, CredentialConfig, DataGatewayConfig, JwtConfig, RoleConfig, CacheConfig, OutboxConfig, OutboxDestinationConfig, LoggerConfig, McpConfig,
+	AuthenticationConfig, AuthenticationType, ConfigReading, CredentialConfig, DataGatewayConfig, JwtConfig, RoleConfig, CacheConfig, ClusterConfig, OutboxConfig, OutboxDestinationConfig, LoggerConfig, McpConfig,
 	OrmConfig, RuntimeConfig, RuntimeMode, SchemaConfig, SessionsConfig, TransportConfig, TransportName, TransportsConfig, WatchConfig
 } from './dataGatewayConfig'
 import { parseDuration } from './durations'
@@ -11,7 +11,7 @@ import { parseSize } from './sizes'
 /** Transports of the design that this version does not serve yet (docs/DATA_GATEWAY_PLAN.md). */
 const LATER_TRANSPORTS: string[] = []
 const TRANSPORTS = ['http', 'mcpHttp', 'mcpWebSocket', 'webSocket', 'management']
-const KNOWN_SECTIONS = ['orm', 'admin', 'server', 'logger', 'metrics', 'observability', 'audit', 'authentication', 'rateLimit', 'scripts', 'mcp', 'runtime', 'transports', 'cache', 'outbox']
+const KNOWN_SECTIONS = ['orm', 'admin', 'server', 'logger', 'metrics', 'observability', 'audit', 'authentication', 'rateLimit', 'scripts', 'mcp', 'runtime', 'transports', 'cache', 'outbox', 'cluster']
 const SCHEMA_KEYS = ['path', 'workspace', 'transports', 'authentication', 'env', 'scripts', 'mcp', 'server', 'runtime', 'view', 'queries', 'cache', 'outbox']
 /** The tools of docs/DATA_GATEWAY.md §5.1: mcp.tools.include / exclude must name them */
 export const TOOL_NAMES = [
@@ -81,6 +81,7 @@ export class ConfigReader {
 			mcp: this.mcp(raw.mcp),
 			cache: this.cache(raw.cache, 'cache'),
 			outbox: this.outbox(raw.outbox, 'outbox'),
+			cluster: this.cluster(raw.cluster),
 			runtime: this.runtime(raw.runtime),
 			transports: this.transports(raw.transports)
 		}
@@ -637,6 +638,28 @@ export class ConfigReader {
 			batch: this.int(raw.batch, none.batch, `${key}.batch`, 1),
 			destinations
 		}
+	}
+
+	/** cluster (docs/REPLICAS.md §2): a Valkey shared by the replicas; without it, each replica on its own */
+	private cluster (raw: unknown): ClusterConfig {
+		if (raw === undefined) return {}
+		if (!isObject(raw)) { this.issues.push('cluster must be an object'); return {} }
+		for (const key of Object.keys(raw)) if (key !== 'valkey') this.warnings.push(`unknown key "cluster.${key}" ignored`)
+		if (raw.valkey === undefined) return {}
+		if (!isObject(raw.valkey)) { this.issues.push('cluster.valkey must be an object: { url, prefix }'); return {} }
+		const url = typeof raw.valkey.url === 'string' ? raw.valkey.url.trim() : ''
+		// a url whose variable is not defined: not set, as a transport without its port
+		if (!url) { this.warnings.push('cluster.valkey has no url (a variable not given?): each replica on its own'); return {} }
+		try {
+			const protocol = new URL(url).protocol
+			if (!['valkey:', 'valkeys:', 'redis:', 'rediss:'].includes(protocol)) throw new Error(protocol)
+		} catch {
+			this.issues.push('cluster.valkey.url must be valkey://, valkeys://, redis:// or rediss://')
+			return {}
+		}
+		const prefix = this.str(raw.valkey.prefix, 'data-gateway')
+		if (!/^[A-Za-z0-9_.:-]+$/.test(prefix)) this.issues.push('cluster.valkey.prefix: letters, digits and _ . : - only')
+		return { valkey: { url, prefix } }
 	}
 
 	/** cache (docs/RESULT_CACHE.md §2): off unless enabled; ttl, maxEntries, maxRowBytes and its entities */

@@ -1,5 +1,5 @@
 import {
-	AuthenticationConfig, CacheConfig, DataGatewayConfig, OutboxConfig, NamedQueryLimitsConfig, RuntimeMode, SchemaOverrides, ScriptsConfig, TransportName
+	AuthenticationConfig, CacheConfig, DataGatewayConfig, OutboxConfig, ValkeyConfig, NamedQueryLimitsConfig, RuntimeMode, SchemaOverrides, ScriptsConfig, TransportName
 } from '../config/dataGatewayConfig'
 import { schemaPathsIssues } from './schemaPath'
 
@@ -59,6 +59,8 @@ export interface SchemaSettings {
 	cache: CacheConfig
 	/** the dispatcher of its outbox (docs/OUTBOX_DISPATCHER.md) */
 	outbox: OutboxConfig
+	/** the Valkey of the replicas (docs/REPLICAS.md): its changes to the others, theirs to it, the lock of its outbox */
+	valkey?: ValkeyConfig
 	server: { timeout: number, maxConcurrent: number, maxResponseBytes: number }
 	runtime: { mode: RuntimeMode, maxMemoryMb: number, checkConnections: boolean }
 	/** the view of a caller without one (orm.schemas[].view) */
@@ -89,6 +91,7 @@ export const effectiveSettings = (config: DataGatewayConfig, schema: SchemaDescr
 		queries: o.queries ?? {},
 		cache: o.cache ?? config.cache,
 		outbox: o.outbox ?? config.outbox,
+		...(config.cluster?.valkey ? { valkey: config.cluster.valkey } : {}),
 		server: {
 			timeout: o.server?.timeout ?? config.server.timeout,
 			maxConcurrent: o.server?.maxConcurrent ?? config.server.maxConcurrent,

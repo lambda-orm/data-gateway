@@ -177,7 +177,7 @@ recomendación, tests por transporte y la conformidad.
 
 > **Estado (2026-11-25): fases 1 a 3 hechas** en `feature/result-cache` ([`RESULT_CACHE.md`](RESULT_CACHE.md),
 > decisiones cerradas): caché en memoria (LRU, TTL, por entidad), clave con la vista y el contexto, invalidación por
-> `orm.onDataChange`, `ETag`/`304` en REST, métricas. **Falta:** Redis (varias réplicas) y la wiki. De paso: `view`,
+> `orm.onDataChange`, `ETag`/`304` en REST, métricas. Entre réplicas, con Valkey: [`REPLICAS.md`](REPLICAS.md) (2026-11-26). De paso: `view`,
 > `queries` y `cache` de un schema ya no dan el aviso *unknown key* (falso en 4.1.0).
 
 - Por schema o entidad, en memoria o Redis, con `ETag`/`Cache-Control` en REST.
@@ -191,7 +191,7 @@ recomendación, tests por transporte y la conformidad.
 > **Estado (2026-11-25): fases 1 a 4 hechas** en `feature/subscriptions` ([`SUBSCRIPTIONS.md`](SUBSCRIPTIONS.md),
 > decisiones cerradas): `subscribe.entity`, `subscribe.query` (también una consulta con nombre) y `unsubscribe` por
 > WebSocket, `GET /subscribe` (SSE), con la identidad de quien se suscribe (una vista con filtro de fila: solo las
-> claves que ve); el cliente Node (`client.subscribe`). **Falta:** entre réplicas (Redis) y la wiki.
+> claves que ve); el cliente Node (`client.subscribe`). Entre réplicas, con Valkey: [`REPLICAS.md`](REPLICAS.md) (2026-11-26).
 
 - `subscribe`/`unsubscribe` por WebSocket (JSON-RPC) y SSE: a una entidad (sus cambios) o a una consulta (se vuelve a
   correr cuando cambia una entidad que lee).

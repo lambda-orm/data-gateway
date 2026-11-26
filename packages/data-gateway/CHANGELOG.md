@@ -6,6 +6,19 @@ All notable changes to this project will be documented in this file.
 
 ### Unreleased
 
+**Replicas together** (`docs/REPLICAS.md`):
+
+- **`cluster.valkey`** (`url`: `valkey://`, `valkeys://`, also `redis://`, `rediss://`; `prefix`): the replicas share
+  the changes of the data through a Valkey (or a Redis), with `iovalkey`. A write through any replica drops the cached
+  results that read it in every replica, and reaches the subscribers (WebSocket, SSE) of every replica, each through
+  its view. Only entity, action, keys and count travel, never the rows.
+- **The outbox** is dispatched by the replica that holds its lease in the Valkey (renewed every 5 s, 15 s to expire):
+  when it goes, another takes it; `outbox.dispatch: false` still keeps a replica out.
+- **The Valkey down:** each replica goes on with its own changes (the cache bounded by its `ttl`), said once in the
+  log; nobody dispatches the outbox until it is back. `/metrics`: `data_gateway_cluster_connected`,
+  `data_gateway_outbox_leader`.
+- The log of the configuration hides the password of a URL, and `secret`, `secretAccessKey` and `accountKey`.
+
 **Development:** `npm run dev` (and the task of VS Code) seeds `dev/workspace` once with northwind on SQLite (sql.js)
 and its data: the dev gateway needs no database server. A `dev/workspace` that is there is left as it is.
 
