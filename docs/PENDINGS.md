@@ -145,6 +145,13 @@ publicar, quitar las marcas *"not in the image 4.0.0"* de sus páginas de la gat
 > `feature/data-gateway-4.3.0` (mergearla **después** de publicar las imágenes). Changesets: `@lambdaorm/ui` (vectores
 > y puntos, archivos, paneles, la fila de la connection) y `@lambdaorm/data-gateway-client` (`approval`).
 
+### R7. Liberar 4.4.0 y el IDE 1.4.0
+
+> **Estado (2026-11-26):** los roles con sus vistas y stages y el estado de la gateway (#45) en `develop`. Ramas
+> `release/data-gateway-4.4.0` y `release/ide-1.4.0`, listas para `main`. La wiki en `lambda-orm/wiki` →
+> `feature/data-gateway-4.4.0` (mergearla **después** de publicar las imágenes). Changesets: `@lambdaorm/ui` (la vista en
+> las opciones, `WhoAmI`).
+
 ## 3. Las features (G1–G7)
 
 El orden de §5. Cada una con su documento de diseño (`docs/<FEATURE>.md` y su plan), decisiones de a una con una
