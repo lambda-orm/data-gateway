@@ -8,6 +8,9 @@
 #   scripts/ci-local.sh clients [<image>] the conformance suite (packages/conformance) on its five transports, with the
 #                                         reference runner and the Node client, against the gateway from source, or
 #                                         against <image> (e.g. flaviorita/data-gateway:3.2.0)
+#   scripts/ci-local.sh oidc              the tokens of a real Keycloak (packages/conformance/oidc) on the five
+#                                         transports of the gateway from source: roles, the view by a claim, a
+#                                         token refused, the rotation of the key of the realm (docs/OIDC_LOGIN.md)
 set -euo pipefail
 
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)
@@ -90,11 +93,38 @@ clients () {
 	ok 'conformance suite passed'
 }
 
+oidc () {
+	local suite log svc
+	suite="$ROOT/packages/conformance"
+	on_exit "'$suite/conformance.sh' down"
+	on_exit "(cd '$suite/oidc' && docker compose down -v)"
+	step 'OIDC: Keycloak (its realm data-gateway)'
+	(cd "$suite/oidc" && docker compose down -v > /dev/null 2>&1 || true; docker compose up -d)
+	for _ in $(seq 1 120); do curl -sf http://127.0.0.1:19480/realms/data-gateway/.well-known/openid-configuration > /dev/null && break; sleep 2; done
+	curl -sf http://127.0.0.1:19480/realms/data-gateway/.well-known/openid-configuration > /dev/null || fail 'Keycloak did not start'
+	step 'OIDC: the gateway from source, which knows only the issuer'
+	pnpm --dir "$ROOT" build
+	"$suite/conformance.sh" up db
+	log=$(mktemp)
+	setsid bash -c "cd '$ROOT/packages/data-gateway' && exec env DATA_GATEWAY_CONFIG_PATH='$suite/oidc/data-gateway.config.yaml' \
+		CONFORMANCE_WORKSPACE='$suite/workspace' \
+		NORTHWIND_DB='{\"host\":\"127.0.0.1\",\"port\":19432,\"user\":\"northwind\",\"password\":\"northwind\",\"database\":\"northwind\"}' \
+		CONFORMANCE_HTTP_PORT=19080 CONFORMANCE_MCP_HTTP_PORT=19081 CONFORMANCE_MCP_WS_PORT=19082 CONFORMANCE_WS_PORT=19083 \
+		npx tsx src/lib/index.ts" > "$log" 2>&1 &
+	svc=$!
+	on_exit "kill -- -$svc"
+	"$suite/conformance.sh" data || { cat "$log"; fail 'the gateway from source did not start'; }
+	step 'OIDC: the runner (runner/oidc.mjs)'
+	node "$suite/runner/oidc.mjs" || { tail -40 "$log"; fail 'oidc failed'; }
+	ok 'oidc passed'
+}
+
 command=${1:-}
 shift || true
 case "$command" in
 check) check ;;
 lab) lab ;;
 clients) clients "${1:-}" ;;
+oidc) oidc ;;
 *) sed -n '2,10p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 2 ;;
 esac

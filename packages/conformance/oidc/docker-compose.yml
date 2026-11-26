@@ -1,0 +1,16 @@
+# Keycloak for the conformance suite (docs/OIDC_LOGIN.md §1): the realm data-gateway of realm.json (its clients, roles,
+# users, and the mappers of roles, country and the audience data-gateway), on 127.0.0.1:19480. Only for tests: the
+# passwords are public. scripts/ci-local.sh oidc starts it with Postgres and a gateway from source.
+name: data-gateway-oidc
+services:
+  keycloak:
+    image: keycloak/keycloak:26.4
+    command: [ "start-dev", "--import-realm", "--http-port=8080" ]
+    environment:
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
+      KC_HEALTH_ENABLED: "true"
+    volumes:
+      - ./realm.json:/opt/keycloak/data/import/realm.json:ro
+    ports:
+      - "127.0.0.1:19480:8080"

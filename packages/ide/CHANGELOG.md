@@ -2,6 +2,12 @@
 
 ### Unreleased
 
+- **Sign in with the identity provider:** a connection can authenticate with **OpenID Connect (sign in)**: its issuer,
+  a public client with PKCE and its scopes. **Sign in** opens the login of the provider (a window of its own; in the
+  desktop app, the browser of the system, back to a loopback of the app); its token stays in the tab and is renewed
+  before it ends. The backend of the IDE reaches the provider: its origin goes in `DATA_GATEWAY_IDE_TARGETS`.
+- `DATA_GATEWAY_IDE_CONNECT_SRC`: the storages of the files the page may reach itself (the bytes go straight to them);
+  the desktop app allows `https:`.
 - **Files:** in **Data**, a property that keeps files (data-gateway 4.3) opens its file, and with `write` uploads
   another (straight to the storage) or removes it.
 - **Panels:** **New panel** in the workbench: cards of queries shown as a number, a table, bars, lines or a pie;

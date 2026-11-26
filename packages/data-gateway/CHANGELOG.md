@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### Unreleased
 
+**Tested against Keycloak** (`docs/OIDC_LOGIN.md`): `scripts/ci-local.sh oidc` and its job of CI take the tokens of a
+real Keycloak on the five transports (its roles, a view by its claim `country`, another audience or a changed token
+refused, the rotation of the key of the realm without a restart).
+
 **Files of some properties** (`docs/FILES_AND_PANELS.md`):
 
 - **`files.storages`** (S3 — AWS, or another with `endpoint` — and Azure Blob) and **`files.properties`**
