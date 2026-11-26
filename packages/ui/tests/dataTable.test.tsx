@@ -138,4 +138,31 @@ describe('the data table', () => {
 		await waitFor(() => expect(api.executed.some(e => e.query === 'Stores.insert()')).toBe(true))
 		expect(api.executed.find(e => e.query === 'Stores.insert()')!.data).toEqual({ id: 2, location: { type: 'Point', coordinates: [2.35, 48.85] }, embedding: [1, 2, 3] })
 	})
+
+	test('a property that keeps files: its name opens it (a signed URL); upload to the storage, then its key in the row; remove', async () => {
+		const DOCS = { name: 'Docs', primaryKey: ['id'], properties: [{ name: 'id', type: 'integer', required: true }, { name: 'photo', type: 'string' }] }
+		const api = new DataApi() as any
+		api.answer = (query: string) => query.includes('update') ? 1 : [{ id: 1, photo: 'shop/Docs/photo/a.png' }]
+		api.files = async () => [{ entity: 'Docs', property: 'photo', storage: 'images', maxBytes: 1024, types: ['image/png'] }]
+		api.fileUrl = vi.fn(async () => ({ url: 'https://s3/a.png?sig', expiresAt: 'x' }))
+		api.fileUpload = vi.fn(async () => ({ key: 'shop/Docs/photo/b.png', url: 'https://s3/b.png?sig', method: 'PUT', headers: { 'Content-Type': 'image/png' }, expiresAt: 'x' }))
+		const opened = vi.spyOn(window, 'open').mockImplementation(() => null)
+		const put = vi.spyOn(globalThis, 'fetch').mockImplementation(async () => new Response(null, { status: 200 }))
+		render(<DataTable api={api} schema="shop" entity={DOCS as any} canWrite={true} locale="en" />)
+		const button = await screen.findByRole('button', { name: 'photo Open' })
+		expect(button.textContent).toContain('a.png')
+		fireEvent.click(button)
+		await waitFor(() => expect(opened).toHaveBeenCalledWith('https://s3/a.png?sig', '_blank', 'noopener,noreferrer'))
+		expect(api.fileUrl).toHaveBeenCalledWith('shop', 'Docs', 'photo', 'shop/Docs/photo/a.png')
+		const file = new File([new Uint8Array([1, 2, 3])], 'b.png', { type: 'image/png' })
+		fireEvent.change(screen.getByLabelText('photo Upload'), { target: { files: [file] } })
+		await waitFor(() => expect(api.executed.some((e: any) => e.query.includes('update'))).toBe(true))
+		expect(api.fileUpload).toHaveBeenCalledWith('shop', 'Docs', 'photo', { name: 'b.png', type: 'image/png', size: 3 })
+		expect(put).toHaveBeenCalledWith('https://s3/b.png?sig', { method: 'PUT', headers: { 'Content-Type': 'image/png' }, body: file })
+		expect(api.executed.find((e: any) => e.query.includes('update')).data).toEqual({ v_new: 'shop/Docs/photo/b.png', v_old: 'shop/Docs/photo/a.png', k_id: 1 })
+		fireEvent.click(screen.getByRole('button', { name: 'photo Remove the file' }))
+		await waitFor(() => expect(api.executed.filter((e: any) => e.query.includes('update'))).toHaveLength(2))
+		expect(api.executed.filter((e: any) => e.query.includes('update'))[1].data.v_new).toBeNull()
+		vi.restoreAllMocks()
+	})
 })

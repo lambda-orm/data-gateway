@@ -74,6 +74,7 @@ export interface SchemaOverrides {
 	mcp?: { maxRows?: number, tools?: { include: string[], exclude: string[] }, freeQueries?: boolean, approval?: ApprovalMode, approvalExpiresMs?: number }
 	/** its outbox dispatcher: replaces the global one */
 	outbox?: OutboxConfig
+	files?: FilesConfig
 	/** its cache: replaces the global one */
 	cache?: CacheConfig
 	/** the limits of its named queries, by name */
@@ -263,6 +264,38 @@ export interface OutboxConfig {
 	destinations: OutboxDestinationConfig[]
 }
 
+/** Where the files of a property live (docs/FILES_AND_PANELS.md §1): an S3 or an Azure Blob, and what it takes */
+export type FileStorageConfig = ({
+	type: 's3'
+	bucket: string
+	region: string
+	/** another S3 (MinIO, R2, versitygw…): its URL, the bucket in the path */
+	endpoint?: string
+	accessKeyId: string
+	secretAccessKey: string
+} | {
+	type: 'azureBlob'
+	account: string
+	container: string
+	accountKey: string
+	/** another Blob service (Azurite) */
+	endpoint?: string
+}) & {
+	/** the keys it creates go under this */
+	prefix: string
+	maxBytes: number
+	/** the types it takes (image/png); none, any */
+	types?: string[]
+	/** the life of a URL it signs */
+	expiresMs: number
+}
+
+/** The storages, and the properties whose value is the key of an object of one (Entity.property: storage) */
+export interface FilesConfig {
+	storages: Record<string, FileStorageConfig>
+	properties: Record<string, string>
+}
+
 /** A Valkey (or Redis) shared by the replicas (docs/REPLICAS.md): the changes of the data and the lock of the outbox */
 export interface ValkeyConfig {
 	/** valkey://, valkeys:// (TLS), redis:// or rediss:// */
@@ -317,6 +350,8 @@ export interface DataGatewayConfig {
 	mcp: McpConfig
 	cache: CacheConfig
 	outbox: OutboxConfig
+	/** the files of some properties in S3 or Azure Blob (docs/FILES_AND_PANELS.md) */
+	files: FilesConfig
 	/** the replicas together, by a Valkey (docs/REPLICAS.md) */
 	cluster: ClusterConfig
 	runtime: RuntimeConfig

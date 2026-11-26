@@ -72,6 +72,7 @@ describe('schemas and their settings', () => {
 			queries: {},
 			cache: { enabled: false, ttlMs: 60000, maxEntries: 10000, maxBytes: 1048576, entities: {} },
 			outbox: { dispatch: true, intervalMs: 1000, batch: 100, destinations: [] },
+			files: { storages: {}, properties: {} },
 			server: { timeout: 5000, maxConcurrent: 4, maxResponseBytes: 268435456 },
 			runtime: { mode: 'thread', maxMemoryMb: 512, checkConnections: true },
 			stateFile: '/w/.data-gateway/state.sqlite',

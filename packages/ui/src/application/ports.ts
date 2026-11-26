@@ -38,7 +38,19 @@ export interface QueryApiPort {
 	execute (schema: string, query: string, data?: unknown, options?: Options): Promise<unknown>
 	executeQueued (schema: string, request: { topic: string, query: string, data?: unknown, chunk?: number, options?: Options }): Promise<unknown>
 	executeScript (schema: string, script: string, data?: unknown, options?: Options): Promise<unknown>
+	/** the properties that keep files, in the view of the credential (GET /{schema}/files, docs/FILES_AND_PANELS.md) */
+	files? (schema: string): Promise<FileProperty[]>
+	/** a URL to upload the file of a property: PUT the bytes to it with its headers, then keep its key in the row */
+	fileUpload? (schema: string, entity: string, property: string, file: { name: string, type: string, size: number }): Promise<SignedUpload>
+	/** a URL to read the file a row keeps */
+	fileUrl? (schema: string, entity: string, property: string, key: string): Promise<{ url: string, expiresAt: string }>
 }
+
+/** A property whose value is the key of an object of a storage (S3, Azure Blob) */
+export interface FileProperty { entity: string, property: string, storage: string, maxBytes: number, types?: string[] }
+
+/** Where to PUT a file: the storage, never the gateway */
+export interface SignedUpload { key: string, url: string, method: 'PUT', headers: Record<string, string>, expiresAt: string }
 
 /** Where the history of each schema is kept */
 export interface HistoryPort {

@@ -1,7 +1,13 @@
 # Archivos y paneles (G6b)
 
-> **Estado (2026-11-26): diseño; decisiones de §5 por cerrar.** La fase siguiente del backoffice
-> ([`BACKOFFICE.md`](BACKOFFICE.md) §4).
+> **Estado (2026-11-26): decisiones de §5 cerradas (las recomendadas, el usuario); fases 1 a 4 hechas** (rama
+> `feature/files-panels`). La fase siguiente del backoffice ([`BACKOFFICE.md`](BACKOFFICE.md) §4). La firma de S3
+> coincide con el ejemplo de AWS y se probó contra un S3 real (versitygw: MinIO y LocalStack ya no publican imágenes
+> libres) y contra Azurite (`tests/integration/files.test.ts`, con `DATA_GATEWAY_TEST_S3` y `DATA_GATEWAY_TEST_AZURITE`);
+> el panel, de punta a punta en el IDE sobre el Northwind en SQLite. Lo que cambió o quedó: Azure no deja fijar en una
+> SAS el tipo ni el tamaño de una subida (la gateway los controla al firmar; S3 sí los firma); el almacenamiento debe
+> permitir el origen del IDE (CORS) para que el navegador suba y lea; la tarjeta de un panel se actualiza cada
+> `refresh` o a mano (suscribirse a su consulta, después); una consulta con nombre como tarjeta, después.
 
 ## 1. Archivos
 

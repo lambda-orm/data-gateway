@@ -1,9 +1,11 @@
 /* the palette (light, then dark) and the design tokens: one scale of spaces, text sizes, radii, heights and shadows for
    every root of the library (a workbench, the tabs, the workspace, a dialog) */
 .lw-workbench, .lw-tabs, .lw-space {
-  --lw-bg: #fff; --lw-fg: #1d1f23; --lw-muted: #6b7280; --lw-border: #d6d9de; --lw-accent: #2563eb; --lw-panel: #f6f7f9; --lw-error: #b42318; --lw-warning: #b45309; --lw-ok: #067647; }
+  --lw-bg: #fff; --lw-fg: #1d1f23; --lw-muted: #6b7280; --lw-border: #d6d9de; --lw-accent: #2563eb; --lw-panel: #f6f7f9; --lw-error: #b42318; --lw-warning: #b45309; --lw-ok: #067647;
+  --lw-series-1: #2563eb; --lw-series-2: #0891b2; --lw-series-3: #ca8a04; --lw-series-4: #c026d3; --lw-series-5: #16a34a; --lw-series-6: #dc2626; }
 .lw-workbench.lw-dark, .lw-tabs.lw-dark, .lw-space.lw-dark {
-  --lw-bg: #16181d; --lw-fg: #e6e8eb; --lw-muted: #9aa1ab; --lw-border: #2e323a; --lw-accent: #6ea0ff; --lw-panel: #1e2128; --lw-error: #ff8a80; --lw-warning: #f0b45a; --lw-ok: #6fdc8c; }
+  --lw-bg: #16181d; --lw-fg: #e6e8eb; --lw-muted: #9aa1ab; --lw-border: #2e323a; --lw-accent: #6ea0ff; --lw-panel: #1e2128; --lw-error: #ff8a80; --lw-warning: #f0b45a; --lw-ok: #6fdc8c;
+  --lw-series-1: #6ea0ff; --lw-series-2: #22d3ee; --lw-series-3: #facc15; --lw-series-4: #e879f9; --lw-series-5: #4ade80; --lw-series-6: #f87171; }
 .lw-workbench, .lw-tabs, .lw-space {
   --lw-space-1: 4px; --lw-space-2: 8px; --lw-space-3: 12px; --lw-space-4: 16px; --lw-space-5: 24px;
   --lw-text-xs: 11px; --lw-text-sm: 12px; --lw-text-md: 13px; --lw-text-lg: 16px;
@@ -483,3 +485,24 @@
 .lw-point-input { display: inline-flex; gap: 4px; }
 .lw-point-input input { width: 9em; min-width: 0; }
 .lw-map-link { text-decoration: none; font-size: var(--lw-text-xs); }
+/* a file of a property in the data table: its name opens it, ⤒ uploads another (docs/FILES_AND_PANELS.md) */
+.lw-file-cell { white-space: nowrap; }
+.lw-file-cell .lw-link { margin-right: 4px; }
+.lw-file-upload { cursor: pointer; padding: 0 4px; }
+.lw-file-upload input { display: none; }
+/* a panel (PanelView, docs/FILES_AND_PANELS.md §2): its cards in a grid, a wide card takes two columns */
+.lw-panel-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: var(--lw-space-3); margin-top: var(--lw-space-3); }
+.lw-card { border: 1px solid var(--lw-border); border-radius: var(--lw-radius-lg); background: var(--lw-bg); padding: var(--lw-space-3); min-width: 0; box-shadow: 0 1px 2px rgba(15, 23, 42, .05); }
+.lw-card-wide { grid-column: span 2; }
+.lw-card > header { display: flex; align-items: center; gap: 6px; margin-bottom: var(--lw-space-2); }
+.lw-card-number { font-size: 34px; font-weight: 600; letter-spacing: -.01em; padding: var(--lw-space-2) 0; }
+.lw-card-table { max-height: 260px; overflow: auto; }
+.lw-card-form textarea { font-family: var(--lw-mono, ui-monospace, monospace); width: 100%; box-sizing: border-box; }
+.lw-chart { margin: 0; }
+.lw-chart svg { width: 100%; height: auto; display: block; }
+.lw-chart-axis line { stroke: var(--lw-border); stroke-width: 1; }
+.lw-chart-axis text, .lw-chart-label { fill: var(--lw-muted); font-size: 11px; }
+.lw-chart-legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: var(--lw-text-xs); color: var(--lw-muted); }
+.lw-chart-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 4px; vertical-align: -1px; }
+@media (max-width: 720px) { .lw-card-wide { grid-column: auto; } }
+.lw-pie .lw-chart-label { font-size: 15px; }

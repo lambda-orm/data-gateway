@@ -1,7 +1,7 @@
 import { ObservabilityConfig } from '@lambdaorm/base'
 import { ALL_PERMISSIONS, isPermission, KNOWN_PERMISSIONS, Permission } from '../auth/permission'
 import {
-	AuthenticationConfig, AuthenticationType, ConfigReading, CredentialConfig, DataGatewayConfig, JwtConfig, RoleConfig, CacheConfig, ClusterConfig, OutboxConfig, OutboxDestinationConfig, LoggerConfig, McpConfig,
+	AuthenticationConfig, AuthenticationType, ConfigReading, CredentialConfig, DataGatewayConfig, JwtConfig, RoleConfig, CacheConfig, ClusterConfig, FilesConfig, FileStorageConfig, OutboxConfig, OutboxDestinationConfig, LoggerConfig, McpConfig,
 	OrmConfig, RuntimeConfig, RuntimeMode, SchemaConfig, SessionsConfig, TransportConfig, TransportName, TransportsConfig, WatchConfig
 } from './dataGatewayConfig'
 import { parseDuration } from './durations'
@@ -11,8 +11,8 @@ import { parseSize } from './sizes'
 /** Transports of the design that this version does not serve yet (docs/DATA_GATEWAY_PLAN.md). */
 const LATER_TRANSPORTS: string[] = []
 const TRANSPORTS = ['http', 'mcpHttp', 'mcpWebSocket', 'webSocket', 'management']
-const KNOWN_SECTIONS = ['orm', 'admin', 'server', 'logger', 'metrics', 'observability', 'audit', 'authentication', 'rateLimit', 'scripts', 'mcp', 'runtime', 'transports', 'cache', 'outbox', 'cluster']
-const SCHEMA_KEYS = ['path', 'workspace', 'transports', 'authentication', 'env', 'scripts', 'mcp', 'server', 'runtime', 'view', 'queries', 'cache', 'outbox']
+const KNOWN_SECTIONS = ['orm', 'admin', 'server', 'logger', 'metrics', 'observability', 'audit', 'authentication', 'rateLimit', 'scripts', 'mcp', 'runtime', 'transports', 'cache', 'outbox', 'cluster', 'files']
+const SCHEMA_KEYS = ['path', 'workspace', 'transports', 'authentication', 'env', 'scripts', 'mcp', 'server', 'runtime', 'view', 'queries', 'cache', 'outbox', 'files']
 /** The tools of docs/DATA_GATEWAY.md §5.1: mcp.tools.include / exclude must name them */
 export const TOOL_NAMES = [
 	'orm_execute', 'orm_execute_script', 'orm_execute_queued', 'approval_status', 'orm_plan', 'orm_metadata', 'orm_model', 'orm_parameters',
@@ -82,6 +82,7 @@ export class ConfigReader {
 			cache: this.cache(raw.cache, 'cache'),
 			outbox: this.outbox(raw.outbox, 'outbox'),
 			cluster: this.cluster(raw.cluster),
+			files: this.files(raw.files, 'files'),
 			runtime: this.runtime(raw.runtime),
 			transports: this.transports(raw.transports)
 		}
@@ -165,6 +166,7 @@ export class ConfigReader {
 		}
 		if (entry.cache !== undefined) schema.cache = this.cache(entry.cache, `${key}.cache`)
 		if (entry.outbox !== undefined) schema.outbox = this.outbox(entry.outbox, `${key}.outbox`)
+		if (entry.files !== undefined) schema.files = this.files(entry.files, `${key}.files`)
 		if (entry.queries !== undefined) {
 			if (!isObject(entry.queries)) this.issues.push(`${key}.queries must be an object (the name of a query: its limits)`)
 			else {
@@ -644,6 +646,48 @@ export class ConfigReader {
 			batch: this.int(raw.batch, none.batch, `${key}.batch`, 1),
 			destinations
 		}
+	}
+
+	/** files (docs/FILES_AND_PANELS.md §1): its storages (s3, azureBlob) and the properties that keep their keys */
+	private files (raw: unknown, key: string): FilesConfig {
+		const none: FilesConfig = { storages: {}, properties: {} }
+		if (raw === undefined) return none
+		if (!isObject(raw)) { this.issues.push(`${key} must be an object: { storages, properties }`); return none }
+		const storages: Record<string, FileStorageConfig> = {}
+		for (const [name, entry] of Object.entries(isObject(raw.storages) ? raw.storages : {})) {
+			const at = `${key}.storages.${name}`
+			if (!isObject(entry)) { this.issues.push(`${at} must be an object`); continue }
+			const need = (field: string): string => {
+				const value = typeof entry[field] === 'string' ? entry[field].trim() : ''
+				if (!value) this.issues.push(`${at}.${field} is required (a variable not given?)`)
+				return value
+			}
+			const endpoint = entry.endpoint === undefined ? undefined : String(entry.endpoint)
+			if (endpoint !== undefined) {
+				try { if (!/^https?:$/.test(new URL(endpoint).protocol)) throw new Error() } catch { this.issues.push(`${at}.endpoint "${endpoint}" is not an http(s) URL`) }
+			}
+			const types = entry.types === undefined ? undefined : Array.isArray(entry.types) ? entry.types.map(String) : (this.issues.push(`${at}.types must be a list (image/png)`), undefined)
+			const common = {
+				prefix: this.str(entry.prefix, '').replace(/^\/+/, ''),
+				maxBytes: this.size(entry.maxBytes, 10 * 1024 * 1024, `${at}.maxBytes`),
+				...(types ? { types } : {}),
+				expiresMs: this.duration(entry.expires, 5 * 60000, `${at}.expires`)
+			}
+			if (entry.type === 's3') {
+				storages[name] = { type: 's3', bucket: need('bucket'), region: this.str(entry.region, 'us-east-1'), ...(endpoint ? { endpoint } : {}), accessKeyId: need('accessKeyId'), secretAccessKey: need('secretAccessKey'), ...common }
+			} else if (entry.type === 'azureBlob') {
+				storages[name] = { type: 'azureBlob', account: need('account'), container: need('container'), accountKey: need('accountKey'), ...(endpoint ? { endpoint } : {}), ...common }
+			} else {
+				this.issues.push(`${at}.type must be s3 or azureBlob`)
+			}
+		}
+		const properties: Record<string, string> = {}
+		for (const [property, storage] of Object.entries(isObject(raw.properties) ? raw.properties : {})) {
+			if (!/^[A-Za-z_][A-Za-z0-9_]*\.[A-Za-z_][A-Za-z0-9_]*$/.test(property)) { this.issues.push(`${key}.properties: "${property}" must be Entity.property`); continue }
+			if (typeof storage !== 'string' || !storages[storage]) { this.issues.push(`${key}.properties.${property}: "${storage}" is not one of its storages`); continue }
+			properties[property] = storage
+		}
+		return { storages, properties }
 	}
 
 	/** none or writes (docs/MUTATION_APPROVAL.md §2); not given, undefined */

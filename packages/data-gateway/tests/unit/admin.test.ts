@@ -9,6 +9,13 @@ describe('workbench as files', () => {
 		expect(workbenchFileName(item('1', 'query', 'sales'))).toBe('sales.query.yaml')
 		expect(workbenchFileName(item('1', 'query', 'close', undefined, { mode: 'script' }))).toBe('close.script.yaml')
 		expect(workbenchFileName(item('1', 'diagram', 'model'))).toBe('model.diagram.yaml')
+		// a panel (docs/FILES_AND_PANELS.md §2): its cards and its refresh, there and back
+		expect(workbenchFileName(item('1', 'panel', 'sales'))).toBe('sales.panel.yaml')
+		expect(workbenchKindOf('sales.panel.yaml')).toEqual({ kind: 'panel', name: 'sales' })
+		const cards = [{ id: 'c', title: 'Orders', query: 'Orders.map(p => ({ n: count(1) }))', form: 'number' }]
+		const content = workbenchContent({ ...item('p1', 'panel', 'sales'), cards, refresh: 60 })
+		expect(content).toMatchObject({ id: 'p1', cards, refresh: 60 })
+		expect(workbenchItemOf('s', 'workbench/sales.panel.yaml', content, undefined, 'v', 'then')).toMatchObject({ id: 'p1', kind: 'panel', name: 'sales', cards, refresh: 60 })
 		expect(workbenchKindOf('close.script.yaml')).toEqual({ kind: 'query', mode: 'script', name: 'close' })
 		expect(workbenchKindOf('notes.txt')).toBeUndefined()
 		expect(workbenchKindOf('.query.yaml')).toBeUndefined()

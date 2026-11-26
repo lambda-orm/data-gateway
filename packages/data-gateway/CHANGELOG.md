@@ -6,6 +6,18 @@ All notable changes to this project will be documented in this file.
 
 ### Unreleased
 
+**Files of some properties** (`docs/FILES_AND_PANELS.md`):
+
+- **`files.storages`** (S3 — AWS, or another with `endpoint` — and Azure Blob) and **`files.properties`**
+  (`Entity.property: storage`), globally or per schema: the property keeps the key of an object, the gateway signs URLs
+  of short life and the bytes go straight between the client and the storage (SigV4 and the SAS of Azure, signed
+  without the SDKs).
+- `GET /{schema}/files` (which properties, in the view of the caller), `POST /files/{Entity}/{property}/upload`
+  `{ name, type, size }` (write: within the `types` and `maxBytes` of the storage; the key is made by the gateway) and
+  `GET /files/{Entity}/{property}/url?key=` (read: only a key that a row of the view of the caller keeps); by WebSocket
+  `files.list`, `files.upload`, `files.url`. The storage must allow the origin of the IDE (CORS).
+- The workbench keeps panels too (`<name>.panel.yaml`).
+
 **Writes that wait for a person** (`docs/MUTATION_APPROVAL.md`):
 
 - **`mcp.approval: writes`** (also per schema; `mcp.approvalExpires`, 1 h): every write by MCP waits, answered at once
