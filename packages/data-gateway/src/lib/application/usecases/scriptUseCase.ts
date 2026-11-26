@@ -1,3 +1,4 @@
+import { ApprovalGate } from '../approval/approvals'
 import { ScriptOptions } from '@lambdaorm/base'
 import { authorize } from '../../domain/auth/authorizationPolicy'
 import { GatewayError, badRequest } from '../../domain/errors/gatewayError'
@@ -23,7 +24,7 @@ const lower = (requested: unknown, limit: number): number => {
 /** Several queries in one transaction: a 3xpr script calling orm.execute (orm.executeScript). Always audited. */
 export class ScriptUseCase {
 	// eslint-disable-next-line no-useless-constructor
-	constructor (private readonly orm: OrmScriptPort, private readonly settings: ScriptSettings, private readonly auditor: Auditor, private readonly views: ViewResolver = NO_VIEWS) {}
+	constructor (private readonly orm: OrmScriptPort, private readonly settings: ScriptSettings, private readonly auditor: Auditor, private readonly views: ViewResolver = NO_VIEWS, private readonly approvals?: ApprovalGate) {}
 
 	public async execute (ctx: RequestContext, request: ScriptRequest): Promise<any> {
 		authorize(ctx.principal, 'executeScript')
@@ -37,6 +38,8 @@ export class ScriptUseCase {
 		if (script.length > this.settings.maxLength) {
 			throw new GatewayError(413, 'ScriptTooLongError', `script longer than ${this.settings.maxLength} characters (scripts.maxLength)`)
 		}
+		// a script may write and it can't be known before: with approvals, it always waits (docs/MUTATION_APPROVAL.md §3)
+		if (this.approvals?.needs(ctx)) return this.approvals.request(ctx, 'executeScript', script, request.data, request.options as Record<string, unknown> | undefined)
 		// the script and its orm.execute run in the view of who calls (λORM: they inherit it)
 		const options: ScriptOptions = requestOptions(request.options, ctx, this.views.of(ctx.principal))
 		options.timeout = lower(options.timeout, this.settings.timeoutMs)

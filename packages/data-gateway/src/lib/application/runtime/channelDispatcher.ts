@@ -68,7 +68,8 @@ export class ChannelDispatcher {
 				principal: {
 					...principal(request.principal.name, request.principal.permissions, request.principal.actor),
 					...(request.principal.context ? { context: request.principal.context } : {}),
-					...(request.principal.view ? { view: request.principal.view } : {})
+					...(request.principal.view ? { view: request.principal.view } : {}),
+					...(request.principal.approval ? { approval: request.principal.approval } : {})
 				},
 				transport: request.transport
 			}

@@ -33,6 +33,8 @@ export class RpcDispatcher {
 		// the queries of application.queries (docs/NAMED_QUERIES.md)
 		this.register('queries.list', (gw, ctx) => gw.queries(ctx))
 		this.register('queries.execute', (gw, ctx, p) => gw.query(ctx, text(p, 'name'), { data: p.data, options: p.options }))
+		// a write that waits for a person (docs/MUTATION_APPROVAL.md)
+		this.register('approvals.status', (gw, ctx, p) => gw.approval(ctx, text(p, 'id')))
 		for (const name of ['plan', 'metadata', 'model', 'parameters', 'constraints'] as const) {
 			this.register(`query.${name}`, (gw, ctx, p) => (gw[name] as any).call(gw, ctx, { query: p.query, options: p.options }))
 		}

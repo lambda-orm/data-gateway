@@ -19,6 +19,8 @@ export interface Principal {
 	readonly view?: string
 	/** When its credential ends (the exp of a token, epoch ms): a session or a connection doesn't outlive it */
 	readonly expiresAt?: number
+	/** its writes wait for a person to approve them (docs/MUTATION_APPROVAL.md): of its key or its roles */
+	readonly approval?: 'writes'
 }
 
 export const principal = (name: string, permissions: readonly Permission[], actor?: Actor): Principal =>

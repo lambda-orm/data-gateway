@@ -108,6 +108,10 @@ export const adminRouter = (admin: AdminService, authenticate: express.RequestHa
 		router.get('/workspaces/:schema/commands', handle(async (req, res) => commands.summary(principal(res), schemaParam(req.params.schema))))
 		// the outbox of a schema (docs/OUTBOX_DISPATCHER.md §5): its dead events, and one back to pending
 		router.get('/workspaces/:schema/outbox', handle(async (req, res) => commands.outbox(principal(res), schemaParam(req.params.schema), req.query.status, req.query.limit)))
+		// the writes that wait for a person (docs/MUTATION_APPROVAL.md §4)
+		router.get('/workspaces/:schema/approvals', handle(async (req, res) => commands.approvals(principal(res), schemaParam(req.params.schema), req.query.status, req.query.limit)))
+		router.post('/workspaces/:schema/approvals/:id/approve', handle(async (req, res) => commands.decide(principal(res), schemaParam(req.params.schema), String(req.params.id), 'approve')))
+		router.post('/workspaces/:schema/approvals/:id/reject', handle(async (req, res) => commands.decide(principal(res), schemaParam(req.params.schema), String(req.params.id), 'reject', req.body?.reason)))
 		router.post('/workspaces/:schema/outbox/:id/retry', handle(async (req, res) => commands.retryOutbox(principal(res), schemaParam(req.params.schema), String(req.params.id))))
 		router.post('/workspaces/:schema/commands/:command/preview', handle(async (req, res) => commands.preview(principal(res), schemaParam(req.params.schema), String(req.params.command), req.body ?? {})))
 		router.post('/workspaces/:schema/commands/:command', handle(async (req, res) => commands.run(principal(res), schemaParam(req.params.schema), String(req.params.command), req.body ?? {})))

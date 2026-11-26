@@ -202,7 +202,7 @@ export class SchemaRouter implements SchemaDirectoryPort {
 					target,
 					op,
 					args,
-					principal: ctx ? { name: ctx.principal.name, permissions: [...ctx.principal.permissions], actor: ctx.principal.actor, ...(ctx.principal.context ? { context: ctx.principal.context } : {}), ...(ctx.principal.view ? { view: ctx.principal.view } : {}) } : undefined,
+					principal: ctx ? { name: ctx.principal.name, permissions: [...ctx.principal.permissions], actor: ctx.principal.actor, ...(ctx.principal.context ? { context: ctx.principal.context } : {}), ...(ctx.principal.view ? { view: ctx.principal.view } : {}), ...(ctx.principal.approval ? { approval: ctx.principal.approval } : {}) } : undefined,
 					transport: ctx?.transport ?? 'edge',
 					deadline: Date.now() + waitMs,
 					trace: this.tracing.carrier()

@@ -30,8 +30,9 @@ describe('tool catalog', () => {
 		expect(read).toContain('orm_execute')
 		expect(read).not.toEqual(expect.arrayContaining(['orm_execute_script']))
 		expect(read.filter(n => ['orm_execute_script', 'orm_execute_queued', 'stage_import'].includes(n))).toEqual([])
-		expect(await names(mcp, ['script'])).toEqual(['orm_execute_script'])
-		expect(await names(mcp, ['write'])).toEqual(['orm_execute'])
+		// approval_status: who may write may wait (docs/MUTATION_APPROVAL.md)
+		expect(await names(mcp, ['script'])).toEqual(['orm_execute_script', 'approval_status'])
+		expect(await names(mcp, ['write'])).toEqual(['orm_execute', 'approval_status'])
 	})
 
 	test('orm_execute: read only description and annotations without write; destructive with it', async () => {

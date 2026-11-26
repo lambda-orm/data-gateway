@@ -1,7 +1,11 @@
 # Aprobación de escrituras de agentes (G7b)
 
-> **Estado (2026-11-26): diseño; decisiones de §7 por cerrar.** La decisión 4 de
-> [`NAMED_QUERIES.md`](NAMED_QUERIES.md): una escritura de un agente espera a que una persona la apruebe.
+> **Estado (2026-11-26): decisiones de §7 cerradas (las recomendadas, el usuario); fases 1 a 5 hechas** (rama
+> `feature/mutation-approval`). La decisión 4 de [`NAMED_QUERIES.md`](NAMED_QUERIES.md): una escritura de un agente
+> espera a que una persona la apruebe. Probado con λORM sobre SQLite (`tests/integration/approvals.test.ts`) y de punta
+> a punta en el IDE (aprobar desde la pestaña corre la escritura como quien la pidió). Cambios respecto del diseño: las
+> rutas de la administración van por schema (`/admin/workspaces/{schema}/approvals`), REST responde `202` y tiene
+> `GET /{schema}/approvals/{id}` (WebSocket: `approvals.status`), y el IDE relee la lista cada 15 s en vez de un evento.
 
 ## 1. Objetivo
 
@@ -34,12 +38,12 @@ authentication:
 
 ## 4. Quien aprueba
 
-- `GET /admin/approvals?schema=&status=pending`: las pendientes, cada una con quién la pidió, cuándo, la consulta o el
+- `GET /admin/workspaces/{schema}/approvals?status=pending`: las pendientes, cada una con quién la pidió, cuándo, la consulta o el
   script, sus datos y **el plan** (las sentencias que correría, de `plan`).
-- `POST /admin/approvals/{id}/approve` y `/reject { reason }`, con `approve`. **No se aprueba la propia** (otra
+- `POST /admin/workspaces/{schema}/approvals/{id}/approve` y `…/reject { reason }`, con `approve`. **No se aprueba la propia** (otra
   credencial, decisión 2).
-- El IDE: una vista **Aprobaciones** (en la connection) con las pendientes, su plan, Aprobar y Rechazar; un aviso
-  cuando llega una nueva (el WebSocket de eventos de `management`).
+- El IDE: la pestaña **Escrituras que esperan** de la connection (con `approve`) con las pendientes, su plan, sus datos,
+  Aprobar y Rechazar (con un motivo); se relee cada 15 s.
 
 ## 5. Dónde viven
 

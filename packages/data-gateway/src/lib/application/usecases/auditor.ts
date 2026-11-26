@@ -33,6 +33,7 @@ export class Auditor {
 			transport: ctx.transport,
 			credential: ctx.principal.name,
 			...fields,
+			...(ctx.approvedBy ? { approvedBy: ctx.approvedBy } : {}),
 			durationMs: 0,
 			result: 'ok'
 		}

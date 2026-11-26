@@ -10,12 +10,15 @@ export interface CredentialConfig {
 	permissions: Permission[]
 	/** the view of λORM of its requests (docs/VIEWS_BY_IDENTITY.md); none, the one of the schema */
 	view?: string
+	/** its writes wait for a person to approve them, on every transport (docs/MUTATION_APPROVAL.md) */
+	approval?: 'writes'
 }
 
-/** A role of the tokens of an issuer: its permissions, and the view of λORM of who has it */
+/** A role of the tokens of an issuer: its permissions, the view of λORM of who has it, and whether its writes wait */
 export interface RoleConfig {
 	permissions: Permission[]
 	view?: string
+	approval?: 'writes'
 }
 
 export type AuthenticationType = 'bearer' | 'apikey' | 'basic'
@@ -68,7 +71,7 @@ export interface SchemaOverrides {
 	/** Variables its worker receives on top of its .env and the base variables */
 	env?: Record<string, string>
 	scripts?: Partial<ScriptsConfig>
-	mcp?: { maxRows?: number, tools?: { include: string[], exclude: string[] }, freeQueries?: boolean }
+	mcp?: { maxRows?: number, tools?: { include: string[], exclude: string[] }, freeQueries?: boolean, approval?: ApprovalMode, approvalExpiresMs?: number }
 	/** its outbox dispatcher: replaces the global one */
 	outbox?: OutboxConfig
 	/** its cache: replaces the global one */
@@ -214,6 +217,9 @@ export interface ManagementTransportConfig extends TransportConfig {
 	trustedProxies: string[]
 }
 
+/** none: writes run at once; writes: they wait for a person to approve them (docs/MUTATION_APPROVAL.md) */
+export type ApprovalMode = 'none' | 'writes'
+
 export interface McpConfig {
 	/** Name the MCP server gives in initialize */
 	name: string
@@ -227,6 +233,10 @@ export interface McpConfig {
 	 * orm_execute, orm_execute_script, orm_execute_queued nor orm_plan (docs/NAMED_QUERIES.md §3)
 	 */
 	freeQueries: boolean
+	/** writes: every write by MCP waits for a person to approve it (docs/MUTATION_APPROVAL.md) */
+	approval: ApprovalMode
+	/** how long a write waits before it expires */
+	approvalExpiresMs: number
 }
 
 /** The cache of the results of the reads (docs/RESULT_CACHE.md) */

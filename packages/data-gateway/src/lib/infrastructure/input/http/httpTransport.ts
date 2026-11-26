@@ -1,3 +1,4 @@
+import { isApprovalPending } from '../../../domain/approval/approval'
 import { createHash } from 'crypto'
 import { requestTracer } from '../telemetry/requestTracer'
 import { ConnectionSubscriptions } from '../../../application/subscriptions/subscriptions'
@@ -314,6 +315,11 @@ export class HttpTransport implements Transport {
 					res.status(204).end()
 					return
 				}
+				// a write that waits for a person (docs/MUTATION_APPROVAL.md): accepted, nothing changed yet
+				if (isApprovalPending(payload)) {
+					res.status(202).json(payload)
+					return
+				}
 				if (validators) {
 					const etag = `W/"${createHash('sha1').update(JSON.stringify(payload)).digest('base64url')}"`
 					res.setHeader('ETag', etag)
@@ -386,6 +392,7 @@ export class HttpTransport implements Transport {
 		router.post('/execute', this.handle((req, ctx) => gw.execute(ctx, body(req)), true))
 		// the queries of application.queries, by their name (docs/NAMED_QUERIES.md)
 		router.get('/queries', this.handle((_req, ctx) => gw.queries(ctx)))
+		router.get('/approvals/:id', this.handle((req, ctx) => gw.approval(ctx, String(req.params.id))))
 		router.post('/queries/:name', this.handle((req, ctx) => gw.query(ctx, String(req.params.name), { data: body(req).data, options: body(req).options }), true))
 		router.post('/script', this.handle((req, ctx) => gw.executeScript(ctx, body(req))))
 		// answers the id of the execution as a string, like the former service

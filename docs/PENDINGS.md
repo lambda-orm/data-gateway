@@ -238,6 +238,8 @@ recomendación, tests por transporte y la conformidad.
 - Límites por herramienta (filas, tiempo, costo) además de `mcp.maxRows`.
 - Confirmación de mutaciones (*human-in-the-loop*) para agentes: una escritura de un agente queda pendiente hasta que
   alguien la aprueba (desde el IDE o un endpoint), o se limita a herramientas de escritura curadas.
+  **Hecho (2026-11-26):** [`MUTATION_APPROVAL.md`](MUTATION_APPROVAL.md) (`mcp.approval`, `approval: writes`, el permiso
+  `approve`, `approval_status`, la pestaña del IDE).
 - El cliente Node (`lambdaorm build -l client-node` ya genera `queries.ts` desde `/model` y `/parameters`): cuando
   existan las rutas de consultas con nombre, que el código generado las use en vez de mandar el texto.
 

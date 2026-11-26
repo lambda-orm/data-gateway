@@ -1,3 +1,5 @@
+import { GatewayError } from '../../domain/errors/gatewayError'
+import { ApprovalUseCases } from '../approval/approvals'
 import { notFound, timeout } from '../../domain/errors/gatewayError'
 import { NamedQueryRequest, NamedQueryUseCases } from '../usecases/namedQueryUseCases'
 import {
@@ -18,6 +20,8 @@ export interface DataGatewayUseCases {
 	stages: StageUseCases
 	/** application.queries; without it, none */
 	named?: NamedQueryUseCases
+	/** the writes that wait for a person (docs/MUTATION_APPROVAL.md) */
+	approvals?: ApprovalUseCases
 }
 
 /**
@@ -60,6 +64,11 @@ export class DataGateway implements DataGatewayPort {
 	public execute (ctx: RequestContext, request: ExecuteRequest) { return this.limit(() => this.useCases.queries.execute(ctx, request)) }
 	public executeScript (ctx: RequestContext, request: ScriptRequest) { return this.limit(() => this.useCases.script.execute(ctx, request)) }
 	public executeQueued (ctx: RequestContext, request: QueuedRequest) { return this.limit(() => this.useCases.queue.execute(ctx, request)) }
+	public async approval (ctx: RequestContext, id: string) {
+		if (!this.useCases.approvals) throw new GatewayError(404, 'NotFoundError', `the approval "${id}" doesn't exist`)
+		return this.useCases.approvals.status(ctx, String(id ?? ''))
+	}
+
 	public async queries (ctx: RequestContext) { return this.useCases.named ? this.useCases.named.list(ctx) : [] }
 	public query (ctx: RequestContext, name: string, request: NamedQueryRequest) {
 		const named = this.useCases.named

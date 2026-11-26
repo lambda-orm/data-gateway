@@ -15,6 +15,8 @@ export interface AuditEntry {
 	/** Only with audit.includeData: the data can hold personal information */
 	data?: unknown
 	rows?: number
+	/** the person who approved the write of an agent (docs/MUTATION_APPROVAL.md) */
+	approvedBy?: string
 	durationMs: number
 	result: 'ok' | 'error'
 	error?: string

@@ -36,6 +36,8 @@ import { SchemaChanges, shareChanges } from '../../application/cluster/clusterCh
 import { LeaderLease } from '../../application/cluster/leaderLease'
 import { ClusterBusPort } from '../../application/ports/output/clusterPorts'
 import { ValkeyClusterBus } from '../output/cluster/valkeyClusterBus'
+import { ApprovalGate, ApprovalUseCases } from '../../application/approval/approvals'
+import { MemoryApprovalStore, SqliteApprovalStore } from '../output/approval/approvalStores'
 
 export interface SchemaCompositionInput {
 	path: string
@@ -108,7 +110,11 @@ export const composeSchema = async (input: SchemaCompositionInput, deps: { logge
 		...(c.count !== undefined ? { count: c.count } : {})
 	}))))
 	const cluster = await joinCluster(input, changes, logger, deps.metrics)
-	const queries = new QueryUseCases(orm, auditor, views, readsCache(input, orm, changes, deps.metrics))
+	// the writes that wait for a person (docs/MUTATION_APPROVAL.md): in the SQLite of the volume, or in memory
+	const approvalStore = settings.stateFile ? new SqliteApprovalStore(path.resolve(settings.stateFile)) : new MemoryApprovalStore()
+	const gate = new ApprovalGate(approvalStore, { mcp: settings.mcp.approval, expiresMs: settings.mcp.approvalExpiresMs }, input.path, deps.clock, randomUUID,
+		(query, options) => orm.plan(query, options as any))
+	const queries = new QueryUseCases(orm, auditor, views, readsCache(input, orm, changes, deps.metrics), gate)
 	// to the subscriptions of the edge (docs/SUBSCRIPTIONS.md)
 	if (deps.dataEvents) {
 		const tell = deps.dataEvents
@@ -118,16 +124,19 @@ export const composeSchema = async (input: SchemaCompositionInput, deps: { logge
 	const named = new NamedQueryUseCases(orm, queries, settings.queries ?? {}, () => orm.entities() as any)
 	const unknownLimits = Object.keys(settings.queries ?? {}).filter(name => !orm.namedQueries().some(q => q.name === name))
 	if (unknownLimits.length) logger.warn(`schema "${input.path || '/'}": orm.schemas[].queries names ${unknownLimits.join(', ')}, not in its application.queries`)
+	const script = new ScriptUseCase(orm, settings.scripts, auditor, views, gate)
+	const approvals = new ApprovalUseCases(approvalStore, input.path, { execute: (ctx, request, named) => queries.execute(ctx, request, named), executeScript: (ctx, request) => script.execute(ctx, request) }, deps.clock)
 	const gateway = new DataGateway({
 		queries,
-		script: new ScriptUseCase(orm, settings.scripts, auditor, views),
+		script,
 		queue: new QueueUseCase(queue, queries, auditor, deps.queueEvents),
 		schema: new SchemaUseCases(orm, views),
 		stages: new StageUseCases(orm, auditor),
-		named
+		named,
+		approvals
 	}, orm, deps.clock, input.version, settings.server.timeout)
 	const outbox = new LambdaOrmOutboxAdapter(orm.orm as Orm)
-	const commands = new CommandUseCases(orm, auditor, outbox)
+	const commands = new CommandUseCases(orm, auditor, outbox, approvals)
 	const dispatcher = outboxDispatcher(input, orm, outbox, logger, deps.metrics)
 	// with a cluster, the replica that holds its lease dispatches (docs/REPLICAS.md §4); without one, this one
 	const leader = dispatcher && cluster ? outboxLeader(input, cluster, dispatcher, logger, deps.metrics) : undefined
@@ -151,6 +160,7 @@ export const composeSchema = async (input: SchemaCompositionInput, deps: { logge
 			await cluster?.leave().catch(error => logger.error(error))
 			await queue?.stop().catch(error => logger.error(error))
 			await orm.end().catch(error => logger.error(error))
+			if (approvalStore instanceof SqliteApprovalStore) approvalStore.close()
 		}
 	}
 }

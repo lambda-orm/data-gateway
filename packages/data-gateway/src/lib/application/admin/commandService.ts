@@ -360,6 +360,19 @@ export class CommandService {
 		return this.call(path, principal, 'ddl', 'outboxRetry', [id])
 	}
 
+	/** the writes that wait for a person in a schema (docs/MUTATION_APPROVAL.md §4): pending by default */
+	public approvals (principal: Principal, path: string, status: unknown, limit: unknown): Promise<unknown> {
+		this.require(principal, 'approve')
+		return this.call(path, principal, 'approve', 'approvalsList', [status ?? 'pending', limit])
+	}
+
+	/** one approved (run as who asked for it) or rejected, never by who asked for it */
+	public decide (principal: Principal, path: string, id: string, decision: 'approve' | 'reject', reason?: unknown): Promise<unknown> {
+		this.require(principal, 'approve')
+		this.logger.info(`[data-gateway] admin: "${principal.name}" ${decision === 'approve' ? 'approves' : 'rejects'} the write ${id} of ${path || '/'}`)
+		return this.call(path, principal, 'approve', decision, decision === 'approve' ? [id] : [id, reason])
+	}
+
 	public jobsOf (principal: Principal, path: string): Job[] {
 		this.require(principal, 'read')
 		this.served(path)
