@@ -217,7 +217,7 @@ recomendación, tests por transporte y la conformidad.
 > **Estado (2026-11-25): hecho** (la tabla editable y exportar) en `feature/backoffice` ([`BACKOFFICE.md`](BACKOFFICE.md),
 > decisiones cerradas): en **Data** de una entidad, con `write`, editar una celda (chequeo optimista), agregar y borrar
 > filas, ordenar y filtrar; exportar la página o todo (hasta 100 000 filas) en CSV, JSON y Excel. **Falta:** la wiki y
-> G6b (archivos S3/Blob y paneles).
+> G6b (archivos S3/Blob y paneles): hecho el 2026-11-26, [`FILES_AND_PANELS.md`](FILES_AND_PANELS.md).
 
 - Tabla con edición en línea (sobre `update` por clave), exportar CSV/Excel/JSON, archivos (S3/Blob) y paneles
   simples.
@@ -286,3 +286,11 @@ actualizarla al final de la serie, como se hizo con core.
 - Un cambio que necesita λORM se hace y se libera primero en `lambda-orm/core`, y después se sube la versión acá.
 - En pruebas con navegador o con el gateway de desarrollo: nunca borrar ni pisar la sesión del usuario
   (`/admin/session`, `.data-gateway/state.sqlite`); usar un workspace y puertos propios, y detener procesos por PID.
+
+## 7. Visto en core (para lambda-orm/core)
+
+- **SQLjs, `year()` y el agrupamiento (2026-11-26):** `Orders.map(p => ({ year: year(p.orderDate), n: count(1) }))`
+  genera `EXTRACT(YEAR FROM …)`, que SQLite no tiene (`strftime('%Y', …)`), y agrupa por `o.OrderDate` en vez de por la
+  expresión del año (`GROUP BY` de la columna y no de lo que el `map` calcula). Visto en un panel del IDE sobre el
+  Northwind de desarrollo.
+

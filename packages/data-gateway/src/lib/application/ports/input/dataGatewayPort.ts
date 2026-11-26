@@ -1,3 +1,4 @@
+import { FileProperty, UploadRequest } from '../../files/files'
 import { Approval } from '../../../domain/approval/approval'
 import { DescribedEntities, DomainSearch } from '../../usecases/domainText'
 import { NamedQueryInfo, NamedQueryRequest } from '../../usecases/namedQueryUseCases'
@@ -44,6 +45,12 @@ export interface DataGatewayPort {
 	query (ctx: RequestContext, name: string, request: NamedQueryRequest): Promise<unknown>
 	/** a write that waits for a person (docs/MUTATION_APPROVAL.md): its state, for who asked or who approves */
 	approval (ctx: RequestContext, id: string): Promise<Approval>
+	/** the properties that keep files (docs/FILES_AND_PANELS.md): which, in the view of who calls */
+	files (ctx: RequestContext): Promise<FileProperty[]>
+	/** a URL to upload the file of a property (write) */
+	fileUpload (ctx: RequestContext, entity: string, property: string, request: UploadRequest): Promise<unknown>
+	/** a URL to read the file a row keeps (read) */
+	fileUrl (ctx: RequestContext, entity: string, property: string, key: string): Promise<{ url: string, expiresAt: string }>
 
 	schema (ctx: RequestContext): Promise<Schema>
 	schemaVersion (ctx: RequestContext): Promise<{ version: string }>

@@ -7,10 +7,11 @@
  *   workbench/reports/sales.query.yaml  a query
  *   workbench/reports/close.script.yaml a script (a saved query in script mode)
  *   workbench/model.diagram.yaml        a diagram
+ *   workbench/sales.panel.yaml          a panel (cards of queries: a number, a table, a chart)
  *
  * The items are those of @lambdaorm/ui (SavedItem): an id, the schema, the folder (parentId), a name and a description.
  */
-export type WorkbenchKind = 'folder' | 'query' | 'diagram'
+export type WorkbenchKind = 'folder' | 'query' | 'diagram' | 'panel'
 
 export interface WorkbenchItem {
 	id: string
@@ -43,6 +44,9 @@ export interface WorkbenchItem {
 	/** a diagram of a stage (the IDE): the stage, and how it is shown (kept as it comes) */
 	stage?: string
 	stageView?: Record<string, unknown>
+	/** panel: its cards (kept as they come: the IDE checks them) and its refresh in seconds */
+	cards?: Record<string, unknown>[]
+	refresh?: number
 }
 
 export const WORKBENCH = 'workbench'
@@ -51,7 +55,8 @@ export const FOLDER_FILE = '.folder.yaml'
 const SUFFIXES: { suffix: string, kind: WorkbenchKind, mode?: 'query' | 'script' }[] = [
 	{ suffix: '.query.yaml', kind: 'query', mode: 'query' },
 	{ suffix: '.script.yaml', kind: 'query', mode: 'script' },
-	{ suffix: '.diagram.yaml', kind: 'diagram' }
+	{ suffix: '.diagram.yaml', kind: 'diagram' },
+	{ suffix: '.panel.yaml', kind: 'panel' }
 ]
 
 /** What a name can't be, as the name of a file of every system: empty, a path, `.` / `..`, hidden, too long */
@@ -69,6 +74,7 @@ export const workbenchNameIssue = (name: string): string | undefined => {
 export const workbenchFileName = (item: Pick<WorkbenchItem, 'kind' | 'name' | 'mode'>): string => {
 	if (item.kind === 'folder') return item.name
 	if (item.kind === 'diagram') return `${item.name}.diagram.yaml`
+	if (item.kind === 'panel') return `${item.name}.panel.yaml`
 	return `${item.name}.${item.mode === 'script' ? 'script' : 'query'}.yaml`
 }
 
@@ -97,6 +103,10 @@ export const workbenchContent = (item: WorkbenchItem): Record<string, unknown> =
 		for (const key of ['positions', 'bends', 'compact', 'detail', 'relationNames', 'stage', 'stageView'] as const) {
 			if (item[key] !== undefined) content[key] = item[key]
 		}
+	}
+	if (item.kind === 'panel') {
+		content.cards = item.cards ?? []
+		if (item.refresh) content.refresh = item.refresh
 	}
 	if (item.createdAt) content.createdAt = item.createdAt
 	if (item.updatedAt) content.updatedAt = item.updatedAt
@@ -134,6 +144,9 @@ export const workbenchItemOf = (
 		item.data = text(c.data, '{}')
 		item.options = text(c.options, '{}')
 		if (c.wizard && typeof c.wizard === 'object' && !Array.isArray(c.wizard)) item.wizard = c.wizard
+	} else if (kind.kind === 'panel') {
+		item.cards = Array.isArray(c.cards) ? c.cards.filter((card: unknown) => card && typeof card === 'object' && !Array.isArray(card)) : []
+		if (typeof c.refresh === 'number' && c.refresh > 0) item.refresh = c.refresh
 	} else {
 		item.entities = Array.isArray(c.entities) ? c.entities.filter((e: unknown) => typeof e === 'string') : []
 		for (const key of ['positions', 'bends', 'compact', 'detail', 'relationNames'] as const) {

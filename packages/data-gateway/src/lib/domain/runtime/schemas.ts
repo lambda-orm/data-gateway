@@ -1,5 +1,5 @@
 import {
-	AuthenticationConfig, CacheConfig, DataGatewayConfig, OutboxConfig, ValkeyConfig, NamedQueryLimitsConfig, RuntimeMode, SchemaOverrides, ScriptsConfig, TransportName
+	AuthenticationConfig, CacheConfig, DataGatewayConfig, OutboxConfig, ValkeyConfig, FilesConfig, NamedQueryLimitsConfig, RuntimeMode, SchemaOverrides, ScriptsConfig, TransportName
 } from '../config/dataGatewayConfig'
 import { schemaPathsIssues } from './schemaPath'
 
@@ -59,6 +59,8 @@ export interface SchemaSettings {
 	cache: CacheConfig
 	/** the dispatcher of its outbox (docs/OUTBOX_DISPATCHER.md) */
 	outbox: OutboxConfig
+	/** the files of some of its properties (docs/FILES_AND_PANELS.md) */
+	files: FilesConfig
 	/** the Valkey of the replicas (docs/REPLICAS.md): its changes to the others, theirs to it, the lock of its outbox */
 	valkey?: ValkeyConfig
 	/** the SQLite of the volume (<orm.workspacePath>/.data-gateway/state.sqlite): the writes that wait (docs/MUTATION_APPROVAL.md §5) */
@@ -102,6 +104,7 @@ export const effectiveSettings = (config: DataGatewayConfig, schema: SchemaDescr
 		queries: o.queries ?? {},
 		cache: o.cache ?? config.cache,
 		outbox: o.outbox ?? config.outbox,
+		files: o.files ?? config.files ?? { storages: {}, properties: {} },
 		...(config.cluster?.valkey ? { valkey: config.cluster.valkey } : {}),
 		...(config.orm.workspacePath ? { stateFile: stateFileOf(config.orm.workspacePath) } : {}),
 		server: {

@@ -393,6 +393,10 @@ export class HttpTransport implements Transport {
 		// the queries of application.queries, by their name (docs/NAMED_QUERIES.md)
 		router.get('/queries', this.handle((_req, ctx) => gw.queries(ctx)))
 		router.get('/approvals/:id', this.handle((req, ctx) => gw.approval(ctx, String(req.params.id))))
+		// the files of some properties (docs/FILES_AND_PANELS.md): URLs signed for the storage, never the bytes
+		router.get('/files', this.handle((_req, ctx) => gw.files(ctx)))
+		router.post('/files/:entity/:property/upload', this.handle((req, ctx) => gw.fileUpload(ctx, String(req.params.entity), String(req.params.property), body(req))))
+		router.get('/files/:entity/:property/url', this.handle((req, ctx) => gw.fileUrl(ctx, String(req.params.entity), String(req.params.property), String(req.query.key ?? ''))))
 		router.post('/queries/:name', this.handle((req, ctx) => gw.query(ctx, String(req.params.name), { data: body(req).data, options: body(req).options }), true))
 		router.post('/script', this.handle((req, ctx) => gw.executeScript(ctx, body(req))))
 		// answers the id of the execution as a string, like the former service

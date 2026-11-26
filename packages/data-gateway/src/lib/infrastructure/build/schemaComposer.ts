@@ -38,6 +38,8 @@ import { ClusterBusPort } from '../../application/ports/output/clusterPorts'
 import { ValkeyClusterBus } from '../output/cluster/valkeyClusterBus'
 import { ApprovalGate, ApprovalUseCases } from '../../application/approval/approvals'
 import { MemoryApprovalStore, SqliteApprovalStore } from '../output/approval/approvalStores'
+import { FileStorage, FilesUseCases } from '../../application/files/files'
+import { AzureBlobUrlSigner, S3UrlSigner } from '../output/files/urlSigners'
 
 export interface SchemaCompositionInput {
 	path: string
@@ -125,15 +127,17 @@ export const composeSchema = async (input: SchemaCompositionInput, deps: { logge
 	const unknownLimits = Object.keys(settings.queries ?? {}).filter(name => !orm.namedQueries().some(q => q.name === name))
 	if (unknownLimits.length) logger.warn(`schema "${input.path || '/'}": orm.schemas[].queries names ${unknownLimits.join(', ')}, not in its application.queries`)
 	const script = new ScriptUseCase(orm, settings.scripts, auditor, views, gate)
+	const schemaUseCases = new SchemaUseCases(orm, views)
 	const approvals = new ApprovalUseCases(approvalStore, input.path, { execute: (ctx, request, named) => queries.execute(ctx, request, named), executeScript: (ctx, request) => script.execute(ctx, request) }, deps.clock)
 	const gateway = new DataGateway({
 		queries,
 		script,
 		queue: new QueueUseCase(queue, queries, auditor, deps.queueEvents),
-		schema: new SchemaUseCases(orm, views),
+		schema: schemaUseCases,
 		stages: new StageUseCases(orm, auditor),
 		named,
-		approvals
+		approvals,
+		files: filesOf(input, deps.clock, (ctx, entity) => schemaUseCases.entity(ctx, entity).then((e: any) => (e?.properties ?? []).map((p: any) => p.name)), (ctx, query, data) => queries.execute(ctx, { query, data }))
 	}, orm, deps.clock, input.version, settings.server.timeout)
 	const outbox = new LambdaOrmOutboxAdapter(orm.orm as Orm)
 	const commands = new CommandUseCases(orm, auditor, outbox, approvals)
@@ -247,4 +251,21 @@ const outboxLeader = (input: SchemaCompositionInput, cluster: ClusterMembership,
 	const lease = new LeaderLease(cluster.bus, `${cluster.prefix}:${schema}:outbox`, cluster.replica, { lead: () => dispatcher.start(), follow: () => dispatcher.pause() }, logger)
 	metrics?.gauge('data_gateway_outbox_leader', 'This replica dispatches the outbox of the schema (1) or another does (0)', ['schema'], () => [{ labels: { schema }, value: lease.isLeader ? 1 : 0 }])
 	return lease
+}
+
+/**
+ * The files of some properties of a schema (docs/FILES_AND_PANELS.md): a signer per storage (S3 SigV4, the SAS of Azure
+ * Blob); without files.properties, none.
+ */
+const filesOf = (input: SchemaCompositionInput, clock: ClockPort, propertiesOf: (ctx: any, entity: string) => Promise<string[]>, read: (ctx: any, query: string, data: Record<string, unknown>) => Promise<unknown>): FilesUseCases | undefined => {
+	const files = input.settings.files
+	if (!files || Object.keys(files.properties).length === 0) return undefined
+	const storages: Record<string, FileStorage> = {}
+	for (const [name, config] of Object.entries(files.storages)) {
+		const signer = config.type === 's3'
+			? new S3UrlSigner({ bucket: config.bucket, region: config.region, ...(config.endpoint ? { endpoint: config.endpoint } : {}), accessKeyId: config.accessKeyId, secretAccessKey: config.secretAccessKey })
+			: new AzureBlobUrlSigner({ account: config.account, container: config.container, accountKey: config.accountKey, ...(config.endpoint ? { endpoint: config.endpoint } : {}) })
+		storages[name] = { signer, prefix: config.prefix, maxBytes: config.maxBytes, ...(config.types ? { types: config.types } : {}), expiresMs: config.expiresMs }
+	}
+	return new FilesUseCases(storages, files.properties, { propertiesOf, read }, clock, randomUUID)
 }

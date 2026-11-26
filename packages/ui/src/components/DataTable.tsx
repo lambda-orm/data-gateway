@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react'
-import { QueryApiPort } from '../application/ports'
+import { FileProperty, QueryApiPort } from '../application/ports'
 import { EntityInfo, PropertyInfo } from '../domain/diagram'
 import { cellOf, deleteRow, insertRow, isPoint, mapUrlOf, pageQuery, pointOf, textOf, updateCell, valueOf } from '../domain/dataEditing'
 import { columnsOf, toCsv, toXlsx } from '../domain/exporters'
@@ -65,6 +65,14 @@ export const DataTable: React.FC<DataTableProps> = ({ api, schema, entity, canWr
 	const [deleting, setDeleting] = useState<Row>()
 	const [exporting, setExporting] = useState<{ rows: number }>()
 	const exportCancel = React.useRef(false)
+	// the properties that keep files (docs/FILES_AND_PANELS.md): their value is the key of an object of a storage
+	const [files, setFiles] = useState<Record<string, FileProperty>>({})
+	const [uploading, setUploading] = useState<string>()
+	useEffect(() => {
+		let live = true
+		api.files?.(schema).then(list => { if (live) setFiles(Object.fromEntries(list.filter(f => f.entity === entity.name).map(f => [f.property, f]))) }).catch(() => undefined)
+		return () => { live = false }
+	}, [api, schema, entity.name])
 
 	const load = useCallback(async () => {
 		setError(undefined)
@@ -84,6 +92,41 @@ export const DataTable: React.FC<DataTableProps> = ({ api, schema, entity, canWr
 	}, [properties, rows])
 
 	const run = async (query: { query: string, data: Record<string, unknown> }): Promise<unknown> => api.execute(schema, query.query, query.data)
+
+	/** the file a row keeps, in another tab: a URL signed for it, of short life */
+	const openFile = async (field: string, key: string) => {
+		try {
+			const { url } = await api.fileUrl!(schema, entity.name, field, key)
+			window.open(url, '_blank', 'noopener,noreferrer')
+		} catch (e: any) { setError(e?.message ?? String(e)) }
+	}
+
+	/** a file to the storage (a URL signed by the gateway, the bytes straight to it), then its key in the row */
+	const uploadFile = async (row: Row, field: string, file: File) => {
+		const id = `${primaryKey.map(k => textOf(row[k])).join('|')}:${field}`
+		setUploading(id)
+		setError(undefined)
+		try {
+			const signed = await api.fileUpload!(schema, entity.name, field, { name: file.name, type: file.type || 'application/octet-stream', size: file.size })
+			const put = await fetch(signed.url, { method: 'PUT', headers: signed.headers, body: file })
+			if (!put.ok) throw new Error(`the storage answered ${put.status} ${put.statusText}`)
+			const changed = await run(updateCell(entity.name, primaryKey, row, field, signed.key))
+			setNotice(Number(changed) === 0 ? m.changedMeanwhile : undefined)
+			await load()
+		} catch (e: any) {
+			setError(e?.message ?? String(e))
+		} finally {
+			setUploading(undefined)
+		}
+	}
+
+	const removeFile = async (row: Row, field: string) => {
+		try {
+			const changed = await run(updateCell(entity.name, primaryKey, row, field, null))
+			setNotice(Number(changed) === 0 ? m.changedMeanwhile : undefined)
+			await load()
+		} catch (e: any) { setError(e?.message ?? String(e)) }
+	}
 
 	const commit = async () => {
 		if (!editing || !rows) return
@@ -231,6 +274,27 @@ export const DataTable: React.FC<DataTableProps> = ({ api, schema, entity, canWr
 											)
 										}
 										const value = row[column]
+										if (files[column]) {
+											const key = typeof value === 'string' && value ? value : undefined
+											const id = `${primaryKey.map(k => textOf(row[k])).join('|')}:${column}`
+											const accept = files[column].types?.join(',')
+											return (
+												<td key={column} className="lw-file-cell">
+													{key && <button type="button" className="lw-link" title={key} aria-label={`${column} ${m.openFile}`} onClick={() => openFile(column, key)}>📎 {key.split('/').pop()}</button>}
+													{writable && canEdit && (uploading === id
+														? <span className="lw-muted"> {m.uploading}</span>
+														: (
+															<>
+																<label className="lw-file-upload" title={m.uploadFile}>
+																	<input type="file" aria-label={`${column} ${m.uploadFile}`} accept={accept} onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; if (f) uploadFile(row, column, f) }} />
+																	⤒
+																</label>
+																{key && <button type="button" className="lw-link" aria-label={`${column} ${m.removeFile}`} title={m.removeFile} onClick={() => removeFile(row, column)}>✕</button>}
+															</>
+															))}
+												</td>
+											)
+										}
 										const start = () => {
 											if (property?.type === 'point') { const [lng, lat] = coordinatesOf(value); setEditing({ row: r, field: column, text: lng, lat }) } else setEditing({ row: r, field: column, text: textOf(value) })
 										}

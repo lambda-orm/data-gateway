@@ -35,6 +35,10 @@ export class RpcDispatcher {
 		this.register('queries.execute', (gw, ctx, p) => gw.query(ctx, text(p, 'name'), { data: p.data, options: p.options }))
 		// a write that waits for a person (docs/MUTATION_APPROVAL.md)
 		this.register('approvals.status', (gw, ctx, p) => gw.approval(ctx, text(p, 'id')))
+		// the files of some properties (docs/FILES_AND_PANELS.md)
+		this.register('files.list', (gw, ctx) => gw.files(ctx))
+		this.register('files.upload', (gw, ctx, p) => gw.fileUpload(ctx, text(p, 'entity'), text(p, 'property'), { name: p.name, type: p.type, size: p.size }))
+		this.register('files.url', (gw, ctx, p) => gw.fileUrl(ctx, text(p, 'entity'), text(p, 'property'), text(p, 'key')))
 		for (const name of ['plan', 'metadata', 'model', 'parameters', 'constraints'] as const) {
 			this.register(`query.${name}`, (gw, ctx, p) => (gw[name] as any).call(gw, ctx, { query: p.query, options: p.options }))
 		}

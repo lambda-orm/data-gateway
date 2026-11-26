@@ -643,7 +643,7 @@ export class AdminService {
 		const incoming = request.items as WorkbenchItem[]
 		const bySchema = new Map<string, WorkbenchItem[]>()
 		for (const item of incoming) {
-			if (!item || typeof item.id !== 'string' || typeof item.schema !== 'string' || typeof item.name !== 'string' || !['folder', 'query', 'diagram'].includes(item.kind)) {
+			if (!item || typeof item.id !== 'string' || typeof item.schema !== 'string' || typeof item.name !== 'string' || !['folder', 'query', 'diagram', 'panel'].includes(item.kind)) {
 				throw badRequest('ValidationError', 'every item has an id, a kind (folder, query, diagram), a schema and a name')
 			}
 			if (!bySchema.has(item.schema)) bySchema.set(item.schema, [])

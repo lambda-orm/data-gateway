@@ -2,6 +2,10 @@
 
 ### Unreleased
 
+- **Files:** in **Data**, a property that keeps files (data-gateway 4.3) opens its file, and with `write` uploads
+  another (straight to the storage) or removes it.
+- **Panels:** **New panel** in the workbench: cards of queries shown as a number, a table, bars, lines or a pie;
+  refreshed by hand or every so often; saved in the workbench.
 - **Writes that wait:** with `approve`, the page of a connection has the tab of the writes of agents that wait for a
   person (data-gateway 4.3): what each would run, its data and who asked; approve it (it runs as who asked) or reject it
   with a reason.

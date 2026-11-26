@@ -36,6 +36,8 @@ export interface ExplorerProps {
 	onNewQuery: (schema: string, parentId?: string) => void
 	/** Without it, no diagrams are offered */
 	onNewDiagram?: (schema: string, parentId?: string) => void
+	/** Without it, no panels are offered (docs/FILES_AND_PANELS.md §2) */
+	onNewPanel?: (schema: string, parentId?: string) => void
 	/** The administration of the workspaces (admin.enabled), with what this credential may do there */
 	admin?: ExplorerAdmin
 }
@@ -126,7 +128,7 @@ const Action: React.FC<{ label: string, onClick: () => void, children: React.Rea
  * saved in it (folders, queries, diagrams) with a name and a description. Folders nest; items are dragged into them.
  * The whole workspace is exported to and imported from a JSON file.
  */
-export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, schemas, controller, api, locale, theme, activeId, onOpen, onOpenEntity, onOpenDomain, onNewQuery, onNewDiagram, loadDomain: domainOf, admin, expanded: expandedProp, onExpandedChange }) => {
+export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, schemas, controller, api, locale, theme, activeId, onOpen, onOpenEntity, onOpenDomain, onNewQuery, onNewDiagram, onNewPanel, loadDomain: domainOf, admin, expanded: expandedProp, onExpandedChange }) => {
 	const m = explorerMessagesOf(locale)
 	const a = adminMessagesOf(locale)
 	// the lambdaORM.yaml of a schema (to fix one that didn't start, too) and removing it
@@ -336,7 +338,8 @@ export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, sc
 		<MenuButton label={m.add} icon={<Icons.plus />} items={[
 			{ label: top ? a.newProject : m.newFolder, icon: <Icons.folderPlus />, onClick: () => setDialog({ kind: 'folder', schema, parentId, project: top }) },
 			{ label: m.newQuery, icon: <Icons.queryPlus />, onClick: () => onNewQuery(schema, parentId) },
-			...(onNewDiagram ? [{ label: m.newDiagram, icon: <Icons.diagramPlus />, onClick: () => onNewDiagram(schema, parentId) }] : [])
+			...(onNewDiagram ? [{ label: m.newDiagram, icon: <Icons.diagramPlus />, onClick: () => onNewDiagram(schema, parentId) }] : []),
+			...(onNewPanel ? [{ label: m.newPanel, icon: <Icons.dashboard />, onClick: () => onNewPanel(schema, parentId) }] : [])
 		]} />
 	)
 
@@ -352,7 +355,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, sc
 			)
 			const row = (
 				<Row key={item.id} level={level} label={item.name} title={item.description ? `${item.name}\n${item.description}` : item.name}
-					icon={isFolder ? <Icons.folder /> : item.kind === 'diagram' ? (item.stage ? <Icons.stages /> : <Icons.diagram />) : <Icons.query />}
+					icon={isFolder ? <Icons.folder /> : item.kind === 'panel' ? <Icons.dashboard /> : item.kind === 'diagram' ? (item.stage ? <Icons.stages /> : <Icons.diagram />) : <Icons.query />}
 					expanded={isFolder ? expanded.has(key) : undefined} active={item.id === activeId}
 					onToggle={isFolder ? () => toggle(key) : undefined} onOpen={isFolder ? undefined : () => onOpen(item)}
 					drag={item.id} dropTarget={isFolder ? { onDrop: id => { if (id !== item.id) { move(id, item.id); open(key) } } } : undefined}

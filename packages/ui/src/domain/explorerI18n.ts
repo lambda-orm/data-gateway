@@ -102,6 +102,28 @@ export interface ExplorerMessages {
 	latitude: string
 	onMap: string
 	vectorHint: string
+	newPanel: string
+	addCard: string
+	noCards: string
+	cardTitle: string
+	cardQuery: string
+	cardForm: string
+	cardLabel: string
+	cardValues: string
+	cardWide: string
+	removeCard: string
+	done: string
+	refreshEvery: string
+	byHand: string
+	formNumber: string
+	formTable: string
+	formBar: string
+	formLine: string
+	formPie: string
+	openFile: string
+	uploadFile: string
+	removeFile: string
+	uploading: string
 	search: string
 	addNeighbours: string
 	clearSelection: string
@@ -223,6 +245,28 @@ const ROWS: Row[] = [
 	['latitude', 'Latitude', 'Latitud', 'Latitude', 'Latitude', 'Latitudine', 'Breitengrad', 'Breedtegraad', 'Latitud', 'Latitude', 'Latitudea'],
 	['onMap', 'See it on a map', 'Verlo en un mapa', 'Ver no mapa', 'Voir sur une carte', 'Vedi sulla mappa', 'Auf einer Karte zeigen', 'Bekijk op een kaart', 'Veure-ho en un mapa', 'Velo nun mapa', 'Ikusi mapan'],
 	['vectorHint', 'a list of {n} numbers: [0.1, 0.2, …]', 'una lista de {n} números: [0.1, 0.2, …]', 'uma lista de {n} números: [0.1, 0.2, …]', 'une liste de {n} nombres : [0.1, 0.2, …]', 'un elenco di {n} numeri: [0.1, 0.2, …]', 'eine Liste von {n} Zahlen: [0.1, 0.2, …]', 'een lijst van {n} getallen: [0.1, 0.2, …]', 'una llista de {n} nombres: [0.1, 0.2, …]', 'unha lista de {n} números: [0.1, 0.2, …]', '{n} zenbakiko zerrenda: [0.1, 0.2, …]'],
+	['openFile', 'Open', 'Abrir', 'Abrir', 'Ouvrir', 'Apri', 'Öffnen', 'Openen', 'Obre', 'Abrir', 'Ireki'],
+	['uploadFile', 'Upload', 'Subir', 'Enviar', 'Téléverser', 'Carica', 'Hochladen', 'Uploaden', 'Puja', 'Subir', 'Igo'],
+	['removeFile', 'Remove the file', 'Quitar el archivo', 'Remover o arquivo', 'Retirer le fichier', 'Rimuovi il file', 'Datei entfernen', 'Bestand verwijderen', 'Treu el fitxer', 'Quitar o ficheiro', 'Kendu fitxategia'],
+	['uploading', 'Uploading…', 'Subiendo…', 'Enviando…', 'Téléversement…', 'Caricamento…', 'Wird hochgeladen…', 'Uploaden…', 'Pujant…', 'Subindo…', 'Igotzen…'],
+	['newPanel', 'New panel', 'Nuevo panel', 'Novo painel', 'Nouveau tableau', 'Nuovo pannello', 'Neues Panel', 'Nieuw paneel', 'Nou tauler', 'Novo panel', 'Panel berria'],
+	['addCard', '+ Card', '+ Tarjeta', '+ Cartão', '+ Carte', '+ Scheda', '+ Karte', '+ Kaart', '+ Targeta', '+ Tarxeta', '+ Txartela'],
+	['noCards', 'No cards yet: add one with a query and how to show it.', 'Todavía no hay tarjetas: agregá una con una consulta y cómo mostrarla.', 'Ainda não há cartões: adicione um com uma consulta e como mostrá-la.', 'Pas encore de cartes : ajoutez-en une avec une requête et sa présentation.', 'Ancora nessuna scheda: aggiungine una con una query e come mostrarla.', 'Noch keine Karten: füge eine mit einer Abfrage und ihrer Darstellung hinzu.', 'Nog geen kaarten: voeg er een toe met een query en hoe die te tonen.', 'Encara no hi ha targetes: afegiu-ne una amb una consulta i com mostrar-la.', 'Aínda non hai tarxetas: engade unha cunha consulta e como mostrala.', 'Oraindik ez dago txartelik: gehitu bat kontsulta batekin eta nola erakutsi.'],
+	['cardTitle', 'Title', 'Título', 'Título', 'Titre', 'Titolo', 'Titel', 'Titel', 'Títol', 'Título', 'Izenburua'],
+	['cardQuery', 'Query', 'Consulta', 'Consulta', 'Requête', 'Query', 'Abfrage', 'Query', 'Consulta', 'Consulta', 'Kontsulta'],
+	['cardForm', 'Shown as', 'Se muestra como', 'Mostrado como', 'Affiché comme', 'Mostrato come', 'Angezeigt als', 'Getoond als', 'Es mostra com', 'Amósase como', 'Honela erakutsia'],
+	['cardLabel', 'Labels (column)', 'Etiquetas (columna)', 'Rótulos (coluna)', 'Libellés (colonne)', 'Etichette (colonna)', 'Beschriftungen (Spalte)', 'Labels (kolom)', 'Etiquetes (columna)', 'Etiquetas (columna)', 'Etiketak (zutabea)'],
+	['cardValues', 'Values (columns)', 'Valores (columnas)', 'Valores (colunas)', 'Valeurs (colonnes)', 'Valori (colonne)', 'Werte (Spalten)', 'Waarden (kolommen)', 'Valors (columnes)', 'Valores (columnas)', 'Balioak (zutabeak)'],
+	['cardWide', 'Wide', 'Ancha', 'Larga', 'Large', 'Larga', 'Breit', 'Breed', 'Ampla', 'Ancha', 'Zabala'],
+	['removeCard', 'Remove the card', 'Quitar la tarjeta', 'Remover o cartão', 'Retirer la carte', 'Rimuovi la scheda', 'Karte entfernen', 'Kaart verwijderen', 'Treu la targeta', 'Quitar a tarxeta', 'Kendu txartela'],
+	['done', 'Done', 'Listo', 'Pronto', 'Terminé', 'Fatto', 'Fertig', 'Klaar', 'Fet', 'Feito', 'Eginda'],
+	['refreshEvery', 'Auto-refresh', 'Actualizar solo', 'Atualizar sozinho', 'Actualisation auto', 'Aggiornamento automatico', 'Automatisch aktualisieren', 'Automatisch vernieuwen', 'Actualitza sol', 'Actualizar só', 'Freskatze automatikoa'],
+	['byHand', 'by hand', 'a mano', 'manualmente', 'à la main', 'a mano', 'von Hand', 'handmatig', 'a mà', 'a man', 'eskuz'],
+	['formNumber', 'number', 'número', 'número', 'nombre', 'numero', 'Zahl', 'getal', 'nombre', 'número', 'zenbakia'],
+	['formTable', 'table', 'tabla', 'tabela', 'tableau', 'tabella', 'Tabelle', 'tabel', 'taula', 'táboa', 'taula'],
+	['formBar', 'bars', 'barras', 'barras', 'barres', 'barre', 'Balken', 'staven', 'barres', 'barras', 'barrak'],
+	['formLine', 'lines', 'líneas', 'linhas', 'lignes', 'linee', 'Linien', 'lijnen', 'línies', 'liñas', 'lerroak'],
+	['formPie', 'pie', 'torta', 'pizza', 'camembert', 'torta', 'Kreis', 'taart', 'pastís', 'torta', 'tarta'],
 	['exportLimit', 'Only the first {n} rows: narrow it with a filter.', 'Solo las primeras {n} filas: acótelo con un filtro.', 'Só as primeiras {n} linhas: restrinja com um filtro.', 'Seulement les {n} premières lignes : réduisez avec un filtre.', 'Solo le prime {n} righe: restringi con un filtro.', 'Nur die ersten {n} Zeilen: mit einem Filter eingrenzen.', 'Alleen de eerste {n} rijen: beperk met een filter.', 'Només les primeres {n} files: acoteu-ho amb un filtre.', 'Só as primeiras {n} filas: acoteo cun filtro.', 'Lehen {n} errenkadak soilik: mugatu iragazki batekin.'],
 	['search', 'search…', 'buscar…', 'buscar…', 'rechercher…', 'cerca…', 'suchen…', 'zoeken…', 'cerca…', 'buscar…', 'bilatu…'],
 	['addNeighbours', 'Add their neighbours', 'Agregar sus vecinas', 'Adicionar as vizinhas', 'Ajouter leurs voisines', 'Aggiungi le vicine', 'Nachbarn hinzufügen', 'Buren toevoegen', 'Afegeix les veïnes', 'Engadir as veciñas', 'Gehitu auzokideak'],
