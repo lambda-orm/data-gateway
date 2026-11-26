@@ -6,6 +6,9 @@ export interface OptionsMessages {
 	json: string
 	stage: string
 	stageHint: string
+	/** the view, when the roles of the credential give more than one (data-gateway 4.4) */
+	view: string
+	viewHint: string
 	chunkSize: string
 	chunkSizeHint: string
 	tryAllCan: string
@@ -37,6 +40,7 @@ export interface OptionsMessages {
 const en: OptionsMessages = {
 	form: 'form', json: 'JSON',
 	stage: 'stage', stageHint: 'where it runs: a stage of the schema; empty, its default one',
+	view: 'view', viewHint: 'what of the domain it sees: one of the views of your roles; empty, the one of your roles',
 	chunkSize: 'chunk size', chunkSizeHint: 'rows per batch of a bulk operation: a whole number greater than 0; empty, all at once',
 	tryAllCan: 'try all it can', tryAllCanHint: 'go on when a sentence fails; empty, the default (stop)',
 	byDefault: '(default)', yes: 'yes', no: 'no',
@@ -56,6 +60,7 @@ const MESSAGES: Record<Locale, OptionsMessages> = {
 	es: {
 		form: 'formulario', json: 'JSON',
 		stage: 'stage', stageHint: 'dónde se ejecuta: un stage del esquema; vacío, el de por defecto',
+		view: 'view', viewHint: 'qué ve del dominio: una de las vistas de tus roles; vacío, la de tus roles',
 		chunkSize: 'tamaño de lote', chunkSizeHint: 'filas por lote de una operación masiva: un entero mayor que 0; vacío, todo junto',
 		tryAllCan: 'intentar todo lo posible', tryAllCanHint: 'seguir cuando falla una sentencia; vacío, lo de por defecto (frenar)',
 		byDefault: '(por defecto)', yes: 'sí', no: 'no',
@@ -72,6 +77,7 @@ const MESSAGES: Record<Locale, OptionsMessages> = {
 	pt: {
 		form: 'formulário', json: 'JSON',
 		stage: 'stage', stageHint: 'onde roda: um stage do esquema; vazio, o padrão',
+		view: 'view', viewHint: 'o que vê do domínio: uma das views dos seus papéis; vazio, a dos seus papéis',
 		chunkSize: 'tamanho do lote', chunkSizeHint: 'linhas por lote de uma operação em massa: um inteiro maior que 0; vazio, tudo de uma vez',
 		tryAllCan: 'tentar tudo o possível', tryAllCanHint: 'continuar quando uma sentença falha; vazio, o padrão (parar)',
 		byDefault: '(padrão)', yes: 'sim', no: 'não',
@@ -88,6 +94,7 @@ const MESSAGES: Record<Locale, OptionsMessages> = {
 	fr: {
 		form: 'formulaire', json: 'JSON',
 		stage: 'stage', stageHint: 'où elle s’exécute : un stage du schéma ; vide, celui par défaut',
+		view: 'view', viewHint: 'ce qu’elle voit du domaine : une des vues de vos rôles ; vide, celle de vos rôles',
 		chunkSize: 'taille de lot', chunkSizeHint: 'lignes par lot d’une opération en masse : un entier supérieur à 0 ; vide, tout d’un coup',
 		tryAllCan: 'tenter tout le possible', tryAllCanHint: 'continuer quand une instruction échoue ; vide, par défaut (s’arrêter)',
 		byDefault: '(par défaut)', yes: 'oui', no: 'non',
@@ -104,6 +111,7 @@ const MESSAGES: Record<Locale, OptionsMessages> = {
 	it: {
 		form: 'modulo', json: 'JSON',
 		stage: 'stage', stageHint: 'dove viene eseguita: uno stage dello schema; vuoto, quello predefinito',
+		view: 'view', viewHint: 'cosa vede del dominio: una delle viste dei tuoi ruoli; vuoto, quella dei tuoi ruoli',
 		chunkSize: 'dimensione del blocco', chunkSizeHint: 'righe per blocco di un’operazione massiva: un intero maggiore di 0; vuoto, tutto insieme',
 		tryAllCan: 'tentare tutto il possibile', tryAllCanHint: 'continuare quando un’istruzione fallisce; vuoto, il predefinito (fermarsi)',
 		byDefault: '(predefinito)', yes: 'sì', no: 'no',
@@ -120,6 +128,7 @@ const MESSAGES: Record<Locale, OptionsMessages> = {
 	de: {
 		form: 'Formular', json: 'JSON',
 		stage: 'Stage', stageHint: 'wo sie läuft: eine Stage des Schemas; leer, die Standard-Stage',
+		view: 'View', viewHint: 'was sie von der Domäne sieht: eine der Views Ihrer Rollen; leer, die Ihrer Rollen',
 		chunkSize: 'Blockgröße', chunkSizeHint: 'Zeilen pro Block einer Massenoperation: eine ganze Zahl größer als 0; leer, alles auf einmal',
 		tryAllCan: 'so viel wie möglich versuchen', tryAllCanHint: 'weitermachen, wenn eine Anweisung fehlschlägt; leer, der Standard (anhalten)',
 		byDefault: '(Standard)', yes: 'ja', no: 'nein',
@@ -136,6 +145,7 @@ const MESSAGES: Record<Locale, OptionsMessages> = {
 	nl: {
 		form: 'formulier', json: 'JSON',
 		stage: 'stage', stageHint: 'waar ze draait: een stage van het schema; leeg, de standaard',
+		view: 'view', viewHint: 'wat ze van het domein ziet: een van de views van je rollen; leeg, die van je rollen',
 		chunkSize: 'blokgrootte', chunkSizeHint: 'rijen per blok van een bulkbewerking: een geheel getal groter dan 0; leeg, alles tegelijk',
 		tryAllCan: 'alles proberen wat kan', tryAllCanHint: 'doorgaan als een opdracht mislukt; leeg, de standaard (stoppen)',
 		byDefault: '(standaard)', yes: 'ja', no: 'nee',
@@ -152,6 +162,7 @@ const MESSAGES: Record<Locale, OptionsMessages> = {
 	ca: {
 		form: 'formulari', json: 'JSON',
 		stage: 'stage', stageHint: 'on s’executa: un stage de l’esquema; buit, el per defecte',
+		view: 'view', viewHint: 'què veu del domini: una de les vistes dels teus rols; buit, la dels teus rols',
 		chunkSize: 'mida del lot', chunkSizeHint: 'files per lot d’una operació massiva: un enter més gran que 0; buit, tot de cop',
 		tryAllCan: 'intentar tot el possible', tryAllCanHint: 'continuar quan falla una sentència; buit, el per defecte (aturar-se)',
 		byDefault: '(per defecte)', yes: 'sí', no: 'no',
@@ -168,6 +179,7 @@ const MESSAGES: Record<Locale, OptionsMessages> = {
 	gl: {
 		form: 'formulario', json: 'JSON',
 		stage: 'stage', stageHint: 'onde se executa: un stage do esquema; baleiro, o predeterminado',
+		view: 'view', viewHint: 'que ve do dominio: unha das vistas dos teus roles; baleiro, a dos teus roles',
 		chunkSize: 'tamaño do lote', chunkSizeHint: 'filas por lote dunha operación masiva: un enteiro maior que 0; baleiro, todo xunto',
 		tryAllCan: 'intentar todo o posible', tryAllCanHint: 'seguir cando falla unha sentenza; baleiro, o predeterminado (parar)',
 		byDefault: '(predeterminado)', yes: 'si', no: 'non',
@@ -184,6 +196,7 @@ const MESSAGES: Record<Locale, OptionsMessages> = {
 	eu: {
 		form: 'formularioa', json: 'JSON',
 		stage: 'stage', stageHint: 'non exekutatzen den: eskemaren stage bat; hutsik, lehenetsia',
+		view: 'view', viewHint: 'domeinutik zer ikusten duen: zure rolen view bat; hutsik, zure rolena',
 		chunkSize: 'sortaren tamaina', chunkSizeHint: 'eragiketa masibo baten sorta bakoitzeko errenkadak: 0 baino handiagoa den zenbaki oso bat; hutsik, dena batera',
 		tryAllCan: 'ahal den guztia saiatu', tryAllCanHint: 'jarraitu sententzia batek huts egiten duenean; hutsik, lehenetsia (gelditu)',
 		byDefault: '(lehenetsia)', yes: 'bai', no: 'ez',

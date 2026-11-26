@@ -181,7 +181,7 @@ export const PermissionsOf: React.FC<{ who: Who }> = ({ who }) => {
  * A connection to a data-gateway: where it is, how it authenticates, who that credential is and what it may do (its
  * roles). The IDE puts its form above (children); the gateway's UI shows its current connection.
  */
-export const ConnectionPage: React.FC<{ name: string, url: string, credential: Credential, who?: Who, current?: boolean, children?: React.ReactNode, tools?: React.ReactNode, sessions?: React.ReactNode, approvals?: React.ReactNode }> = ({ name, url, credential, who, current, children, tools, sessions, approvals }) => {
+export const ConnectionPage: React.FC<{ name: string, url: string, credential: Credential, who?: Who, current?: boolean, children?: React.ReactNode, tools?: React.ReactNode, sessions?: React.ReactNode, approvals?: React.ReactNode, gatewayRoles?: React.ReactNode }> = ({ name, url, credential, who, current, children, tools, sessions, approvals, gatewayRoles }) => {
 	const { t } = usePrefs()
 	// its sections in tabs: the connection (its form and who it is), its tools, its roles, its sessions
 	const sections = [
@@ -219,6 +219,7 @@ export const ConnectionPage: React.FC<{ name: string, url: string, credential: C
 			)}
 			{active === 'tools' && tools}
 			{active === 'roles' && who && <PermissionsOf who={who} />}
+			{active === 'roles' && gatewayRoles}
 			{active === 'sessions' && sessions}
 			{active === 'approvals' && approvals}
 		</div>

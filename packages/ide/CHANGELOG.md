@@ -2,6 +2,14 @@
 
 ### Unreleased
 
+- **Roles of the gateway:** with the permission `roles` (data-gateway 4.4), the tab **Roles** of a connection lists the
+  roles of its configuration (read only) and those of its state; **Add a role**, **Extend** one of the configuration
+  (more views, stages or permissions, in every schema or in one), edit or remove one of the state, with a reason; its
+  changes, who and when.
+- **The options of a query** offer the stages the roles of the credential allow and, when they give more than one, the
+  view (data-gateway 4.4).
+- The permissions `approve`, `destructive` and `roles` in the list of the permissions of a connection.
+
 ### 1.3.0 (2026-11-26)
 
 Works with any data-gateway 4.x; the files of a property and the writes that wait need data-gateway 4.3.
