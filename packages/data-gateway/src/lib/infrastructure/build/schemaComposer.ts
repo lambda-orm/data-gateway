@@ -12,6 +12,7 @@ import { McpServerPort } from '../../application/ports/input/mcpServerPort'
 import { AuditPort, ClockPort, LoggerPort, QueueEventsPort } from '../../application/ports/output/supportPorts'
 import { Auditor } from '../../application/usecases/auditor'
 import { ViewResolver } from '../../application/usecases/viewResolver'
+import { ScopeResolver, scopedCommands, scopedGateway, scopedMcp } from '../../application/auth/scopedSchema'
 import { ResultCache } from '../../application/cache/resultCache'
 import { OutboxDestinationPort, OutboxDispatcher } from '../../application/outbox/outboxDispatcher'
 import { KafkaDestination, LambdaOrmOutboxAdapter, WebhookDestination } from '../output/outbox/outboxDestinations'
@@ -37,7 +38,9 @@ import { LeaderLease } from '../../application/cluster/leaderLease'
 import { ClusterBusPort } from '../../application/ports/output/clusterPorts'
 import { ValkeyClusterBus } from '../output/cluster/valkeyClusterBus'
 import { ApprovalGate, ApprovalUseCases } from '../../application/approval/approvals'
-import { MemoryApprovalStore, SqliteApprovalStore } from '../output/approval/approvalStores'
+import { SqliteApprovalStore } from '../output/approval/approvalStores'
+import { approvalStoreOf, closeState } from '../output/state/stateStores'
+import { StateSource } from '../../domain/config/stateSource'
 import { FileStorage, FilesUseCases } from '../../application/files/files'
 import { AzureBlobUrlSigner, S3UrlSigner } from '../output/files/urlSigners'
 
@@ -113,7 +116,8 @@ export const composeSchema = async (input: SchemaCompositionInput, deps: { logge
 	}))))
 	const cluster = await joinCluster(input, changes, logger, deps.metrics)
 	// the writes that wait for a person (docs/MUTATION_APPROVAL.md): in the SQLite of the volume, or in memory
-	const approvalStore = settings.stateFile ? new SqliteApprovalStore(path.resolve(settings.stateFile)) : new MemoryApprovalStore()
+	const stateSource: StateSource = settings.state ?? (settings.stateFile ? { kind: 'sqlite', file: settings.stateFile } : { kind: 'memory' })
+	const approvalStore = approvalStoreOf(stateSource)
 	const gate = new ApprovalGate(approvalStore, { mcp: settings.mcp.approval, expiresMs: settings.mcp.approvalExpiresMs }, input.path, deps.clock, randomUUID,
 		(query, options) => orm.plan(query, options as any))
 	const queries = new QueryUseCases(orm, auditor, views, readsCache(input, orm, changes, deps.metrics), gate)
@@ -154,10 +158,13 @@ export const composeSchema = async (input: SchemaCompositionInput, deps: { logge
 		pageSize: input.pageSize,
 		maxRows: settings.mcp.maxRows
 	}, views, namedQueryTools(gateway))
+	// the view and the stage of each request among those of the roles of who calls (docs/ROLE_SCOPES.md)
+	const scopes = new ScopeResolver(() => ({ view: settings.view, stage: settings.stage, stages: orm.stageNames(), openStages: settings.openStages }))
+	if (settings.stage && !orm.stageNames().includes(settings.stage)) logger.warn(`schema "${input.path || '/'}": orm.schemas[].stage "${settings.stage}" is not a stage of its lambdaORM.yaml (${orm.stageNames().join(', ')})`)
 	return {
-		gateway,
-		mcp,
-		commands,
+		gateway: scopedGateway(gateway, scopes),
+		mcp: scopedMcp(mcp, scopes),
+		commands: scopedCommands(commands, scopes),
 		stop: async () => {
 			await leader?.stop().catch(error => logger.error(error))
 			await dispatcher?.stop().catch(error => logger.error(error))
@@ -165,6 +172,7 @@ export const composeSchema = async (input: SchemaCompositionInput, deps: { logge
 			await queue?.stop().catch(error => logger.error(error))
 			await orm.end().catch(error => logger.error(error))
 			if (approvalStore instanceof SqliteApprovalStore) approvalStore.close()
+			await closeState(stateSource).catch(error => logger.error(error))
 		}
 	}
 }

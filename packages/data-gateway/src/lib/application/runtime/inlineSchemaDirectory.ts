@@ -1,4 +1,5 @@
-import { DataChangeSummary } from '../../domain/runtime/channelProtocol'
+import { CONTEXT_FREE_OPERATIONS, DataChangeSummary, GATEWAY_OPERATIONS, MCP_OPERATIONS } from '../../domain/runtime/channelProtocol'
+import { RoleGrantsPort } from '../auth/roleCatalog'
 import { TransportName } from '../../domain/config/dataGatewayConfig'
 import { SchemaState } from '../../domain/runtime/policies'
 import { WorkspaceChange } from '../../domain/runtime/workspaces'
@@ -61,13 +62,30 @@ export class InlineSchemaDirectory implements SchemaDirectoryPort {
 		return this.workspaceChanges.subscribe(listener)
 	}
 
+	/** the roles of who calls as they apply in each schema (docs/ROLE_SCOPES.md) */
+	public grants?: RoleGrantsPort
+
+	private granted (ctx: RequestContext, path: string): RequestContext {
+		return this.grants ? { ...ctx, principal: { ...ctx.principal, grants: this.grants.grantsOf(ctx.principal, path) } } : ctx
+	}
+
 	private serve (s: InlineSchema): ServedSchema {
+		// the facade and the MCP server, with the grants of who calls in this schema (looked up when called: a test may give
+		// a partial one)
+		const gateway: Record<string, unknown> = {}
+		for (const op of GATEWAY_OPERATIONS) {
+			gateway[op] = CONTEXT_FREE_OPERATIONS.includes(op)
+				? (...args: unknown[]) => (s.gateway as any)[op](...args)
+				: (ctx: RequestContext, ...args: unknown[]) => (s.gateway as any)[op](this.granted(ctx, s.path), ...args)
+		}
+		const mcp: Record<string, unknown> = { info: () => s.mcp.info() }
+		for (const op of MCP_OPERATIONS) mcp[op] = (ctx: RequestContext, ...args: unknown[]) => (s.mcp as any)[op](this.granted(ctx, s.path), ...args)
 		return {
 			path: s.path,
 			workspace: s.workspace,
-			commands: s.commands ? (ctx, op, args) => s.commands!.run(ctx, op, args) : undefined,
-			gateway: s.gateway,
-			mcp: s.mcp,
+			commands: s.commands ? (ctx, op, args) => s.commands!.run(this.granted(ctx, s.path), op, args) : undefined,
+			gateway: gateway as unknown as DataGatewayPort,
+			mcp: mcp as unknown as McpServerPort,
 			features: s.features ?? { scripts: false },
 			onQueueOutcome: listener => s.queueOutcomes?.subscribe(listener) ?? (() => undefined),
 			onDataChange: listener => s.dataChanges?.subscribe(listener) ?? (() => undefined),

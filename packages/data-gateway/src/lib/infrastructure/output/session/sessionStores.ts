@@ -36,12 +36,14 @@ export class SqliteSessionStore implements SessionStorePort {
 				revoked_at TEXT,
 				revoked_by TEXT,
 				context TEXT,
-				view TEXT
+				view TEXT,
+				roles TEXT
 			)`)
 			// a store of before the context of a token (docs/JWT.md): its column added
 			const columns = (this.db.prepare('PRAGMA table_info(sessions)').all() as { name: string }[]).map(c => c.name)
 			if (!columns.includes('context')) this.db.exec('ALTER TABLE sessions ADD COLUMN context TEXT')
 			if (!columns.includes('view')) this.db.exec('ALTER TABLE sessions ADD COLUMN view TEXT')
+			if (!columns.includes('roles')) this.db.exec('ALTER TABLE sessions ADD COLUMN roles TEXT')
 			this.db.exec('CREATE INDEX IF NOT EXISTS sessions_credential ON sessions (credential)')
 			// the WebSocket of events of each session, by replica: a session is connected if a replica saw it lately
 			this.db.exec('CREATE TABLE IF NOT EXISTS session_connections (session_id TEXT NOT NULL, replica TEXT NOT NULL, seen_at TEXT NOT NULL, PRIMARY KEY (session_id, replica))')
@@ -49,43 +51,43 @@ export class SqliteSessionStore implements SessionStorePort {
 		return this.db
 	}
 
-	public create (session: Session, tokenHash: string): void {
-		this.open().prepare(`INSERT INTO sessions (id, token_hash, credential, permissions, created_at, last_seen_at, expires_at, ip, client, activity, context, view)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(session.id, tokenHash, session.credential, JSON.stringify(session.permissions),
+	public async create (session: Session, tokenHash: string): Promise<void> {
+		this.open().prepare(`INSERT INTO sessions (id, token_hash, credential, permissions, created_at, last_seen_at, expires_at, ip, client, activity, context, view, roles)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).run(session.id, tokenHash, session.credential, JSON.stringify(session.permissions),
 			session.createdAt, session.lastSeenAt, session.expiresAt, session.ip ?? null,
 			session.client ? JSON.stringify(session.client) : null, session.activity ? JSON.stringify(session.activity) : null,
-			session.context ? JSON.stringify(session.context) : null, session.view ?? null)
+			session.context ? JSON.stringify(session.context) : null, session.view ?? null, session.roles ? JSON.stringify(session.roles) : null)
 	}
 
-	public byTokenHash (tokenHash: string): Session | undefined {
+	public async byTokenHash (tokenHash: string): Promise<Session | undefined> {
 		return this.row(this.open().prepare('SELECT * FROM sessions WHERE token_hash = ?').get(tokenHash))
 	}
 
-	public byId (id: string): Session | undefined {
+	public async byId (id: string): Promise<Session | undefined> {
 		return this.row(this.open().prepare('SELECT * FROM sessions WHERE id = ?').get(id))
 	}
 
-	public active (credential?: string): Session[] {
+	public async active (credential?: string): Promise<Session[]> {
 		const rows = credential === undefined
 			? this.open().prepare('SELECT * FROM sessions WHERE revoked_at IS NULL').all()
 			: this.open().prepare('SELECT * FROM sessions WHERE revoked_at IS NULL AND credential = ?').all(credential)
 		return rows.map(row => this.row(row)!)
 	}
 
-	public touch (id: string, at: string, ip?: string): void {
+	public async touch (id: string, at: string, ip?: string): Promise<void> {
 		if (ip) this.open().prepare('UPDATE sessions SET last_seen_at = ?, ip = ? WHERE id = ?').run(at, ip, id)
 		else this.open().prepare('UPDATE sessions SET last_seen_at = ? WHERE id = ?').run(at, id)
 	}
 
-	public revoke (id: string, by: string, at: string): void {
+	public async revoke (id: string, by: string, at: string): Promise<void> {
 		this.open().prepare('UPDATE sessions SET revoked_at = ?, revoked_by = ? WHERE id = ? AND revoked_at IS NULL').run(at, by, id)
 	}
 
-	public setActivity (id: string, activity: { schema?: string, tab?: string }): void {
+	public async setActivity (id: string, activity: { schema?: string, tab?: string }): Promise<void> {
 		this.open().prepare('UPDATE sessions SET activity = ? WHERE id = ?').run(JSON.stringify(activity), id)
 	}
 
-	public markConnected (replica: string, ids: string[], at: string): void {
+	public async markConnected (replica: string, ids: string[], at: string): Promise<void> {
 		const db = this.open()
 		db.exec('BEGIN IMMEDIATE')
 		try {
@@ -99,12 +101,12 @@ export class SqliteSessionStore implements SessionStorePort {
 		}
 	}
 
-	public connectedSince (since: string): Set<string> {
+	public async connectedSince (since: string): Promise<Set<string>> {
 		const rows = this.open().prepare('SELECT DISTINCT session_id FROM session_connections WHERE seen_at >= ?').all(since) as { session_id: string }[]
 		return new Set(rows.map(r => r.session_id))
 	}
 
-	public purge (endedBefore: string): number {
+	public async purge (endedBefore: string): Promise<number> {
 		const result = this.open().prepare('DELETE FROM sessions WHERE revoked_at < ? OR expires_at < ?').run(endedBefore, endedBefore)
 		this.open().prepare('DELETE FROM session_connections WHERE seen_at < ?').run(endedBefore)
 		return Number(result.changes)
@@ -131,6 +133,7 @@ export class SqliteSessionStore implements SessionStorePort {
 		if (r.activity) session.activity = JSON.parse(r.activity)
 		if (r.context) session.context = JSON.parse(r.context)
 		if (r.view) session.view = r.view
+		if (r.roles) session.roles = JSON.parse(r.roles)
 		if (r.revoked_at) session.revokedAt = r.revoked_at
 		if (r.revoked_by) session.revokedBy = r.revoked_by
 		return session
@@ -142,54 +145,54 @@ export class MemorySessionStore implements SessionStorePort {
 	private readonly sessions = new Map<string, { session: Session, tokenHash: string }>()
 	private readonly connections = new Map<string, { ids: string[], at: string }>()
 
-	public create (session: Session, tokenHash: string): void {
+	public async create (session: Session, tokenHash: string): Promise<void> {
 		this.sessions.set(session.id, { session: { ...session }, tokenHash })
 	}
 
-	public byTokenHash (tokenHash: string): Session | undefined {
+	public async byTokenHash (tokenHash: string): Promise<Session | undefined> {
 		for (const entry of this.sessions.values()) if (entry.tokenHash === tokenHash) return { ...entry.session }
 		return undefined
 	}
 
-	public byId (id: string): Session | undefined {
+	public async byId (id: string): Promise<Session | undefined> {
 		const entry = this.sessions.get(id)
 		return entry ? { ...entry.session } : undefined
 	}
 
-	public active (credential?: string): Session[] {
+	public async active (credential?: string): Promise<Session[]> {
 		return [...this.sessions.values()].map(e => e.session)
 			.filter(s => !s.revokedAt && (credential === undefined || s.credential === credential))
 			.map(s => ({ ...s }))
 	}
 
-	public touch (id: string, at: string, ip?: string): void {
+	public async touch (id: string, at: string, ip?: string): Promise<void> {
 		const entry = this.sessions.get(id)
 		if (!entry) return
 		entry.session.lastSeenAt = at
 		if (ip) entry.session.ip = ip
 	}
 
-	public revoke (id: string, by: string, at: string): void {
+	public async revoke (id: string, by: string, at: string): Promise<void> {
 		const entry = this.sessions.get(id)
 		if (!entry || entry.session.revokedAt) return
 		entry.session.revokedAt = at
 		entry.session.revokedBy = by
 	}
 
-	public setActivity (id: string, activity: { schema?: string, tab?: string }): void {
+	public async setActivity (id: string, activity: { schema?: string, tab?: string }): Promise<void> {
 		const entry = this.sessions.get(id)
 		if (entry) entry.session.activity = { ...activity }
 	}
 
-	public markConnected (replica: string, ids: string[], at: string): void {
+	public async markConnected (replica: string, ids: string[], at: string): Promise<void> {
 		this.connections.set(replica, { ids: [...ids], at })
 	}
 
-	public connectedSince (since: string): Set<string> {
+	public async connectedSince (since: string): Promise<Set<string>> {
 		return new Set([...this.connections.values()].filter(c => c.at >= since).flatMap(c => c.ids))
 	}
 
-	public purge (endedBefore: string): number {
+	public async purge (endedBefore: string): Promise<number> {
 		let removed = 0
 		for (const [id, { session }] of this.sessions) {
 			if ((session.revokedAt && session.revokedAt < endedBefore) || session.expiresAt < endedBefore) {

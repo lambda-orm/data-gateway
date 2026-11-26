@@ -71,16 +71,16 @@ export class SessionService {
 	public get idleTimeoutMs (): number { return this.settings.idleTimeoutMs }
 
 	/** A credential already validated by the authenticator of management becomes a session */
-	public login (principal: Principal, client: SessionClient | undefined, ip: string | undefined): Login {
+	public async login (principal: Principal, client: SessionClient | undefined, ip: string | undefined): Promise<Login> {
 		const now = this.clock.now()
 		const at = now.toISOString()
-		this.store.purge(new Date(now.getTime() - KEEP_ENDED_MS).toISOString())
+		await this.store.purge(new Date(now.getTime() - KEEP_ENDED_MS).toISOString())
 		if (this.settings.maxPerCredential > 0) {
 			// over the limit, the oldest sessions of that credential go (not the new login)
-			const live = this.store.active(principal.name).filter(s => !endOf(s, now, this.settings))
+			const live = (await this.store.active(principal.name)).filter(s => !endOf(s, now, this.settings))
 				.sort((a, b) => a.createdAt.localeCompare(b.createdAt))
 			for (const old of live.slice(0, Math.max(0, live.length - this.settings.maxPerCredential + 1))) {
-				this.store.revoke(old.id, 'limit', at)
+				await this.store.revoke(old.id, 'limit', at)
 				this.write({ credential: old.credential, operation: 'sessionRevoked', session: old.id, by: 'limit', result: 'ok' })
 				this.ended.emit({ id: old.id, error: sessionError({ reason: 'revoked', by: 'limit', at }) })
 			}
@@ -96,10 +96,11 @@ export class SessionService {
 			expiresAt: new Date(Math.min(now.getTime() + this.settings.maxLifetimeMs, principal.expiresAt ?? Infinity)).toISOString(),
 			...(principal.context ? { context: principal.context } : {}),
 			...(principal.view ? { view: principal.view } : {}),
+			...(principal.roles ? { roles: [...principal.roles] } : {}),
 			...(ip ? { ip } : {}),
 			...(client && Object.keys(client).length ? { client } : {})
 		}
-		this.store.create(session, this.secrets.hash(token))
+		await this.store.create(session, this.secrets.hash(token))
 		this.write({ credential: principal.name, operation: 'login', session: session.id, ip, result: 'ok' })
 		this.logger.info(`[data-gateway] management: "${principal.name}" logged in (session ${session.id}${ip ? `, ${ip}` : ''})`)
 		return { session, token, idleTimeoutMs: this.settings.idleTimeoutMs }
@@ -111,30 +112,30 @@ export class SessionService {
 	}
 
 	/** The session of a token, valid now; else the 401 that says why. Renews its inactivity (at most once a minute). */
-	public authenticate (token: string | undefined, ip: string | undefined): Authenticated {
+	public async authenticate (token: string | undefined, ip: string | undefined): Promise<Authenticated> {
 		if (!token) throw sessionRequired()
-		const session = this.store.byTokenHash(this.secrets.hash(token))
+		const session = await this.store.byTokenHash(this.secrets.hash(token))
 		if (!session) throw sessionRequired()
 		const now = this.clock.now()
-		const error = this.settle(session, now, ip)
+		const error = await this.settle(session, now, ip)
 		if (error) throw error
 		if (now.getTime() - Date.parse(session.lastSeenAt) >= TOUCH_EVERY_MS || (ip && ip !== session.ip)) {
 			const at = now.toISOString()
-			this.store.touch(session.id, at, ip)
+			await this.store.touch(session.id, at, ip)
 			session.lastSeenAt = at
 			if (ip) session.ip = ip
 		}
 		const who = principalOf(session.credential, session.permissions)
-		return { principal: { ...who, ...(session.context ? { context: session.context } : {}), ...(session.view ? { view: session.view } : {}) }, session }
+		return { principal: { ...who, ...(session.context ? { context: session.context } : {}), ...(session.view ? { view: session.view } : {}), ...(session.roles ? { roles: session.roles } : {}) }, session }
 	}
 
 	/** Why a session can't be used now (and, the first time it is seen expired, its audit line), or undefined */
-	private settle (session: Session, now: Date, ip?: string): GatewayError | undefined {
+	private async settle (session: Session, now: Date, ip?: string): Promise<GatewayError | undefined> {
 		const end = endOf(session, now, this.settings)
 		if (!end) return undefined
 		if (end.reason !== 'revoked' && !session.revokedAt) {
 			// it ended now: once, its audit line, and it is kept as revoked by its expiry so it isn't counted again
-			this.store.revoke(session.id, `expired:${end.reason}`, end.at)
+			await this.store.revoke(session.id, `expired:${end.reason}`, end.at)
 			this.write({ credential: session.credential, operation: 'sessionExpired', session: session.id, reason: end.reason, ip, result: 'ok' })
 		}
 		return sessionError(end.reason === 'revoked' && session.revokedBy?.startsWith('expired:')
@@ -143,12 +144,12 @@ export class SessionService {
 	}
 
 	/** Of the sessions of the sockets of this replica, the ones that ended (in any replica) and why: they are closed */
-	public check (ids: string[]): { id: string, error: GatewayError }[] {
+	public async check (ids: string[]): Promise<{ id: string, error: GatewayError }[]> {
 		const now = this.clock.now()
 		const ended: { id: string, error: GatewayError }[] = []
 		for (const id of ids) {
-			const session = this.store.byId(id)
-			const error = session ? this.settle(session, now) : sessionRequired()
+			const session = await this.store.byId(id)
+			const error = session ? await this.settle(session, now) : sessionRequired()
 			if (error) ended.push({ id, error })
 		}
 		return ended
@@ -160,73 +161,73 @@ export class SessionService {
 	}
 
 	/** The sessions with a WebSocket of events open in this replica, said to the others (every 15 s, and on a change) */
-	public presence (ids: string[]): void {
-		this.store.markConnected(this.replica, ids, this.clock.now().toISOString())
+	public async presence (ids: string[]): Promise<void> {
+		await this.store.markConnected(this.replica, ids, this.clock.now().toISOString())
 	}
 
 	/** What the IDE is looking at (session.activity); orientative, not audit */
-	public activity (id: string, activity: { schema?: string, tab?: string }): void {
+	public async activity (id: string, activity: { schema?: string, tab?: string }): Promise<void> {
 		const text = (value: unknown) => typeof value === 'string' && value ? value.slice(0, 200) : undefined
 		const clean = { schema: text(activity?.schema), tab: text(activity?.tab) }
-		this.store.setActivity(id, Object.fromEntries(Object.entries(clean).filter(([, v]) => v !== undefined)))
+		await this.store.setActivity(id, Object.fromEntries(Object.entries(clean).filter(([, v]) => v !== undefined)))
 	}
 
-	private connectedIds (): Set<string> {
-		return this.store.connectedSince(new Date(this.clock.now().getTime() - CONNECTED_WITHIN_MS).toISOString())
+	private async connectedIds (): Promise<Set<string>> {
+		return await this.store.connectedSince(new Date(this.clock.now().getTime() - CONNECTED_WITHIN_MS).toISOString())
 	}
 
-	public current (auth: Authenticated): ListedSession {
-		return listed(this.store.byId(auth.session.id) ?? auth.session, auth.session.id, this.connectedIds().has(auth.session.id))
+	public async current (auth: Authenticated): Promise<ListedSession> {
+		return listed(await this.store.byId(auth.session.id) ?? auth.session, auth.session.id, (await this.connectedIds()).has(auth.session.id))
 	}
 
-	public logout (auth: Authenticated): void {
+	public async logout (auth: Authenticated): Promise<void> {
 		const at = this.clock.now().toISOString()
-		this.store.revoke(auth.session.id, auth.session.credential, at)
+		await this.store.revoke(auth.session.id, auth.session.credential, at)
 		this.write({ credential: auth.session.credential, operation: 'logout', session: auth.session.id, result: 'ok' })
 		this.ended.emit({ id: auth.session.id, error: sessionError({ reason: 'revoked', by: auth.session.credential, at }) })
 	}
 
 	/** One's own sessions; with all, every credential's (sessionAdmin). Only the ones that can still be used. */
-	public list (auth: Authenticated, all: boolean): ListedSession[] {
+	public async list (auth: Authenticated, all: boolean): Promise<ListedSession[]> {
 		if (all) this.require(auth, 'sessionAdmin')
 		const now = this.clock.now()
-		const connected = this.connectedIds()
-		return this.store.active(all ? undefined : auth.session.credential)
+		const connected = await this.connectedIds()
+		return (await this.store.active(all ? undefined : auth.session.credential))
 			.filter(s => !endOf(s, now, this.settings))
 			.sort((a, b) => a.credential.localeCompare(b.credential) || b.lastSeenAt.localeCompare(a.lastSeenAt))
 			.map(s => listed(s, auth.session.id, connected.has(s.id)))
 	}
 
 	/** Revokes a session: one's own credential's, or any with sessionAdmin */
-	public revoke (auth: Authenticated, id: string): void {
-		const session = this.store.byId(id)
+	public async revoke (auth: Authenticated, id: string): Promise<void> {
+		const session = await this.store.byId(id)
 		if (!session || session.revokedAt) throw notFound(`there is no session "${id}" (it may have ended already)`)
 		if (session.credential !== auth.session.credential) this.require(auth, 'sessionAdmin')
-		this.end(session, auth.session.credential)
+		await this.end(session, auth.session.credential)
 	}
 
 	/** Revokes every session of a credential (but the caller's own with exceptCurrent): its own, or any with sessionAdmin */
-	public revokeCredential (auth: Authenticated, credential: string, exceptCurrent: boolean): { revoked: number } {
+	public async revokeCredential (auth: Authenticated, credential: string, exceptCurrent: boolean): Promise<{ revoked: number }> {
 		if (credential !== auth.session.credential) this.require(auth, 'sessionAdmin')
 		const now = this.clock.now()
-		const sessions = this.store.active(credential)
+		const sessions = (await this.store.active(credential))
 			.filter(s => !endOf(s, now, this.settings))
 			.filter(s => !(exceptCurrent && s.id === auth.session.id))
-		for (const session of sessions) this.end(session, auth.session.credential)
+		for (const session of sessions) await this.end(session, auth.session.credential)
 		return { revoked: sessions.length }
 	}
 
 	/** Sessions that can be used now: for the metrics */
-	public count (): { active: number, connected: number } {
+	public async count (): Promise<{ active: number, connected: number }> {
 		const now = this.clock.now()
-		const live = this.store.active().filter(s => !endOf(s, now, this.settings))
-		const connected = this.connectedIds()
+		const live = (await this.store.active()).filter(s => !endOf(s, now, this.settings))
+		const connected = await this.connectedIds()
 		return { active: live.length, connected: live.filter(s => connected.has(s.id)).length }
 	}
 
-	private end (session: Session, by: string): void {
+	private async end (session: Session, by: string): Promise<void> {
 		const at = this.clock.now().toISOString()
-		this.store.revoke(session.id, by, at)
+		await this.store.revoke(session.id, by, at)
 		this.ended.emit({ id: session.id, error: sessionError({ reason: 'revoked', by, at }) })
 		this.write({ credential: session.credential, operation: 'sessionRevoked', session: session.id, by, result: 'ok' })
 		this.logger.info(`[data-gateway] management: session ${session.id} of "${session.credential}" revoked by "${by}"`)

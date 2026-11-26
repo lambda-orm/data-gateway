@@ -10,13 +10,16 @@ import { MeasuredSchemaDirectory } from '../../application/runtime/measuredDirec
 import { AuthenticatorRegistry, TransportRegistry } from './registries'
 import { control, EdgeWorkerData } from './workerControl'
 import { startObservability, stopObservability } from './observability'
+import { buildGatewayState } from './stateBuilder'
 
 const run = async (): Promise<void> => {
 	const ctl = control()
 	const data = ctl.data<EdgeWorkerData>()
 	const { config } = data
 	const logger = buildLogger(config, '[edge]')
-	const registry = new AuthenticatorRegistry()
+	// the roles of the YAML and of the state of the gateway (docs/ROLE_SCOPES.md), before the transports
+	const state = await buildGatewayState(config, logger, new SystemClock())
+	const registry = new AuthenticatorRegistry(state.catalog)
 	const routed = ({ descriptor, settings }: EdgeWorkerData['schemas'][number]) => ({
 		path: descriptor.path,
 		workspace: descriptor.workspace,
@@ -29,12 +32,13 @@ const run = async (): Promise<void> => {
 	// the SDK of the edge: the spans of the transports, and their traceparent to the workers
 	const tracing = await startObservability(data.observability, logger)
 	const router = new SchemaRouter(data.schemas.map(routed), new SystemClock(), data.version, tracing)
+	router.grants = state.catalog
 	const metrics = config.metrics.enabled ? new PromClientMetrics('edge') : new NoMetrics()
 	// /metrics: the edge's and every schema worker's, asked through its channel (the ones served at that moment)
 	metrics.addSource(() => Promise.all(router.states().map(s => router.workerMetrics(s.path).catch(() => []))))
 	const directory = metrics.enabled ? new MeasuredSchemaDirectory(router, metrics) : router
 	const admin = buildAdmin(config, directory, logger, new SystemClock(), config.orm.watch.enabled)
-	const transports = new TransportRegistry().build({ config, directory, metrics, logger, admin })
+	const transports = new TransportRegistry().build({ config, directory, metrics, logger, admin, state })
 	measureConnections(metrics, transports)
 	ctl.on(async request => {
 		switch (request.type) {
@@ -67,6 +71,7 @@ const run = async (): Promise<void> => {
 			// stop taking requests, let the ones in flight finish (the transports wait for them), then go
 			await Promise.all(transports.map(t => t.stop().catch(error => logger.error(error))))
 			router.closeAll()
+			await state.close().catch(() => undefined)
 			await stopObservability().catch(() => undefined)
 			process.exit(0)
 		}

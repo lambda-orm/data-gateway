@@ -30,7 +30,8 @@ describe('configuration', () => {
 		})
 		expect(reading.issues).toEqual([])
 		const auth = reading.config!.authentication
-		expect(auth.methods![0].jwt!.principal.permissions!.roles).toEqual({ support: { permissions: ['read'], view: 'support' }, admin: { permissions: ['read', 'write'] } })
+		// view (one) is views (docs/ROLE_SCOPES.md)
+		expect(auth.methods![0].jwt!.principal.permissions!.roles).toEqual({ support: { permissions: ['read'], views: ['support'] }, admin: { permissions: ['read', 'write'] } })
 		expect(auth.methods![1].credentials[0]).toMatchObject({ name: 'billing', view: 'billing' })
 		expect(reading.config!.orm.schemas[0].view).toBe('public')
 		expect(viewsOf(auth).sort()).toEqual(['billing', 'support'])
@@ -55,10 +56,11 @@ describe('who has which view', () => {
 	const token = (roles: string[]) => new SignJWT({ sub: 'ann', roles }).setProtectedHeader({ alg: 'HS256' }).setIssuer('https://x').setExpirationTime('1m').sign(new TextEncoder().encode(SECRET))
 	const bearer = async (roles: string[]) => ({ authorization: `Bearer ${await token(roles)}` })
 
-	test('the view of its role; a role without one, none; two views, 403 (never guessed)', async () => {
-		expect((await jwt.authenticate(await bearer(['support', 'admin']))).principal).toMatchObject({ name: 'ann', view: 'support' })
+	test('the roles of the token it knows; the schema chooses the view with them (docs/ROLE_SCOPES.md)', async () => {
+		expect((await jwt.authenticate(await bearer(['support', 'admin', 'unknown']))).principal).toMatchObject({ name: 'ann', roles: ['support', 'admin'] })
 		expect((await jwt.authenticate(await bearer(['admin']))).principal?.view).toBeUndefined()
-		expect(await jwt.authenticate(await bearer(['support', 'analyst']))).toMatchObject({ valid: false, status: 403, reason: expect.stringContaining('several views (support, analytics)') })
+		// two views are no longer refused here: the request chooses one, or is told to (resolveScope)
+		expect(await jwt.authenticate(await bearer(['support', 'analyst']))).toMatchObject({ valid: true, principal: { roles: ['support', 'analyst'] } })
 	})
 
 	test('the view of a key', async () => {

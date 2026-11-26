@@ -81,7 +81,7 @@ export class ManagementEvents {
 			ws.terminate()
 		}
 		this.sockets.clear()
-		try { this.sessions.presence([]) } catch { /* the store is closing */ }
+		await this.sessions.presence([]).catch(() => { /* the store is closing */ })
 		await new Promise<void>(resolve => this.wss.close(() => resolve()))
 	}
 
@@ -95,17 +95,15 @@ export class ManagementEvents {
 		const token = (Array.isArray(header) ? header[0] : header) ?? sessionFromProtocols(req.headers['sec-websocket-protocol'])
 		let sessionId: string
 		let expiringIn: number
-		try {
-			const auth = this.sessions.authenticate(token, this.address.of(req.socket.remoteAddress, req.headers['x-forwarded-for']))
+		this.sessions.authenticate(token, this.address.of(req.socket.remoteAddress, req.headers['x-forwarded-for'])).then(auth => {
 			sessionId = auth.session.id
 			expiringIn = this.sessions.expiringInMs(auth.session)
-		} catch (error) {
+			this.wss.handleUpgrade(req, socket, head, ws => this.connected(ws, sessionId, expiringIn))
+		}, error => {
 			const { status, body } = toHttpError(error)
 			const text = JSON.stringify(body)
 			socket.end(`HTTP/1.1 ${status} ${http.STATUS_CODES[status]}\r\nContent-Type: application/json\r\nContent-Length: ${Buffer.byteLength(text)}\r\nConnection: close\r\n\r\n${text}`)
-			return
-		}
-		this.wss.handleUpgrade(req, socket, head, ws => this.connected(ws, sessionId, expiringIn))
+		})
 	}
 
 	private connected (ws: WebSocket, sessionId: string, expiringIn: number): void {
@@ -135,7 +133,7 @@ export class ManagementEvents {
 		const now = Date.now()
 		if (now - connected.lastActivity < 10000) return
 		connected.lastActivity = now
-		try { this.sessions.activity(connected.sessionId, message.params) } catch (error: any) { this.logger.warn(`[data-gateway] management events: ${error?.message ?? error}`) }
+		this.sessions.activity(connected.sessionId, message.params).catch((error: any) => this.logger.warn(`[data-gateway] management events: ${error?.message ?? error}`))
 	}
 
 	private notify (ws: WebSocket, method: string, params: unknown): void {
@@ -163,20 +161,20 @@ export class ManagementEvents {
 		}
 	}
 
-	private tellPresence (): void {
+	private async tellPresence (): Promise<void> {
 		try {
-			this.sessions.presence([...new Set([...this.sockets.values()].map(c => c.sessionId))])
+			await this.sessions.presence([...new Set([...this.sockets.values()].map(c => c.sessionId))])
 		} catch (error: any) {
 			this.logger.warn(`[data-gateway] management events: the presence could not be written: ${error?.message ?? error}`)
 		}
 	}
 
 	/** Sessions revoked or expired in another replica (or by time): their sockets here close */
-	private checkEnded (): void {
+	private async checkEnded (): Promise<void> {
 		const ids = [...new Set([...this.sockets.values()].map(c => c.sessionId))]
 		if (!ids.length) return
 		try {
-			for (const { id, error } of this.sessions.check(ids)) this.closeSession(id, error)
+			for (const { id, error } of await this.sessions.check(ids)) this.closeSession(id, error)
 		} catch (error: any) {
 			this.logger.warn(`[data-gateway] management events: the sessions could not be checked: ${error?.message ?? error}`)
 		}

@@ -32,10 +32,10 @@ const tokenOf = (req: express.Request): string | undefined => {
  * principal of the session goes on as the one of the request; the session too (res.locals.session).
  */
 export const sessionAuthentication = (deps: SessionDeps, open: string[]): express.RequestHandler =>
-	(req, res, next) => {
+	async (req, res, next) => {
 		if (open.includes(req.path)) return next()
 		try {
-			const auth = deps.service.authenticate(tokenOf(req), ipOf(req, deps.address))
+			const auth = await deps.service.authenticate(tokenOf(req), ipOf(req, deps.address))
 			// who it is for λORM and the history: the credential, the session, the IDE and its address
 			const client = auth.session.client
 			res.locals.principal = withActor(auth.principal, {
@@ -92,7 +92,7 @@ export const sessionRouter = (deps: SessionDeps): express.Router => {
 			deps.service.rejected(refusal.message, ip)
 			return Promise.reject(Object.assign(new Error(refusal.message), { status: refusal.status, name: refusal.status === 401 ? 'UnauthorizedError' : 'UnavailableError' }))
 		}
-		const login = deps.service.login(result.principal, clientOf(req.body, req.headers['user-agent']), ip)
+		const login = await deps.service.login(result.principal, clientOf(req.body, req.headers['user-agent']), ip)
 		const { session } = login
 		return {
 			id: session.id,
@@ -105,7 +105,7 @@ export const sessionRouter = (deps: SessionDeps): express.Router => {
 		}
 	}))
 	router.get('/current', authenticate, handle(200, (_req, res) => deps.service.current(auth(res))))
-	router.delete('/current', authenticate, handle(204, (_req, res) => { deps.service.logout(auth(res)) }))
+	router.delete('/current', authenticate, handle(204, async (_req, res) => { await deps.service.logout(auth(res)) }))
 	router.get('/', authenticate, handle(200, (req, res) => deps.service.list(auth(res), req.query.all === 'true')))
 	// every session of a credential: ?credential=name (&except=current to keep the caller's own)
 	router.delete('/', authenticate, handle(200, (req, res) => {
@@ -113,10 +113,10 @@ export const sessionRouter = (deps: SessionDeps): express.Router => {
 		if (!credential) throw badRequest('ValidationError', 'say whose sessions: ?credential=name (&except=current)')
 		return deps.service.revokeCredential(auth(res), credential, req.query.except === 'current')
 	}))
-	router.delete('/:id', authenticate, handle(204, (req, res) => {
+	router.delete('/:id', authenticate, handle(204, async (req, res) => {
 		const id = String(req.params.id)
 		if (id === 'current') throw notFound('DELETE /sessions/current is the logout')
-		deps.service.revoke(auth(res), id)
+		await deps.service.revoke(auth(res), id)
 	}))
 	return router
 }

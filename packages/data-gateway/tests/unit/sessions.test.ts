@@ -33,121 +33,121 @@ const setup = (store: SessionStorePort = new MemorySessionStore(), overrides: Pa
 	return { clock, audit, service, store }
 }
 
-const error = (run: () => unknown) => { try { run() } catch (e: any) { return { status: e.status, name: e.name, message: e.message } } return undefined }
+const error = async (run: () => unknown) => { try { await run() } catch (e: any) { return { status: e.status, name: e.name, message: e.message } } return undefined }
 
 describe('sessions', () => {
-	test('a login gives a token once; the token authenticates with the credential and its permissions', () => {
+	test('a login gives a token once; the token authenticates with the credential and its permissions', async () => {
 		const { service, audit } = setup()
-		const login = service.login(modeler, { app: 'data-gateway-ide', kind: 'web' }, '10.0.0.5')
+		const login = await service.login(modeler, { app: 'data-gateway-ide', kind: 'web' }, '10.0.0.5')
 		expect(login.token).toMatch(/^[A-Za-z0-9_-]{43}$/)
 		expect(login.session).toMatchObject({ credential: 'modeler', ip: '10.0.0.5', client: { app: 'data-gateway-ide', kind: 'web' }, expiresAt: '2026-11-23T22:00:00.000Z' })
-		const auth = service.authenticate(login.token, '10.0.0.5')
+		const auth = await service.authenticate(login.token, '10.0.0.5')
 		expect(auth.principal.name).toBe('modeler')
 		expect([...auth.principal.permissions]).toEqual(['read', 'schemaRead'])
-		expect(error(() => service.authenticate(undefined, undefined))).toMatchObject({ status: 401, name: 'SessionRequiredError' })
-		expect(error(() => service.authenticate('not-a-token', undefined))).toMatchObject({ status: 401, name: 'SessionRequiredError' })
+		expect(await error(() => service.authenticate(undefined, undefined))).toMatchObject({ status: 401, name: 'SessionRequiredError' })
+		expect(await error(() => service.authenticate('not-a-token', undefined))).toMatchObject({ status: 401, name: 'SessionRequiredError' })
 		// the audit: the login, with the id of the session, never the token
 		expect(audit).toEqual([expect.objectContaining({ type: 'audit', transport: 'management', operation: 'login', credential: 'modeler', session: login.session.id, ip: '10.0.0.5', result: 'ok' })])
 		expect(JSON.stringify(audit)).not.toContain(login.token)
 	})
 
-	test('it ends after 30 minutes without requests, or 12 hours after the login; a request renews the inactivity', () => {
+	test('it ends after 30 minutes without requests, or 12 hours after the login; a request renews the inactivity', async () => {
 		const { service, clock, audit } = setup()
-		const { token } = service.login(modeler, undefined, undefined)
+		const { token } = await service.login(modeler, undefined, undefined)
 		clock.advance(29 * MIN)
-		service.authenticate(token, undefined)
+		await service.authenticate(token, undefined)
 		clock.advance(29 * MIN)
-		expect(service.authenticate(token, undefined).principal.name).toBe('modeler')
+		expect((await service.authenticate(token, undefined)).principal.name).toBe('modeler')
 		clock.advance(31 * MIN)
-		expect(error(() => service.authenticate(token, undefined))).toMatchObject({ name: 'SessionExpiredError', message: expect.stringMatching(/idleTimeout/) })
+		expect(await error(() => service.authenticate(token, undefined))).toMatchObject({ name: 'SessionExpiredError', message: expect.stringMatching(/idleTimeout/) })
 		// once ended it says the same, and it is audited once
-		expect(error(() => service.authenticate(token, undefined))).toMatchObject({ name: 'SessionExpiredError', message: expect.stringMatching(/idleTimeout/) })
+		expect(await error(() => service.authenticate(token, undefined))).toMatchObject({ name: 'SessionExpiredError', message: expect.stringMatching(/idleTimeout/) })
 		expect(audit.filter(e => e.operation === 'sessionExpired')).toEqual([expect.objectContaining({ reason: 'idle' })])
 		const busy = setup()
-		const second = busy.service.login(modeler, undefined, undefined)
+		const second = await busy.service.login(modeler, undefined, undefined)
 		// 24 × 29 minutes = 11 h 36 min, always active; 29 more pass the 12 hours
-		for (let i = 0; i < 24; i++) { busy.clock.advance(29 * MIN); busy.service.authenticate(second.token, undefined) }
+		for (let i = 0; i < 24; i++) { busy.clock.advance(29 * MIN); await busy.service.authenticate(second.token, undefined) }
 		busy.clock.advance(29 * MIN)
-		expect(error(() => busy.service.authenticate(second.token, undefined))).toMatchObject({ name: 'SessionExpiredError', message: expect.stringMatching(/maxLifetime/) })
+		expect(await error(() => busy.service.authenticate(second.token, undefined))).toMatchObject({ name: 'SessionExpiredError', message: expect.stringMatching(/maxLifetime/) })
 	})
 
-	test('the lists: one\'s own; all only with sessionAdmin; the current one marked; never a token', () => {
+	test('the lists: one\'s own; all only with sessionAdmin; the current one marked; never a token', async () => {
 		const { service } = setup()
-		const mine = service.login(modeler, undefined, '10.0.0.5')
-		service.login(modeler, undefined, '10.0.0.6')
-		const theirs = service.login(admin, undefined, '10.0.0.7')
-		const me = service.authenticate(mine.token, undefined)
-		const own = service.list(me, false)
+		const mine = await service.login(modeler, undefined, '10.0.0.5')
+		await service.login(modeler, undefined, '10.0.0.6')
+		const theirs = await service.login(admin, undefined, '10.0.0.7')
+		const me = await service.authenticate(mine.token, undefined)
+		const own = await service.list(me, false)
 		expect(own.map(s => [s.credential, s.ip, s.current])).toEqual([['modeler', '10.0.0.5', true], ['modeler', '10.0.0.6', false]])
 		expect(JSON.stringify(own)).not.toContain(mine.token)
 		expect(own[0]).not.toHaveProperty('permissions')
-		expect(error(() => service.list(me, true))).toMatchObject({ status: 403, name: 'ForbiddenError', message: expect.stringMatching(/sessionAdmin/) })
-		const all = service.list(service.authenticate(theirs.token, undefined), true)
+		expect(await error(() => service.list(me, true))).toMatchObject({ status: 403, name: 'ForbiddenError', message: expect.stringMatching(/sessionAdmin/) })
+		const all = await service.list(await service.authenticate(theirs.token, undefined), true)
 		expect(all.map(s => s.credential)).toEqual(['admin', 'modeler', 'modeler'])
 	})
 
-	test('revoking: one\'s own, or another credential\'s with sessionAdmin; a revoked session says who and when', () => {
+	test('revoking: one\'s own, or another credential\'s with sessionAdmin; a revoked session says who and when', async () => {
 		const { service, audit } = setup()
-		const a = service.login(modeler, undefined, undefined)
-		const b = service.login(modeler, undefined, undefined)
-		const boss = service.login(admin, undefined, undefined)
-		const me = service.authenticate(a.token, undefined)
+		const a = await service.login(modeler, undefined, undefined)
+		const b = await service.login(modeler, undefined, undefined)
+		const boss = await service.login(admin, undefined, undefined)
+		const me = await service.authenticate(a.token, undefined)
 		// another credential's: only with sessionAdmin
-		expect(error(() => service.revoke(me, boss.session.id))).toMatchObject({ status: 403 })
-		expect(error(() => service.revokeCredential(me, 'admin', false))).toMatchObject({ status: 403 })
+		expect(await error(() => service.revoke(me, boss.session.id))).toMatchObject({ status: 403 })
+		expect(await error(() => service.revokeCredential(me, 'admin', false))).toMatchObject({ status: 403 })
 		// "close the others": its own credential's, but the caller's session
-		expect(service.revokeCredential(me, 'modeler', true)).toEqual({ revoked: 1 })
-		expect(error(() => service.authenticate(b.token, undefined))).toMatchObject({ name: 'SessionRevokedError', message: expect.stringMatching(/by "modeler"/) })
-		expect(service.authenticate(a.token, undefined).session.id).toBe(a.session.id)
+		expect(await service.revokeCredential(me, 'modeler', true)).toEqual({ revoked: 1 })
+		expect(await error(() => service.authenticate(b.token, undefined))).toMatchObject({ name: 'SessionRevokedError', message: expect.stringMatching(/by "modeler"/) })
+		expect((await service.authenticate(a.token, undefined)).session.id).toBe(a.session.id)
 		// the administrator revokes it
-		service.revoke(service.authenticate(boss.token, undefined), a.session.id)
-		expect(error(() => service.authenticate(a.token, undefined))).toMatchObject({ name: 'SessionRevokedError', message: expect.stringMatching(/by "admin"/) })
-		expect(error(() => service.revoke(service.authenticate(boss.token, undefined), a.session.id))).toMatchObject({ status: 404 })
+		await service.revoke(await service.authenticate(boss.token, undefined), a.session.id)
+		expect(await error(() => service.authenticate(a.token, undefined))).toMatchObject({ name: 'SessionRevokedError', message: expect.stringMatching(/by "admin"/) })
+		expect(await error(async () => service.revoke(await service.authenticate(boss.token, undefined), a.session.id))).toMatchObject({ status: 404 })
 		expect(audit.filter(e => e.operation === 'sessionRevoked').map(e => [e.session, e.by])).toEqual([[b.session.id, 'modeler'], [a.session.id, 'admin']])
 		// the logout
-		const auth = service.authenticate(boss.token, undefined)
-		service.logout(auth)
-		expect(error(() => service.authenticate(boss.token, undefined))).toMatchObject({ name: 'SessionRevokedError' })
+		const auth = await service.authenticate(boss.token, undefined)
+		await service.logout(auth)
+		expect(await error(() => service.authenticate(boss.token, undefined))).toMatchObject({ name: 'SessionRevokedError' })
 	})
 
-	test('maxPerCredential: a new login closes the oldest of that credential', () => {
+	test('maxPerCredential: a new login closes the oldest of that credential', async () => {
 		const { service, clock } = setup(undefined, { maxPerCredential: 2 })
-		const first = service.login(modeler, undefined, undefined)
+		const first = await service.login(modeler, undefined, undefined)
 		clock.advance(1000)
-		const second = service.login(modeler, undefined, undefined)
+		const second = await service.login(modeler, undefined, undefined)
 		clock.advance(1000)
-		const third = service.login(modeler, undefined, undefined)
-		service.login(admin, undefined, undefined)
-		expect(error(() => service.authenticate(first.token, undefined))).toMatchObject({ name: 'SessionRevokedError', message: expect.stringMatching(/maxPerCredential/) })
-		expect(service.authenticate(second.token, undefined).principal.name).toBe('modeler')
-		expect(service.authenticate(third.token, undefined).principal.name).toBe('modeler')
-		expect(service.count()).toEqual({ active: 3, connected: 0 })
+		const third = await service.login(modeler, undefined, undefined)
+		await service.login(admin, undefined, undefined)
+		expect(await error(() => service.authenticate(first.token, undefined))).toMatchObject({ name: 'SessionRevokedError', message: expect.stringMatching(/maxPerCredential/) })
+		expect((await service.authenticate(second.token, undefined)).principal.name).toBe('modeler')
+		expect((await service.authenticate(third.token, undefined)).principal.name).toBe('modeler')
+		expect(await service.count()).toEqual({ active: 3, connected: 0 })
 	})
 
-	test('presence: connected while a replica said so lately; activity listed; ended sessions found by check', () => {
+	test('presence: connected while a replica said so lately; activity listed; ended sessions found by check', async () => {
 		const { service, clock } = setup()
-		const a = service.login(modeler, undefined, undefined)
-		const b = service.login(modeler, undefined, undefined)
-		const me = service.authenticate(a.token, undefined)
-		service.presence([a.session.id])
-		service.activity(a.session.id, { schema: 'shop', tab: 'query:1', ignored: 'x' } as any)
-		expect(service.list(me, false).map(s => [s.id === a.session.id, s.connected, s.activity])).toEqual([
+		const a = await service.login(modeler, undefined, undefined)
+		const b = await service.login(modeler, undefined, undefined)
+		const me = await service.authenticate(a.token, undefined)
+		await service.presence([a.session.id])
+		await service.activity(a.session.id, { schema: 'shop', tab: 'query:1', ignored: 'x' } as any)
+		expect((await service.list(me, false)).map(s => [s.id === a.session.id, s.connected, s.activity])).toEqual([
 			[true, true, { schema: 'shop', tab: 'query:1' }], [false, false, undefined]
 		])
-		expect(service.count()).toEqual({ active: 2, connected: 1 })
+		expect(await service.count()).toEqual({ active: 2, connected: 1 })
 		// not said again for 45 s: no longer connected
 		clock.advance(46000)
-		expect(service.count().connected).toBe(0)
+		expect((await service.count()).connected).toBe(0)
 		// check: of some sessions, the ones that ended and why; the revoked one is announced to the sockets
 		const announced: string[] = []
 		service.ended.subscribe(({ id }) => announced.push(id))
-		service.revoke(me, b.session.id)
+		await service.revoke(me, b.session.id)
 		expect(announced).toEqual([b.session.id])
-		expect(service.check([a.session.id, b.session.id]).map(e => [e.id, e.error.name])).toEqual([[b.session.id, 'SessionRevokedError']])
+		expect((await service.check([a.session.id, b.session.id])).map(e => [e.id, e.error.name])).toEqual([[b.session.id, 'SessionRevokedError']])
 		expect(service.expiringInMs(a.session)).toBe(12 * 60 * MIN - 2 * MIN - 46000)
 	})
 
-	test('on SQLite: shared by two services on the same file (two replicas); only the hash of the token is kept', () => {
+	test('on SQLite: shared by two services on the same file (two replicas); only the hash of the token is kept', async () => {
 		const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sessions-'))
 		const file = path.join(dir, '.data-gateway', 'state.sqlite')
 		const one = new SqliteSessionStore(file)
@@ -155,16 +155,16 @@ describe('sessions', () => {
 		try {
 			const a = setup(one)
 			const b = setup(two)
-			const login = a.service.login(modeler, { app: 'data-gateway-ide', version: '1.0.0', kind: 'desktop' }, '10.0.0.5')
+			const login = await a.service.login(modeler, { app: 'data-gateway-ide', version: '1.0.0', kind: 'desktop' }, '10.0.0.5')
 			// the other replica authenticates it, and sees its revocation on the next request
-			expect(b.service.authenticate(login.token, '10.0.0.9').session).toMatchObject({ id: login.session.id, client: { kind: 'desktop' } })
-			a.service.revoke(a.service.authenticate(login.token, undefined), login.session.id)
-			expect(error(() => b.service.authenticate(login.token, undefined))).toMatchObject({ name: 'SessionRevokedError' })
+			expect((await b.service.authenticate(login.token, '10.0.0.9')).session).toMatchObject({ id: login.session.id, client: { kind: 'desktop' } })
+			await a.service.revoke(await a.service.authenticate(login.token, undefined), login.session.id)
+			expect(await error(() => b.service.authenticate(login.token, undefined))).toMatchObject({ name: 'SessionRevokedError' })
 			expect(fs.readFileSync(file).includes(Buffer.from(login.token))).toBe(false)
 			// a day after it ended, it is removed
 			a.clock.advance(25 * 60 * MIN)
-			expect(one.purge(new Date(a.clock.time - 24 * 60 * MIN).toISOString())).toBe(1)
-			expect(one.byId(login.session.id)).toBeUndefined()
+			expect(await one.purge(new Date(a.clock.time - 24 * 60 * MIN).toISOString())).toBe(1)
+			expect(await one.byId(login.session.id)).toBeUndefined()
 		} finally {
 			one.close()
 			two.close()
@@ -215,22 +215,22 @@ describe('the configuration of the sessions', () => {
 describe('a session of a token (docs/JWT.md)', () => {
 	const ann = { ...principal('ann', ['read']), context: { tenant: 't1' }, expiresAt: Date.parse('2026-11-23T10:20:00.000Z') }
 
-	test('it ends with the token, and its requests carry its context; the list doesn\'t show it', () => {
+	test('it ends with the token, and its requests carry its context; the list doesn\'t show it', async () => {
 		const { service, clock } = setup()
-		const { session, token } = service.login(ann, {}, undefined)
+		const { session, token } = await service.login(ann, {}, undefined)
 		expect(session.expiresAt).toBe('2026-11-23T10:20:00.000Z')
-		const auth = service.authenticate(token, undefined)
+		const auth = await service.authenticate(token, undefined)
 		expect(auth.principal.context).toEqual({ tenant: 't1' })
-		expect(service.list(auth, false)[0]).not.toHaveProperty('context')
+		expect((await service.list(auth, false))[0]).not.toHaveProperty('context')
 		clock.advance(19 * MIN)
-		expect(service.authenticate(token, undefined).principal.name).toBe('ann')
+		expect((await service.authenticate(token, undefined)).principal.name).toBe('ann')
 		clock.advance(MIN)
-		expect(error(() => service.authenticate(token, undefined))).toMatchObject({ status: 401, name: 'SessionExpiredError', message: expect.stringMatching(/or the token it logged in with/) })
+		expect(await error(() => service.authenticate(token, undefined))).toMatchObject({ status: 401, name: 'SessionExpiredError', message: expect.stringMatching(/or the token it logged in with/) })
 		// a credential without an end keeps sessions.maxLifetime
-		expect(service.login(modeler, {}, undefined).session.expiresAt).toBe(new Date(clock.time + 12 * 60 * MIN).toISOString())
+		expect((await service.login(modeler, {}, undefined)).session.expiresAt).toBe(new Date(clock.time + 12 * 60 * MIN).toISOString())
 	})
 
-	test('the store of SQLite keeps the context, also in a database of before it (the column added)', () => {
+	test('the store of SQLite keeps the context, also in a database of before it (the column added)', async () => {
 		const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'dg-sessions-ctx-'))
 		const file = path.join(dir, 'state.sqlite')
 		const { DatabaseSync } = require('node:sqlite')
@@ -239,8 +239,8 @@ describe('a session of a token (docs/JWT.md)', () => {
 		old.close()
 		const store = new SqliteSessionStore(file)
 		const { service } = setup(store)
-		const { token } = service.login(ann, {}, undefined)
-		expect(service.authenticate(token, undefined).principal.context).toEqual({ tenant: 't1' })
+		const { token } = await service.login(ann, {}, undefined)
+		expect((await service.authenticate(token, undefined)).principal.context).toEqual({ tenant: 't1' })
 		store.close?.()
 		fs.rmSync(dir, { recursive: true, force: true })
 	})

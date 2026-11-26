@@ -1,5 +1,6 @@
 import { Actor } from '@lambdaorm/base'
 import { ALL_PERMISSIONS, Permission } from './permission'
+import { RoleGrant } from './roles'
 
 /** Who is calling: the name of the credential (never its secret) and what it may do. */
 export interface Principal {
@@ -21,6 +22,17 @@ export interface Principal {
 	readonly expiresAt?: number
 	/** its writes wait for a person to approve them (docs/MUTATION_APPROVAL.md): of its key or its roles */
 	readonly approval?: 'writes'
+	/** the names of its roles (docs/ROLE_SCOPES.md): of the claim of its token or of its key */
+	readonly roles?: readonly string[]
+	/**
+	 * its roles as they apply in the schema it calls (the edge fills them: it knows the schema); the facade of the schema
+	 * chooses with them the view and the stage, and its permissions become those of the roles that allow both
+	 */
+	readonly grants?: readonly RoleGrant[]
+	/** the stage of λORM of the request, once chosen (docs/ROLE_SCOPES.md) */
+	readonly stage?: string
+	/** the most rows its request may ask for (options.maxRows), once chosen */
+	readonly maxRows?: number
 }
 
 export const principal = (name: string, permissions: readonly Permission[], actor?: Actor): Principal =>
