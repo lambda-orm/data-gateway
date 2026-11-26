@@ -1,3 +1,4 @@
+import { DataChangeSummary } from '../../domain/runtime/channelProtocol'
 import { TransportName } from '../../domain/config/dataGatewayConfig'
 import { SchemaState } from '../../domain/runtime/policies'
 import { WorkspaceChange } from '../../domain/runtime/workspaces'
@@ -19,6 +20,8 @@ export interface InlineSchema {
 	features?: { scripts: boolean }
 	/** Where its queue reports the end of background executions */
 	queueOutcomes?: Listeners<QueueOutcome>
+	/** Where its writes through λORM are told (docs/SUBSCRIPTIONS.md) */
+	dataChanges?: Listeners<DataChangeSummary[]>
 }
 
 /**
@@ -67,6 +70,7 @@ export class InlineSchemaDirectory implements SchemaDirectoryPort {
 			mcp: s.mcp,
 			features: s.features ?? { scripts: false },
 			onQueueOutcome: listener => s.queueOutcomes?.subscribe(listener) ?? (() => undefined),
+			onDataChange: listener => s.dataChanges?.subscribe(listener) ?? (() => undefined),
 			exposedOn: transport => s.transports.includes(transport),
 			authenticator: transport => {
 				const authenticator = s.authenticators[transport]

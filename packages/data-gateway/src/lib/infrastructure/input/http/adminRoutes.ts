@@ -106,6 +106,9 @@ export const adminRouter = (admin: AdminService, authenticate: express.RequestHa
 	if (commands) {
 		// the commands of a workspace (§4): their panel, the preview of the ones that change the databases, the jobs
 		router.get('/workspaces/:schema/commands', handle(async (req, res) => commands.summary(principal(res), schemaParam(req.params.schema))))
+		// the outbox of a schema (docs/OUTBOX_DISPATCHER.md §5): its dead events, and one back to pending
+		router.get('/workspaces/:schema/outbox', handle(async (req, res) => commands.outbox(principal(res), schemaParam(req.params.schema), req.query.status, req.query.limit)))
+		router.post('/workspaces/:schema/outbox/:id/retry', handle(async (req, res) => commands.retryOutbox(principal(res), schemaParam(req.params.schema), String(req.params.id))))
 		router.post('/workspaces/:schema/commands/:command/preview', handle(async (req, res) => commands.preview(principal(res), schemaParam(req.params.schema), String(req.params.command), req.body ?? {})))
 		router.post('/workspaces/:schema/commands/:command', handle(async (req, res) => commands.run(principal(res), schemaParam(req.params.schema), String(req.params.command), req.body ?? {})))
 		router.get('/workspaces/:schema/jobs', handle(async (req, res) => commands.jobsOf(principal(res), schemaParam(req.params.schema))))

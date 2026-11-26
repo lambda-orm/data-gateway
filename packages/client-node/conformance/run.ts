@@ -79,8 +79,38 @@ const main = async (): Promise<void> => {
 		}
 		for (const c of Object.values(open)) await c.close()
 	}
-	console.log(`\n${passed} passed, ${failures.length} failed (${cases.length} cases × ${transports.length} transports)`)
+	// the subscriptions of the client (ws, docs/SUBSCRIPTIONS.md): a write reaches the subscription of its entity and the
+	// one of a query that reads it
+	if (transports.includes('ws') && !filter) {
+		const problem = await subscriptions().catch((error: any) => `failed to run: ${error.message}`)
+		if (problem) failures.push(`ws subscriptions: ${problem}`)
+		else passed++
+		console.log(`  ${problem ? '✗' : '✓'} subscriptions: an entity and a query${problem ? `\n      ${problem}` : ''}`)
+	}
+	console.log(`\n${passed} passed, ${failures.length} failed (${cases.length} cases × ${transports.length} transports, and the subscriptions)`)
 	process.exit(failures.length ? 1 : 0)
+}
+
+const subscriptions = async (): Promise<string | undefined> => {
+	const client = await connect(CONNECTIONS.ws, credentialOf('backend'))
+	const name = `conformance client subscription ${Date.now()}`
+	const events: any[] = []
+	try {
+		const entity = await client.subscribe({ entity: 'Categories' }, event => events.push(event))
+		const query = await client.subscribe({ query: 'Categories.filter(p => p.name == name).map(p => p.name)', data: { name } }, event => events.push(event))
+		if (!Array.isArray(query.result) || query.result.length !== 0) return `the first result of the query: ${JSON.stringify(query.result)}`
+		await client.execute('Categories.insert()', { name })
+		const end = Date.now() + 3000
+		const arrived = () => events.some(e => e.type === 'data.changed' && e.subscription === entity.subscription) &&
+			events.some(e => e.type === 'query.changed' && e.subscription === query.subscription && JSON.stringify(e.result) === JSON.stringify([{ name }]))
+		while (!arrived() && Date.now() < end) await new Promise(resolve => setTimeout(resolve, 50))
+		await client.execute('Categories.delete().filter(p => p.name == name)', { name })
+		await entity.unsubscribe()
+		await query.unsubscribe()
+		return arrived() ? undefined : `events: ${JSON.stringify(events)}`
+	} finally {
+		await client.close()
+	}
 }
 
 main()

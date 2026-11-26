@@ -1,5 +1,6 @@
 import { createHash } from 'crypto'
 import { requestTracer } from '../telemetry/requestTracer'
+import { ConnectionSubscriptions } from '../../../application/subscriptions/subscriptions'
 import express from 'express'
 import http from 'http'
 import path from 'path'
@@ -241,6 +242,7 @@ export class HttpTransport implements Transport {
 				}
 			})
 			this.queryRoutes(router, schema.gateway)
+			router.get('/subscribe', (req, res) => this.subscribe(req, res, schema))
 			this.schemaRoutes(router, schema.gateway)
 			this.stageRoutes(router, schema.gateway)
 			app.use(this.schemaBase(schema) || '/', router)
@@ -339,6 +341,39 @@ export class HttpTransport implements Transport {
 		router.get('/version', this.handle(() => gw.version()))
 		router.get('/health', this.handle(() => gw.health()))
 		router.get('/ping', this.handle(() => gw.ping()))
+	}
+
+	/**
+	 * GET /subscribe?entity=… | ?query=…&data=… | ?name=…&data=…: the subscriptions as Server-Sent Events
+	 * (docs/SUBSCRIPTIONS.md §3): one per stream, with the identity of who asks; a comment every 25 s keeps it open.
+	 */
+	private async subscribe (req: express.Request, res: express.Response, schema: ServedSchema): Promise<void> {
+		const ctx: RequestContext = { principal: res.locals.principal as Principal, transport: this.name }
+		const write = (event: string, params: unknown) => res.write(`event: ${event}\ndata: ${JSON.stringify(params)}\n\n`)
+		const subscriptions = new ConnectionSubscriptions(schema.gateway, ctx, listener => schema.onDataChange(listener), write, { max: 1, debounceMs: 200 })
+		try {
+			const text = (name: string) => typeof req.query[name] === 'string' ? req.query[name] as string : undefined
+			let data: unknown = {}
+			if (text('data')) {
+				try { data = JSON.parse(text('data')!) } catch { throw badRequest('ValidationError', 'data must be JSON') }
+			}
+			const started = text('entity') !== undefined
+				? await subscriptions.entity(text('entity'))
+				: await subscriptions.query({ query: text('query'), name: text('name'), data })
+			res.status(200)
+			res.setHeader('Content-Type', 'text/event-stream')
+			res.setHeader('Cache-Control', 'no-cache')
+			res.setHeader('Connection', 'keep-alive')
+			res.flushHeaders()
+			write('subscribed', started)
+			const beat = setInterval(() => res.write(': keep-alive\n\n'), 25000)
+			beat.unref?.()
+			req.on('close', () => { clearInterval(beat); subscriptions.close() })
+		} catch (error: any) {
+			subscriptions.close()
+			const httpError = toHttpError(error)
+			res.status(httpError.status).json(httpError.body)
+		}
 	}
 
 	private queryRoutes (router: express.Router, gw: DataGatewayPort): void {

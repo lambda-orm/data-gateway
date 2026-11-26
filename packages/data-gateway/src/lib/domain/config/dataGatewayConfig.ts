@@ -69,6 +69,8 @@ export interface SchemaOverrides {
 	env?: Record<string, string>
 	scripts?: Partial<ScriptsConfig>
 	mcp?: { maxRows?: number, tools?: { include: string[], exclude: string[] }, freeQueries?: boolean }
+	/** its outbox dispatcher: replaces the global one */
+	outbox?: OutboxConfig
 	/** its cache: replaces the global one */
 	cache?: CacheConfig
 	/** the limits of its named queries, by name */
@@ -237,6 +239,20 @@ export interface CacheConfig {
 	entities: Record<string, { enabled?: boolean, ttlMs?: number }>
 }
 
+/** Where the events of the outbox go (docs/OUTBOX_DISPATCHER.md §2); entities: only theirs */
+export type OutboxDestinationConfig =
+	| { type: 'webhook', url: string, secret?: string, timeoutMs: number, entities?: string[] }
+	| { type: 'kafka', topic: string, entities?: string[] }
+
+/** The dispatcher of the outbox of a schema (docs/OUTBOX_DISPATCHER.md) */
+export interface OutboxConfig {
+	/** this replica dispatches (one per outbox: λORM doesn't lock its rows); DATA_GATEWAY_OUTBOX_DISPATCH=false turns it off */
+	dispatch: boolean
+	intervalMs: number
+	batch: number
+	destinations: OutboxDestinationConfig[]
+}
+
 /** The limits of a query of application.queries (docs/NAMED_QUERIES.md §4) */
 export interface NamedQueryLimitsConfig {
 	maxRows?: number
@@ -277,6 +293,7 @@ export interface DataGatewayConfig {
 	scripts: ScriptsConfig
 	mcp: McpConfig
 	cache: CacheConfig
+	outbox: OutboxConfig
 	runtime: RuntimeConfig
 	/** Only the transports with a port (docs/DATA_GATEWAY.md §2.1) */
 	transports: TransportsConfig

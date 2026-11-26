@@ -54,11 +54,19 @@ export interface ChannelResponse {
 }
 
 /** schema worker → edge, unasked: a background execution ended (the edge forwards it to the connection that asked) */
-export interface ChannelEvent {
-	type: 'event'
-	event: 'queue'
-	outcome: { queueId: string, ok: boolean, rows?: number, error?: string }
+/** A write of λORM after its commit, as it travels to the edge (docs/SUBSCRIPTIONS.md): never the data written */
+export interface DataChangeSummary {
+	entity: string
+	action: string
+	/** the primary keys of the rows, when they are known */
+	keys?: Record<string, unknown>[]
+	count?: number
 }
+
+export type ChannelEvent =
+	| { type: 'event', event: 'queue', outcome: { queueId: string, ok: boolean, rows?: number, error?: string } }
+	/** the writes of one commit of the schema (a DataChange of λORM each), for the subscriptions of the edge */
+	| { type: 'event', event: 'data', changes: DataChangeSummary[] }
 
 export type ChannelMessage = ChannelRequest | ChannelResponse | ChannelEvent
 
@@ -82,6 +90,7 @@ export const MCP_OPERATIONS = ['listTools', 'callTool', 'listResources', 'listRe
  */
 export const COMMAND_OPERATIONS = [
 	'stages', 'fetch', 'pushSentences', 'push', 'dropSentences', 'drop', 'export', 'import', 'pullSchema', 'pull', 'introspectSchema',
-	'migrations', 'migrateSentences', 'migrate', 'seedFiles', 'seed'
+	'migrations', 'migrateSentences', 'migrate', 'seedFiles', 'seed',
+	'outboxList', 'outboxRetry'
 ] as const
 export type CommandOperation = typeof COMMAND_OPERATIONS[number]

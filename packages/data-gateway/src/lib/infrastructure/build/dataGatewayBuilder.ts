@@ -1,3 +1,4 @@
+import { DataChangeSummary } from '../../domain/runtime/channelProtocol'
 import { FileSchemaHistory } from '../output/admin/fileSchemaHistory'
 import { resolveObservability, startObservability, stopObservability, withPrometheus } from './observability'
 import { otelMetricsAsPromJson } from '../output/metrics/otelPrometheus'
@@ -161,6 +162,7 @@ export class DataGatewayBuilder {
 			const unwatched = { ...config, orm: { ...config.orm, watch: { ...config.orm.watch, enabled: false } } }
 			for (const { descriptor, settings } of resolveConfiguredSchemas(unwatched)) {
 				const queueOutcomes = new Listeners<QueueOutcome>()
+				const dataChanges = new Listeners<DataChangeSummary[]>()
 				const schema = await composeSchema({
 					path: descriptor.path,
 					workspace: descriptor.workspace,
@@ -172,7 +174,7 @@ export class DataGatewayBuilder {
 					checkConnections: options.checkConnections ?? false,
 					admin: config.admin.enabled,
 					observability
-				}, { logger, audit, clock, queueEvents: { completed: outcome => queueOutcomes.emit(outcome) } })
+				}, { logger, audit, clock, queueEvents: { completed: outcome => queueOutcomes.emit(outcome) }, dataEvents: changes => dataChanges.emit(changes) })
 				composed.push(schema)
 				inline.push({
 					path: descriptor.path,
@@ -183,6 +185,7 @@ export class DataGatewayBuilder {
 					transports: settings.transports,
 					features: { scripts: settings.scripts.enabled },
 					queueOutcomes,
+					dataChanges,
 					authenticators: schemaAuthenticators(config, descriptor, settings, authenticators)
 				})
 			}

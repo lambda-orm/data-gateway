@@ -1,5 +1,5 @@
 import {
-	AuthenticationConfig, CacheConfig, DataGatewayConfig, NamedQueryLimitsConfig, RuntimeMode, SchemaOverrides, ScriptsConfig, TransportName
+	AuthenticationConfig, CacheConfig, DataGatewayConfig, OutboxConfig, NamedQueryLimitsConfig, RuntimeMode, SchemaOverrides, ScriptsConfig, TransportName
 } from '../config/dataGatewayConfig'
 import { schemaPathsIssues } from './schemaPath'
 
@@ -57,6 +57,8 @@ export interface SchemaSettings {
 	queries: Record<string, NamedQueryLimitsConfig>
 	/** the cache of its reads (docs/RESULT_CACHE.md) */
 	cache: CacheConfig
+	/** the dispatcher of its outbox (docs/OUTBOX_DISPATCHER.md) */
+	outbox: OutboxConfig
 	server: { timeout: number, maxConcurrent: number, maxResponseBytes: number }
 	runtime: { mode: RuntimeMode, maxMemoryMb: number, checkConnections: boolean }
 	/** the view of a caller without one (orm.schemas[].view) */
@@ -86,6 +88,7 @@ export const effectiveSettings = (config: DataGatewayConfig, schema: SchemaDescr
 		mcp: { maxRows: o.mcp?.maxRows ?? config.mcp.maxRows, tools: o.mcp?.tools ?? config.mcp.tools, freeQueries: o.mcp?.freeQueries ?? config.mcp.freeQueries ?? true },
 		queries: o.queries ?? {},
 		cache: o.cache ?? config.cache,
+		outbox: o.outbox ?? config.outbox,
 		server: {
 			timeout: o.server?.timeout ?? config.server.timeout,
 			maxConcurrent: o.server?.maxConcurrent ?? config.server.maxConcurrent,

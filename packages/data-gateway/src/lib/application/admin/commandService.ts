@@ -346,6 +346,20 @@ export class CommandService {
 		return rest
 	}
 
+	/** the events of the outbox of a schema by state (docs/OUTBOX_DISPATCHER.md §5): dead by default */
+	public outbox (principal: Principal, path: string, status: unknown, limit: unknown): Promise<unknown> {
+		this.require(principal, 'schemaRead')
+		return this.call(path, principal, 'read', 'outboxList', [status ?? 'dead', limit])
+	}
+
+	/** an event of the outbox back to pending, its attempts from 0 */
+	public retryOutbox (principal: Principal, path: string, id: string): Promise<unknown> {
+		this.require(principal, 'schemaRead')
+		this.require(principal, 'ddl')
+		this.logger.info(`[data-gateway] admin: "${principal.name}" retries the event ${id} of the outbox of ${path || '/'}`)
+		return this.call(path, principal, 'ddl', 'outboxRetry', [id])
+	}
+
 	public jobsOf (principal: Principal, path: string): Job[] {
 		this.require(principal, 'read')
 		this.served(path)
