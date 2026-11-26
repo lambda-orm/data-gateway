@@ -134,6 +134,14 @@ publicar, quitar las marcas *"not in the image 4.0.0"* de sus páginas de la gat
 > `@lambdaorm/ui` (la tabla) y `@lambdaorm/data-gateway-client` (`subscribe`). Fuera: caché y suscripciones entre
 > réplicas (Redis), G6b.
 
+### R6. Liberar 4.3.0 y el IDE 1.3.0
+
+> **Estado (2026-11-26):** réplicas con Valkey, archivos y paneles (G6b), escrituras que esperan aprobación (G7b),
+> Keycloak y el login con PKCE, vectores y puntos en el IDE y SQLite para desarrollo, en `develop` (#36–#40). Ramas
+> `release/data-gateway-4.3.0` y `release/ide-1.3.0`, listas para `main`. La wiki en `lambda-orm/wiki` →
+> `feature/data-gateway-4.3.0` (mergearla **después** de publicar las imágenes). Changesets: `@lambdaorm/ui` (vectores
+> y puntos, archivos, paneles, la fila de la connection) y `@lambdaorm/data-gateway-client` (`approval`).
+
 ## 3. Las features (G1–G7)
 
 El orden de §5. Cada una con su documento de diseño (`docs/<FEATURE>.md` y su plan), decisiones de a una con una
