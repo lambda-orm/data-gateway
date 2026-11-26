@@ -1,11 +1,12 @@
 /**
  * The options of a query or script (QueryOptions and ScriptOptions of λORM) as the fields of a form, and back to their
  * JSON text: the text stays what a query keeps (saved, in its history), the form only shows it. An empty field is no
- * option; an option the form doesn't know is kept as it is. The view is not one: the gateway decides it (by the
- * identity) and drops the one of a client, so a view of a query saved before is just kept.
+ * option; an option the form doesn't know is kept as it is. The view: one of those the roles of the credential give
+ * (data-gateway 4.4, docs/ROLE_SCOPES.md); the gateway refuses another one.
  */
 export interface OptionsFields {
 	stage: string
+	view: string
 	chunkSize: string
 	/** '' (the default), 'true' or 'false' */
 	tryAllCan: '' | 'true' | 'false'
@@ -16,9 +17,9 @@ export interface OptionsFields {
 	maxIterations: string
 }
 
-export const EMPTY_OPTIONS: OptionsFields = { stage: '', chunkSize: '', tryAllCan: '', headers: [], timeout: '', maxIterations: '' }
+export const EMPTY_OPTIONS: OptionsFields = { stage: '', view: '', chunkSize: '', tryAllCan: '', headers: [], timeout: '', maxIterations: '' }
 
-const KNOWN = ['stage', 'chunkSize', 'tryAllCan', 'headers', 'timeout', 'maxIterations']
+const KNOWN = ['stage', 'view', 'chunkSize', 'tryAllCan', 'headers', 'timeout', 'maxIterations']
 const NUMBERS = ['chunkSize', 'timeout', 'maxIterations'] as const
 
 /** A whole number greater than 0, written as such (an empty field is valid: no option) */
@@ -39,6 +40,7 @@ export const optionsFieldsOf = (text: string): { fields: OptionsFields, extra: R
 	return {
 		fields: {
 			stage: textOf(o.stage),
+			view: textOf(o.view),
 			chunkSize: textOf(o.chunkSize),
 			tryAllCan: o.tryAllCan === true ? 'true' : o.tryAllCan === false ? 'false' : '',
 			headers,
@@ -56,6 +58,7 @@ export const optionsFieldsOf = (text: string): { fields: OptionsFields, extra: R
 export const optionsTextOf = (fields: OptionsFields, extra: Record<string, unknown> = {}): string => {
 	const options: Record<string, unknown> = { ...extra }
 	if (fields.stage.trim()) options.stage = fields.stage.trim()
+	if (fields.view.trim()) options.view = fields.view.trim()
 	for (const key of NUMBERS) {
 		const value = fields[key].trim()
 		if (value && validCount(value)) options[key] = Number(value)

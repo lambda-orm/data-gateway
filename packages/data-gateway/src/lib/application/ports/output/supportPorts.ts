@@ -83,7 +83,7 @@ export interface OperationSample {
 }
 
 /** A value read when the metrics are rendered (connections, states of the schemas…) */
-export type GaugeReader = () => { labels: Record<string, string>, value: number }[]
+export type GaugeReader = () => { labels: Record<string, string>, value: number }[] | Promise<{ labels: Record<string, string>, value: number }[]>
 
 export interface MetricsPort {
 	readonly enabled: boolean

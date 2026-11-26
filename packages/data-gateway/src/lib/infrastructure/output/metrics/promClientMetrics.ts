@@ -102,9 +102,10 @@ export class PromClientMetrics implements MetricsPort {
 			help,
 			labelNames,
 			registers: [this.register],
-			collect (this: any) {
+			async collect (this: any) {
+				const values = await read()
 				this.reset()
-				for (const { labels, value } of read()) this.set(labels, value)
+				for (const { labels, value } of values) this.set(labels, value)
 			}
 		})
 	}

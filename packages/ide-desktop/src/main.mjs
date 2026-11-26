@@ -3,10 +3,10 @@
 // 127.0.0.1 with a token of this run (server.mjs in its desktop mode). The same code as the web image.
 import { app, BrowserWindow, ipcMain, Menu, net, protocol, shell } from 'electron'
 import crypto from 'node:crypto'
-import http from 'node:http'
 import fs from 'node:fs'
 import path from 'node:path'
 import { fileURLToPath, pathToFileURL } from 'node:url'
+import { startLoopback } from './oidcLoopback.mjs'
 import { setupUpdates } from './updates.mjs'
 
 const here = path.dirname(fileURLToPath(import.meta.url))
@@ -134,25 +134,15 @@ const menu = () => Menu.buildFromTemplate([
 let updates
 let oidcLoopback
 
-/** One answer of the identity provider on 127.0.0.1 (any free port): its query string to the page, the window back */
+/** One answer of the identity provider on 127.0.0.1 (oidcLoopback.mjs): its query string to the page, the window back */
 const startOidcLoopback = async () => {
-	oidcLoopback?.server.close()
-	let answered
-	const answer = new Promise(resolve => { answered = resolve })
-	const server = http.createServer((req, res) => {
-		const url = new URL(req.url ?? '/', 'http://127.0.0.1')
-		if (url.pathname !== '/oidc-callback') { res.writeHead(404).end(); return }
-		res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' })
-		res.end('<!doctype html><meta charset="utf-8"><title>λORM Data Gateway</title><body style="font: 14px system-ui, sans-serif; text-align: center; padding-top: 40px">You can close this tab and go back to the IDE.</body>')
-		answered(url.search)
-		server.close()
-		const win = BrowserWindow.getAllWindows()[0]
-		if (win) { if (win.isMinimized()) win.restore(); win.focus() }
+	oidcLoopback?.close()
+	oidcLoopback = await startLoopback({
+		onAnswer: () => {
+			const win = BrowserWindow.getAllWindows()[0]
+			if (win) { if (win.isMinimized()) win.restore(); win.focus() }
+		}
 	})
-	await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
-	const timer = setTimeout(() => { answered('?error=timeout&error_description=the%20login%20took%20too%20long'); server.close() }, 10 * 60000)
-	timer.unref?.()
-	oidcLoopback = { server, answer, redirectUri: `http://127.0.0.1:${server.address().port}/oidc-callback` }
 	return { redirectUri: oidcLoopback.redirectUri }
 }
 

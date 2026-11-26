@@ -17,6 +17,16 @@ export interface RequestContext {
 }
 
 export interface QueryRequest { query: string, options?: QueryOptions }
+/** The scope of who calls in a schema: what it got without choosing, and what it may choose */
+export interface ScopeInfo {
+	view: string
+	stage: string
+	views: string[]
+	stages: string[]
+	permissions: string[]
+	roles: string[]
+	maxRows?: number
+}
 export interface ExecuteRequest { query: string, data?: unknown, options?: QueryOptions }
 export interface ScriptRequest { script: string, data?: unknown, options?: ScriptOptions }
 /** notify: the WebSocket connection that sends it gets queue.completed / queue.failed */
@@ -45,6 +55,8 @@ export interface DataGatewayPort {
 	query (ctx: RequestContext, name: string, request: NamedQueryRequest): Promise<unknown>
 	/** a write that waits for a person (docs/MUTATION_APPROVAL.md): its state, for who asked or who approves */
 	approval (ctx: RequestContext, id: string): Promise<Approval>
+	/** where who calls works here (docs/ROLE_SCOPES.md §3): its view and stage, and what it may choose */
+	scope (ctx: RequestContext): Promise<ScopeInfo>
 	/** the properties that keep files (docs/FILES_AND_PANELS.md): which, in the view of who calls */
 	files (ctx: RequestContext): Promise<FileProperty[]>
 	/** a URL to upload the file of a property (write) */

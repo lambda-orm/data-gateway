@@ -225,3 +225,8 @@ div.dg-error { border: 1px solid var(--bad); border-radius: 6px; padding: 6px 10
 .dg-approval .dg-form-actions { display: flex; gap: 6px; justify-content: flex-end; align-items: center; }
 .dg-approval .dg-form-actions input { flex: 1; min-width: 0; }
 .dg-warning { color: var(--warning, #b45309); margin: 6px 0; }
+/* the roles of the gateway (docs/ROLE_SCOPES.md §5) */
+.dg-roles .dg-table td .dg-chip { margin-left: 6px; }
+.dg-roles .dg-form { margin-top: 12px; }
+.dg-roles .dg-list { margin: 6px 0; padding-left: 18px; color: var(--muted); }
+.dg-roles > button { margin-top: 10px; align-self: flex-start; }

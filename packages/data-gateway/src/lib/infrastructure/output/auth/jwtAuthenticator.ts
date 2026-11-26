@@ -2,7 +2,7 @@ import { createRemoteJWKSet, errors, jwtVerify, JWTPayload, JWTVerifyGetKey } fr
 import { AuthenticatorPort, CredentialScheme, Headers } from '../../../application/ports/output/supportPorts'
 import { JwtConfig } from '../../../domain/config/dataGatewayConfig'
 import { AuthenticationResult, principal } from '../../../domain/auth/principal'
-import { Permission } from '../../../domain/auth/permission'
+import { RoleCatalog, RoleLookupPort } from '../../../application/auth/roleCatalog'
 
 /** header.payload.signature, base64url: what a JWT looks like (an opaque token is left to another method) */
 const JWT_SHAPE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*$/
@@ -65,12 +65,17 @@ export class JwtAuthenticator implements AuthenticatorPort {
 	 * jwks: how long its keys are kept, and the least time between two readings (a token of an unknown kid reads them
 	 * again, but not more often: made up kids can't flood the issuer)
 	 */
-	// eslint-disable-next-line no-useless-constructor
+	private readonly roles: RoleLookupPort
+
+	/** roles: the catalog of the roles (docs/ROLE_SCOPES.md); without it, the roles of this method */
 	constructor (
 		private readonly config: JwtConfig,
 		private readonly discover: (issuer: string) => Promise<string> = discoverJwksUri,
-		private readonly jwks: { cacheMaxAgeMs: number, cooldownMs: number } = { cacheMaxAgeMs: 600_000, cooldownMs: 30_000 }
-	) {}
+		private readonly jwks: { cacheMaxAgeMs: number, cooldownMs: number } = { cacheMaxAgeMs: 600_000, cooldownMs: 30_000 },
+		roles?: RoleLookupPort
+	) {
+		this.roles = roles ?? new RoleCatalog({ authorization: { roles: config.principal.permissions?.roles ?? {}, stages: 'restricted' }, authentication: { adapter: 'none', credentials: [] }, orm: { schemas: [] } as any })
+	}
 
 	public scheme (): CredentialScheme { return { type: 'bearer' } }
 
@@ -121,35 +126,26 @@ export class JwtAuthenticator implements AuthenticatorPort {
 			const reason = `no ${this.config.principal.name}`
 			return { valid: false, reason: `the token is not valid: ${reason}`, challenge: `Bearer error="invalid_token", error_description="${reason}"` }
 		}
-		const permissions = new Set<Permission>()
-		let approval = false
-		const views = new Set<string>()
 		const mapping = this.config.principal.permissions
-		if (mapping) {
-			const value = claimOf(claims, mapping.claim)
-			const roles = Array.isArray(value) ? value.map(String) : typeof value === 'string' ? value.split(/\s+/).filter(Boolean) : []
-			for (const role of roles) {
-				const config = mapping.roles[role]
-				if (!config) continue
-				for (const permission of config.permissions) permissions.add(permission)
-				if (config.view) views.add(config.view)
-				if (config.approval) approval = true
-			}
-		}
-		// one view per request, never guessed (docs/VIEWS_BY_IDENTITY.md, decision 2)
-		if (views.size > 1) return { valid: false, status: 403, reason: `the roles of the token give several views (${[...views].join(', ')}): it must have one` }
+		const value = mapping ? claimOf(claims, mapping.claim) : undefined
+		// the roles of the token the gateway knows (docs/ROLE_SCOPES.md): before a schema, the permissions of them all;
+		// the schema chooses the view and the stage among theirs, and its permissions are those of the roles that allow both
+		const roles = (Array.isArray(value) ? value.map(String) : typeof value === 'string' ? value.split(/\s+/).filter(Boolean) : [])
+			.filter(role => this.roles.has(role))
+		const permissions = this.roles.permissionsOf(roles)
+		const approval = this.roles.approvalOf(roles) === 'writes'
 		const context: Record<string, unknown> = {}
 		for (const [variable, path] of Object.entries(this.config.context)) {
 			const value = claimOf(claims, path)
 			if (value !== undefined) context[variable] = value
 		}
-		const who = principal(name, [...permissions])
+		const who = principal(name, permissions)
 		return {
 			valid: true,
 			principal: {
 				...who,
 				...(Object.keys(context).length ? { context } : {}),
-				...(views.size ? { view: [...views][0] } : {}),
+				roles,
 				...(approval ? { approval: 'writes' as const } : {}),
 				...(typeof payload.exp === 'number' ? { expiresAt: payload.exp * 1000 } : {})
 			}

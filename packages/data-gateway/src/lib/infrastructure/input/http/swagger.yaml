@@ -554,7 +554,7 @@ paths:
   /whoami:
     get:
       operationId: whoami
-      description: The credential (name and permissions) and what this schema offers (scripts enabled)
+      description: The credential (name, its roles and the permissions they give here), where it works without choosing (its view and stage), every view and stage it may choose with options.view and options.stage, and what this schema offers (scripts enabled)
       parameters: []
       responses:
         "200":
@@ -565,6 +565,12 @@ paths:
                 properties:
                   name: { type: string }
                   permissions: { type: array, items: { type: string } }
+                  roles: { type: array, items: { type: string } }
+                  view: { type: string }
+                  stage: { type: string }
+                  views: { type: array, items: { type: string } }
+                  stages: { type: array, items: { type: string } }
+                  maxRows: { type: integer }
                   schema: { type: string }
                   scripts: { type: boolean }
           description: Ok

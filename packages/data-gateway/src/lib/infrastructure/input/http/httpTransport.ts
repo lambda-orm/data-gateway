@@ -23,6 +23,7 @@ import { AdminService } from '../../../application/admin/adminService'
 import { CommandService } from '../../../application/admin/commandService'
 import { SessionDeps, sessionAuthentication, sessionRouter } from './sessionRoutes'
 import { ManagementEvents } from './managementEvents'
+import { RoleAdmin } from '../../../application/auth/roleAdmin'
 import { parseSize } from '../../../domain/config/sizes'
 const YAML = require('js-yaml')
 
@@ -55,7 +56,7 @@ export interface HttpTransportDeps {
 	metrics: MetricsPort
 	logger: LoggerPort
 	/** management: the administration of the workspaces at {basePath}/admin, with this authentication */
-	admin?: { service: AdminService, commands?: CommandService, authenticator: AuthenticatorPort }
+	admin?: { service: AdminService, commands?: CommandService, authenticator: AuthenticatorPort, roles?: RoleAdmin }
 	/**
 	 * management: every request needs a session (docs/DATA_GATEWAY_SESSIONS_PLAN.md), given at {basePath}/sessions
 	 * with the credential; a credential sent directly is refused
@@ -183,7 +184,7 @@ export class HttpTransport implements Transport {
 		// its transports (no credential: as /schemas, what a client needs to find them)
 		if (this.options.transports) app.get(`${base}/transports`, this.handle(async () => this.options.transports))
 		if (this.deps.sessions) app.use(`${base}/sessions`, sessionRouter(this.deps.sessions))
-		if (this.deps.admin) app.use(`${base}/admin`, adminRouter(this.deps.admin.service, this.authenticate(this.deps.admin.authenticator), this.deps.admin.commands, this.deps.directory))
+		if (this.deps.admin) app.use(`${base}/admin`, adminRouter(this.deps.admin.service, this.authenticate(this.deps.admin.authenticator), this.deps.admin.commands, this.deps.directory, this.deps.admin.roles))
 		// the schemas: the router of the moment (a schema added or removed replaces it)
 		app.use((req, res, next) => this.schemaRouter(req, res, next))
 		// a route that doesn't exist: JSON like every other answer, with the closest routes (L42)
@@ -225,14 +226,17 @@ export class HttpTransport implements Transport {
 			})
 			router.use(this.authenticate(schema.authenticator(this.name)))
 			// who the credential is and what this schema offers: the UI enables its actions with it
-			router.get('/whoami', this.handle(async (_req, ctx) => ({
-				name: ctx.principal.name,
-				permissions: [...ctx.principal.permissions],
-				// the view of λORM of the credential (its key, its roles); without one, the schema's or the domain
-				...(ctx.principal.view ? { view: ctx.principal.view } : {}),
-				schema: schema.path,
-				scripts: schema.features.scripts
-			})))
+			router.get('/whoami', this.handle(async (_req, ctx) => {
+				// where it works here (docs/ROLE_SCOPES.md): its view and stage without choosing, and what it may choose
+				const scope = await schema.gateway.scope(ctx).catch(() => undefined)
+				return {
+					name: ctx.principal.name,
+					permissions: scope?.permissions ?? [...ctx.principal.permissions],
+					...(scope ? { view: scope.view, stage: scope.stage, views: scope.views, stages: scope.stages, roles: scope.roles, ...(scope.maxRows !== undefined ? { maxRows: scope.maxRows } : {}) } : ctx.principal.view ? { view: ctx.principal.view } : {}),
+					schema: schema.path,
+					scripts: schema.features.scripts
+				}
+			}))
 			router.get('/typings', async (req, res) => {
 				try {
 					const ctx: RequestContext = { principal: res.locals.principal as Principal, transport: this.name }

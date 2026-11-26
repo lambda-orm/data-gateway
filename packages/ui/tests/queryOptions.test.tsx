@@ -17,10 +17,11 @@ afterEach(cleanup)
 describe('the options as fields', () => {
 	test('read: the known ones as fields, the others kept; an invalid text says so', () => {
 		const read = optionsFieldsOf('{"stage":"test","chunkSize":500,"tryAllCan":true,"headers":[["tenant","a"]],"timeout":2000,"other":{"x":1}}')
-		expect(read.fields).toEqual({ stage: 'test', chunkSize: '500', tryAllCan: 'true', headers: [['tenant', 'a']], timeout: '2000', maxIterations: '' })
+		expect(read.fields).toEqual({ stage: 'test', view: '', chunkSize: '500', tryAllCan: 'true', headers: [['tenant', 'a']], timeout: '2000', maxIterations: '' })
 		expect(read.extra).toEqual({ other: { x: 1 } })
-		// a view of a query saved before is not a field (the gateway drops it): just kept
-		expect(optionsFieldsOf('{"view":"public"}').extra).toEqual({ view: 'public' })
+		// the view: one of those of the roles of the credential (data-gateway 4.4)
+		expect(optionsFieldsOf('{"view":"public"}').fields.view).toBe('public')
+		expect(JSON.parse(optionsTextOf({ ...EMPTY_OPTIONS, view: 'support' }))).toEqual({ view: 'support' })
 		expect(optionsFieldsOf('').fields).toEqual(EMPTY_OPTIONS)
 		expect(optionsFieldsOf('{ nope').error).toBe('invalid')
 		expect(optionsFieldsOf('[1]').error).toBe('invalid')
@@ -52,7 +53,27 @@ const Harness: React.FC<{ initial: string, mode?: 'query' | 'script', onText?: (
 	return <OptionsForm label="options" value={text} onChange={t => { setText(t); onText?.(t) }} api={api} schema="northwind/v1" mode={mode} theme="light" />
 }
 
+class RolesApi extends ChoicesApi {
+	async whoami (schema: string) { return { name: 'ana', permissions: ['read'], schema, scripts: false, view: 'support', stage: 'default', views: ['support', 'public'], stages: ['default', 'reporting'], roles: ['analyst'] } }
+}
+
 describe('OptionsForm', () => {
+	test('with roles (data-gateway 4.4): the stages and the views they allow; a view only when there is more than one', async () => {
+		const texts: string[] = []
+		const Roles: React.FC = () => {
+			const [text, setText] = useState('{}')
+			const [api] = useState(() => new RolesApi())
+			return <OptionsForm label="options" value={text} onChange={t => { setText(t); texts.push(t) }} api={api} schema="shop" mode="query" theme="light" />
+		}
+		render(<Roles />)
+		await waitFor(() => expect((screen.getByLabelText('options · stage') as HTMLElement).tagName).toBe('SELECT'))
+		expect([...(screen.getByLabelText('options · stage') as HTMLSelectElement).options].map(o => o.value)).toEqual(['', 'default', 'reporting'])
+		const view = screen.getByLabelText('options · view') as HTMLSelectElement
+		expect([...view.options].map(o => o.value)).toEqual(['', 'support', 'public'])
+		fireEvent.change(view, { target: { value: 'public' } })
+		expect(JSON.parse(texts.at(-1)!)).toEqual({ view: 'public' })
+	})
+
 	test('stage offers those of the schema, and there is no view; each field says what is valid; an empty one is no option', async () => {
 		const texts: string[] = []
 		render(<Harness initial="{}" onText={t => texts.push(t)} />)

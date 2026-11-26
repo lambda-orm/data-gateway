@@ -1,7 +1,21 @@
 # El estado de la gateway: un schema de λORM propio
 
-> **Estado (2026-11-26): diseño, decisiones de §8 abiertas.** La base de lo que la gateway guarda de sí misma; su
-> primer uso, los roles con sus vistas y stages ([`ROLE_SCOPES.md`](ROLE_SCOPES.md)).
+> **Estado (2026-11-26): decisiones de §8 cerradas (las recomendadas, el usuario); fases 1 a 4 hechas** (rama
+> `feature/gateway-state`). Lo que cambió respecto del diseño:
+> - **SQLite sigue en `node:sqlite`, no en λORM.** El dialecto SQLjs de λORM tiene la base en memoria y la escribe al
+>   archivo solo al cerrar el pool: una caída pierde lo de la corrida y dos workers se pisan. `SqlLite` está en el enum
+>   de λORM sin adaptador. Con `dialect: SQLite` la gateway usa `node:sqlite` (durable, seguro entre procesos); con
+>   PostgreSQL (o MySQL, MariaDB, SqlServer, Oracle), el schema de sistema por λORM. Cuando core tenga un SQLite nativo,
+>   SQLite puede pasar también por λORM (§7 de [`PENDINGS.md`](PENDINGS.md)).
+> - **Sin migraciones versionadas todavía:** al arrancar, `push` del schema de sistema (crea lo que falta, agrega
+>   columnas; nunca borra). Dos réplicas a la vez: la segunda reintenta y no encuentra nada que crear.
+> - **`Settings` (valores en caliente) queda para cuando haya una opción que lo use;** hecho: `Roles`, `ConfigChanges`,
+>   `StateVersions`, y las sesiones, el estado de la UI y las aprobaciones en el mismo schema.
+> - **Entre réplicas, por versión cada `state.refresh`** (30 s); el aviso por Valkey, después. En la réplica que guarda,
+>   al instante.
+>
+> Probado: los mismos almacenes en `node:sqlite`, λORM sobre SQLjs y λORM sobre PostgreSQL
+> (`tests/integration/gatewayState.test.ts`, con `DATA_GATEWAY_TEST_POSTGRES`).
 
 ## 1. Objetivo
 

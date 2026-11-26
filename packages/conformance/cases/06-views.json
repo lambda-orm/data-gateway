@@ -7,11 +7,12 @@
 		"expect": { "result": [ { "customers": 11 } ] }
 	},
 	{
-		"name": "view: a context or a view sent by the client changes nothing",
+		"name": "view: a context sent by the client changes nothing; a view only among those of its roles",
 		"credential": "jwtSales",
-		"operation": "execute",
-		"args": { "query": "Customers.map(p => ({ customers: count(1) }))", "options": { "context": { "country": "France" }, "view": "default" } },
-		"expect": { "result": [ { "customers": 11 } ] }
+		"steps": [
+			{ "operation": "execute", "args": { "query": "Customers.map(p => ({ customers: count(1) }))", "options": { "context": { "country": "France" }, "view": "sales" } }, "expect": { "result": [ { "customers": 11 } ] } },
+			{ "operation": "execute", "args": { "query": "Customers.map(p => ({ customers: count(1) }))", "options": { "view": "default" } }, "expect": { "error": { "code": "forbidden" } }, "mcp": { "result": [ { "customers": 11 } ] } }
+		]
 	},
 	{
 		"name": "view: what it masks comes masked",

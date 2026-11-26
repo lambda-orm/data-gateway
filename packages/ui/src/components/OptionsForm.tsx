@@ -30,6 +30,7 @@ export const optionsSummary = (text: string, locale?: string): { text: string, i
 	const f = read.fields
 	const parts = [
 		f.stage && `${m.stage}: ${f.stage}`,
+		f.view && `${m.view}: ${f.view}`,
 		f.chunkSize && `${m.chunkSize}: ${f.chunkSize}`,
 		f.tryAllCan && `${m.tryAllCan}: ${f.tryAllCan === 'true' ? m.yes : m.no}`,
 		f.headers.length > 0 && format(m.headersCount, { n: f.headers.length }),
@@ -67,20 +68,22 @@ export const OptionsForm: React.FC<OptionsFormProps> = ({ value, onChange, api, 
 		onChange(text)
 	}
 
-	// the stages of the schema
-	const [choices, setChoices] = useState<{ stages?: string[] }>({})
+	// the stages and the views the roles of the credential let it choose (data-gateway 4.4); before, the stages of the schema
+	const [choices, setChoices] = useState<{ stages?: string[], views?: string[] }>({})
 	useEffect(() => {
 		setChoices({})
 		if (schema === undefined) return
 		let alive = true
-		Promise.resolve(api.stages?.(schema)).catch(() => undefined)
-			.then(stages => { if (alive) setChoices({ stages }) })
+		Promise.resolve(api.whoami(schema)).catch(() => undefined).then(async whoami => {
+			const stages = whoami?.stages ?? await Promise.resolve(api.stages?.(schema)).catch(() => undefined)
+			if (alive) setChoices({ stages, views: whoami?.views })
+		})
 		return () => { alive = false }
 	}, [api, schema])
 
 	const id = useMemo(() => `lw-options-${Math.random().toString(36).slice(2, 8)}`, [])
 	/** a choice of the schema (a name kept that is not in it any more is still shown, marked) */
-	const choice = (key: 'stage', list: string[] | undefined, hint: string) => {
+	const choice = (key: 'stage' | 'view', list: string[] | undefined, hint: string) => {
 		const current = fields[key]
 		const names = list ?? []
 		return (
@@ -137,6 +140,7 @@ export const OptionsForm: React.FC<OptionsFormProps> = ({ value, onChange, api, 
 				: (
 					<div className="lw-options-form">
 						{choice('stage', choices.stages, m.stageHint)}
+						{(choices.views?.length ?? 0) > 1 && choice('view', choices.views, m.viewHint)}
 						{count('chunkSize', m.chunkSizeHint)}
 						<div className="lw-option">
 							<span className="lw-option-label" aria-hidden="true">{m.tryAllCan}</span>

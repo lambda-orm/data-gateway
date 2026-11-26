@@ -1,6 +1,7 @@
 import { TransportName } from '../../domain/config/dataGatewayConfig'
 import { GatewayError, timeout, unavailable } from '../../domain/errors/gatewayError'
-import { CONTEXT_FREE_OPERATIONS, GATEWAY_OPERATIONS, MCP_OPERATIONS, DataChangeSummary } from '../../domain/runtime/channelProtocol'
+import { CONTEXT_FREE_OPERATIONS, GATEWAY_OPERATIONS, MCP_OPERATIONS, DataChangeSummary, toWire } from '../../domain/runtime/channelProtocol'
+import { RoleGrantsPort } from '../auth/roleCatalog'
 import { SchemaState } from '../../domain/runtime/policies'
 import { WorkspaceChange } from '../../domain/runtime/workspaces'
 import { DataGatewayPort, RequestContext } from '../ports/input/dataGatewayPort'
@@ -56,6 +57,9 @@ export class SchemaRouter implements SchemaDirectoryPort {
 	private readonly stateChanges = new Listeners<SchemaState>()
 	private readonly schemasChanges = new Listeners<void>()
 	private readonly workspaceChanges = new Listeners<WorkspaceChange>()
+
+	/** the roles of who calls as they apply in each schema (docs/ROLE_SCOPES.md): the edge knows them, the worker not */
+	public grants?: RoleGrantsPort
 
 	constructor (settings: RoutedSchemaSettings[], private readonly clock: ClockPort, private readonly gatewayVersion: string,
 		private readonly tracing: TracingPort = NO_TRACING) {
@@ -202,7 +206,7 @@ export class SchemaRouter implements SchemaDirectoryPort {
 					target,
 					op,
 					args,
-					principal: ctx ? { name: ctx.principal.name, permissions: [...ctx.principal.permissions], actor: ctx.principal.actor, ...(ctx.principal.context ? { context: ctx.principal.context } : {}), ...(ctx.principal.view ? { view: ctx.principal.view } : {}), ...(ctx.principal.approval ? { approval: ctx.principal.approval } : {}) } : undefined,
+					principal: ctx ? toWire(this.grants ? { ...ctx.principal, grants: this.grants.grantsOf(ctx.principal, path) } : ctx.principal) : undefined,
 					transport: ctx?.transport ?? 'edge',
 					deadline: Date.now() + waitMs,
 					trace: this.tracing.carrier()

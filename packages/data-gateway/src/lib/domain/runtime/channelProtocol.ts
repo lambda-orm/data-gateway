@@ -1,5 +1,7 @@
 import { Actor } from '@lambdaorm/base'
 import { Permission } from '../auth/permission'
+import { Principal } from '../auth/principal'
+import { RoleGrant } from '../auth/roles'
 
 /** Who asks, as it crosses the channel (a Set doesn't) */
 export interface WirePrincipal {
@@ -12,7 +14,34 @@ export interface WirePrincipal {
 	view?: string
 	/** its writes wait for a person (docs/MUTATION_APPROVAL.md) */
 	approval?: 'writes'
+	/** its roles, and how they apply in the schema it calls (docs/ROLE_SCOPES.md) */
+	roles?: string[]
+	grants?: RoleGrant[]
 }
+
+/** A principal as it crosses the channel */
+export const toWire = (p: Principal): WirePrincipal => ({
+	name: p.name,
+	permissions: [...p.permissions],
+	...(p.actor ? { actor: p.actor } : {}),
+	...(p.context ? { context: p.context } : {}),
+	...(p.view ? { view: p.view } : {}),
+	...(p.approval ? { approval: p.approval } : {}),
+	...(p.roles ? { roles: [...p.roles] } : {}),
+	...(p.grants ? { grants: p.grants.map(g => ({ ...g })) } : {})
+})
+
+/** A principal from the channel */
+export const fromWire = (w: WirePrincipal): Principal => ({
+	name: w.name,
+	permissions: new Set(w.permissions),
+	...(w.actor ? { actor: w.actor } : {}),
+	...(w.context ? { context: w.context } : {}),
+	...(w.view ? { view: w.view } : {}),
+	...(w.approval ? { approval: w.approval } : {}),
+	...(w.roles ? { roles: w.roles } : {}),
+	...(w.grants ? { grants: w.grants } : {})
+})
 
 /** edge → schema worker: one operation of DataGatewayPort ('gateway') or McpServerPort ('mcp') */
 export interface ChannelRequest {
@@ -75,7 +104,7 @@ export type ChannelMessage = ChannelRequest | ChannelResponse | ChannelEvent
 /** Operations a schema worker answers: anything else is refused (the channel is not an eval) */
 export const GATEWAY_OPERATIONS = [
 	'version', 'health', 'ping', 'plan', 'metadata', 'model', 'parameters', 'constraints', 'execute', 'executeScript',
-	'executeQueued', 'queries', 'query', 'approval', 'files', 'fileUpload', 'fileUrl', 'schema', 'schemaVersion', 'domain', 'sources', 'source', 'entities', 'entity', 'enums', 'enum',
+	'executeQueued', 'queries', 'query', 'approval', 'scope', 'files', 'fileUpload', 'fileUrl', 'schema', 'schemaVersion', 'domain', 'sources', 'source', 'entities', 'entity', 'enums', 'enum',
 	'mappings', 'mapping', 'entityMapping', 'stages', 'stage', 'views', 'typings', 'search', 'describe', 'stageExists', 'stageExport', 'stageImport'
 ] as const
 

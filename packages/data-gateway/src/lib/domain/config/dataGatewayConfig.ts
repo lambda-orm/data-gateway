@@ -12,13 +12,54 @@ export interface CredentialConfig {
 	view?: string
 	/** its writes wait for a person to approve them, on every transport (docs/MUTATION_APPROVAL.md) */
 	approval?: 'writes'
+	/** the roles of authorization.roles it has (docs/ROLE_SCOPES.md): instead of its own permissions and view */
+	roles?: string[]
 }
 
-/** A role of the tokens of an issuer: its permissions, the view of λORM of who has it, and whether its writes wait */
+/**
+ * A role (docs/ROLE_SCOPES.md): where it may work (the views and the stages of λORM, the first of each the one of who
+ * doesn't choose) and what it may do there (its permissions, its limits). Of authorization.roles, of a schema, of a
+ * method jwt (as before 4.4) or of the state of the gateway (extended from the administration).
+ */
 export interface RoleConfig {
 	permissions: Permission[]
+	/** @deprecated a single view: views: [view] */
 	view?: string
+	/** the views it may use; none, the one of the schema */
+	views?: string[]
+	/** the stages it may use; none, the one of the schema */
+	stages?: string[]
+	/** the most rows (options.maxRows) a request of it may ask for */
+	maxRows?: number
 	approval?: 'writes'
+	/** any: its permissions count whatever view and stage were chosen (as before 4.4) */
+	scope?: 'any'
+	/** not extended from the administration */
+	locked?: boolean
+}
+
+/** authorization (docs/ROLE_SCOPES.md): the roles the tokens and the keys name */
+export interface AuthorizationConfig {
+	roles: Record<string, RoleConfig>
+	/** open: a stage the roles don't name may be chosen (as before 4.4, for one version) */
+	stages: 'restricted' | 'open'
+}
+
+/** The dialects the state of the gateway may live in (docs/GATEWAY_STATE.md §2) */
+export const STATE_DIALECTS = ['SQLite', 'PostgreSQL', 'MySQL', 'MariaDB', 'SqlServer', 'Oracle'] as const
+export type StateDialect = typeof STATE_DIALECTS[number]
+
+/** state (docs/GATEWAY_STATE.md): where the gateway keeps what is its own (sessions, approvals, roles) */
+export interface StateConfig {
+	source?: {
+		dialect: StateDialect
+		/** SQLite: the file (or { file }); the others, the connection of λORM (a URL or its object) */
+		connection: unknown
+	}
+	/** without a Valkey, how often a replica looks whether the state changed */
+	refreshMs: number
+	/** without the source the gateway doesn't start (else it starts with the YAML alone) */
+	required: boolean
 }
 
 export type AuthenticationType = 'bearer' | 'apikey' | 'basic'
@@ -68,6 +109,10 @@ export interface SchemaOverrides {
 	authentication?: AuthenticationConfig
 	/** the view of λORM of a caller without one (docs/VIEWS_BY_IDENTITY.md); none, default (the domain) */
 	view?: string
+	/** the stage of λORM of a caller without one (docs/ROLE_SCOPES.md); none, the first of the schema */
+	stage?: string
+	/** the roles in this schema (docs/ROLE_SCOPES.md): they extend the ones of authorization.roles */
+	roles?: Record<string, Partial<RoleConfig>>
 	/** Variables its worker receives on top of its .env and the base variables */
 	env?: Record<string, string>
 	scripts?: Partial<ScriptsConfig>
@@ -354,6 +399,10 @@ export interface DataGatewayConfig {
 	files: FilesConfig
 	/** the replicas together, by a Valkey (docs/REPLICAS.md) */
 	cluster: ClusterConfig
+	/** the roles of the tokens and the keys (docs/ROLE_SCOPES.md) */
+	authorization: AuthorizationConfig
+	/** where the gateway keeps its own state (docs/GATEWAY_STATE.md) */
+	state: StateConfig
 	runtime: RuntimeConfig
 	/** Only the transports with a port (docs/DATA_GATEWAY.md §2.1) */
 	transports: TransportsConfig

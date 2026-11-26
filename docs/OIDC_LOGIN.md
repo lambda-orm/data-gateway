@@ -4,7 +4,7 @@
 > `feature/oidc-login`). Lo que quedó de [`JWT.md`](JWT.md): la prueba contra un IdP real (criterio de aceptación de
 > §10) y el login desde el IDE (decisión 5). `scripts/ci-local.sh oidc` (y su job de CI): 31 chequeos contra Keycloak
 > 26.4 en los cinco transportes, la rotación incluida. El login, de punta a punta en el IDE (Chrome, el formulario de
-> Keycloak en su ventana, la gateway lo ve como carla); renovar con el refresh token no se ejercitó en vivo. Cambios
+> Keycloak en su ventana, la gateway lo ve como carla). **Después (2026-11-26):** la renovación, en vivo en el IDE (Chrome, tokens de 70 s: el temporizador lo cambió solo y la gateway lo tomó); el login de la app de escritorio, en el runner de Keycloak (el loopback en `ide-desktop/src/oidcLoopback.mjs`, el formulario del realm por HTTP, el canje con PKCE) y la renovación con el cliente público. Cambios
 > respecto del diseño: el IDE llega al IdP **por su backend** (su CSP no deja a la página hablar con otro origen): en la
 > imagen web, el origen del IdP va en `DATA_GATEWAY_IDE_TARGETS` y el IdP no necesita CORS; la ventana del login se abre
 > en el clic (después de un `await` el navegador la bloquea). De paso, `DATA_GATEWAY_IDE_CONNECT_SRC` suma a la CSP de
