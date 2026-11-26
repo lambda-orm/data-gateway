@@ -380,8 +380,9 @@ const ConnectionSection: React.FC<{
 					{(() => {
 						const name = (
 							<>
-								<strong>{spec.name}</strong>{spec.current && <span className="lw-badge">{a.current}</span>}
-								{spec.description && <span className="lw-type lw-connection-url">{spec.description}</span>}
+								<strong>{spec.name}</strong>
+								{spec.description && <><span className="lw-connection-sep" aria-hidden="true">:</span><span className="lw-type lw-connection-url">{spec.description}</span></>}
+								{spec.current && <span className="lw-badge">{a.current}</span>}
 							</>
 						)
 						return spec.onOpen
