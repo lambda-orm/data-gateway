@@ -53,6 +53,8 @@ que no existe en Docker Hub: hoy falla para cualquiera que la siga.
 > **Estado (2026-11-25): hecho** (#14). `requestOptions` borra `view` y `context` en los casos de uso de todos los
 > transportes; `plan` lleva el actor; el IDE ya no ofrece la vista. **Sin decidir:** si el cliente puede elegir
 > `stage`, `maxRows` y `allowDestructive`.
+> **En diseño (2026-11-26):** [`ROLE_SCOPES.md`](ROLE_SCOPES.md): el rol dice las vistas y los stages permitidos (y
+> los defaults), el cliente elige dentro; sobre un schema de λORM propio de la gateway ([`GATEWAY_STATE.md`](GATEWAY_STATE.md)).
 
 `queryUseCases.execute` pasa a λORM las `options` del pedido tal como llegan, más el actor
 (`application/usecases/actor.ts`, `withActor`); `plan` ni eso. Con λORM ≥ 3.10 eso incluye:
