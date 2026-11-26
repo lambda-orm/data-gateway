@@ -2,6 +2,10 @@
 
 ### Unreleased
 
+### 1.3.0 (2026-11-26)
+
+Works with any data-gateway 4.x; the files of a property and the writes that wait need data-gateway 4.3.
+
 - **Sign in with the identity provider:** a connection can authenticate with **OpenID Connect (sign in)**: its issuer,
   a public client with PKCE and its scopes. **Sign in** opens the login of the provider (a window of its own; in the
   desktop app, the browser of the system, back to a loopback of the app); its token stays in the tab and is renewed
