@@ -7,13 +7,11 @@ export interface CredentialConfig {
 	value?: string
 	username?: string
 	password?: string
-	permissions: Permission[]
-	/** the view of λORM of its requests (docs/VIEWS_BY_IDENTITY.md); none, the one of the schema */
-	view?: string
-	/** its writes wait for a person to approve them, on every transport (docs/MUTATION_APPROVAL.md) */
-	approval?: 'writes'
-	/** the roles of authorization.roles it has (docs/ROLE_SCOPES.md): instead of its own permissions and view */
-	roles?: string[]
+	/**
+	 * the roles of authorization.roles it has (docs/ROLE_SCOPES.md): what it may do (its permissions, views, stages,
+	 * approval) is theirs, never its own
+	 */
+	roles: string[]
 	/**
 	 * the context of λORM of its requests (variable → value), as a token gives it from its claims (docs/JWT.md): the user
 	 * a key is of (context.username), what the views, the defaults and the writeValue read
@@ -84,10 +82,8 @@ export interface JwtConfig {
 		/** the claim of the name (a path with dots); default sub */
 		name: string
 		permissions?: {
-			/** the claim of the roles: a list, or a text separated by spaces (as scope) */
+			/** the claim of the roles (those of authorization.roles): a list, or a text separated by spaces (as scope) */
 			claim: string
-			/** role → its permissions and its view */
-			roles: Record<string, RoleConfig>
 		}
 	}
 	/** variable of the context of λORM → the claim it takes (a path with dots) */

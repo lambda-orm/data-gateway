@@ -19,11 +19,15 @@ identidad del agente (su vista, su contexto) y queda en la auditoría con quién
 mcp:
   approval: writes         # none (hoy) | writes: toda escritura por MCP espera una aprobación
   approvalExpires: 1h      # una pendiente que nadie aprueba vence
-# también por schema (orm.schemas[].mcp.approval) y por credencial o rol:
+# también por schema (orm.schemas[].mcp.approval) y por rol:
+authorization:
+  roles:
+    agent: { permissions: [read, write], approval: writes }
+    ops:   { permissions: [read, approve] }
 authentication:
   keys:
-    - { name: agent, value: $AGENT_KEY, permissions: [read, write], approval: writes }
-    - { name: ops,   value: $OPS_KEY,   permissions: [read, approve] }
+    - { name: agent, value: $AGENT_KEY, roles: [agent] }
+    - { name: ops,   value: $OPS_KEY,   roles: [ops] }
 ```
 
 `approve` es un permiso nuevo: aprobar o rechazar las pendientes del schema.

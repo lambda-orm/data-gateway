@@ -4,10 +4,14 @@
 # infrastructure.service of lambdaORM.yaml.
 orm:
   workspacePath: $WORKSPACE
+authorization:
+  roles:
+    service: { permissions: [ read, write, script, queue, stageImport ] }
 authentication:
   adapter: local
   type: bearer
   token: $SERVICE_TOKEN
+  roles: [ service ]
 rateLimit:
   windowMs: $RATE_LIMIT_WINDOWS_MS
   max: $RATE_LIMIT_MAX

@@ -34,12 +34,16 @@ audit: { enabled: false }
 metrics: { enabled: false }
 rateLimit: { max: 0 }
 runtime: { checkConnections: false }
+authorization:
+  roles:
+    modeler: { permissions: [ read, schemaRead, schemaWrite ] }
+    reader: { permissions: [ read ] }
 authentication:
   adapter: local
   type: apikey
   keys:
-    - { name: modeler, value: modeler-key, permissions: [ read, schemaRead, schemaWrite ] }
-    - { name: reader, value: reader-key, permissions: [ read ] }
+    - { name: modeler, value: modeler-key, roles: [ modeler ] }
+    - { name: reader, value: reader-key, roles: [ reader ] }
 transports:
   management: { port: ${port}, host: 127.0.0.1 }
 `)

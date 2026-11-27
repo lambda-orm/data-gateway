@@ -10,11 +10,15 @@ import { fakeGateway, FixedClock, GatewayFixture } from '../helpers/fakes'
 import { InlineSchemaDirectory } from '../../src/lib/application/runtime/inlineSchemaDirectory'
 import { call } from '../helpers/net'
 import { AuthenticatorPort } from '../../src/lib/application/ports/output/supportPorts'
+import { ownRoles, withGrants } from '../helpers/roles'
 
-const credentials = [
-	{ name: 'agent', value: 'agent-token', permissions: ['read' as const] },
-	{ name: 'backend', value: 'backend-token', permissions: ['read' as const, 'write' as const, 'script' as const, 'queue' as const, 'stageImport' as const] }
-]
+const { credentials, roles } = ownRoles([
+	{ name: 'agent', value: 'agent-token', permissions: ['read'] },
+	{ name: 'backend', value: 'backend-token', permissions: ['read', 'write', 'script', 'queue', 'stageImport'] },
+	{ name: 'svc', value: 'svc-key', permissions: ['read'] },
+	{ name: 'ana', value: 'ana-key', permissions: ['read'], context: { username: 'ana@acme' } },
+	{ name: 'reader', permissions: ['read'] }
+])
 const agent = { Authorization: 'Bearer agent-token' }
 const backend = { Authorization: 'Bearer backend-token' }
 
@@ -29,9 +33,9 @@ const start = async (fixture: GatewayFixture, options: Partial<{ basePath: strin
 		transports: options.transports,
 		observability: options.observability
 	}, {
-		directory: new InlineSchemaDirectory([{
-			path: '', gateway: fixture.gateway, mcp: undefined as any, transports: ['http'], authenticators: { http: options.authenticator ?? new BearerAuthenticator(credentials) }
-		}], new FixedClock(), '9.9.9'),
+		directory: withGrants(new InlineSchemaDirectory([{
+			path: '', gateway: fixture.gateway, mcp: undefined as any, transports: ['http'], authenticators: { http: options.authenticator ?? new BearerAuthenticator(credentials.slice(0, 2), roles) }
+		}], new FixedClock(), '9.9.9'), roles),
 		metrics: options.metrics ? new PromClientMetrics() : new NoMetrics(),
 		logger: new ConsoleLogger('error')
 	})
@@ -205,7 +209,7 @@ describe('http transport options', () => {
 	test('Authorize offers the credential of the configuration: the bearer token, or the API key in its header', async () => {
 		const spec = async (base: string) => fetch(`${base}/doc/swagger-ui-init.js`).then(r => r.text())
 		const bearer = await start(fakeGateway())
-		const apikey = await start(fakeGateway(), { authenticator: new ApiKeyAuthenticator(credentials, 'x-api-key') })
+		const apikey = await start(fakeGateway(), { authenticator: new ApiKeyAuthenticator(credentials.slice(0, 2), roles, 'x-api-key') })
 		try {
 			const withBearer = await spec(bearer.base)
 			expect(withBearer).toMatch(/"bearerAuth"/)
@@ -239,10 +243,10 @@ describe('http transport with JWT (docs/JWT.md)', () => {
 		fixture = fakeGateway()
 		const jwt = new JwtAuthenticator({
 			issuer: ISSUER, audience: ['data-gateway'], secret: SECRET, algorithms: ['HS256'], clockToleranceSec: 0,
-			principal: { name: 'sub', permissions: { claim: 'roles', roles: { reader: { permissions: ['read'] } } } },
+			principal: { name: 'sub', permissions: { claim: 'roles' } },
 			context: { tenant: 'tenant_id' }
-		})
-		;({ transport, base } = await start(fixture, { authenticator: new MethodsAuthenticator([jwt, new ApiKeyAuthenticator([{ name: 'svc', value: 'svc-key', permissions: ['read'] }, { name: 'ana', value: 'ana-key', permissions: ['read'], context: { username: 'ana@acme' } }])]) }))
+		}, roles)
+		;({ transport, base } = await start(fixture, { authenticator: new MethodsAuthenticator([jwt, new ApiKeyAuthenticator(credentials.slice(2, 4), roles)]) }))
 	})
 	afterAll(() => transport.stop())
 

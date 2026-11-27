@@ -1,4 +1,4 @@
-// The view by identity (docs/VIEWS_BY_IDENTITY.md): the view of a key, of the roles of a token or of the schema; one
+// The view by identity (docs/VIEWS_BY_IDENTITY.md): the view of the roles of a key or a token, or of the schema; one
 // the schema doesn't have refused; what λORM receives (the queries, their metadata, the domain), never the client's.
 import { SignJWT } from 'jose'
 import { ConfigReader } from '../../src/lib/domain/config/configReader'
@@ -9,7 +9,8 @@ import { QueryUseCases } from '../../src/lib/application/usecases/queryUseCases'
 import { SchemaUseCases } from '../../src/lib/application/usecases/schemaUseCases'
 import { Auditor } from '../../src/lib/application/usecases/auditor'
 import { principal } from '../../src/lib/domain/auth/principal'
-import { viewsOf } from '../../src/lib/domain/runtime/schemas'
+import { effectiveSettings } from '../../src/lib/domain/runtime/schemas'
+import { catalogOf } from '../helpers/roles'
 import { FakeOrm, FixedClock, MemoryAudit, fakeGateway } from '../helpers/fakes'
 import { DataGatewayMcpServer } from '../../src/lib/application/mcp/dataGatewayMcpServer'
 import { ToolCatalog } from '../../src/lib/application/mcp/toolCatalog'
@@ -18,41 +19,42 @@ import { gatewayTools } from '../../src/lib/application/mcp/gatewayTools'
 const minimal = { orm: { schemas: [{ path: 'shop', workspace: '/tmp/shop', view: 'public' }] }, transports: { http: { port: 9291 } } }
 
 describe('configuration', () => {
-	test('a view in a key, in a role (with its permissions) and in a schema', () => {
+	test('a view in a role and in a schema; the views of the roles are checked when the schema loads', () => {
 		const reading = new ConfigReader().read({
 			...minimal,
+			authorization: { roles: { support: { permissions: ['read'], view: 'support' }, admin: ['read', 'write'], billing: { permissions: ['read'], views: ['billing'] } } },
 			authentication: {
 				methods: [
-					{ adapter: 'jwt', issuer: 'https://x', principal: { permissions: { claim: 'roles', roles: { support: { permissions: ['read'], view: 'support' }, admin: ['read', 'write'] } } } },
-					{ adapter: 'local', type: 'apikey', keys: [{ name: 'billing', value: 'k', permissions: ['read'], view: 'billing' }] }
+					{ adapter: 'jwt', issuer: 'https://x', principal: { permissions: { claim: 'roles' } } },
+					{ adapter: 'local', type: 'apikey', keys: [{ name: 'billing', value: 'k', roles: ['billing'] }] }
 				]
 			}
 		})
 		expect(reading.issues).toEqual([])
-		const auth = reading.config!.authentication
+		const config = reading.config!
 		// view (one) is views (docs/ROLE_SCOPES.md)
-		expect(auth.methods![0].jwt!.principal.permissions!.roles).toEqual({ support: { permissions: ['read'], views: ['support'] }, admin: { permissions: ['read', 'write'] } })
-		expect(auth.methods![1].credentials[0]).toMatchObject({ name: 'billing', view: 'billing' })
-		expect(reading.config!.orm.schemas[0].view).toBe('public')
-		expect(viewsOf(auth).sort()).toEqual(['billing', 'support'])
+		expect(config.authorization.roles).toEqual({ support: { permissions: ['read'], views: ['support'] }, admin: { permissions: ['read', 'write'] }, billing: { permissions: ['read'], views: ['billing'] } })
+		expect(config.orm.schemas[0].view).toBe('public')
+		expect(effectiveSettings(config, { path: 'shop', workspace: '/tmp/shop', origin: 'explicit', overrides: {} }).namedViews.sort()).toEqual(['billing', 'support'])
 	})
 
-	test('a view with the permissions of stage is said (those commands see everything); a bad name stops it', () => {
-		const reading = new ConfigReader().read({ ...minimal, authentication: { adapter: 'local', type: 'apikey', keys: [{ name: 'ops', value: 'k', permissions: ['read', 'stageImport'], view: 'support' }] } })
+	test('a view with the permissions of stage is said (those commands see everything); a key with its own view stops it', () => {
+		const reading = new ConfigReader().read({ ...minimal, authorization: { roles: { ops: { permissions: ['read', 'stageImport'], views: ['support'] } } } })
 		expect(reading.issues).toEqual([])
 		expect(reading.warnings.join()).toContain('has a view and stageImport: the commands of stage see the whole schema')
-		const bad = new ConfigReader().read({ ...minimal, authentication: { adapter: 'local', type: 'apikey', keys: [{ name: 'ops', value: 'k', view: 'a view' }] } })
-		expect(bad.issues.join()).toContain('view must be the name of a view of the schema')
+		const own = new ConfigReader().read({ ...minimal, authentication: { adapter: 'local', type: 'apikey', keys: [{ name: 'ops', value: 'k', roles: ['ops'], view: 'support' }] } })
+		expect(own.issues.join()).toContain('keys[0]: view go in a role of authorization.roles')
 	})
 })
 
 describe('who has which view', () => {
 	const SECRET = 'a-secret-of-at-least-32-bytes-long!'
+	const roles = catalogOf({ support: { permissions: ['read'], views: ['support'] }, analyst: { permissions: ['read'], views: ['analytics'] }, admin: ['read', 'write'], billing: { permissions: ['read'], views: ['billing'] } })
 	const jwt = new JwtAuthenticator({
 		issuer: 'https://x', audience: [], secret: SECRET, algorithms: ['HS256'], clockToleranceSec: 0,
-		principal: { name: 'sub', permissions: { claim: 'roles', roles: { support: { permissions: ['read'], view: 'support' }, analyst: { permissions: ['read'], view: 'analytics' }, admin: { permissions: ['read', 'write'] } } } },
+		principal: { name: 'sub', permissions: { claim: 'roles' } },
 		context: {}
-	})
+	}, roles)
 	const token = (roles: string[]) => new SignJWT({ sub: 'ann', roles }).setProtectedHeader({ alg: 'HS256' }).setIssuer('https://x').setExpirationTime('1m').sign(new TextEncoder().encode(SECRET))
 	const bearer = async (roles: string[]) => ({ authorization: `Bearer ${await token(roles)}` })
 
@@ -63,9 +65,9 @@ describe('who has which view', () => {
 		expect(await jwt.authenticate(await bearer(['support', 'analyst']))).toMatchObject({ valid: true, principal: { roles: ['support', 'analyst'] } })
 	})
 
-	test('the view of a key', async () => {
-		const keys = new ApiKeyAuthenticator([{ name: 'billing', value: 'k', permissions: ['read'], view: 'billing' }])
-		expect((await keys.authenticate({ 'x-api-key': 'k' })).principal).toMatchObject({ name: 'billing', view: 'billing' })
+	test('a key: its roles (the schema chooses the view with them, as with a token)', async () => {
+		const keys = new ApiKeyAuthenticator([{ name: 'billing', value: 'k', roles: ['billing'] }], roles)
+		expect((await keys.authenticate({ 'x-api-key': 'k' })).principal).toMatchObject({ name: 'billing', roles: ['billing'] })
 	})
 
 	test('ViewResolver: its own, else the schema\'s, else none; one the schema doesn\'t have, 403', () => {

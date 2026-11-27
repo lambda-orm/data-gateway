@@ -12,8 +12,9 @@ import { InlineSchemaDirectory } from '../../src/lib/application/runtime/inlineS
 import { requestTracer } from '../../src/lib/infrastructure/input/telemetry/requestTracer'
 import { fakeGateway, FixedClock, GatewayFixture } from '../helpers/fakes'
 import { call } from '../helpers/net'
+import { ownRoles, withGrants } from '../helpers/roles'
 
-const credentials = [{ name: 'backend', value: 'backend-token', permissions: ['read' as const, 'write' as const] }]
+const { credentials, roles } = ownRoles([{ name: 'backend', value: 'backend-token', permissions: ['read', 'write'] }])
 const exporter = new InMemorySpanExporter()
 const provider = new TracerProvider({ spanProcessors: [new SimpleSpanProcessor({ exporter })] })
 let fixture: GatewayFixture
@@ -29,9 +30,9 @@ beforeAll(async () => {
 	transport = new HttpTransport({
 		port: 0, host: '127.0.0.1', basePath: '/data-gateway', requestBodySize: '1mb', rateLimit: { windowMs: 1000, max: 0 }, swaggerEnabled: false
 	}, {
-		directory: new InlineSchemaDirectory([{
-			path: 'shop', gateway: fixture.gateway, mcp: undefined as any, transports: ['http'], authenticators: { http: new BearerAuthenticator(credentials) }
-		}], new FixedClock(), '9.9.9'),
+		directory: withGrants(new InlineSchemaDirectory([{
+			path: 'shop', gateway: fixture.gateway, mcp: undefined as any, transports: ['http'], authenticators: { http: new BearerAuthenticator(credentials, roles) }
+		}], new FixedClock(), '9.9.9'), roles),
 		metrics: new NoMetrics(),
 		logger: new ConsoleLogger('error')
 	})

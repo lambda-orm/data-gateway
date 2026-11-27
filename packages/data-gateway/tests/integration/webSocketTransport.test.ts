@@ -7,12 +7,13 @@ import { BearerAuthenticator } from '../../src/lib/infrastructure/output/auth/au
 import { ConsoleLogger } from '../../src/lib/infrastructure/output/logger/loggers'
 import { fakeGateway, FixedClock, GatewayFixture } from '../helpers/fakes'
 import { call } from '../helpers/net'
+import { ownRoles, withGrants } from '../helpers/roles'
 import { protocolsFor } from '../../src/lib/domain/auth/protocolCredential'
 
-const credentials = [
-	{ name: 'agent', value: 'agent-token', permissions: ['read' as const] },
-	{ name: 'backend', value: 'backend-token', permissions: ['read' as const, 'write' as const, 'script' as const, 'queue' as const, 'stageImport' as const] }
-]
+const { credentials, roles } = ownRoles([
+	{ name: 'agent', value: 'agent-token', permissions: ['read'] },
+	{ name: 'backend', value: 'backend-token', permissions: ['read', 'write', 'script', 'queue', 'stageImport'] }
+])
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` })
 const logger = new ConsoleLogger('error')
 
@@ -62,12 +63,12 @@ describe('webSocket transport (schema at a route)', () => {
 
 	beforeAll(async () => {
 		fixture = fakeGateway()
-		const directory = new InlineSchemaDirectory([{
+		const directory = withGrants(new InlineSchemaDirectory([{
 			path: 'iot/v1', gateway: fixture.gateway, mcp: undefined as any, transports: ['webSocket'],
-			authenticators: { webSocket: new BearerAuthenticator(credentials) }, queueOutcomes: fixture.queueOutcomes
-		}], new FixedClock(), '9.9.9')
+			authenticators: { webSocket: new BearerAuthenticator(credentials, roles) }, queueOutcomes: fixture.queueOutcomes
+		}], new FixedClock(), '9.9.9'), roles)
 		transport = new WebSocketTransport({ port: 0, host: '127.0.0.1', basePath: '', maxConnections: 3, maxPayload: 1024 * 1024, asyncapiEnabled: true },
-			{ directory, logger, rootAuthenticator: new BearerAuthenticator(credentials) })
+			{ directory, logger, rootAuthenticator: new BearerAuthenticator(credentials, roles) })
 		await transport.start()
 		url = `ws://127.0.0.1:${transport.address!.port}`
 	})
@@ -205,9 +206,9 @@ describe('webSocket transport (schema at a route)', () => {
 describe('webSocket transport with the edge router', () => {
 	test('a schema not ready answers 503 without closing; schema.statusChanged when it changes', async () => {
 		const fixture = fakeGateway()
-		const router = new SchemaRouter([{ path: 'iot/v1', transports: ['webSocket'], maxConcurrent: 0, timeout: 1000, authenticators: { webSocket: new BearerAuthenticator(credentials) } }], new FixedClock(), '9.9.9')
+		const router = withGrants(new SchemaRouter([{ path: 'iot/v1', transports: ['webSocket'], maxConcurrent: 0, timeout: 1000, authenticators: { webSocket: new BearerAuthenticator(credentials, roles) } }], new FixedClock(), '9.9.9'), roles)
 		const transport = new WebSocketTransport({ port: 0, host: '127.0.0.1', basePath: '/gw', maxConnections: 5, maxPayload: 1024 * 1024, asyncapiEnabled: false },
-			{ directory: router, logger, rootAuthenticator: new BearerAuthenticator(credentials) })
+			{ directory: router, logger, rootAuthenticator: new BearerAuthenticator(credentials, roles) })
 		await transport.start()
 		try {
 			const c = await open(`ws://127.0.0.1:${transport.address!.port}/gw/iot/v1`, bearer('agent-token'))

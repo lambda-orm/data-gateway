@@ -6,11 +6,22 @@ All notable changes to this project will be documented in this file.
 
 ### Unreleased
 
+**Breaking: what a credential may do is said only by its roles** (`docs/ROLE_SCOPES.md` §2). One way, not two:
+
+- A local credential (`keys`, `tokens`, `users`, or the single `token`/`value`/`username`) names its `roles` of
+  `authorization.roles` (or of `orm.schemas[].roles`, or of the administration): **required**. A credential with its own
+  `permissions`, `view` or `approval` stops the gateway, saying where they go; one without `roles` no longer gets every
+  permission.
+- A method `jwt` says only the claim of the roles (`principal.permissions.claim`); its own `roles` stop the gateway:
+  they go in `authorization.roles`.
+- To migrate: each set of permissions of a key becomes a role of `authorization.roles`
+  (`agent: { permissions: [read], views: [support] }`) and the key names it (`roles: [agent]`); the roles of a method
+  `jwt` move as they are to `authorization.roles`. `/whoami` now lists the roles of a key.
 - **The context of a local credential:** an entry of `keys`, `tokens` or `users` may say `context` (variable → a text,
   a number or a boolean), the context of λORM of its requests as a token gives it from its claims:
-  `{ name: ana, value: $ANA_KEY, context: { username: ana@acme.com } }` fills a `default: context.username` or a
-  `writeValue` of the schema. It reaches a session opened with the key too; the client can't replace it. Without it,
-  none (as before).
+  `{ name: ana, value: $ANA_KEY, roles: [editor], context: { username: ana@acme.com } }` fills a
+  `default: context.username` or a `writeValue` of the schema. It reaches a session opened with the key too; the client
+  can't replace it. Without it, none.
 - **`observability.explore`**: where the traces of the gateway are seen (`grafana`, the URL of Grafana; `tempo`, the uid
   of the datasource of Tempo; `orgId`), of the installation and not of each IDE. `management` tells it at
   `GET /observability` (no credential, as `/transports`); `{}` without it. It doesn't reach the SDK of λORM.

@@ -10,17 +10,18 @@ import { JwtAuthenticator, claimOf } from '../../src/lib/infrastructure/output/a
 import { ApiKeyAuthenticator, MethodsAuthenticator } from '../../src/lib/infrastructure/output/auth/authenticators'
 import { requestOptions } from '../../src/lib/application/usecases/requestOptions'
 import { principal, refusalOf } from '../../src/lib/domain/auth/principal'
+import { catalogOf } from '../helpers/roles'
 
 const minimal = { orm: { schemas: [{ path: 'shop', workspace: '/tmp/shop' }] }, transports: { http: { port: 9291 } } }
 const read = (authentication: unknown) => new ConfigReader().read({ ...minimal, authentication })
 
 describe('configuration', () => {
-	test('jwt: the issuer, its roles mapped to permissions and its claims to the context; defaults', () => {
+	test('jwt: the issuer, the claim of its roles (those of authorization.roles) and its claims to the context; defaults', () => {
 		const reading = read({
 			adapter: 'jwt',
 			issuer: 'https://auth.example.com/realms/shop',
 			audience: 'data-gateway',
-			principal: { name: 'preferred_username', permissions: { claim: 'realm_access.roles', roles: { reader: ['read'], backend: ['read', 'write'] } } },
+			principal: { name: 'preferred_username', permissions: { claim: 'realm_access.roles' } },
 			context: { tenant: 'tenant_id' }
 		})
 		expect(reading.issues).toEqual([])
@@ -32,7 +33,7 @@ describe('configuration', () => {
 				audience: ['data-gateway'],
 				algorithms: ['RS256', 'ES256', 'PS256'],
 				clockToleranceSec: 30,
-				principal: { name: 'preferred_username', permissions: { claim: 'realm_access.roles', roles: { reader: { permissions: ['read'] }, backend: { permissions: ['read', 'write'] } } } },
+				principal: { name: 'preferred_username', permissions: { claim: 'realm_access.roles' } },
 				context: { tenant: 'tenant_id' }
 			}
 		})
@@ -47,15 +48,15 @@ describe('configuration', () => {
 		expect(issues({ adapter: 'jwt', issuer: 'https://x', algorithms: ['HS256'] })).toContain('HS256 needs a secret')
 		expect(issues({ adapter: 'jwt', issuer: 'https://x', secret: 's', algorithms: ['RS256'] })).toContain('is for the keys of the issuer')
 		expect(issues({ adapter: 'jwt', issuer: 'https://x', secret: '' })).toContain('secret is empty')
-		// a role must say its permissions: one without them never gets all
-		expect(issues({ adapter: 'jwt', issuer: 'https://x', principal: { permissions: { claim: 'roles', roles: { admin: null } } } })).toContain('roles.admin must be a list')
-		expect(issues({ adapter: 'jwt', issuer: 'https://x', principal: { permissions: { claim: 'roles', roles: { admin: ['root'] } } } })).toContain('unknown permissions root')
+		// the roles are those of authorization.roles: a method says only the claim that names them
+		expect(issues({ adapter: 'jwt', issuer: 'https://x', principal: { permissions: { claim: 'roles', roles: { admin: ['read'] } } } })).toContain('principal.permissions.roles: the roles go in authorization.roles')
+		expect(issues({ adapter: 'jwt', issuer: 'https://x', principal: { permissions: {} } })).toContain('principal.permissions needs claim')
 		expect(issues({ adapter: 'jwt', issuer: 'https://x', context: { 'a-b': 'x' } })).toContain('is not a name of a variable')
 		expect(issues({ adapter: 'jwt', issuer: 'https://x', clockTolerance: '1h' })).toContain('up to 5m')
 	})
 
 	test('methods: jwt and local keys in order; none is not a method, they don\'t nest', () => {
-		const reading = read({ methods: [{ adapter: 'jwt', issuer: 'https://x' }, { adapter: 'local', type: 'apikey', keys: [{ name: 'svc', value: 'k', permissions: ['read'] }] }] })
+		const reading = read({ methods: [{ adapter: 'jwt', issuer: 'https://x' }, { adapter: 'local', type: 'apikey', keys: [{ name: 'svc', value: 'k', roles: ['reader'] }] }] })
 		expect(reading.issues).toEqual([])
 		expect(reading.config?.authentication.adapter).toBe('methods')
 		expect(reading.config?.authentication.methods?.map(m => m.adapter)).toEqual(['jwt', 'local'])
@@ -121,6 +122,7 @@ describe('the tokens of an issuer', () => {
 	const issuer = new Issuer()
 	let rsa: Key
 	let config: JwtConfig
+	const roles = catalogOf({ reader: ['read'], backend: ['read', 'write', 'script'], billing: ['read', 'write'] })
 	beforeAll(async () => {
 		await issuer.start()
 		rsa = await newKey('RS256', 'k1', issuer)
@@ -129,14 +131,14 @@ describe('the tokens of an issuer', () => {
 			audience: ['data-gateway'],
 			algorithms: ['RS256', 'ES256'],
 			clockToleranceSec: 0,
-			principal: { name: 'preferred_username', permissions: { claim: 'realm_access.roles', roles: { reader: { permissions: ['read'] }, backend: { permissions: ['read', 'write', 'script'] } } } },
+			principal: { name: 'preferred_username', permissions: { claim: 'realm_access.roles' } },
 			context: { tenant: 'tenant_id', region: 'address.region' }
 		}
 	})
 	afterAll(() => issuer.stop())
 
 	test('valid: its name, the permissions of its roles, its context and when it ends; the jwksUri discovered', async () => {
-		const authenticator = new JwtAuthenticator(config)
+		const authenticator = new JwtAuthenticator(config, roles)
 		const token = await sign(rsa, { preferred_username: 'ann', realm_access: { roles: ['reader', 'backend', 'other'] }, tenant_id: 't1', address: { region: 'eu' } }, { iss: issuer.url, aud: 'data-gateway' })
 		const result = await authenticator.authenticate(bearer(token))
 		expect(result.valid).toBe(true)
@@ -152,7 +154,7 @@ describe('the tokens of an issuer', () => {
 	})
 
 	test('refused, with why: expired, issuer, audience, not yet valid, signature, algorithm, unknown key, no name', async () => {
-		const authenticator = new JwtAuthenticator(config)
+		const authenticator = new JwtAuthenticator(config, roles)
 		const claims = { preferred_username: 'ann' }
 		const reasonOf = async (token: string) => {
 			const result = await authenticator.authenticate(bearer(token))
@@ -174,14 +176,14 @@ describe('the tokens of an issuer', () => {
 	})
 
 	test('not a JWT: not recognized (another method may take it)', async () => {
-		const authenticator = new JwtAuthenticator(config)
+		const authenticator = new JwtAuthenticator(config, roles)
 		for (const headers of [{}, { authorization: 'Bearer opaque-token' }, { authorization: 'Basic dTpw' }]) {
 			expect(await authenticator.authenticate(headers)).toMatchObject({ valid: false, recognized: false })
 		}
 	})
 
 	test('the keys rotate: a token of a new kid reads the JWKS again (not more often than the cooldown)', async () => {
-		const authenticator = new JwtAuthenticator(config, undefined, { cacheMaxAgeMs: 600_000, cooldownMs: 0 })
+		const authenticator = new JwtAuthenticator(config, roles, undefined, { cacheMaxAgeMs: 600_000, cooldownMs: 0 })
 		expect((await authenticator.authenticate(bearer(await sign(rsa, { preferred_username: 'ann' }, { iss: issuer.url, aud: 'data-gateway' })))).valid).toBe(true)
 		const before = issuer.jwksRequests
 		const rotated = await newKey('ES256', 'k2', issuer)
@@ -192,7 +194,7 @@ describe('the tokens of an issuer', () => {
 
 	test('an issuer that can\'t be reached: 503, not 401; it is tried again', async () => {
 		issuer.down = true
-		const authenticator = new JwtAuthenticator(config)
+		const authenticator = new JwtAuthenticator(config, roles)
 		const token = await sign(rsa, { preferred_username: 'ann' }, { iss: issuer.url, aud: 'data-gateway' })
 		const down = await authenticator.authenticate(bearer(token))
 		expect(refusalOf(down)).toMatchObject({ status: 503, message: expect.stringContaining('can\'t be checked now') })
@@ -202,7 +204,7 @@ describe('the tokens of an issuer', () => {
 	})
 
 	test('a shared secret (HS256, development)', async () => {
-		const authenticator = new JwtAuthenticator({ ...config, secret: 'a-secret-of-at-least-32-bytes-long!', algorithms: ['HS256'] })
+		const authenticator = new JwtAuthenticator({ ...config, secret: 'a-secret-of-at-least-32-bytes-long!', algorithms: ['HS256'] }, roles)
 		const key = new TextEncoder().encode('a-secret-of-at-least-32-bytes-long!')
 		const token = await new SignJWT({ preferred_username: 'dev' }).setProtectedHeader({ alg: 'HS256' }).setIssuer(issuer.url).setAudience('data-gateway').setExpirationTime('1m').sign(key)
 		expect((await authenticator.authenticate(bearer(token))).principal?.name).toBe('dev')
@@ -211,7 +213,7 @@ describe('the tokens of an issuer', () => {
 	})
 
 	test('methods: a JWT for the users, an API key for the services; the first that recognizes it decides', async () => {
-		const methods = new MethodsAuthenticator([new JwtAuthenticator(config), new ApiKeyAuthenticator([{ name: 'billing', value: 'svc-key', permissions: ['read', 'write'] }])])
+		const methods = new MethodsAuthenticator([new JwtAuthenticator(config, roles), new ApiKeyAuthenticator([{ name: 'billing', value: 'svc-key', roles: ['billing'] }], roles)])
 		expect((await methods.authenticate(bearer(await sign(rsa, { preferred_username: 'ann' }, { iss: issuer.url, aud: 'data-gateway' })))).principal?.name).toBe('ann')
 		expect((await methods.authenticate({ 'x-api-key': 'svc-key' })).principal?.name).toBe('billing')
 		// a wrong key is refused as a key, an expired JWT as a JWT: not tried by the other

@@ -45,13 +45,18 @@ logger: { level: error }
 audit: { enabled: false }
 rateLimit: { max: 0 }
 runtime: { checkConnections: false, heartbeat: { intervalMs: 200, timeoutMs: 3000 }, restart: { initialDelayMs: 200, maxDelayMs: 1000 } }
+authorization:
+  roles:
+    admin: { permissions: [ read, schemaRead, schemaWrite, schemaAdmin, workbenchWrite, build, sessionAdmin ] }
+    analyst: { permissions: [ read, workbenchWrite ] }
+    reader: { permissions: [ read ] }
 authentication:
   adapter: local
   type: apikey
   keys:
-    - { name: admin, value: admin-key, permissions: [ read, schemaRead, schemaWrite, schemaAdmin, workbenchWrite, build, sessionAdmin ] }
-    - { name: analyst, value: analyst-key, permissions: [ read, workbenchWrite ] }
-    - { name: reader, value: reader-key, permissions: [ read ] }
+    - { name: admin, value: admin-key, roles: [ admin ] }
+    - { name: analyst, value: analyst-key, roles: [ analyst ] }
+    - { name: reader, value: reader-key, roles: [ reader ] }
 transports:
   management: { port: ${port}, host: 127.0.0.1 }
 `

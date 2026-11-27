@@ -25,8 +25,8 @@ publishes it, and then:
   **[data-gateway-ide](https://hub.docker.com/r/flaviorita/data-gateway-ide)**, which reaches the gateway through its
   `management` port (left out in production when the schemas come in the volumes).
 
-**Who can do what** is decided in one place: each credential has permissions (`read`, `write`, `script`, `queue`,
-`stageImport`), the same on every transport, and every change is audited.
+**Who can do what** is decided in one place: roles say the permissions (`read`, `write`, `script`, `queue`,
+`stageImport`…), each credential or token names its roles, the same on every transport, and every change is audited.
 
 ## Try it in two minutes
 
@@ -108,8 +108,8 @@ authentication, the token in `SERVICE_TOKEN`). See [Clients](https://lambda-orm.
 - Every operation of λORM: queries (`execute`, `plan`, `metadata`, `model`, `parameters`, `constraints`), **scripts**
   (several queries in one transaction), **queued executions** (Kafka), the schema and its domain, and stages (export,
   import).
-- **Authentication** (API key, bearer token, basic) and **permissions** per credential (`read`, `write`, `script`,
-  `queue`, `stageImport`), globally, per transport or per schema. `execute` of a query that only selects needs `read`;
+- **Authentication** (API key, bearer token, basic, JWT) and **roles** with their permissions (`read`, `write`,
+  `script`, `queue`, `stageImport`…), which each credential names; globally, per transport or per schema. `execute` of a query that only selects needs `read`;
   one that writes needs `write`.
 - **Audit** of every write, **metrics** (Prometheus), **health** (Kubernetes probes), limits (rate, concurrency,
   sizes, time).
@@ -130,13 +130,17 @@ orm:
   schemas:
     - path: ""                         # that schema: it receives only the variables given here
       env: { NORTHWIND_DB: $NORTHWIND_DB }
+authorization:                         # what each credential may do: only its roles say it
+  roles:
+    reader:  { permissions: [ read ] }
+    backend: { permissions: [ read, write, script, queue, stageImport ] }
 authentication:                        # none (default) or local: apikey | bearer | basic
   adapter: local
   type: apikey
   header: X-Api-Key
   keys:
-    - { name: reader,  value: $READER_KEY,  permissions: [ read ] }
-    - { name: backend, value: $BACKEND_KEY, permissions: [ read, write, script, queue, stageImport ] }
+    - { name: reader,  value: $READER_KEY,  roles: [ reader ] }
+    - { name: backend, value: $BACKEND_KEY, roles: [ backend ] }
 scripts:
   enabled: true                        # POST /script, off by default
 transports:                            # a transport is on only when it has a port
