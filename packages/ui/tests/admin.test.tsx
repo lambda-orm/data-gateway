@@ -1055,4 +1055,27 @@ describe('what an entity inherits from the abstract one it extends', () => {
 		expect(within(own).getByText('redefines Audited')).toBeTruthy()
 		expect(within(own).queryByRole('textbox', { name: 'createdAt name' })).toBeNull()
 	})
+
+	// the abstract isn't in the completed domain (nor in the explorer): the view and the form open its form
+	const formOf = (name: string) => waitFor(() => {
+		const f = document.querySelector('[role=tabpanel]:not([hidden]) .lw-schema-forms')
+		expect(f?.textContent).toContain(`Entities / ${name}`)
+		return f as HTMLElement
+	})
+
+	test('its view opens the form of the abstract it extends', async () => {
+		const view = await openCustomers()
+		fireEvent.click(await within(view).findByRole('button', { name: 'extends Audited' }))
+		const form = await formOf('Audited')
+		expect(within(form).getAllByRole('tab').map(t => t.textContent)[0]).toBe('Properties (2)')
+	})
+
+	test('its form opens the form of the abstract in a tab of its own, keeping what is being edited', async () => {
+		const view = await openCustomers()
+		fireEvent.click(await within(view).findByRole('button', { name: 'Edit' }))
+		const form = await formOf('Customers')
+		fireEvent.click(within(within(form).getByRole('group', { name: 'properties Inherited from Audited' })).getByRole('button', { name: 'Open Audited' }))
+		await formOf('Audited')
+		expect(screen.getAllByRole('tab').map(t => t.textContent)).toEqual(expect.arrayContaining([expect.stringContaining('Customers'), expect.stringContaining('Audited')]))
+	})
 })

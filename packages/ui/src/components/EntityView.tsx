@@ -31,6 +31,8 @@ export interface EntityViewProps {
 	onEdit?: (schema: string, entity: string) => void
 	/** the text of the button of onEdit */
 	editLabel?: string
+	/** The form of an entity the domain doesn't serve: the abstract it extends (the completed domain has no abstracts) */
+	onOpenForm?: (schema: string, entity: string) => void
 	/** Its removal (what uses it, and a confirmation), when the credential may write the schema */
 	onRemove?: (schema: string, entity: string) => void
 	/** the text of the button of onRemove */
@@ -54,7 +56,7 @@ const Check: React.FC<{ on?: boolean }> = ({ on }) => <>{on ? '✓' : ''}</>
  * auto, default, enum, what each foreign key references, expressions), its relations and what references it, its
  * keys, indexes and constraints, its rows (a backoffice: editable with write, exported) and its diagram with its neighbours.
  */
-export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: name, domain: loadDomain, theme = 'light', locale, onOpenEntity, onQuery, onQueryText, onEdit, editLabel = 'Edit', onRemove, removeLabel = 'Remove', pageSize = 50, admin, tracesUrl, revision }) => {
+export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: name, domain: loadDomain, theme = 'light', locale, onOpenEntity, onQuery, onQueryText, onEdit, editLabel = 'Edit', onOpenForm, onRemove, removeLabel = 'Remove', pageSize = 50, admin, tracesUrl, revision }) => {
 	const m = explorerMessagesOf(locale)
 	const a = adminMessagesOf(locale)
 	const [domain, setDomain] = useState<DomainInfo>()
@@ -123,11 +125,13 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 				<code>/{schema}</code>
 				{entity.abstract && <span className="lw-badge">{m.abstract}</span>}
 				{entity.view && <span className="lw-badge">{m.viewEntity}</span>}
-				{(entity.extends ?? inheritance?.bases[0]) && (
-					<span className="lw-badge" title={inheritance?.bases.length ? [entity.name, ...inheritance.bases].join(' → ') : undefined}>
-						{format(m.extendsEntity, { name: entity.extends ?? inheritance!.bases[0] })}
-					</span>
-				)}
+				{(entity.extends ?? inheritance?.bases[0]) && (() => {
+					const base: string = entity.extends ?? inheritance!.bases[0]
+					const title = inheritance?.bases.length ? [entity.name, ...inheritance.bases].join(' → ') : undefined
+					return onOpenForm
+						? <button type="button" className="lw-badge lw-badge-link" title={title} onClick={() => onOpenForm(schema, base)}>{format(m.extendsEntity, { name: base })}</button>
+						: <span className="lw-badge" title={title}>{format(m.extendsEntity, { name: base })}</span>
+				})()}
 				<span className="lw-spacer" />
 				{tracesUrl && <a href={tracesUrl} target="_blank" rel="noopener noreferrer">{a.viewTraces}</a>}
 				{onRemove && <button className="lw-danger" onClick={() => onRemove(schema, entity.name)}>{removeLabel}</button>}

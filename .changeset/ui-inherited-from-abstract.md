@@ -7,3 +7,7 @@ relations apart, by the base that declares them, read only (they are changed in 
 own one that redefines an inherited one says so; its view says `extends <base>` (the chain in its title) and, in its
 properties and relations, a column Inherited with where each one comes from. Read from the lambdaORM.yaml (with
 schemaRead): the completed domain no longer says `extends`. `inheritanceOf(entities, name)` resolves it as λORM does.
+
+The abstract isn't in the completed domain nor in the explorer: `extends <base>` of the view opens its form
+(`onOpenForm`), and so does the link of the inherited ones in the form of one element, in a tab of its own
+(`onOpenElement` of `SchemaForms`), keeping what is being edited.

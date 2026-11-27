@@ -110,6 +110,8 @@
 .lw-dirty { color: var(--lw-accent); font-weight: 700; }
 .lw-save { display: inline-flex; gap: 6px; align-items: center; margin-left: 8px; }
 .lw-badge { font-size: var(--lw-text-xs); border: 1px solid var(--lw-border); border-radius: var(--lw-pill); padding: 0 8px; color: var(--lw-muted); }
+button.lw-badge-link { background: none; cursor: pointer; font: inherit; font-size: var(--lw-text-xs); }
+button.lw-badge-link:hover { color: var(--lw-fg); border-color: var(--lw-accent); }
 .lw-muted { color: var(--lw-muted); }
 .lw-icon-button { display: inline-flex; align-items: center; justify-content: center; font: inherit; color: inherit; background: none; border: 1px solid transparent; border-radius: 4px; padding: 3px; cursor: pointer; }
 .lw-icon-button:hover, .lw-icon-button:focus-visible { border-color: var(--lw-border); background: var(--lw-hover); }

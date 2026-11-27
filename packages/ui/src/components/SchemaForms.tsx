@@ -35,6 +35,8 @@ export interface SchemaFormsProps {
 	removeRequest?: number
 	/** The schema itself removed (its Remove, next to Edit in what it is) */
 	onRemoveSchema?: () => void
+	/** With focus: another element it names (the abstract an entity extends), opened in a tab of its own */
+	onOpenElement?: (focus: FormFocus) => void
 }
 
 /** The variables of the connections (.env): defined or not, and where used; a value is set, never shown */
@@ -209,7 +211,7 @@ type About = Record<typeof ABOUT[number], string>
  * with the element as it was read: someone else's change to another element doesn't collide; to the same one, the
  * form shows what it has now. The gateway writes it keeping the comments and the rest of the file.
  */
-export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, theme, schema, writable, revision, locale, canAdmin = false, focus, onChanged, editRequest, onDone, removeRequest, onRemoveSchema }) => {
+export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, theme, schema, writable, revision, locale, canAdmin = false, focus, onChanged, editRequest, onDone, removeRequest, onRemoveSchema, onOpenElement }) => {
 	const [showVariables, setShowVariables] = useState(focus?.section === 'variables')
 	const [showApplication] = useState(focus?.section === 'application')
 	// a focused element is read first: Edit to change it; the forms of the whole schema edit at once
@@ -390,7 +392,10 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, theme, schema, 
 		<fieldset key={base} className="lw-form-group lw-inherited" aria-label={`${key} ${format(e.inheritedFrom, { name: base })}`}>
 			<legend>
 				{format(e.inheritedFrom, { name: base })}
-				{!focus && <button type="button" className="lw-link" disabled={changed} onClick={() => openBase(base)}>{format(e.openNamed, { name: base })}</button>}
+				{(!focus || onOpenElement) && (
+					<button type="button" className="lw-link" disabled={!focus && changed}
+						onClick={() => focus ? onOpenElement!({ section: 'entities', name: base }) : openBase(base)}>{format(e.openNamed, { name: base })}</button>
+				)}
 			</legend>
 			<p className="lw-type">{format(e.inheritedHint, { name: base })}</p>
 			<Rows label={`${key} ${base}`} rows={list} columns={columns} readOnly addLabel="" expressionLabel={m.expression} detail={detail} onChange={() => undefined} />

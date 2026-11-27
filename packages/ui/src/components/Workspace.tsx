@@ -949,7 +949,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 								{r && tab.kind === 'element' && adminApi && tab.focus && (
 									<SchemaForms admin={adminApi} theme={theme} schema={tab.schema ?? ''} writable={!!can?.schemaWrite} canAdmin={!!can?.schemaAdmin} revision={sinceOf(conn, tab.schema)} locale={workbench.locale}
 										focus={tab.focus} editRequest={tab.editRequest} removeRequest={tab.removeRequest} onChanged={focus => elementChanged(tab.id, focus)}
-										onDone={() => elementDone(conn, tab)} />
+										onDone={() => elementDone(conn, tab)} onOpenElement={focus => openElement(conn, tab.schema ?? '', focus)} />
 								)}
 								{r && tab.kind === 'schema' && adminApi && (
 									<CommandsPanel admin={adminApi} schema={tab.schema ?? ''} canSave={!!can?.workbenchWrite} canBuild={!!can?.build} locale={workbench.locale}
@@ -990,6 +990,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 									<EntityView key={sinceOf(conn, tab.schema)} api={r.api} schema={tab.schema ?? ''} entity={tab.entity ?? ''} domain={r.loaderOf(tab.schema ?? '')} theme={theme} locale={workbench.locale}
 										onOpenEntity={(schema, entity) => openEntity(conn, schema, entity)} onQuery={queryEntity(conn)} onQueryText={queryOfDiagram(conn)} culture={workbench.culture}
 										onEdit={adminApi && can?.schemaWrite ? (schema, entity) => openElement(conn, schema, { section: 'entities', name: entity }, true) : undefined} editLabel={a.edit}
+										onOpenForm={adminApi && can?.schemaRead ? (schema, entity) => openElement(conn, schema, { section: 'entities', name: entity }) : undefined}
 										onRemove={adminApi && can?.schemaWrite ? (schema, entity) => openElement(conn, schema, { section: 'entities', name: entity }, false, true) : undefined} removeLabel={a.remove}
 										admin={adminApi && can?.schemaRead ? adminApi : undefined} revision={sinceOf(conn, tab.schema)}
 										tracesUrl={connections.find(c => c.id === conn)?.tracesUrl?.(tab.schema ?? '', tab.entity ?? '')} />
