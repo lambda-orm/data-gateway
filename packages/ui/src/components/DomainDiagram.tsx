@@ -78,8 +78,8 @@ interface View { x: number, y: number, k: number }
 
 /** The colours are in the drawing (not in CSS): the exported SVG and PNG look the same as the screen */
 const PALETTES = {
-	light: { canvas: '#f6f7f9', box: '#ffffff', header: '#e8eefc', border: '#9aa4b2', text: '#1d1f23', muted: '#6b7280', pk: '#b54708', fk: '#2563eb', line: '#7c8594', accent: '#2563eb' },
-	dark: { canvas: '#16181d', box: '#1e2128', header: '#263049', border: '#4a515c', text: '#e6e8eb', muted: '#9aa1ab', pk: '#f5b971', fk: '#6ea0ff', line: '#7d8590', accent: '#6ea0ff' }
+	light: { canvas: '#f6f7f9', box: '#ffffff', header: '#e8eefc', abstractHeader: '#efe9fb', abstractBorder: '#8b7fb0', border: '#9aa4b2', text: '#1d1f23', muted: '#6b7280', pk: '#b54708', fk: '#2563eb', line: '#7c8594', accent: '#2563eb' },
+	dark: { canvas: '#16181d', box: '#1e2128', header: '#263049', abstractHeader: '#2e2942', abstractBorder: '#8f84b8', border: '#4a515c', text: '#e6e8eb', muted: '#9aa1ab', pk: '#f5b971', fk: '#6ea0ff', line: '#7d8590', accent: '#6ea0ff' }
 }
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
 const SANS = 'system-ui, -apple-system, "Segoe UI", sans-serif'
@@ -140,14 +140,19 @@ const Box: React.FC<{
 }> = ({ entity, at, compact, focused, foreignKeys, colors, onClick, onDoubleClick, onPointerDown, onRemove, removeLabel, onAddRelated, addRelatedLabel, chosen, onToggleField, allChosen, onToggleAll, allLabel }) => {
 	const { width, height } = boxSize(entity, compact, !!onToggleAll)
 	const keys = new Set(entity.primaryKey ?? [])
+	// an abstract one (no table, only what others extend): its own header, a dashed border, «abstract»
+	const abstract = !!entity.abstract
+	const header = abstract ? colors.abstractHeader : colors.header
+	const border = focused ? colors.accent : abstract ? colors.abstractBorder : colors.border
+	const dash = abstract ? '5 3' : undefined
 	return (
-		<g transform={`translate(${at.x},${at.y})`} className={`lw-entity ${onPointerDown ? 'lw-movable' : ''}`} data-entity={entity.name} onClick={onClick} onDoubleClick={onDoubleClick} onPointerDown={onPointerDown}>
-			<title>{entity.name}</title>
-			<rect width={width} height={height} rx={6} fill={colors.box} stroke={focused ? colors.accent : colors.border} strokeWidth={focused ? 2 : 1} />
-			<rect width={width} height={HEADER} rx={6} fill={colors.header} />
-			{!compact && <rect y={HEADER - 6} width={width} height={6} fill={colors.header} />}
+		<g transform={`translate(${at.x},${at.y})`} className={`lw-entity ${abstract ? 'lw-abstract' : ''} ${onPointerDown ? 'lw-movable' : ''}`} data-entity={entity.name} onClick={onClick} onDoubleClick={onDoubleClick} onPointerDown={onPointerDown}>
+			<title>{abstract ? `${entity.name} (abstract)` : entity.name}</title>
+			<rect width={width} height={height} rx={6} fill={colors.box} stroke={border} strokeWidth={focused ? 2 : 1} strokeDasharray={dash} />
+			<rect width={width} height={HEADER} rx={6} fill={header} />
+			{!compact && <rect y={HEADER - 6} width={width} height={6} fill={header} />}
 			{!compact && <line x1={0} x2={width} y1={HEADER} y2={HEADER} stroke={colors.border} />}
-			<rect width={width} height={height} rx={6} fill="none" stroke={focused ? colors.accent : colors.border} strokeWidth={focused ? 2 : 1} />
+			<rect width={width} height={height} rx={6} fill="none" stroke={border} strokeWidth={focused ? 2 : 1} strokeDasharray={dash} />
 			{onToggleAll && (
 				<g role="checkbox" aria-checked={!!allChosen} aria-label={`${entity.name}: ${allLabel ?? 'all properties'}`} className="lw-field-row"
 					onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onToggleAll() }} onDoubleClick={e => e.stopPropagation()}>
@@ -158,6 +163,7 @@ const Box: React.FC<{
 			)}
 			<text x={onToggleAll ? 28 : 10} y={17} fontFamily={SANS} fontSize={13} fontWeight={700} fontStyle={entity.abstract ? 'italic' : undefined} fill={colors.text}>
 				{entity.name}{entity.extends && <tspan fill={colors.muted} fontWeight={400}> : {entity.extends}</tspan>}
+				{abstract && <tspan fill={colors.abstractBorder} fontWeight={400} fontStyle="normal" fontSize={10}> «abstract»</tspan>}
 			</text>
 			{!compact && (entity.properties ?? []).map((property, i) => {
 				const y = HEADER + 4 + i * ROW + 13

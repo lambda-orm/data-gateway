@@ -145,7 +145,7 @@ const CHAR = 7.2
 
 /** The size of an entity's box: its name and, unless compact, a row per property; check: a check before the name (the wizard) */
 export const boxSize = (entity: EntityInfo, compact: boolean, check = false): { width: number, height: number } => {
-	const title = (entity.name.length + (entity.extends ? entity.extends.length + 3 : 0)) * 8 + 24 + (check ? 18 : 0)
+	const title = (entity.name.length + (entity.extends ? entity.extends.length + 3 : 0)) * 8 + 24 + (check ? 18 : 0) + (entity.abstract ? 64 : 0)
 	const rows = compact ? [] : (entity.properties ?? []).map(p => (p.name.length + 2 + typeText(p).length) * CHAR + 44)
 	return { width: Math.ceil(Math.max(140, title, ...rows)), height: HEADER + (compact ? 0 : Math.max(1, entity.properties?.length ?? 0) * ROW + 6) }
 }

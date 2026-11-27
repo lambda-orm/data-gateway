@@ -161,7 +161,15 @@ describe('DomainDiagram', () => {
 		fireEvent.click(option('extended entities'))
 		await waitFor(() => expect(shown()).toEqual(['Areas', 'Audited', 'Located', 'Locations']))
 		expect([...container.querySelectorAll('[data-edge^="extends:"]')].map(e => e.getAttribute('data-edge')).sort()).toEqual(['extends:Audited>Located', 'extends:Located>Areas'])
-		expect(container.querySelector('[data-entity=Located]')!.textContent).toContain('Located : Audited')
+		expect(container.querySelector('[data-entity=Located]')!.textContent).toContain('Located : Audited «abstract»')
+		// an abstract one is drawn apart: its class, a dashed border, «abstract»; a concrete one is not
+		const located = container.querySelector('.lw-diagram-svg [data-entity=Located]')!
+		expect(located.classList.contains('lw-abstract')).toBe(true)
+		expect(located.querySelector('rect')!.getAttribute('stroke-dasharray')).toBe('5 3')
+		const areas = container.querySelector('.lw-diagram-svg [data-entity=Areas]')!
+		expect(areas.classList.contains('lw-abstract')).toBe(false)
+		expect(areas.querySelector('rect')!.getAttribute('stroke-dasharray')).toBeNull()
+		expect(areas.textContent).not.toContain('«abstract»')
 		// without its related ones: the entity and what it extends
 		fireEvent.click(option('related entities'))
 		await waitFor(() => expect(shown()).toEqual(['Areas', 'Audited', 'Located']))
