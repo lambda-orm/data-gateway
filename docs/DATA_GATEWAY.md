@@ -260,6 +260,8 @@ authentication:                    # política global
   keys:
     - { name: agent,   value: $AGENT_KEY,   permissions: [ read ] }
     - { name: backend, value: $BACKEND_KEY, permissions: [ read, write, script, queue, stageImport ] }
+    # la key de una persona: su contexto de λORM (variable: valor), como el de un token (docs/JWT.md §4)
+    - { name: ana, value: $ANA_KEY, permissions: [ read, write ], context: { username: ana@acme.com } }
 
 rateLimit: { windowMs: 30000, max: 0 }   # solo http; max: 0 = sin límite
 
@@ -726,7 +728,7 @@ en el edge, antes de enviar nada al esquema. Cada tipo es un `AuthenticatorPort`
 | --- | --- | --- | --- |
 | `none` (por defecto) | — | — | todo (principal anónimo con todos los permisos) |
 | `local`, `type: bearer` | `token` | `tokens: [{ name, value, permissions }]` | `Authorization: Bearer <token>` |
-| `local`, `type: apikey` | `value` (+ `header`, def. `X-Api-Key`) | `keys: [{ name, value, permissions }]` | el header |
+| `local`, `type: apikey` | `value` (+ `header`, def. `X-Api-Key`) | `keys: [{ name, value, permissions, context }]` | el header |
 | `local`, `type: basic` | `username`, `password` | `users: [{ username, password, permissions }]` | `Authorization: Basic …` |
 | `jwt` (fase posterior) | — | roles / scopes del token mapeados a permisos | JWT firmado (Keycloak, Entra ID) |
 

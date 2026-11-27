@@ -33,6 +33,17 @@ describe('authenticators', () => {
 		expect((await auth.authenticate({ authorization: 'Bearer k-agent' })).valid).toBe(false)
 	})
 
+	test('the context of a key is the one of its principal (with roles too); without it, none', async () => {
+		const auth = new ApiKeyAuthenticator([
+			{ name: 'ana', value: 'k-ana', permissions: ['read' as const], context: { username: 'ana@acme' } },
+			{ name: 'bob', value: 'k-bob', permissions: [], roles: ['analyst'], context: { username: 'bob@acme' } },
+			...credentials
+		], 'x-api-key')
+		expect((await auth.authenticate({ 'x-api-key': 'k-ana' })).principal?.context).toEqual({ username: 'ana@acme' })
+		expect((await auth.authenticate({ 'x-api-key': 'k-bob' })).principal).toMatchObject({ roles: ['analyst'], context: { username: 'bob@acme' } })
+		expect((await auth.authenticate({ 'x-api-key': 'k-agent' })).principal?.context).toBeUndefined()
+	})
+
 	test('basic', async () => {
 		const auth = new BasicAuthenticator([{ name: 'ana', username: 'ana', password: 'p:ss', permissions: ['read'] }])
 		const basic = (text: string) => 'Basic ' + Buffer.from(text).toString('base64')

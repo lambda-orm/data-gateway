@@ -6,6 +6,11 @@ All notable changes to this project will be documented in this file.
 
 ### Unreleased
 
+- **The context of a local credential:** an entry of `keys`, `tokens` or `users` may say `context` (variable → a text,
+  a number or a boolean), the context of λORM of its requests as a token gives it from its claims:
+  `{ name: ana, value: $ANA_KEY, context: { username: ana@acme.com } }` fills a `default: context.username` or a
+  `writeValue` of the schema. It reaches a session opened with the key too; the client can't replace it. Without it,
+  none (as before).
 - **`observability.explore`**: where the traces of the gateway are seen (`grafana`, the URL of Grafana; `tempo`, the uid
   of the datasource of Tempo; `orgId`), of the installation and not of each IDE. `management` tells it at
   `GET /observability` (no credential, as `/transports`); `{}` without it. It doesn't reach the SDK of λORM.
