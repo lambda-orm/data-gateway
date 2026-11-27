@@ -77,6 +77,7 @@ export interface AdminMessages {
 	forms: string
 	entities: string
 	enums: string
+	abstracts: string
 	sources: string
 	mappings: string
 	stages: string
@@ -279,6 +280,7 @@ ROWS.push(
 	['forms', 'Schema (forms)', 'Esquema (formularios)', 'Esquema (formulários)', 'Schéma (formulaires)', 'Schema (moduli)', 'Schema (Formulare)', 'Schema (formulieren)', 'Esquema (formularis)', 'Esquema (formularios)', 'Eskema (inprimakiak)'],
 	['entities', 'Entities', 'Entidades', 'Entidades', 'Entités', 'Entità', 'Entitäten', 'Entiteiten', 'Entitats', 'Entidades', 'Entitateak'],
 	['enums', 'Enums', 'Enums', 'Enums', 'Énumérations', 'Enum', 'Enums', 'Enums', 'Enums', 'Enums', 'Enumak'],
+	['abstracts', 'Abstracts', 'Abstractas', 'Abstratas', 'Abstraites', 'Astratte', 'Abstrakte', 'Abstracte', 'Abstractes', 'Abstractas', 'Abstraktuak'],
 	['sources', 'Sources', 'Sources', 'Sources', 'Sources', 'Sources', 'Sources', 'Sources', 'Sources', 'Sources', 'Sources'],
 	['mappings', 'Mappings', 'Mappings', 'Mappings', 'Mappings', 'Mappings', 'Mappings', 'Mappings', 'Mappings', 'Mappings', 'Mappings'],
 	['stages', 'Stages', 'Stages', 'Stages', 'Stages', 'Stages', 'Stages', 'Stages', 'Stages', 'Stages', 'Stages'],

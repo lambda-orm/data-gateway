@@ -287,6 +287,21 @@ export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, sc
 		})
 	}
 	const namesIn = (list: unknown): string[] => Array.isArray(list) ? list.map((e: any) => e?.name).filter((n: unknown): n is string => typeof n === 'string') : []
+	// the abstract entities, as the lambdaORM.yaml says them (the completed domain has none): `abstract: true` among the
+	// entities, and domain.abstracts once λORM has it (L52)
+	const abstractsIn = (doc: any): { name: string, extends?: string }[] => [
+		...(Array.isArray(doc?.domain?.abstracts) ? doc.domain.abstracts : []),
+		...(Array.isArray(doc?.domain?.entities) ? doc.domain.entities.filter((e: any) => e?.abstract === true) : [])
+	].filter((e: any) => typeof e?.name === 'string').map((e: any) => ({ name: e.name, ...(typeof e.extends === 'string' ? { extends: e.extends } : {}) }))
+	const abstractRows = (schema: string, doc: any, level: number) => {
+		if (doc === undefined) return [<Row key="abstracts-loading" level={level} label={m.loading} icon={null} muted />]
+		const list = abstractsIn(doc)
+		if (list.length === 0) return [<Row key="abstracts-none" level={level} label={m.none} icon={null} muted />]
+		return list.map(e => (
+			<Row key={`abstract:${e.name}`} level={level} label={e.name} icon={<Icons.entity />} title={e.extends ? format(m.extendsEntity, { name: e.extends }) : undefined}
+				onOpen={() => admin!.onOpenElement!(schema, { section: 'entities', name: e.name })} />
+		))
+	}
 	const removeSchema = (schema: string) => admin?.can.schemaAdmin
 		? <Action label={`${a.removeSchema} ${schema || '/'}`} onClick={() => admin.onRemoveSchema(schema)}><Icons.trash /></Action>
 		: null
@@ -317,19 +332,21 @@ export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, sc
 			const has = (part: string) => expanded.has(`${part}:${s.path}`)
 			const once = (id: string, load: () => void) => { if (!requested.current.has(id)) { requested.current.add(id); load() } }
 			if (has('d') || has('e') || has('n')) loadDomain(s.path)
-			if (has('i') || has('mappings') || has('sources') || has('stages')) once(`doc:${s.path}`, () => loadDoc(s.path))
+			if (has('i') || has('ab') || has('mappings') || has('sources') || has('stages')) once(`doc:${s.path}`, () => loadDoc(s.path))
 			if (has('da')) once(`data:${s.path}`, () => loadFolder(s.path, 'data'))
 			if (has('sc')) once(`src:${s.path}`, () => loadFolder(s.path, 'src'))
 		}
 	}, [expanded, schemas])
 
-	// a schema reloaded (another since): its domain again, if it was read
+	// a schema reloaded (another since): its domain and its YAML again (abstracts, infrastructure), if they were read
 	const seen = useRef<Record<string, string | undefined>>({})
 	useEffect(() => {
 		for (const s of schemas) {
 			const before = seen.current[s.path]
 			seen.current[s.path] = s.since
-			if (before === undefined || before === s.since || domains[s.path] === undefined) continue
+			if (before === undefined || before === s.since) continue
+			if (docs[s.path] !== undefined) loadDoc(s.path)
+			if (domains[s.path] === undefined) continue
 			const read = domainOf ?? (api.domain ? (path: string) => api.domain!(path) : undefined)
 			if (read) read(s.path).then(domain => setDomains(d => ({ ...d, [s.path]: domain })), () => undefined)
 		}
@@ -528,6 +545,14 @@ export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, sc
 													<Row level={4} label={a.enums} icon={<Icons.enums />} expanded={expanded.has(k('n'))}
 														onToggle={unfold('n', () => loadDomain(s.path))} actions={newOf(s.path, 'enums')} />
 													{expanded.has(k('n')) && elementRows(s.path, 'enums', enums, 5)}
+													{admin?.can.schemaRead && admin.loadSchemaDoc && admin.onOpenElement && (
+														<>
+															<Row level={4} label={a.abstracts} icon={<Icons.entity />} expanded={expanded.has(k('ab'))}
+																onToggle={unfold('ab', () => loadDoc(s.path))}
+																actions={canWrite ? <Action label={format(a.newNamed, { name: a.abstracts })} onClick={() => admin.onOpenElement!(s.path, { section: 'entities', abstract: true })}><Icons.plus /></Action> : null} />
+															{expanded.has(k('ab')) && abstractRows(s.path, doc, 5)}
+														</>
+													)}
 												</>
 											)}
 											{admin?.can.schemaRead && admin.onOpenElement && (

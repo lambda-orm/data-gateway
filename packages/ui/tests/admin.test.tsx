@@ -965,6 +965,20 @@ describe('several data-gateways', () => {
 		await readAgain()
 	})
 
+	test('its key entered after it opened: what the credential may do is asked again (the administration appears)', async () => {
+		// without its key the gateway refuses; with it (the same admin, the same fetch) it answers
+		class KeyedAdmin extends FakeAdmin { keyed = false; async capabilities () { if (!this.keyed) throw new Error('401'); return super.capabilities() } }
+		const admin = new KeyedAdmin()
+		const of = (problem?: string) => ({ id: 'a', name: 'local', api: new FakeApi(), admin, store: new MemoryWorkspaceStore([], true), ...(problem ? { problem } : {}) })
+		const { rerender } = render(<Workspace locale="en" refreshMs={0} history={false} connections={[of('Its key: open the connection to enter it')]} />)
+		fireEvent.click(await rowSoon('Metadata'))
+		await waitFor(() => expect(row('domain')).toBeTruthy())
+		expect(row('config')).toBeFalsy()
+		admin.keyed = true
+		rerender(<Workspace locale="en" refreshMs={0} history={false} connections={[of()]} />)
+		await rowSoon('config')
+	})
+
 	test('a connection opens its page by a click on its name (its edit and remove are there)', async () => {
 		let opened = 0
 		const a = { id: 'a', name: 'local', description: 'http://localhost:8097/data-gateway', api: new FakeApi(), admin: false as const, store: new MemoryWorkspaceStore([], true), onOpen: () => { opened++ } }
@@ -1077,5 +1091,35 @@ describe('what an entity inherits from the abstract one it extends', () => {
 		fireEvent.click(within(within(form).getByRole('group', { name: 'properties Inherited from Audited' })).getByRole('button', { name: 'Open Audited' }))
 		await formOf('Audited')
 		expect(screen.getAllByRole('tab').map(t => t.textContent)).toEqual(expect.arrayContaining([expect.stringContaining('Customers'), expect.stringContaining('Audited')]))
+	})
+
+	const openDomain = async () => {
+		const admin = new FakeAdmin()
+		admin.text = SCHEMA
+		render(<Workspace api={new InheritedApi()} admin={admin} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" refreshMs={0} />)
+		await waitFor(() => expect(row('domain')).toBeTruthy())
+		fireEvent.click(row('domain'))
+		return admin
+	}
+
+	test('the domain lists its abstracts apart, from the lambdaORM.yaml; each opens its form', async () => {
+		await openDomain()
+		fireEvent.click(await rowSoon('Entities'))
+		await rowSoon('Customers')
+		expect(row('Audited')).toBeFalsy()
+		fireEvent.click(await rowSoon('Abstracts'))
+		fireEvent.click(await rowSoon('Audited'))
+		const form = await formOf('Audited')
+		expect((within(form).getByRole('checkbox', { name: 'abstract' }) as HTMLInputElement).checked).toBe(true)
+	})
+
+	test('a new abstract starts abstract', async () => {
+		const admin = await openDomain()
+		fireEvent.click(within(await rowSoon('Abstracts')).getByRole('button', { name: 'New in Abstracts' }))
+		const form = await waitFor(() => { const f = document.querySelector('[role=tabpanel]:not([hidden]) .lw-schema-forms'); expect(f).toBeTruthy(); return f as HTMLElement })
+		expect((within(form).getByRole('checkbox', { name: 'abstract' }) as HTMLInputElement).checked).toBe(true)
+		fireEvent.change(within(form).getByLabelText('name'), { target: { value: 'Located' } })
+		fireEvent.click(within(form).getByRole('button', { name: 'Save' }))
+		await waitFor(() => expect(admin.patches[0]).toMatchObject({ op: 'add', at: ['domain', 'entities'], value: { name: 'Located', abstract: true } }))
 	})
 })

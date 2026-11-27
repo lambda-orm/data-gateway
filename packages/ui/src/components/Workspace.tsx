@@ -260,11 +260,14 @@ const ConnectionSection: React.FC<{
 	const [can, setCan] = useState<AdminCapabilities>()
 	// what the gateway allows is known (or there is no administration): until then nothing saved is read
 	const [known, setKnown] = useState(false)
+	// asked again when its problem goes (its key entered after the page opened: the same fetch, now with a session)
+	const solved = !spec.problem
 	useEffect(() => {
+		if (!solved && can) return
 		setCan(undefined)
 		setKnown(!adminApi)
 		adminApi?.capabilities().then(setCan, () => setCan(undefined)).finally(() => setKnown(true))
-	}, [adminApi])
+	}, [adminApi, solved])
 	// with workbenchWrite what is saved goes to the workspaces of the gateway, shared; without it, to this browser
 	const shared = !spec.store && !!adminApi && !!can?.workbenchWrite
 	const browserKey = spec.workspaceKey ?? spec.baseUrl ?? 'default'
@@ -663,8 +666,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 	const openSchema = (conn: string, schema: string) => {
 		if (!reuse(t => same(conn, t) && t.kind === 'schema' && t.schema === schema)) add({ kind: 'schema', title: format(a.commandsOf, { name: schema || '/' }), schema, connection: conn })
 	}
-	const focusKey = (f: FormFocus) => `${f.section}:${(f as any).name ?? ''}`
-	const focusTitle = (f: FormFocus) => (f as any).name ?? (f.section === 'application' || f.section === 'variables' || f.section === 'about' ? a[f.section] : format(a.newNamed, { name: a[f.section] }))
+	const focusKey = (f: FormFocus) => `${f.section}:${(f as any).name ?? ''}${(f as any).abstract ? ':abstract' : ''}`
+	const focusTitle = (f: FormFocus) => (f as any).name ?? (f.section === 'application' || f.section === 'variables' || f.section === 'about' ? a[f.section] : format(a.newNamed, { name: (f as any).abstract ? a.abstracts : a[f.section] }))
 	// one element of the schema; a new one (no name) is always a tab of its own
 	// edit: asked by Edit, it opens in edit (an open tab of it goes to edit too)
 	// remove: asked by Remove in the view of the element (its form says what uses it and asks to confirm)

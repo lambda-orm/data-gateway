@@ -95,7 +95,8 @@ const Variables: React.FC<{ admin: AdminApiPort, schema: string, canAdmin: boole
 type Json = any
 type Section = 'entities' | 'enums' | 'sources' | 'mappings' | 'stages'
 /** What a tab of one element shows: an element of a section, the application section as YAML, or the variables */
-export type FormFocus = { section: Section, name?: string } | { section: 'application' } | { section: 'variables' } | { section: 'about' }
+/** abstract: a new entity that starts abstract (Abstracts of the explorer) */
+export type FormFocus = { section: Section, name?: string, abstract?: boolean } | { section: 'application' } | { section: 'variables' } | { section: 'about' }
 
 const SECTIONS: { key: Section, at: string[] }[] = [
 	{ key: 'entities', at: ['domain', 'entities'] },
@@ -226,7 +227,7 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, theme, schema, 
 	const [doc, setDoc] = useState<Json>()
 	const [selected, setSelected] = useState<{ section: Section, name?: string } | undefined>(
 		focus && focus.section !== 'application' && focus.section !== 'variables' && focus.section !== 'about' ? { section: focus.section, name: (focus as any).name } : undefined)
-	const [draft, setDraft] = useState<Json>(creating ? {} : undefined)
+	const [draft, setDraft] = useState<Json>(creating ? ((focus as any).abstract ? { abstract: true } : {}) : undefined)
 	const [read, setRead] = useState<Json>()
 	const [error, setError] = useState<string>()
 	const [notice, setNotice] = useState<string>()
