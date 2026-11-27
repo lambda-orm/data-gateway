@@ -14,9 +14,17 @@ All notable changes to this project will be documented in this file.
   permission.
 - A method `jwt` says only the claim of the roles (`principal.permissions.claim`); its own `roles` stop the gateway:
   they go in `authorization.roles`.
+- **A role is of the gateway and says its `schemas`** (their paths; none, every schema): in another schema it gives
+  nothing. `orm.schemas[].roles` is gone (it stops the gateway): a role that needs other permissions or views in
+  another schema is another role. From the administration, a role says its `schemas` too (`PUT` with `schema`, `400`);
+  one kept for a schema by 4.4 doesn't apply and is listed as ignored, to remove it.
+- **`GET /admin/access`** (permission `roles`): who may come in, as the configuration says it: the authentications of
+  every level (global, transport, schema) with their keys (name, roles, context), the issuer and claims of a method
+  `jwt`, and every permission there is. Never a secret.
 - To migrate: each set of permissions of a key becomes a role of `authorization.roles`
   (`agent: { permissions: [read], views: [support] }`) and the key names it (`roles: [agent]`); the roles of a method
-  `jwt` move as they are to `authorization.roles`. `/whoami` now lists the roles of a key.
+  `jwt` move as they are to `authorization.roles`; the roles of `orm.schemas[].roles` move there with
+  `schemas: [<path>]`. `/whoami` now lists the roles of a key.
 - **The context of a local credential:** an entry of `keys`, `tokens` or `users` may say `context` (variable → a text,
   a number or a boolean), the context of λORM of its requests as a token gives it from its claims:
   `{ name: ana, value: $ANA_KEY, roles: [editor], context: { username: ana@acme.com } }` fills a

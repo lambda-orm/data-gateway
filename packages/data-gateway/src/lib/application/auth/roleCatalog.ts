@@ -18,20 +18,17 @@ export interface RoleLookupPort {
 }
 
 /**
- * The roles of the gateway (docs/ROLE_SCOPES.md): authorization.roles (the base), those of each schema (orm.schemas[].roles) and those of the state of the gateway, which extend them unless they are locked.
- * A role of the state that the YAML doesn't have is a new one.
+ * The roles of the gateway (docs/ROLE_SCOPES.md): authorization.roles, and those of the state of the gateway, which
+ * extend them unless they are locked (a role of the state that the YAML doesn't have is a new one). A role says the
+ * schemas where it applies (none, every schema): in another one it gives nothing. A role kept in the state for one
+ * schema (4.4) doesn't apply: the administration lists it to remove it.
  */
 export class RoleCatalog implements RoleGrantsPort, RoleLookupPort {
 	private readonly base: Record<string, RoleConfig>
-	private readonly bySchema: Record<string, Record<string, Partial<RoleConfig>>>
 	private stored: StoredRole[] = []
 
-	constructor (config: Pick<DataGatewayConfig, 'authorization' | 'orm'>) {
+	constructor (config: Pick<DataGatewayConfig, 'authorization'>) {
 		this.base = { ...config.authorization?.roles }
-		this.bySchema = {}
-		for (const schema of config.orm.schemas) {
-			if (schema.roles && Object.keys(schema.roles).length) this.bySchema[schema.path] = { ...schema.roles }
-		}
 	}
 
 	/** the roles of the state (loaded at the start, and again when they change) */
@@ -44,40 +41,48 @@ export class RoleCatalog implements RoleGrantsPort, RoleLookupPort {
 	}
 
 	/** the roles of the YAML (they can't be removed from the administration) */
-	public yamlRoles (): { name: string, schema?: string, config: Partial<RoleConfig> }[] {
-		return [
-			...Object.entries(this.base).map(([name, config]) => ({ name, config })),
-			...Object.entries(this.bySchema).flatMap(([schema, roles]) => Object.entries(roles).map(([name, config]) => ({ name, schema, config })))
-		]
+	public yamlRoles (): { name: string, config: Partial<RoleConfig> }[] {
+		return Object.entries(this.base).map(([name, config]) => ({ name, config }))
 	}
 
 	public locked (name: string): boolean {
 		return this.base[name]?.locked === true
 	}
 
-	private storedOf (name: string, schema: string | undefined): StoredRole | undefined {
-		return this.stored.find(r => r.name === name && r.schema === schema)
+	/** the role of the state that applies: the one of the gateway (one of a schema, of 4.4, doesn't) */
+	private storedOf (name: string): StoredRole | undefined {
+		return this.stored.find(r => r.name === name && r.schema === undefined)
 	}
 
-	/** a role in a schema: the YAML, extended by the schema, by the state (global) and by the state of the schema */
+	/** the schemas where a role applies (the YAML and the state together); undefined, every schema */
+	public schemasOf (name: string): string[] | undefined {
+		const base = this.base[name]
+		const own = this.locked(name) ? undefined : this.storedOf(name)?.config
+		if (!base) return own?.schemas
+		// an extension adds schemas to a role that names some; one that applies everywhere keeps applying everywhere
+		if (!own?.schemas || !base.schemas) return base.schemas
+		return [...new Set([...base.schemas, ...own.schemas])]
+	}
+
+	/** a role (in a schema: nothing where it doesn't apply): the YAML extended by the state */
 	public grantOf (name: string, schema?: string): RoleGrant | undefined {
 		let grant: RoleGrant | undefined = this.base[name] ? grantOf(name, this.base[name]) : undefined
-		const schemaRole = schema !== undefined ? this.bySchema[schema]?.[name] : undefined
-		if (schemaRole) grant = extendGrant(grant, schemaRole, name)
 		if (!this.locked(name)) {
-			const global = this.storedOf(name, undefined)
+			const global = this.storedOf(name)
 			if (global) grant = extendGrant(grant, global.config, name)
-			const own = schema !== undefined ? this.storedOf(name, schema) : undefined
-			if (own) grant = extendGrant(grant, own.config, name)
+		}
+		if (grant && schema !== undefined) {
+			const schemas = this.schemasOf(name)
+			if (schemas && !schemas.includes(schema)) return undefined
 		}
 		return grant
 	}
 
 	public has (role: string): boolean {
-		return this.base[role] !== undefined || Object.values(this.bySchema).some(r => r[role] !== undefined) || this.stored.some(r => r.name === role)
+		return this.base[role] !== undefined || this.storedOf(role) !== undefined
 	}
 
-	/** before a schema: the permissions of the roles in no schema (the administration, the sessions) */
+	/** before a schema: the permissions of the roles, whatever their schemas (the administration, the sessions) */
 	public permissionsOf (roles: readonly string[]): Permission[] {
 		return [...new Set(roles.flatMap(r => this.grantOf(r)?.permissions ?? []))]
 	}

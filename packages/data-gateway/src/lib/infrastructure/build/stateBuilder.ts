@@ -2,6 +2,7 @@ import { randomUUID } from 'crypto'
 import { DataGatewayConfig } from '../../domain/config/dataGatewayConfig'
 import { describeState, StateSource, stateSourceOf } from '../../domain/config/stateSource'
 import { RoleCatalog } from '../../application/auth/roleCatalog'
+import { describeAccess } from '../../application/auth/accessView'
 import { RoleAdmin, RoleRefresher } from '../../application/auth/roleAdmin'
 import { ClockPort, LoggerPort } from '../../application/ports/output/supportPorts'
 import { closeState, roleStoreOf } from '../output/state/stateStores'
@@ -30,7 +31,7 @@ export const buildGatewayState = async (config: DataGatewayConfig, logger: Logge
 	return {
 		source,
 		catalog,
-		roles: new RoleAdmin(store, catalog, clock, randomUUID, logger),
+		roles: new RoleAdmin(store, catalog, clock, randomUUID, logger, () => describeAccess(config)),
 		refresher,
 		close: async () => {
 			refresher.stop()

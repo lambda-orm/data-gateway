@@ -8,8 +8,7 @@ export const catalogOf = (roles: Record<string, Permission[] | Partial<RoleConfi
 		authorization: {
 			roles: Object.fromEntries(Object.entries(roles).map(([name, r]) => [name, (Array.isArray(r) ? { permissions: r } : { permissions: [], ...r }) as RoleConfig])),
 			stages: 'restricted'
-		},
-		orm: { schemas: [] } as any
+		}
 	})
 
 /** A credential of a test as it was before roles: what it may do, said by itself */

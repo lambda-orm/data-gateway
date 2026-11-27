@@ -230,3 +230,8 @@ div.dg-error { border: 1px solid var(--bad); border-radius: 6px; padding: 6px 10
 .dg-roles .dg-form { margin-top: 12px; }
 .dg-roles .dg-list { margin: 6px 0; padding-left: 18px; color: var(--muted); }
 .dg-roles > button { margin-top: 10px; align-self: flex-start; }
+/* the permissions by role: a column by permission, a mark where the role has it */
+.dg-matrix th:nth-child(n+3), .dg-matrix td:nth-child(n+3) { text-align: center; padding: 5px 4px; }
+.dg-matrix th code { font-size: 11px; writing-mode: vertical-rl; transform: rotate(180deg); }
+.dg-matrix td.dg-granted { color: var(--ok); background: color-mix(in srgb, var(--ok) 10%, transparent); }
+.dg-matrix td.dg-denied { color: var(--muted); }

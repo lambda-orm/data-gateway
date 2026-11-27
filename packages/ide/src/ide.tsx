@@ -8,7 +8,7 @@ import { AppMenu } from './appMenu'
 import { ManagementClient, ManagementState, testConnection } from './management'
 import { SessionsPanel } from './sessions'
 import { ApprovalsPanel } from './approvals'
-import { RolesPanel } from './roles'
+import { GatewayConfigPanel } from './gatewayConfig'
 import { endpointsOf, McpTab, SwaggerTab, useTransports, WebSocketTab } from './tools'
 import { forbiddenTarget, unreachable, viaProxy } from './proxy'
 
@@ -163,7 +163,7 @@ const ConnectionEditor: React.FC<{
 			tools={onOpenTool && <ToolsOf connection={initial} onOpen={onOpenTool} />}
 			sessions={client && who && <SessionsPanel client={client} who={who} />}
 			approvals={client && who && who.permissions.includes('approve') && <ApprovalsPanel client={client} self={who.name} />}
-			gatewayRoles={client && who && who.permissions.includes('roles') && <RolesPanel client={client} />}>{form}</ConnectionPage>
+			gatewayConfig={client && who && who.permissions.includes('roles') && <GatewayConfigPanel client={client} />}>{form}</ConnectionPage>
 		: <div className="dg-pane"><h2>{t.newConnection}</h2>{form}</div>
 }
 

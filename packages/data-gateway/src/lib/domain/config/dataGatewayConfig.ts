@@ -26,6 +26,8 @@ export interface CredentialConfig {
  */
 export interface RoleConfig {
 	permissions: Permission[]
+	/** the schemas (their paths) where it applies; none, every schema */
+	schemas?: string[]
 	/** @deprecated a single view: views: [view] */
 	view?: string
 	/** the views it may use; none, the one of the schema */
@@ -112,8 +114,6 @@ export interface SchemaOverrides {
 	view?: string
 	/** the stage of λORM of a caller without one (docs/ROLE_SCOPES.md); none, the first of the schema */
 	stage?: string
-	/** the roles in this schema (docs/ROLE_SCOPES.md): they extend the ones of authorization.roles */
-	roles?: Record<string, Partial<RoleConfig>>
 	/** Variables its worker receives on top of its .env and the base variables */
 	env?: Record<string, string>
 	scripts?: Partial<ScriptsConfig>

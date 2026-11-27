@@ -33,7 +33,8 @@ Los roles salen de cada método de autenticación y pasan a un lugar propio, `au
 authorization:
   roles:
     support:
-      views: [support]                 # la primera, la de quien no elige
+      schemas: [shop]                  # dónde vale; sin schemas, en todos
+      views: [support, public]         # la primera, la de quien no elige
       permissions: [read]
     analyst:
       views: [analytics, support]
@@ -63,9 +64,11 @@ orm:
     - path: shop
       view: public                     # la vista del schema (como hoy)
       stage: default                   # el stage del schema
-      roles:                           # por schema: extiende o reemplaza (decisión 3) los globales
-        support: { views: [support, public] }
 ```
+
+- **Un rol es del gateway (5.0.0):** dice en qué schemas vale (`schemas: [shop, sales]`, sus rutas; sin `schemas`, en
+  todos) y en otro no da nada. `orm.schemas[].roles` ya no existe (la gateway no arranca y el error dice que va en
+  `authorization.roles` con `schemas`): si en dos schemas un rol necesita otros permisos o vistas, son dos roles.
 
 - **Un solo camino (5.0.0):** los permisos, las vistas, los stages y la aprobación los dice un rol. Una clave (o un
   token local, o un usuario basic) solo nombra sus `roles` (obligatorio) y puede decir su `context`; un método `jwt`
@@ -115,16 +118,23 @@ rol: hoy cualquiera con `ddl` los corre en cualquier stage del schema.
 
 Sobre [`GATEWAY_STATE.md`](GATEWAY_STATE.md) §4 (el YAML es la base, la base extiende):
 
-- **Un rol nuevo:** su nombre, sus permisos, vistas, stages, `maxRows`, `approval`; global o de un schema. Un token que
-  trae ese nombre en su claim ya lo tiene; una clave local, si la clave es de la base (después).
-- **Extender un rol del YAML:** agregar vistas, stages o permisos, cambiar el default o `maxRows`. No se le quita lo
-  que el YAML le da (eso es del despliegue); un rol `locked` no se toca.
+- **Un rol nuevo:** su nombre, sus permisos, `schemas`, vistas, stages, `maxRows`, `approval`. Un token que trae ese
+  nombre en su claim ya lo tiene; una clave local, si la clave es de la base (después).
+- **Extender un rol del YAML:** agregar schemas (a uno que nombra algunos; uno sin `schemas` sigue valiendo en todos),
+  vistas, stages o permisos, cambiar el default o `maxRows`. No se le quita lo que el YAML le da (eso es del
+  despliegue); un rol `locked` no se toca. Un rol que la 4.4 guardó para un schema no vale: se lista como ignorado
+  para quitarlo (`DELETE /admin/roles/{name}?schema=`).
 - **El permiso `roles`:** ver y cambiar los roles; nadie se da a sí mismo un permiso que no tiene (un cambio que suma
   permisos que quien lo hace no tiene, `403`), y nadie se quita `roles` a sí mismo si es el último.
 - Cada cambio, en `ConfigChanges` (quién, cuándo, antes y después) y en la auditoría; llega a las réplicas
   (`GATEWAY_STATE.md` §5).
-- `GET/PUT/DELETE /admin/roles[/{name}]` (y `/admin/workspaces/{schema}/roles`); en el IDE, una página de roles en la
-  administración: los del YAML (de solo lectura, con lo que la base les suma) y los de la base.
+- `GET/PUT/DELETE /admin/roles[/{name}]` (un `PUT` con `schema`, `400`: el rol dice sus `schemas`).
+- `GET /admin/access` (5.0.0, con `roles`): quién puede entrar, como lo dice la configuración: las autenticaciones
+  global, de cada transporte y de cada schema, con sus claves (nombre, `roles`, `context`), el emisor y los claims de
+  un método `jwt`, y los permisos que existen. Nunca un secreto (clave, token, contraseña, secreto de un jwt).
+- En el IDE, la pestaña **Configuración** de una conexión (con `roles`): los roles (los del YAML de solo lectura, con
+  lo que la base les suma, y los de la base), el acceso (cada clave o token con sus roles y su contexto) y los
+  permisos por rol (una matriz rol × permiso, con sus schemas).
 
 ## 6. El caché, las suscripciones, la auditoría
 

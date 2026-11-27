@@ -36,6 +36,8 @@ export const adminRouter = (admin: AdminService, authenticate: express.RequestHa
 	if (roles) {
 		const schemaOf = (req: express.Request): string | undefined => typeof req.query.schema === 'string' ? schemaParam(req.query.schema) : undefined
 		router.get('/roles', handle(async (_req, res) => roles.list(principal(res))))
+		// who may come in: the authentications with their keys and roles (never a secret), and the permissions there are
+		router.get('/access', handle(async (_req, res) => roles.access(principal(res))))
 		router.get('/roles/changes', handle(async (req, res) => roles.changes(principal(res), Number(req.query.limit ?? 100))))
 		router.put('/roles/:name', handle(async (req, res) => roles.put(principal(res), String(req.params.name), req.body?.schema ? schemaParam(String(req.body.schema)) : schemaOf(req), req.body?.config ?? req.body, req.body?.reason)))
 		router.delete('/roles/:name', handle(async (req, res) => {

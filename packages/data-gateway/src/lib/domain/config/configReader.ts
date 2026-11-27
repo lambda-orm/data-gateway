@@ -176,16 +176,8 @@ export class ConfigReader {
 			if (typeof entry.stage !== 'string' || !entry.stage) this.issues.push(`${key}.stage must be the name of a stage of the schema`)
 			else schema.stage = entry.stage
 		}
-		if (entry.roles !== undefined) {
-			if (!isObject(entry.roles)) this.issues.push(`${key}.roles must be an object (a role: what it adds in this schema)`)
-			else {
-				schema.roles = {}
-				for (const [name, value] of Object.entries(entry.roles)) {
-					const role = this.role(value, `${key}.roles.${name}`, true)
-					if (role) schema.roles[name] = role
-				}
-			}
-		}
+		// the roles are of the gateway (docs/ROLE_SCOPES.md §2): the schemas where a role applies are said by the role
+		if (entry.roles !== undefined) this.issues.push(`${key}.roles: the roles are of the gateway: in authorization.roles, with schemas: [${String(entry.path ?? '')}]`)
 		if (entry.cache !== undefined) schema.cache = this.cache(entry.cache, `${key}.cache`)
 		if (entry.outbox !== undefined) schema.outbox = this.outbox(entry.outbox, `${key}.outbox`)
 		if (entry.files !== undefined) schema.files = this.files(entry.files, `${key}.files`)
@@ -739,7 +731,7 @@ export class ConfigReader {
 	 * locked } (view: one, as before 4.4). partial: of a schema, what it adds (no permissions needed).
 	 */
 	private role (value: unknown, at: string, partial: boolean): Partial<RoleConfig> | undefined {
-		const known = ['permissions', 'view', 'views', 'stages', 'maxRows', 'approval', 'scope', 'locked']
+		const known = ['permissions', 'schemas', 'view', 'views', 'stages', 'maxRows', 'approval', 'scope', 'locked']
 		// a role says its permissions: one without them must not end up with all
 		const list = isObject(value) ? value.permissions : value
 		if (!Array.isArray(list) && !(partial && isObject(value) && list === undefined)) {
@@ -760,6 +752,8 @@ export class ConfigReader {
 		if (views) role.views = views
 		const stages = names(value.stages, 'stages')
 		if (stages) role.stages = stages
+		const schemas = names(value.schemas, 'schemas')
+		if (schemas) role.schemas = schemas
 		if (value.maxRows !== undefined) role.maxRows = this.int(value.maxRows, 0, `${at}.maxRows`, 1)
 		const approval = this.approvalMode(value.approval, `${at}.approval`)
 		if (approval === 'writes') role.approval = approval
@@ -797,7 +791,15 @@ export class ConfigReader {
 	/** a role a key names that the configuration doesn't have: said (it may come from the state of the gateway) */
 	private rolesTogether (config: DataGatewayConfig): void {
 		const methods = config.authentication.adapter === 'methods' ? config.authentication.methods ?? [] : [config.authentication]
-		const known = new Set([...Object.keys(config.authorization.roles), ...config.orm.schemas.flatMap(s => Object.keys(s.roles ?? {}))])
+		const known = new Set(Object.keys(config.authorization.roles))
+		// a schema a role names that the configuration doesn't have, when it says them all (no workspacePath to discover)
+		if (!config.orm.workspacePath) {
+			const paths = new Set(config.orm.schemas.map(s => s.path))
+			for (const [name, role] of Object.entries(config.authorization.roles)) {
+				const missing = (role.schemas ?? []).filter(s => !paths.has(s))
+				if (missing.length) this.warnings.push(`the role "${name}" names the schemas ${missing.join(', ')}, which orm.schemas doesn't have`)
+			}
+		}
 		for (const method of methods) {
 			for (const credential of method.credentials ?? []) {
 				for (const role of credential.roles ?? []) {

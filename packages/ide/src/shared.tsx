@@ -181,16 +181,18 @@ export const PermissionsOf: React.FC<{ who: Who }> = ({ who }) => {
  * A connection to a data-gateway: where it is, how it authenticates, who that credential is and what it may do (its
  * roles). The IDE puts its form above (children); the gateway's UI shows its current connection.
  */
-export const ConnectionPage: React.FC<{ name: string, url: string, credential: Credential, who?: Who, current?: boolean, children?: React.ReactNode, tools?: React.ReactNode, sessions?: React.ReactNode, approvals?: React.ReactNode, gatewayRoles?: React.ReactNode }> = ({ name, url, credential, who, current, children, tools, sessions, approvals, gatewayRoles }) => {
+export const ConnectionPage: React.FC<{ name: string, url: string, credential: Credential, who?: Who, current?: boolean, children?: React.ReactNode, tools?: React.ReactNode, sessions?: React.ReactNode, approvals?: React.ReactNode, gatewayConfig?: React.ReactNode }> = ({ name, url, credential, who, current, children, tools, sessions, approvals, gatewayConfig }) => {
 	const { t } = usePrefs()
-	// its sections in tabs: the connection (its form and who it is), its tools, its roles, its sessions
+	// its sections in tabs: the connection (its form and who it is), its tools, its permissions, its sessions, and the
+	// configuration of the gateway (with the permission roles)
 	const sections = [
 		{ key: 'connection', label: t.connection, show: true },
 		{ key: 'tools', label: t.tools, show: !!tools },
 		{ key: 'roles', label: t.roles, show: !!who },
 		{ key: 'sessions', label: t.sessions, show: !!sessions },
 		// the writes that wait for a person (docs/MUTATION_APPROVAL.md), with approve
-		{ key: 'approvals', label: t.approvals, show: !!approvals }
+		{ key: 'approvals', label: t.approvals, show: !!approvals },
+		{ key: 'config', label: t.gatewayConfig, show: !!gatewayConfig }
 	].filter(s => s.show)
 	const [section, setSection] = useState('connection')
 	const active = sections.some(s => s.key === section) ? section : 'connection'
@@ -219,9 +221,9 @@ export const ConnectionPage: React.FC<{ name: string, url: string, credential: C
 			)}
 			{active === 'tools' && tools}
 			{active === 'roles' && who && <PermissionsOf who={who} />}
-			{active === 'roles' && gatewayRoles}
 			{active === 'sessions' && sessions}
 			{active === 'approvals' && approvals}
+			{active === 'config' && gatewayConfig}
 		</div>
 	)
 }

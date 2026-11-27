@@ -2,6 +2,10 @@
 
 ### Unreleased
 
+- **The configuration of the gateway:** a tab **Configuration** in the page of a connection (with the permission
+  `roles`) with its roles (moved from the tab Roles, now with the schemas where each applies), the access (each key or
+  token, where it applies, its roles and its context; never a secret) and the permissions by role (a role by row, a
+  permission by column). The access and the matrix need data-gateway 5.0 (`GET /admin/access`); before, the roles alone.
 - **The traces of an entity, from its gateway:** the link of an entity to its traces in Grafana comes from the
   configuration of the gateway (`observability.explore`, data-gateway 4.5, `GET /observability` of its management).
   The section **Observability** of a connection (Grafana URL, Tempo datasource) is gone: what was saved there is no

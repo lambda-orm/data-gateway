@@ -3,11 +3,13 @@ import { ManagementClient } from './management'
 import { usePrefs } from './shared'
 
 /** A role as the administration lists it (docs/ROLE_SCOPES.md §5): of the configuration, or kept in the state */
-interface ListedRole {
+export interface ListedRole {
 	name: string
+	/** of a role kept for one schema by 4.4: it doesn't apply (ignored), it is listed to remove it */
 	schema?: string
+	ignored?: boolean
 	source: 'yaml' | 'state'
-	config: { permissions?: string[], views?: string[], view?: string, stages?: string[], maxRows?: number, approval?: string, scope?: string }
+	config: { permissions?: string[], schemas?: string[], views?: string[], view?: string, stages?: string[], maxRows?: number, approval?: string, scope?: string }
 	locked?: boolean
 	updatedAt?: string
 	updatedBy?: string
@@ -21,15 +23,16 @@ const list = (text: string): string[] | undefined => {
 }
 const text = (items?: string[]) => (items ?? []).join(', ')
 
-interface Draft { name: string, schema: string, permissions: string, views: string, stages: string, maxRows: string, reason: string }
-const EMPTY: Draft = { name: '', schema: '', permissions: '', views: '', stages: '', maxRows: '', reason: '' }
+interface Draft { name: string, schemas: string, permissions: string, views: string, stages: string, maxRows: string, reason: string }
+const EMPTY: Draft = { name: '', schemas: '', permissions: '', views: '', stages: '', maxRows: '', reason: '' }
 
 /**
- * The roles of a gateway, in the page of a connection (with the permission roles): those of its configuration, read
- * only, and those of its state, which add a role or extend one (more views, stages, permissions). Each change says who
- * and when; a change applies to the requests at once (in the other replicas within state.refresh).
+ * The roles of a gateway, in its configuration (with the permission roles): those of its configuration, read only, and
+ * those of its state, which add a role or extend one (more schemas, views, stages, permissions). A role is of the
+ * gateway and says the schemas where it applies. Each change says who and when; a change applies to the requests at
+ * once (in the other replicas within state.refresh).
  */
-export const RolesPanel: React.FC<{ client: ManagementClient }> = ({ client }) => {
+export const RolesPanel: React.FC<{ client: ManagementClient, onChange?: () => void }> = ({ client, onChange }) => {
 	const { t, culture } = usePrefs()
 	const [roles, setRoles] = useState<ListedRole[]>([])
 	const [changes, setChanges] = useState<RoleChange[]>([])
@@ -56,17 +59,19 @@ export const RolesPanel: React.FC<{ client: ManagementClient }> = ({ client }) =
 		try {
 			const config = {
 				...(list(draft.permissions) ? { permissions: list(draft.permissions) } : {}),
+				...(list(draft.schemas) ? { schemas: list(draft.schemas) } : {}),
 				...(list(draft.views) ? { views: list(draft.views) } : {}),
 				...(list(draft.stages) ? { stages: list(draft.stages) } : {}),
 				...(draft.maxRows.trim() ? { maxRows: Number(draft.maxRows) } : {})
 			}
 			const response = await client.fetch(`${client.base}/admin/roles/${encodeURIComponent(draft.name.trim())}`, {
 				method: 'PUT', headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ ...(draft.schema.trim() ? { schema: draft.schema.trim() } : {}), config, ...(draft.reason.trim() ? { reason: draft.reason.trim() } : {}) })
+				body: JSON.stringify({ config, ...(draft.reason.trim() ? { reason: draft.reason.trim() } : {}) })
 			})
 			if (!response.ok) { setError(await failed(response)); return }
 			setDraft(undefined)
 			await load()
+			onChange?.()
 		} finally { setBusy(false) }
 	}
 	const remove = async (role: ListedRole) => {
@@ -76,10 +81,11 @@ export const RolesPanel: React.FC<{ client: ManagementClient }> = ({ client }) =
 			const response = await client.fetch(`${client.base}/admin/roles/${encodeURIComponent(role.name)}${query}`, { method: 'DELETE' })
 			if (!response.ok) setError(await failed(response))
 			await load()
+			onChange?.()
 		} finally { setBusy(false) }
 	}
 	const edit = (role?: ListedRole) => setDraft(role
-		? { ...EMPTY, name: role.name, schema: role.schema ?? '', ...(role.source === 'state' ? { permissions: text(role.config.permissions), views: text(role.config.views), stages: text(role.config.stages), maxRows: role.config.maxRows ? String(role.config.maxRows) : '' } : {}) }
+		? { ...EMPTY, name: role.name, ...(role.source === 'state' ? { schemas: text(role.config.schemas), permissions: text(role.config.permissions), views: text(role.config.views), stages: text(role.config.stages), maxRows: role.config.maxRows ? String(role.config.maxRows) : '' } : {}) }
 		: { ...EMPTY })
 	const field = (key: keyof Draft, label: string, hint?: string) => (
 		<label className="dg-field">
@@ -96,20 +102,20 @@ export const RolesPanel: React.FC<{ client: ManagementClient }> = ({ client }) =
 			{error && <div className="dg-error" role="alert">{error}</div>}
 			<div className="dg-table-scroll"><table className="dg-table">
 				<thead>
-					<tr><th>{t.roleName}</th><th>{t.roleSchema}</th><th>{t.permissions}</th><th>{t.roleViews}</th><th>{t.roleStages}</th><th>{t.roleSource}</th><th /></tr>
+					<tr><th>{t.roleName}</th><th>{t.roleSchemas}</th><th>{t.permissions}</th><th>{t.roleViews}</th><th>{t.roleStages}</th><th>{t.roleSource}</th><th /></tr>
 				</thead>
 				<tbody>
 					{roles.map(role => (
 						<tr key={`${role.source}:${role.name}@${role.schema ?? ''}`} aria-label={`${role.name}${role.schema ? `@${role.schema}` : ''}`}>
-							<td><strong>{role.name}</strong>{role.locked && <span className="dg-chip">{t.roleLocked}</span>}</td>
-							<td>{role.schema === undefined ? <span className="dg-muted">{t.roleGlobal}</span> : role.schema || '/'}</td>
+							<td><strong>{role.name}</strong>{role.locked && <span className="dg-chip">{t.roleLocked}</span>}{role.ignored && <span className="dg-chip" title={t.roleIgnored}>{role.schema || '/'}: {t.roleIgnored}</span>}</td>
+							<td>{text(role.config.schemas) || <span className="dg-muted">{t.roleEverySchema}</span>}</td>
 							<td>{text(role.config.permissions)}</td>
 							<td>{text(role.config.views ?? (role.config.view ? [role.config.view] : undefined)) || <span className="dg-muted">{t.roleOfSchema}</span>}</td>
 							<td>{text(role.config.stages) || <span className="dg-muted">{t.roleOfSchema}</span>}</td>
 							<td className="dg-muted">{role.source === 'yaml' ? t.roleFromConfig : `${role.updatedBy} · ${when(role.updatedAt!)}`}</td>
 							<td>
 								<span className="dg-form-actions">
-									{!role.locked && <button type="button" disabled={busy} onClick={() => edit(role)}>{role.source === 'yaml' ? t.extendRole : t.editRole}</button>}
+									{!role.locked && !role.ignored && <button type="button" disabled={busy} onClick={() => edit(role)}>{role.source === 'yaml' ? t.extendRole : t.editRole}</button>}
 									{role.source === 'state' && <button type="button" className="dg-danger" disabled={busy} onClick={() => remove(role)}>{t.removeRole}</button>}
 								</span>
 							</td>
@@ -121,7 +127,7 @@ export const RolesPanel: React.FC<{ client: ManagementClient }> = ({ client }) =
 				? (
 					<form className="dg-form" onSubmit={save} aria-label={t.saveRole}>
 						{field('name', t.roleName)}
-						{field('schema', t.roleSchema, t.roleSchemaHint)}
+						{field('schemas', t.roleSchemas, `${t.roleListHint}; ${t.roleSchemasHint}`)}
 						{field('permissions', t.permissions, t.roleListHint)}
 						{field('views', t.roleViews, t.roleListHint)}
 						{field('stages', t.roleStages, t.roleListHint)}

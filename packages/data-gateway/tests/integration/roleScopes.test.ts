@@ -56,15 +56,14 @@ orm:
   workspacePath: ${dir}
   schemas:
     - path: shop
-      roles:
-        analyst: { stages: [default, reporting] }
 logger: { level: error }
 rateLimit: { max: 0 }
 authorization:
   roles:
     support: { permissions: [read], views: [support] }
     backend: { permissions: [read, write] }
-    analyst: { permissions: [read], views: [support, default] }
+    analyst: { permissions: [read], views: [support, default], stages: [default, reporting], schemas: [shop] }
+    elsewhere: { permissions: [read, write], schemas: [sales] }
     admin: { permissions: [read, write, schemaRead, roles] }
 authentication:
   adapter: local
@@ -74,6 +73,7 @@ authentication:
     - { name: ana, value: ana-key, roles: [analyst] }
     - { name: boss, value: boss-key, roles: [admin] }
     - { name: legacy, value: legacy-key, roles: [backend] }
+    - { name: eve, value: eve-key, roles: [elsewhere] }
 transports:
   http: { port: ${port}, host: 127.0.0.1 }
   management: { port: ${management}, host: 127.0.0.1 }
@@ -112,27 +112,41 @@ test('two roles of different views: the permissions of the one that allows the v
 	expect((await execute('carla-key', 'Customers.map(p => p.name)', { view: 'analytics' })).status).toBe(403)
 })
 
-test('a stage its role allows in this schema (extended by the schema); the view chosen with it', async () => {
+test('a stage its role allows; the view chosen with it; a role of other schemas gives nothing here', async () => {
 	expect((await execute('ana-key', 'Customers.map(p => p.name)', { stage: 'reporting' })).body).toEqual([{ name: 'Alfreds' }])
 	expect((await execute('ana-key', 'Customers.update(p => ({ name: n })).filter(p => p.id == 1)', {}, { n: 'x' })).status).toBe(403)
 	const whoami = await call(base, '/whoami', { headers: key('ana-key') })
 	expect(whoami.body).toMatchObject({ name: 'ana', view: 'support', stage: 'default', views: ['support', 'default'], stages: ['default', 'reporting'], roles: ['analyst'], permissions: ['read'] })
+	// elsewhere applies in sales, not in shop
+	expect((await execute('eve-key', 'Customers.map(p => p.name)')).status).toBe(403)
 })
 
 test('a role extended from the administration applies at once; each change recorded', async () => {
 	const session = await login(admin, key('boss-key'))
 	expect((await call(admin, '/admin/roles', { headers: await login(admin, key('ana-key')) })).status).toBe(403)
-	const saved = await call(admin, '/admin/roles/analyst', { method: 'PUT', body: { schema: 'shop', config: { permissions: ['write'] }, reason: 'they fix names' }, headers: session })
+	// a role is of the gateway: not of one schema
+	expect((await call(admin, '/admin/roles/analyst', { method: 'PUT', body: { schema: 'shop', config: { permissions: ['write'] } }, headers: session })).status).toBe(400)
+	const saved = await call(admin, '/admin/roles/analyst', { method: 'PUT', body: { config: { permissions: ['write'] }, reason: 'they fix names' }, headers: session })
 	expect(saved.status).toBe(200)
 	expect((await execute('ana-key', 'Customers.update(p => ({ name: n })).filter(p => p.id == 1)', {}, { n: 'Alfreds Futterkiste' })).status).toBe(200)
 	// nobody gives what it doesn't have
 	expect((await call(admin, '/admin/roles/analyst', { method: 'PUT', body: { config: { permissions: ['ddl'] } }, headers: session })).status).toBe(403)
 	const listed = await call(admin, '/admin/roles', { headers: session })
-	expect(listed.body).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'analyst', schema: 'shop', source: 'state', config: { permissions: ['write'] }, updatedBy: 'boss' })]))
+	expect(listed.body).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'analyst', source: 'state', config: { permissions: ['write'] }, updatedBy: 'boss' })]))
 	const changes = await call(admin, '/admin/roles/changes', { headers: session })
-	expect(changes.body[0]).toMatchObject({ key: 'analyst@shop', by: 'boss', reason: 'they fix names', after: { permissions: ['write'] } })
-	expect((await call(admin, '/admin/roles/analyst?schema=shop', { method: 'DELETE', headers: session })).status).toBe(200)
+	expect(changes.body[0]).toMatchObject({ key: 'analyst', by: 'boss', reason: 'they fix names', after: { permissions: ['write'] } })
+	expect((await call(admin, '/admin/roles/analyst', { method: 'DELETE', headers: session })).status).toBe(200)
 	expect((await execute('ana-key', 'Customers.update(p => ({ name: n })).filter(p => p.id == 1)', {}, { n: 'x' })).status).toBe(403)
 	// kept in the SQLite of the volume, next to the sessions
 	expect(fs.existsSync(path.join(dir, '.data-gateway', 'state.sqlite'))).toBe(true)
+})
+
+test('the access: the keys with their roles and context, never their secrets; with the permission roles', async () => {
+	expect((await call(admin, '/admin/access', { headers: await login(admin, key('ana-key')) })).status).toBe(403)
+	const access = await call(admin, '/admin/access', { headers: await login(admin, key('boss-key')) })
+	expect(access.status).toBe(200)
+	expect(access.body.permissions).toEqual(expect.arrayContaining(['read', 'write', 'roles']))
+	expect(access.body.authentications[0]).toMatchObject({ where: { level: 'global' }, adapter: 'local', type: 'apikey', header: 'x-api-key' })
+	expect(access.body.authentications[0].credentials).toEqual(expect.arrayContaining([{ name: 'ana', roles: ['analyst'] }, { name: 'eve', roles: ['elsewhere'] }]))
+	expect(JSON.stringify(access.body)).not.toMatch(/(carla|ana|boss|legacy|eve)-key/)
 })

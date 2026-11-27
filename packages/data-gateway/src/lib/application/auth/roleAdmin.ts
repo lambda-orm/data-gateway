@@ -5,11 +5,14 @@ import { badRequest, forbidden, GatewayError, notFound } from '../../domain/erro
 import { ClockPort, LoggerPort } from '../ports/output/supportPorts'
 import { ConfigChange, RoleStorePort, StoredRole } from '../ports/output/statePorts'
 import { RoleCatalog } from './roleCatalog'
+import { AccessDescription } from './accessView'
 
 /** A role as the administration shows it: of the YAML (read only), of the state, and how it applies */
 export interface ListedRole {
 	name: string
+	/** a role kept in the state for one schema (4.4): it doesn't apply, it is listed to remove it */
 	schema?: string
+	ignored?: boolean
 	/** yaml: of the configuration (only extended); state: kept in the state of the gateway */
 	source: 'yaml' | 'state'
 	config: Partial<RoleConfig>
@@ -18,11 +21,11 @@ export interface ListedRole {
 	updatedBy?: string
 }
 
-const ROLE_KEYS = ['permissions', 'views', 'stages', 'maxRows', 'approval', 'scope']
+const ROLE_KEYS = ['permissions', 'schemas', 'views', 'stages', 'maxRows', 'approval', 'scope']
 
 /** What a role of the state may say: as in the YAML, but never locked (that is of the YAML) */
 export const roleOfBody = (raw: unknown): Partial<RoleConfig> => {
-	if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw badRequest('ValidationError', 'a role is { permissions, views, stages, maxRows, approval, scope }')
+	if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw badRequest('ValidationError', 'a role is { permissions, schemas, views, stages, maxRows, approval, scope }')
 	const body = raw as Record<string, unknown>
 	const unknown = Object.keys(body).filter(k => !ROLE_KEYS.includes(k))
 	if (unknown.length) throw badRequest('ValidationError', `unknown keys of a role: ${unknown.join(', ')} (${ROLE_KEYS.join(', ')})`)
@@ -31,7 +34,7 @@ export const roleOfBody = (raw: unknown): Partial<RoleConfig> => {
 		if (!Array.isArray(body.permissions) || body.permissions.some(p => !isPermission(p))) throw badRequest('ValidationError', `permissions: a list of ${KNOWN_PERMISSIONS.join(', ')}`)
 		role.permissions = [...new Set(body.permissions as Permission[])]
 	}
-	for (const key of ['views', 'stages'] as const) {
+	for (const key of ['schemas', 'views', 'stages'] as const) {
 		const value = body[key]
 		if (value === undefined) continue
 		if (!Array.isArray(value) || !value.length || value.some(v => typeof v !== 'string' || !v)) throw badRequest('ValidationError', `${key}: a list of names`)
@@ -65,8 +68,15 @@ export class RoleAdmin {
 		private readonly catalog: RoleCatalog,
 		private readonly clock: ClockPort,
 		private readonly id: () => string,
-		private readonly logger: LoggerPort
+		private readonly logger: LoggerPort,
+		private readonly accessOf: () => AccessDescription = () => ({ permissions: KNOWN_PERMISSIONS, authentications: [] })
 	) {}
+
+	/** who may come in (the authentications, their keys and roles, never a secret) and every permission there is */
+	public access (who: Principal): AccessDescription {
+		this.require(who)
+		return this.accessOf()
+	}
 
 	private require (who: Principal): void {
 		if (!who.permissions.has('roles')) throw forbidden(who.name, 'roles')
@@ -75,14 +85,16 @@ export class RoleAdmin {
 	public async list (who: Principal): Promise<ListedRole[]> {
 		this.require(who)
 		return [
-			...this.catalog.yamlRoles().map(r => ({ name: r.name, ...(r.schema ? { schema: r.schema } : {}), source: 'yaml' as const, config: r.config, ...(r.config.locked ? { locked: true } : {}) })),
-			...this.catalog.storedRoles().map(r => ({ name: r.name, ...(r.schema ? { schema: r.schema } : {}), source: 'state' as const, config: r.config, updatedAt: r.updatedAt, updatedBy: r.updatedBy }))
+			...this.catalog.yamlRoles().map(r => ({ name: r.name, source: 'yaml' as const, config: r.config, ...(r.config.locked ? { locked: true } : {}) })),
+			...this.catalog.storedRoles().map(r => ({ name: r.name, ...(r.schema !== undefined ? { schema: r.schema, ignored: true } : {}), source: 'state' as const, config: r.config, updatedAt: r.updatedAt, updatedBy: r.updatedBy }))
 		]
 	}
 
 	public async put (who: Principal, name: string, schema: string | undefined, body: unknown, reason?: string): Promise<StoredRole> {
 		this.require(who)
 		if (!/^[A-Za-z0-9_.:@-]{1,200}$/.test(name)) throw badRequest('ValidationError', 'the name of a role: letters, digits and _ . : @ - (up to 200)')
+		// a role is of the gateway: where it applies is said by its schemas (docs/ROLE_SCOPES.md §2)
+		if (schema !== undefined) throw badRequest('ValidationError', 'a role is of the gateway: the schemas where it applies go in its config (schemas: [...])')
 		if (this.catalog.locked(name)) throw new GatewayError(403, 'ForbiddenError', `the role "${name}" is locked in the configuration: it can't be extended`)
 		const config = roleOfBody(body)
 		// nobody gives what it doesn't have
