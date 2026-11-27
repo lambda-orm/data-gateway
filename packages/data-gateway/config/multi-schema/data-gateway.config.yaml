@@ -12,12 +12,16 @@ orm:
       server: { maxConcurrent: 8 }
       mcp: { tools: { exclude: [ orm_execute_script ] } }
 scripts: { enabled: true }
+authorization:
+  roles:
+    reader: { permissions: [ read ] }
+    backend: { permissions: [ read, write, script, queue, stageImport ] }
 authentication:
   adapter: local
   type: apikey
   keys:
-    - { name: reader, value: $READER_KEY, permissions: [ read ] }
-    - { name: backend, value: $BACKEND_KEY }
+    - { name: reader, value: $READER_KEY, roles: [ reader ] }
+    - { name: backend, value: $BACKEND_KEY, roles: [ backend ] }
 transports:
   http:
     port: $HTTP_PORT

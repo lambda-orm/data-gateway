@@ -37,12 +37,16 @@ describe('gateway from its configuration file', () => {
 orm:
   workspacePath: $WORKSPACE
 logger: { level: error }
+authorization:
+  roles:
+    agent: { permissions: [ read ] }
+    backend: { permissions: [ read, write, script, queue, stageImport ] }
 authentication:
   adapter: local
   type: apikey
   keys:
-    - { name: agent, value: $AGENT_KEY, permissions: [ read ] }
-    - { name: backend, value: backend-key }
+    - { name: agent, value: $AGENT_KEY, roles: [ agent ] }
+    - { name: backend, value: backend-key, roles: [ backend ] }
 rateLimit: { max: 0 }
 transports:
   http:
@@ -123,7 +127,7 @@ transports:
 
 	test('whoami: the credential and what the schema offers; typings need read', async () => {
 		// where it works and what it may choose (docs/ROLE_SCOPES.md): a key of before, its own view and the stage of the schema
-		expect((await call(base, '/whoami', { headers: { 'X-Api-Key': 'agent-key' } })).body).toEqual({ name: 'agent', permissions: ['read'], view: 'default', stage: 'default', views: ['default'], stages: ['default'], roles: [], schema: '', scripts: false })
+		expect((await call(base, '/whoami', { headers: { 'X-Api-Key': 'agent-key' } })).body).toEqual({ name: 'agent', permissions: ['read'], view: 'default', stage: 'default', views: ['default'], stages: ['default'], roles: ['agent'], schema: '', scripts: false })
 		expect((await call(base, '/whoami')).status).toBe(401)
 	})
 
@@ -163,7 +167,7 @@ describe('configuration problems stop the start', () => {
 	test('every problem is listed: a local credential whose variable is not defined, no transport', async () => {
 		const file = writeConfig(`
 orm: { workspacePath: ${WORKSPACE} }
-authentication: { adapter: local, type: bearer, token: $SERVICE_TOKEN }
+authentication: { adapter: local, type: bearer, token: $SERVICE_TOKEN, roles: [ service ] }
 transports: { http: { port: $PORT } }
 `)
 		await expect(startGateway({ source: new YamlFileConfigSource(file, {}), bootLogger: new ConsoleLogger('error') }))

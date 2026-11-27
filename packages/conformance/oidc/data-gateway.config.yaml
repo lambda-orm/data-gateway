@@ -1,11 +1,18 @@
 # The gateway of the OIDC step of the conformance suite (docs/OIDC_LOGIN.md §1): the tokens of a real Keycloak, of which
-# it knows only the issuer (its JWKS is discovered, RS256); its roles to permissions, its claim country to the context.
+# it knows only the issuer (its JWKS is discovered, RS256); its roles those of authorization.roles, its claim country
+# to the context.
 # The API key backend loads the data. On the ports of the suite (scripts/ci-local.sh oidc).
 orm:
   workspacePath: $CONFORMANCE_WORKSPACE
   schemas:
     - path: northwind
       env: { NORTHWIND_DB: $NORTHWIND_DB }
+# what each one may do: the roles that the tokens (their claim roles) and the keys name
+authorization:
+  roles:
+    reader: { permissions: [ read ] }
+    backend: { permissions: [ read, write, script, queue, stageImport ] }
+    sales: { permissions: [ read ], views: [ sales ] }
 authentication:
   methods:
     - adapter: jwt
@@ -13,18 +20,13 @@ authentication:
       audience: data-gateway
       principal:
         name: preferred_username
-        permissions:
-          claim: roles
-          roles:
-            reader: [ read ]
-            backend: [ read, write, script, queue, stageImport ]
-            sales: { permissions: [ read ], view: sales }
+        permissions: { claim: roles }          # the names of authorization.roles
       context: { country: country }
     - adapter: local
       type: apikey
       header: X-Api-Key
       keys:
-        - { name: backend, value: conformance-backend-key, permissions: [ read, write, script, queue, stageImport ] }
+        - { name: backend, value: conformance-backend-key, roles: [ backend ] }
 rateLimit: { windowMs: 30000, max: 0 }
 scripts: { enabled: true }
 transports:

@@ -38,12 +38,12 @@ describe('schemas and their settings', () => {
 			workspacePath: '/w',
 			schemas: [
 				{ path: 'iot/v1', env: { DB: 'one' }, server: { maxConcurrent: 4 }, mcp: { tools: { exclude: ['orm_execute_script'] } }, transports: ['mcpHttp'] },
-				{ path: 'accounts/v1', workspace: '/mnt/accounts', runtime: { mode: 'process', maxMemoryMb: 256 }, authentication: { adapter: 'local', type: 'bearer', token: 's' } }
+				{ path: 'accounts/v1', workspace: '/mnt/accounts', runtime: { mode: 'process', maxMemoryMb: 256 }, authentication: { adapter: 'local', type: 'bearer', token: 's', roles: ['backend'] } }
 			]
 		},
 		scripts: { enabled: true },
 		server: { timeout: 5000 },
-		authentication: { adapter: 'local', type: 'apikey', value: 'k' }
+		authentication: { adapter: 'local', type: 'apikey', value: 'k', roles: ['backend'] }
 	})
 	const discovered = [{ path: 'iot/v1', workspace: '/w/iot/v1' }, { path: 'iot/v2', workspace: '/w/iot/v2' }]
 
@@ -308,7 +308,7 @@ describe('observability', () => {
 		const { maskSecrets } = await import('../../src/lib/infrastructure/build/dataGatewayBuilder')
 		const c = config({
 			orm: { workspacePath: '/w', schemas: [{ path: 'iot/v1', env: { DB: 'postgres://user:pass@host' } }] },
-			authentication: { adapter: 'local', type: 'basic', users: [{ username: 'u', password: 'p' }] },
+			authentication: { adapter: 'local', type: 'basic', users: [{ username: 'u', password: 'p', roles: ['backend'] }] },
 			runtime: { env: { passthrough: ['KAFKA'] } }
 		})
 		const masked = JSON.stringify(maskSecrets(c))

@@ -1,4 +1,4 @@
-import { AuthenticationConfig, DataGatewayConfig, RoleConfig } from '../../domain/config/dataGatewayConfig'
+import { DataGatewayConfig, RoleConfig } from '../../domain/config/dataGatewayConfig'
 import { extendGrant, grantOf, RoleGrant } from '../../domain/auth/roles'
 import { Permission } from '../../domain/auth/permission'
 import { Principal } from '../../domain/auth/principal'
@@ -17,16 +17,8 @@ export interface RoleLookupPort {
 	has (role: string): boolean
 }
 
-/** The roles of the methods jwt (as before 4.4) of an authentication, and of its methods */
-const jwtRolesOf = (authentication: AuthenticationConfig | undefined): Record<string, RoleConfig> => {
-	if (!authentication) return {}
-	const methods = authentication.adapter === 'methods' ? authentication.methods ?? [] : [authentication]
-	return Object.assign({}, ...methods.map(m => m.jwt?.principal.permissions?.roles ?? {}))
-}
-
 /**
- * The roles of the gateway (docs/ROLE_SCOPES.md): authorization.roles and those of the methods jwt (the base), those of
- * each schema (orm.schemas[].roles) and those of the state of the gateway, which extend them unless they are locked.
+ * The roles of the gateway (docs/ROLE_SCOPES.md): authorization.roles (the base), those of each schema (orm.schemas[].roles) and those of the state of the gateway, which extend them unless they are locked.
  * A role of the state that the YAML doesn't have is a new one.
  */
 export class RoleCatalog implements RoleGrantsPort, RoleLookupPort {
@@ -34,13 +26,11 @@ export class RoleCatalog implements RoleGrantsPort, RoleLookupPort {
 	private readonly bySchema: Record<string, Record<string, Partial<RoleConfig>>>
 	private stored: StoredRole[] = []
 
-	constructor (config: Pick<DataGatewayConfig, 'authorization' | 'authentication' | 'orm'> & { transports?: DataGatewayConfig['transports'] }) {
-		const transports = Object.values(config.transports ?? {}).map(t => (t as { authentication?: AuthenticationConfig } | undefined)?.authentication)
-		this.base = Object.assign({}, ...transports.map(jwtRolesOf), jwtRolesOf(config.authentication), config.authorization?.roles)
+	constructor (config: Pick<DataGatewayConfig, 'authorization' | 'orm'>) {
+		this.base = { ...config.authorization?.roles }
 		this.bySchema = {}
 		for (const schema of config.orm.schemas) {
-			const roles = { ...jwtRolesOf(schema.authentication), ...schema.roles }
-			if (Object.keys(roles).length) this.bySchema[schema.path] = roles
+			if (schema.roles && Object.keys(schema.roles).length) this.bySchema[schema.path] = { ...schema.roles }
 		}
 	}
 
@@ -102,8 +92,8 @@ export class RoleCatalog implements RoleGrantsPort, RoleLookupPort {
 }
 
 /**
- * The grants of a principal: those of its roles, or one of its own (a key with its permissions and its view, as before
- * 4.4; a principal made by a test). Its own scope: all its permissions, in its view and the stage of the schema.
+ * The grants of a principal: those of its roles, or one of its own (the anonymous of adapter none, a principal made by a
+ * test). Its own scope: all its permissions, in its view and the stage of the schema.
  */
 export const grantsFor = (principal: Principal, of: (roles: readonly string[]) => RoleGrant[]): RoleGrant[] => {
 	if (principal.grants) return [...principal.grants]

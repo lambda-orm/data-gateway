@@ -550,7 +550,7 @@ export class ConfigReader {
 				if (credential) credentials.push(credential)
 			})
 		} else {
-			const credential = this.credential(type, { ...raw, permissions: undefined }, key, type === 'basic' ? this.str(raw.username, 'default') : 'default', false)
+			const credential = this.credential(type, raw, key, type === 'basic' ? this.str(raw.username, 'default') : 'default', false)
 			if (credential) credentials.push(credential)
 		}
 		const names = credentials.map(c => c.name)
@@ -622,16 +622,13 @@ export class ConfigReader {
 		let permissions: JwtConfig['principal']['permissions']
 		if (p.permissions !== undefined) {
 			const at = `${key}.principal.permissions`
-			// the roles may be in authorization.roles (docs/ROLE_SCOPES.md): here only the claim
-			if (!isObject(p.permissions) || !this.str(p.permissions.claim, '') || (p.permissions.roles !== undefined && !isObject(p.permissions.roles))) {
-				this.issues.push(`${at} needs claim (where the roles are); its roles (role → permissions) here or in authorization.roles`)
+			// the roles are those of authorization.roles (docs/ROLE_SCOPES.md): here only the claim that names them
+			if (!isObject(p.permissions) || !this.str(p.permissions.claim, '')) {
+				this.issues.push(`${at} needs claim (where the roles are)`)
+			} else if (p.permissions.roles !== undefined) {
+				this.issues.push(`${at}.roles: the roles go in authorization.roles; here only the claim that names them`)
 			} else {
-				const roles: Record<string, RoleConfig> = {}
-				for (const [role, value] of Object.entries(p.permissions.roles ?? {})) {
-					const config = this.role(value, `${at}.roles.${role}`, false)
-					if (config) roles[role] = config as RoleConfig
-				}
-				permissions = { claim: String(p.permissions.claim), roles }
+				permissions = { claim: String(p.permissions.claim) }
 			}
 		}
 		const context: Record<string, string> = {}
@@ -797,15 +794,10 @@ export class ConfigReader {
 		return authorization
 	}
 
-	/** the roles of the methods jwt (as before 4.4) and of authorization.roles are one catalog: a name in both, an issue */
+	/** a role a key names that the configuration doesn't have: said (it may come from the state of the gateway) */
 	private rolesTogether (config: DataGatewayConfig): void {
 		const methods = config.authentication.adapter === 'methods' ? config.authentication.methods ?? [] : [config.authentication]
-		for (const method of methods) {
-			for (const name of Object.keys(method.jwt?.principal.permissions?.roles ?? {})) {
-				if (config.authorization.roles[name]) this.issues.push(`the role "${name}" is in authorization.roles and in a method jwt: keep it in one`)
-			}
-		}
-		const known = new Set([...Object.keys(config.authorization.roles), ...methods.flatMap(m => Object.keys(m.jwt?.principal.permissions?.roles ?? {}))])
+		const known = new Set([...Object.keys(config.authorization.roles), ...config.orm.schemas.flatMap(s => Object.keys(s.roles ?? {}))])
 		for (const method of methods) {
 			for (const credential of method.credentials ?? []) {
 				for (const role of credential.roles ?? []) {
@@ -920,24 +912,16 @@ export class ConfigReader {
 			this.issues.push(`${at}: username is required`)
 			return undefined
 		}
-		if (entry.roles !== undefined && (!Array.isArray(entry.roles) || entry.roles.some((r: unknown) => typeof r !== 'string' || !r))) {
-			this.issues.push(`${at}.roles must be a list of the names of roles of authorization.roles`)
+		// what a credential may do is said by its roles only (docs/ROLE_SCOPES.md): never by itself
+		const own = ['permissions', 'view', 'approval'].filter(k => entry[k] !== undefined)
+		if (own.length) this.issues.push(`${at}: ${own.join(', ')} go in a role of authorization.roles, which the credential names in roles`)
+		if (!Array.isArray(entry.roles) || entry.roles.length === 0 || entry.roles.some((r: unknown) => typeof r !== 'string' || !r)) {
+			this.issues.push(`${at}.roles must be a non empty list of the names of roles of authorization.roles`)
+			return undefined
 		}
-		const roles: string[] | undefined = Array.isArray(entry.roles) ? entry.roles.map(String) : undefined
-		if (roles && (entry.permissions !== undefined || entry.view !== undefined)) this.issues.push(`${at}: roles or its own permissions and view, not both`)
-		// with roles, its permissions are theirs (the role catalog fills them): none of its own
-		const permissions = roles ? [] : this.permissions(entry.permissions, `${at}.permissions`)
-		const credential: CredentialConfig = { name, permissions, ...(roles ? { roles } : {}) }
-		if (this.approvalMode(entry.approval, `${at}.approval`) === 'writes') credential.approval = 'writes'
+		const credential: CredentialConfig = { name, roles: [...new Set(entry.roles.map(String))] }
 		const context = this.credentialContext(entry.context, `${at}.context`)
 		if (context) credential.context = context
-		if (entry.view !== undefined) {
-			const view = this.viewName(entry.view, `${at}.view`)
-			if (view) {
-				credential.view = view
-				this.stageWithView(permissions, at)
-			}
-		}
 		if (type === 'basic') {
 			credential.username = String(entry.username)
 			credential.password = String(secret)

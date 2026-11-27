@@ -58,7 +58,6 @@ authentication:
       type: apikey
       keys:
         - { name: billing, value: '${BILLING_KEY}', roles: [backend] }
-        - { name: legacy, value: '${LEGACY_KEY}', permissions: [read], view: public }   # como hoy: un rol propio
 orm:
   schemas:
     - path: shop
@@ -68,9 +67,11 @@ orm:
         support: { views: [support, public] }
 ```
 
-- **Lo de hoy sigue valiendo:** `roles` dentro de un método `jwt` (`support: { permissions, view }`), `view` en una
-  clave o un rol (= `views: [view]`), los permisos en la clave. Se leen como un rol más; un nombre en los dos lugares,
-  error.
+- **Un solo camino (5.0.0):** los permisos, las vistas, los stages y la aprobación los dice un rol. Una clave (o un
+  token local, o un usuario basic) solo nombra sus `roles` (obligatorio) y puede decir su `context`; un método `jwt`
+  solo dice el claim de los roles (`principal.permissions.claim`). Con `permissions`, `view` o `approval` en una clave,
+  o `roles` dentro de un método `jwt`, la gateway no arranca y el error dice dónde van. `view` en un rol sigue siendo
+  `views: [view]`.
 - Un rol que no dice `views` tiene la vista del schema; uno que no dice `stages`, el stage del schema. Así una
   instalación de hoy no cambia de comportamiento.
 - Un nombre de `views` o `stages` que el schema no tiene: aviso al cargar y `403` en el pedido (como hoy la vista).
@@ -140,8 +141,9 @@ No son reglas con expresiones sobre los claims (`when: claims.x == …`): los ro
 
 | Hoy | Después |
 | --- | --- |
-| `roles` en un método `jwt` | sigue; se lee como `authorization.roles` (aviso de que se mueve) |
-| `view` en un rol o una clave | `views: [view]` |
+| `roles` en un método `jwt` | 4.4: se leía como `authorization.roles`; **5.0.0: error**, van en `authorization.roles` |
+| `permissions`, `view`, `approval` en una clave | 4.4: un rol propio; **5.0.0: error**, van en un rol que la clave nombra en `roles` |
+| `view` en un rol | `views: [view]` |
 | `options.stage` del cliente, cualquiera | **solo los del rol**: un cliente que hoy pide otro stage recibe `403` (el único cambio que rompe: va en el CHANGELOG; `authorization.stages: open` lo deja como hoy por una versión) |
 | `options.maxRows` mayor | recortado |
 | `options.allowDestructive` | ignorado: hace falta `destructive` |
@@ -150,7 +152,7 @@ No son reglas con expresiones sobre los claims (`when: claims.x == …`): los ro
 
 | # | Tema | Recomendación | Alternativa |
 | --- | --- | --- | --- |
-| 1 | Dónde van los roles | **`authorization.roles`**, compartidos por los métodos; los de hoy siguen leyéndose | Dentro de cada método, como hoy |
+| 1 | Dónde van los roles | **`authorization.roles`**, compartidos por los métodos (desde 5.0.0 el único lugar) | Dentro de cada método, como en 4.3 |
 | 2 | Los permisos con varios roles | **Los de los roles que permiten la vista y el stage elegidos** (`scope: any` para sumar todo) | La suma de todos sus roles (como hoy) |
 | 3 | Los roles de un schema | **Extienden los globales** (agregan vistas, stages, permisos) | Reemplazan al global del mismo nombre |
 | 4 | El stage del cliente | **Solo entre los de sus roles**, `403` fuera; `authorization.stages: open` por una versión | Abierto como hoy |

@@ -416,12 +416,16 @@ data-gateway:
       workspacePath: /workspace
     runtime:
       env: { passthrough: [ DB_CONNECTION ] }
+    authorization:
+      roles:
+        backend: { permissions: [ read, write, script ] }
+        agent:   { permissions: [ read ] }
     authentication:
       adapter: local
       type: bearer
       tokens:
-        - { name: backend, value: $BACKEND_TOKEN, permissions: [ read, write, script ] }
-        - { name: agent,   value: $AGENT_TOKEN,   permissions: [ read ] }
+        - { name: backend, value: $BACKEND_TOKEN, roles: [ backend ] }
+        - { name: agent,   value: $AGENT_TOKEN,   roles: [ agent ] }
     transports:
       http:         { port: $DATA_GATEWAY_HTTP_PORT }
       mcpHttp:      { port: $DATA_GATEWAY_MCP_HTTP_PORT }
@@ -730,13 +734,18 @@ Bloque `authentication` en tres niveles: global, por transporte (`transports.<t>
 en el edge, antes de enviar nada al esquema. Cada tipo es un `AuthenticatorPort` registrado en el
 `AuthenticatorRegistry`:
 
-| `adapter` | Credencial única (todos los permisos) | Varias credenciales con permisos | Valida |
+| `adapter` | Credencial única | Varias credenciales | Valida |
 | --- | --- | --- | --- |
 | `none` (por defecto) | — | — | todo (principal anónimo con todos los permisos) |
-| `local`, `type: bearer` | `token` | `tokens: [{ name, value, permissions }]` | `Authorization: Bearer <token>` |
-| `local`, `type: apikey` | `value` (+ `header`, def. `X-Api-Key`) | `keys: [{ name, value, roles, context }]` | el header |
-| `local`, `type: basic` | `username`, `password` | `users: [{ username, password, permissions }]` | `Authorization: Basic …` |
-| `jwt` (fase posterior) | — | roles / scopes del token mapeados a permisos | JWT firmado (Keycloak, Entra ID) |
+| `local`, `type: bearer` | `token`, `roles` | `tokens: [{ name, value, roles, context }]` | `Authorization: Bearer <token>` |
+| `local`, `type: apikey` | `value`, `roles` (+ `header`, def. `X-Api-Key`) | `keys: [{ name, value, roles, context }]` | el header |
+| `local`, `type: basic` | `username`, `password`, `roles` | `users: [{ username, password, roles, context }]` | `Authorization: Basic …` |
+| `jwt` | — | los roles del claim `principal.permissions.claim` | JWT firmado (Keycloak, Entra ID; docs/JWT.md) |
+
+Lo que una credencial puede hacer lo dicen **solo sus roles** (5.0.0): `roles` es obligatorio y nombra roles de
+`authorization.roles` (o de `orm.schemas[].roles`, o de la administración), que dicen los permisos, las vistas, los
+stages y la aprobación (docs/ROLE_SCOPES.md). Una credencial con `permissions`, `view` o `approval` propios, o un método
+`jwt` con sus `roles`, detiene la gateway con el error que dice dónde van.
 
 - Una credencial `local` sin su secreto (o con su `$VAR` no definida) es error de configuración: el proceso no
   arranca. Abierto es solo `adapter: none`, explícito.

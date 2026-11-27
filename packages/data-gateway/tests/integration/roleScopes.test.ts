@@ -1,5 +1,5 @@
 // The roles with their views and stages (docs/ROLE_SCOPES.md) in a real gateway: λORM on SQLite with a view and two
-// stages, keys with roles of authorization.roles and of the schema, a key of before (its own permissions); over REST
+// stages, keys with roles of authorization.roles and of the schema, a role without views nor stages; over REST
 // the view and the stage asked for only among those of the roles, the permissions of the roles that allow both;
 // /whoami says what it may choose; a role extended from the administration (the state of the gateway) applies at once.
 import fs from 'fs'
@@ -73,7 +73,7 @@ authentication:
     - { name: carla, value: carla-key, roles: [support, backend] }
     - { name: ana, value: ana-key, roles: [analyst] }
     - { name: boss, value: boss-key, roles: [admin] }
-    - { name: legacy, value: legacy-key, permissions: [read, write] }
+    - { name: legacy, value: legacy-key, roles: [backend] }
 transports:
   http: { port: ${port}, host: 127.0.0.1 }
   management: { port: ${management}, host: 127.0.0.1 }
@@ -95,7 +95,7 @@ afterAll(async () => {
 
 const execute = (k: string, query: string, options?: object, data?: object) => call(base, '/execute', { body: { query, ...(data ? { data } : {}), ...(options ? { options } : {}) }, headers: key(k) })
 
-test('a key of before: its own permissions, in the stage of the schema; another stage, 403', async () => {
+test('a role without views nor stages: the view and the stage of the schema; another stage, 403', async () => {
 	expect((await execute('legacy-key', 'Customers.map(p => p.phone)')).body).toEqual([{ phone: '030-007' }])
 	expect((await execute('legacy-key', 'Customers.map(p => p.name)', { stage: 'reporting' })).status).toBe(403)
 })

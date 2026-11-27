@@ -34,17 +34,18 @@ describe('the configuration of the roles', () => {
 		expect(config!.authorization.roles.admin.locked).toBe(true)
 		expect(config!.authorization.roles.agent).toMatchObject({ approval: 'writes', scope: 'any' })
 		expect(config!.orm.schemas[0]).toMatchObject({ stage: 'default', roles: { support: { views: ['public'] } } })
-		expect(config!.authentication.credentials[0]).toMatchObject({ name: 'billing', roles: ['support'], permissions: [] })
+		expect(config!.authentication.credentials[0]).toEqual({ name: 'billing', value: 'k', roles: ['support'] })
 		expect(config!.authorization.stages).toBe('restricted')
 	})
 
-	test('what stops it: a role in two places, roles and permissions in a key, a bad state', () => {
-		const twice = read({
-			authorization: { roles: { support: ['read'] } },
-			authentication: { adapter: 'jwt', issuer: 'https://x', principal: { permissions: { claim: 'roles', roles: { support: ['read'] } } } }
-		})
-		expect(twice.issues).toContain('the role "support" is in authorization.roles and in a method jwt: keep it in one')
-		expect(read({ authentication: { adapter: 'local', type: 'apikey', keys: [{ name: 'k', value: 'k', roles: ['a'], permissions: ['read'] }] } }).issues.join()).toContain('roles or its own permissions and view, not both')
+	test('what stops it: roles defined out of authorization.roles, what a key says of itself, a bad state', () => {
+		const inJwt = read({ authentication: { adapter: 'jwt', issuer: 'https://x', principal: { permissions: { claim: 'roles', roles: { support: ['read'] } } } } })
+		expect(inJwt.issues).toContain('authentication.principal.permissions.roles: the roles go in authorization.roles; here only the claim that names them')
+		expect(read({ authentication: { adapter: 'local', type: 'apikey', keys: [{ name: 'k', value: 'k', roles: ['a'], permissions: ['read'], approval: 'writes' }] } }).issues)
+			.toContain('authentication.keys[0]: permissions, approval go in a role of authorization.roles, which the credential names in roles')
+		expect(read({ authentication: { adapter: 'local', type: 'bearer', token: 't' } }).issues).toContain('authentication.roles must be a non empty list of the names of roles of authorization.roles')
+		// a role a key names that the configuration doesn't have: said (it may come from the state)
+		expect(read({ authentication: { adapter: 'local', type: 'apikey', keys: [{ name: 'k', value: 'k', roles: ['ghost'] }] } }).warnings.join()).toContain('the key "k" has the role "ghost"')
 		expect(read({ state: { source: { dialect: 'SQLjs', connection: ':memory:' } } }).issues.join()).toContain('SQLjs keeps the database in memory')
 		expect(read({ state: { source: { dialect: 'Mongo', connection: 'x' } } }).issues.join()).toContain('state.source.dialect must be one of')
 		expect(read({ state: { source: { dialect: 'PostgreSQL', connection: 'postgres://db/g' }, refresh: '10s' } }).config!.state).toEqual({ source: { dialect: 'PostgreSQL', connection: 'postgres://db/g' }, refreshMs: 10000, required: false })
@@ -136,7 +137,7 @@ describe('the catalog of the roles', () => {
 
 	test('a key with roles: their names, and before a schema the permissions of them all', async () => {
 		const catalog = new RoleCatalog(config)
-		const keys = new ApiKeyAuthenticator([{ name: 'billing', value: 'k', permissions: [], roles: ['support', 'admin'] }], 'x-api-key', catalog)
+		const keys = new ApiKeyAuthenticator([{ name: 'billing', value: 'k', roles: ['support', 'admin'] }], catalog, 'x-api-key')
 		const who = (await keys.authenticate({ 'x-api-key': 'k' })).principal!
 		expect(who.roles).toEqual(['support', 'admin'])
 		expect([...who.permissions].sort()).toEqual(['read', 'roles', 'schemaRead'])

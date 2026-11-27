@@ -24,12 +24,16 @@ orm: { workspacePath: ${root} }
 logger: { level: error }
 audit: { enabled: false }
 rateLimit: { max: 0 }
+authorization:
+  roles:
+    admin: { permissions: [ read, schemaRead ] }
+    reader: { permissions: [ read ] }
 authentication:
   adapter: local
   type: apikey
   keys:
-    - { name: admin, value: admin-key, permissions: [ read, schemaRead ] }
-    - { name: reader, value: reader-key, permissions: [ read ] }
+    - { name: admin, value: admin-key, roles: [ admin ] }
+    - { name: reader, value: reader-key, roles: [ reader ] }
 transports:
   mcpHttp: { port: ${port}, host: 127.0.0.1, legacySse: false }
 ${admin ? `  management: { port: ${await freePort()}, host: 127.0.0.1 }` : ''}

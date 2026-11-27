@@ -19,12 +19,17 @@ Google…) y la gateway:
   defaults, las condiciones y el `forward` de las fuentes Http (C7), que ya leen `context`.
 
 Hoy la autenticación es `adapter: none` o `local` con una lista fija de claves (`bearer`, `apikey`, `basic`): sirve para
-servicios, no para usuarios de un IdP. Desde 4.5 una clave local puede decir su contexto, fijo (`context: { username:
+servicios, no para usuarios de un IdP. Desde 5.0.0 una clave local puede decir su contexto, fijo (`context: { username:
 ana@acme.com }`, ver §4); sin él, no da contexto.
 
 ## 2. Configuración
 
 ```yaml
+authorization:
+  roles:                                                  # los roles que nombra el claim (docs/ROLE_SCOPES.md)
+    reader: [read]
+    backend: [read, write, script, queue]
+    admin: [read, write, script, queue, stageImport, ddl, schemaRead, schemaWrite]
 authentication:
   adapter: jwt
   issuer: https://auth.example.com/realms/ilusor          # iss; con él se descubre el jwksUri (OIDC discovery)
@@ -36,10 +41,6 @@ authentication:
     name: preferred_username                              # el claim del nombre (por defecto sub)
     permissions:
       claim: realm_access.roles                           # una lista (o un texto separado por espacios, como scope)
-      roles:                                              # rol → permisos; un rol que no está, ninguno
-        reader: [read]
-        backend: [read, write, script, queue]
-        admin: [read, write, script, queue, stageImport, ddl, schemaRead, schemaWrite]
   context:                                                # claim → variable del contexto de λORM
     tenant: tenant_id
     region: address.region
@@ -55,8 +56,9 @@ authentication:
       - { adapter: local, type: apikey, keys: [ { name: billing, value: '${BILLING_KEY}', roles: [backend] } ] }
   ```
 
-- Un rol de `roles` dice sus permisos: uno sin lista es un error de configuración (nunca *todos*, como una credencial
-  local sin `permissions`).
+- Los roles del claim son los de `authorization.roles` (docs/ROLE_SCOPES.md): un rol del token que no está ahí no da
+  nada. Desde 5.0.0 es el único lugar: `roles` dentro del método es un error de configuración. Un rol dice sus
+  permisos; uno sin lista es un error (nunca *todos*).
 - Como hoy, por schema: `orm.schemas[].authentication` reemplaza a la global.
 - Un secreto compartido (HS256), solo para desarrollo y tests: `secret: ${JWT_SECRET}` (siempre de una variable).
 
@@ -80,7 +82,7 @@ Una conexión larga (WebSocket, MCP) se corta cuando vence el token (código 440
   worker del schema (como hoy el actor) y `requestOptions` lo pone en `options.context`: el cliente sigue sin poder
   mandarlo (R2). Un claim que falta deja la variable sin valor: si una vista la necesita, λORM responde
   `ContextError` (400).
-- **Contexto de una clave local** (4.5): una entrada de `keys`, `tokens` o `users` puede tener `context` (variable →
+- **Contexto de una clave local** (5.0.0): una entrada de `keys`, `tokens` o `users` puede tener `context` (variable →
   texto, número o booleano), el que tendría el token de esa persona: `context: { username: ana@acme.com }` llena el
   `default: context.username` o el `writeValue` de un schema. Viaja igual que el de un token (también a una sesión
   abierta con la clave) y el cliente tampoco puede reemplazarlo. Una clave sin `context` no da ninguno.
