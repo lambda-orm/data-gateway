@@ -1,4 +1,5 @@
 import { ObservabilityConfig } from '@lambdaorm/base'
+import { readExplore, readObservabilitySdk } from './observabilitySettings'
 import { ALL_PERMISSIONS, isPermission, KNOWN_PERMISSIONS, Permission } from '../auth/permission'
 import {
 	AuthenticationConfig, AuthenticationType, AuthorizationConfig, StateConfig, StateDialect, STATE_DIALECTS, ConfigReading, CredentialConfig, DataGatewayConfig, ExploreConfig, JwtConfig, RoleConfig, CacheConfig, ClusterConfig, FilesConfig, FileStorageConfig, OutboxConfig, OutboxDestinationConfig, LoggerConfig, McpConfig,
@@ -289,36 +290,11 @@ export class ConfigReader {
 
 	/** checked in full (with its trace rules) when the gateway starts, where 3xpr is: here only its form */
 	private observability (raw: unknown): ObservabilityConfig | undefined {
-		if (raw === undefined || raw === null) return undefined
-		if (typeof raw !== 'object' || Array.isArray(raw)) {
-			this.issues.push('observability must be an object (the same shape as infrastructure.observability of a lambdaORM.yaml)')
-			return undefined
-		}
-		if ((raw as any).exporter?.headers !== undefined) {
-			this.issues.push('observability.exporter.headers is not allowed: the headers carry tokens; use OTEL_EXPORTER_OTLP_HEADERS')
-		}
-		// explore is of the gateway (the link of the IDE), not of the SDK of λORM
-		const sdk: Raw = { ...(raw as Raw) }
-		delete sdk.explore
-		return sdk as ObservabilityConfig
+		return readObservabilitySdk(raw, this.issues)
 	}
 
 	private explore (raw: unknown): ExploreConfig | undefined {
-		if (raw === undefined || raw === null) return undefined
-		if (!isObject(raw)) {
-			this.issues.push('observability.explore must be an object: { grafana, tempo, orgId }')
-			return undefined
-		}
-		const unknown = Object.keys(raw).filter(k => !['grafana', 'tempo', 'orgId'].includes(k))
-		if (unknown.length) this.issues.push(`observability.explore: unknown keys ${unknown.join(', ')} (grafana, tempo, orgId)`)
-		const grafana = raw.grafana
-		if (typeof grafana !== 'string' || !/^https?:\/\/[^\s]+$/.test(grafana)) {
-			this.issues.push('observability.explore.grafana: the URL of Grafana (http or https)')
-			return undefined
-		}
-		const tempo = this.str(raw.tempo, 'tempo')
-		if (!tempo) this.issues.push('observability.explore.tempo: the uid of the datasource of Tempo')
-		return { grafana: grafana.replace(/\/+$/, ''), tempo, orgId: this.int(raw.orgId, 1, 'observability.explore.orgId', 1) }
+		return readExplore(raw, this.issues)
 	}
 
 	private logger (raw: Raw | undefined): LoggerConfig {

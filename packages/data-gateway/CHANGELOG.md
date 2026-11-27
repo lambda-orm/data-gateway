@@ -18,6 +18,16 @@ All notable changes to this project will be documented in this file.
   nothing. `orm.schemas[].roles` is gone (it stops the gateway): a role that needs other permissions or views in
   another schema is another role. From the administration, a role says its `schemas` too (`PUT` with `schema`, `400`);
   one kept for a schema by 4.4 doesn't apply and is listed as ignored, to remove it.
+- **The observability, from the administration:** `GET/PUT/DELETE /admin/observability` with the new permission
+  `observability`. `PUT { config, reason }` replaces sections of `observability` whole (`exporter`, `traces`,
+  `metrics`, `logs`, `explore`), checked as the YAML (no headers in the exporter), kept in the state (`Settings`, with
+  its `ConfigChanges` and the version of the area) over the YAML; `DELETE` goes back to it. Applied at once: the
+  supervisor restarts the edge and reloads blue-green the schema workers whose SDK changes, in every replica (the edge
+  watches the version); it reads it before starting the workers too.
+- **`observability.explore`** says where the metrics and the logs are seen too: `prometheus` and `loki`, the uids of
+  their datasources in Grafana (`prometheus`, `loki` by default).
+- **`GET /admin/me`** (any credential, about itself): its name, its context and each of its roles as it applies
+  (permissions, schemas, views, stages).
 - **`GET /admin/access`** (permission `roles`): who may come in, as the configuration says it: the authentications of
   every level (global, transport, schema) with their keys (name, roles, context), the issuer and claims of a method
   `jwt`, and every permission there is. Never a secret.

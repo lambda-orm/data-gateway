@@ -387,6 +387,10 @@ export interface ExploreConfig {
 	grafana: string
 	/** the uid of the datasource of Tempo in that Grafana (tempo when it isn't given) */
 	tempo: string
+	/** the uid of the datasource of Prometheus, where the metrics are (prometheus when it isn't given) */
+	prometheus: string
+	/** the uid of the datasource of Loki, where the logs are (loki when it isn't given) */
+	loki: string
 	/** the organization of Grafana (1 when it isn't given) */
 	orgId: number
 }

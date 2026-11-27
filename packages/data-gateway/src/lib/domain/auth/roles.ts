@@ -21,7 +21,7 @@ export interface RoleGrant {
 /** The permissions of the commands of a stage: they count in the stages of their role, whatever the view */
 const STAGE_COMMANDS: Permission[] = ['ddl', 'destructive', 'stageImport']
 /** The permissions of the administration: they don't depend on the view nor the stage */
-const ADMINISTRATION: Permission[] = ['schemaRead', 'schemaWrite', 'schemaAdmin', 'workbenchWrite', 'build', 'sessionAdmin', 'approve', 'roles']
+const ADMINISTRATION: Permission[] = ['schemaRead', 'schemaWrite', 'schemaAdmin', 'workbenchWrite', 'build', 'sessionAdmin', 'approve', 'roles', 'observability']
 
 /** In a list of views or stages: the one of the schema (a role without views extended with some keeps it) */
 export const SCHEMA_DEFAULT = '@schema'

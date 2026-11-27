@@ -166,7 +166,7 @@ describe('http transport options', () => {
 	})
 
 	test('where its traces are seen (observability.explore), without a credential', async () => {
-		const explore = { grafana: 'https://grafana.example.com', tempo: 'tempo', orgId: 1 }
+		const explore = { grafana: 'https://grafana.example.com', tempo: 'tempo', prometheus: 'prometheus', loki: 'loki', orgId: 1 }
 		const { transport, base } = await start(fakeGateway(), { observability: { explore } })
 		try {
 			expect(await (await fetch(`${base}/observability`)).json()).toEqual({ explore })

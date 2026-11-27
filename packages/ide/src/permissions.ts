@@ -2,7 +2,7 @@ import type { Locale } from '@lambdaorm/ui'
 
 /** The permissions of the gateway (docs/DATA_GATEWAY.md §6.2): those of the data and those of the administration */
 export const DATA_PERMISSIONS = ['read', 'write', 'script', 'queue', 'stageImport']
-export const ADMIN_PERMISSIONS = ['schemaRead', 'schemaWrite', 'schemaAdmin', 'workbenchWrite', 'ddl', 'destructive', 'build', 'sessionAdmin', 'approve', 'roles']
+export const ADMIN_PERMISSIONS = ['schemaRead', 'schemaWrite', 'schemaAdmin', 'workbenchWrite', 'ddl', 'destructive', 'build', 'sessionAdmin', 'approve', 'roles', 'observability']
 
 type Descriptions = Record<string, string> & { data: string, admin: string, granted: string, notGranted: string, other: string }
 
@@ -22,7 +22,8 @@ const EN: Descriptions = {
 	sessionAdmin: 'See every session of management (who is connected) and revoke those of other credentials.',
 	destructive: 'With ddl, a push or a migration that loses data.',
 	approve: 'Approve or reject the writes of agents that wait for a person (never its own).',
-	roles: 'See and change the roles kept in the state of the gateway: add one, or give one more views, stages or permissions.'
+	roles: 'See and change the roles kept in the state of the gateway: add one, or give one more views, stages or permissions.',
+	observability: 'See and change the observability of the gateway: where its metrics, logs and traces go and where they are seen (it restarts the edge).'
 }
 const ES: Descriptions = {
 	data: 'Datos', admin: 'Administración', granted: 'otorgado', notGranted: 'no otorgado', other: 'Otros',
@@ -40,7 +41,8 @@ const ES: Descriptions = {
 	sessionAdmin: 'Ver todas las sesiones de management (quién está conectado) y revocar las de otras credenciales.',
 	destructive: 'Con ddl, un push o una migración que pierde datos.',
 	approve: 'Aprobar o rechazar las escrituras de agentes que esperan a una persona (nunca las propias).',
-	roles: 'Ver y cambiar los roles guardados en el estado de la gateway: agregar uno, o darle más vistas, stages o permisos.'
+	roles: 'Ver y cambiar los roles guardados en el estado de la gateway: agregar uno, o darle más vistas, stages o permisos.',
+	observability: 'Ver y cambiar la observabilidad del gateway: a dónde van sus métricas, logs y trazas y dónde se ven (reinicia el edge).'
 }
 const PT: Descriptions = {
 	data: 'Dados', admin: 'Administração', granted: 'concedida', notGranted: 'não concedida', other: 'Outras',
@@ -58,7 +60,8 @@ const PT: Descriptions = {
 	sessionAdmin: 'Ver todas as sessões do management (quem está conectado) e revogar as de outras credenciais.',
 	destructive: 'Com ddl, um push ou uma migração que perde dados.',
 	approve: 'Aprovar ou recusar as escritas de agentes que aguardam uma pessoa (nunca as próprias).',
-	roles: 'Ver e mudar os papéis guardados no estado do gateway: adicionar um, ou dar a um mais views, stages ou permissões.'
+	roles: 'Ver e mudar os papéis guardados no estado do gateway: adicionar um, ou dar a um mais views, stages ou permissões.',
+	observability: 'Ver e mudar a observabilidade do gateway: para onde vão suas métricas, logs e traces e onde se veem (reinicia o edge).'
 }
 const FR: Descriptions = {
 	data: 'Données', admin: 'Administration', granted: 'accordée', notGranted: 'non accordée', other: 'Autres',
@@ -76,7 +79,8 @@ const FR: Descriptions = {
 	sessionAdmin: 'Voir toutes les sessions de management (qui est connecté) et révoquer celles des autres identifiants.',
 	destructive: 'Avec ddl, un push ou une migration qui perd des données.',
 	approve: 'Approuver ou rejeter les écritures des agents qui attendent une personne (jamais les siennes).',
-	roles: 'Voir et changer les rôles gardés dans l’état de la gateway : en ajouter un, ou donner à un plus de vues, de stages ou de permissions.'
+	roles: 'Voir et changer les rôles gardés dans l’état de la gateway : en ajouter un, ou donner à un plus de vues, de stages ou de permissions.',
+	observability: 'Voir et changer l’observabilité de la gateway : où vont ses métriques, logs et traces et où on les voit (redémarre l’edge).'
 }
 const IT: Descriptions = {
 	data: 'Dati', admin: 'Amministrazione', granted: 'concesso', notGranted: 'non concesso', other: 'Altri',
@@ -94,7 +98,8 @@ const IT: Descriptions = {
 	sessionAdmin: 'Vedere tutte le sessioni di management (chi è connesso) e revocare quelle di altre credenziali.',
 	destructive: 'Con ddl, un push o una migrazione che perde dati.',
 	approve: 'Approvare o rifiutare le scritture degli agenti che attendono una persona (mai le proprie).',
-	roles: 'Vedere e cambiare i ruoli tenuti nello stato del gateway: aggiungerne uno, o dare a uno più viste, stage o permessi.'
+	roles: 'Vedere e cambiare i ruoli tenuti nello stato del gateway: aggiungerne uno, o dare a uno più viste, stage o permessi.',
+	observability: 'Vedere e cambiare l’osservabilità del gateway: dove vanno metriche, log e tracce e dove si vedono (riavvia l’edge).'
 }
 const DE: Descriptions = {
 	data: 'Daten', admin: 'Verwaltung', granted: 'erteilt', notGranted: 'nicht erteilt', other: 'Weitere',
@@ -112,7 +117,8 @@ const DE: Descriptions = {
 	sessionAdmin: 'Alle Sitzungen von management sehen (wer verbunden ist) und die anderer Anmeldedaten widerrufen.',
 	destructive: 'Mit ddl ein Push oder eine Migration, die Daten verliert.',
 	approve: 'Schreibvorgänge von Agenten, die auf eine Person warten, genehmigen oder ablehnen (nie die eigenen).',
-	roles: 'Die im Zustand des Gateways gehaltenen Rollen sehen und ändern: eine hinzufügen oder einer mehr Views, Stages oder Berechtigungen geben.'
+	roles: 'Die im Zustand des Gateways gehaltenen Rollen sehen und ändern: eine hinzufügen oder einer mehr Views, Stages oder Berechtigungen geben.',
+	observability: 'Die Observability des Gateways sehen und ändern: wohin Metriken, Logs und Traces gehen und wo man sie sieht (startet den Edge neu).'
 }
 const NL: Descriptions = {
 	data: 'Gegevens', admin: 'Beheer', granted: 'toegekend', notGranted: 'niet toegekend', other: 'Overige',
@@ -130,7 +136,8 @@ const NL: Descriptions = {
 	sessionAdmin: 'Alle sessies van management zien (wie verbonden is) en die van andere inloggegevens intrekken.',
 	destructive: 'Met ddl een push of een migratie die gegevens verliest.',
 	approve: 'Schrijfacties van agents die op een persoon wachten goedkeuren of afwijzen (nooit de eigen).',
-	roles: 'De rollen in de staat van de gateway zien en wijzigen: er een toevoegen, of er een meer views, stages of rechten geven.'
+	roles: 'De rollen in de staat van de gateway zien en wijzigen: er een toevoegen, of er een meer views, stages of rechten geven.',
+	observability: 'De observability van de gateway zien en wijzigen: waar metrics, logs en traces heen gaan en waar je ze ziet (herstart de edge).'
 }
 const CA: Descriptions = {
 	data: 'Dades', admin: 'Administració', granted: 'atorgat', notGranted: 'no atorgat', other: 'Altres',
@@ -148,7 +155,8 @@ const CA: Descriptions = {
 	sessionAdmin: 'Veure totes les sessions de management (qui està connectat) i revocar les d’altres credencials.',
 	destructive: 'Amb ddl, un push o una migració que perd dades.',
 	approve: 'Aprovar o rebutjar les escriptures d’agents que esperen una persona (mai les pròpies).',
-	roles: 'Veure i canviar els rols desats a l’estat de la gateway: afegir-ne un, o donar-ne a un més vistes, stages o permisos.'
+	roles: 'Veure i canviar els rols desats a l’estat de la gateway: afegir-ne un, o donar-ne a un més vistes, stages o permisos.',
+	observability: 'Veure i canviar l’observabilitat de la gateway: on van les mètriques, logs i traces i on es veuen (reinicia l’edge).'
 }
 const GL: Descriptions = {
 	data: 'Datos', admin: 'Administración', granted: 'outorgado', notGranted: 'non outorgado', other: 'Outros',
@@ -166,7 +174,8 @@ const GL: Descriptions = {
 	sessionAdmin: 'Ver todas as sesións de management (quen está conectado) e revogar as doutras credenciais.',
 	destructive: 'Con ddl, un push ou unha migración que perde datos.',
 	approve: 'Aprobar ou rexeitar as escritas de axentes que agardan unha persoa (nunca as propias).',
-	roles: 'Ver e cambiar os roles gardados no estado da gateway: engadir un, ou darlle a un máis vistas, stages ou permisos.'
+	roles: 'Ver e cambiar os roles gardados no estado da gateway: engadir un, ou darlle a un máis vistas, stages ou permisos.',
+	observability: 'Ver e cambiar a observabilidade da gateway: a onde van as métricas, logs e trazas e onde se ven (reinicia o edge).'
 }
 const EU: Descriptions = {
 	data: 'Datuak', admin: 'Administrazioa', granted: 'emanda', notGranted: 'eman gabe', other: 'Besteak',
@@ -184,7 +193,8 @@ const EU: Descriptions = {
 	sessionAdmin: 'Management-eko saio guztiak ikusi (nor dagoen konektatuta) eta beste kredentzialenak baliogabetu.',
 	destructive: 'ddl-rekin, datuak galtzen dituen push edo migrazio bat.',
 	approve: 'Pertsona baten zain dauden agenteen idazketak onartu edo baztertu (inoiz ez norberarenak).',
-	roles: 'Gatewayaren egoeran gordetako rolak ikusi eta aldatu: bat gehitu, edo bati view, stage edo baimen gehiago eman.'
+	roles: 'Gatewayaren egoeran gordetako rolak ikusi eta aldatu: bat gehitu, edo bati view, stage edo baimen gehiago eman.',
+	observability: 'Gatewayaren behagarritasuna ikusi eta aldatu: metrikak, logak eta trazak nora doazen eta non ikusten diren (edge-a berrabiarazten du).'
 }
 
 const BY_LOCALE: Record<string, Descriptions> = { en: EN, es: ES, pt: PT, fr: FR, it: IT, de: DE, nl: NL, ca: CA, gl: GL, eu: EU }

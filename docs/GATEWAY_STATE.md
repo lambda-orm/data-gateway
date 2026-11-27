@@ -74,16 +74,22 @@ Entidades tipadas para lo que tiene forma propia, y una genérica para los valor
 | Entidad | Qué guarda | Hoy |
 | --- | --- | --- |
 | `Roles` | los roles agregados o extendidos desde la administración ([`ROLE_SCOPES.md`](ROLE_SCOPES.md)) | — |
-| `Settings` | un valor de la configuración cambiado en caliente: `scope` (`global` o un schema), `key` (el camino, `cache.ttl`, `mcp.maxRows`…), `value` (JSON) | — |
+| `Settings` | un valor de la configuración cambiado en caliente: `settingKey` (el área: `observability` desde 5.0.0), `value` (JSON), quién y cuándo | `settings` |
 | `ConfigChanges` | cada cambio de `Roles` y `Settings`: quién, cuándo, el valor anterior y el nuevo, el motivo | — |
 | `Sessions`, `SessionConnections` | las sesiones de `management` (el hash del token, nunca el token) | `sessions`, `session_connections` |
 | `UiStates` | el estado de la UI de cada credencial | `session` |
 | `Approvals` | las escrituras que esperan una persona | `approval` |
-| `StateVersion` | un número por área (`roles`, `settings`): sube con cada cambio; las réplicas lo comparan | — |
+| `StateVersion` | un número por área (`roles`, `observability`): sube con cada cambio; las réplicas lo comparan | `state_versions` |
 
 Más adelante, cuando hagan falta: claves de API creadas desde la administración (su hash, sus permisos, su rol),
 la historia de los schemas (hoy en `changes.jsonl` de los logs de cada workspace), lo que la gateway necesite
 recordar.
+
+**La observabilidad (5.0.0)** es el primer valor de `Settings`: las secciones de `observability` (`exporter`,
+`traces`, `metrics`, `logs`, `explore`…) que la administración cambió, cada una reemplazando entera la del YAML
+(`PUT /admin/observability`, permiso `observability`; `DELETE` vuelve al YAML). Al guardarla, el edge que la guardó (y
+el de cada réplica, al ver subir la versión de `observability`) se lo dice al supervisor, que reinicia el edge y
+recarga en blue-green los workers cuyo SDK cambia; al arrancar, el supervisor la lee antes de iniciar los workers.
 
 `Settings` existe para no necesitar una migración por cada opción nueva: una opción de la configuración que se puede
 cambiar en caliente se declara en el código (su camino, su tipo, su validación) y su valor va a `Settings`. Una

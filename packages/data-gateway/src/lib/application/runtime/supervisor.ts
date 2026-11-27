@@ -24,6 +24,8 @@ export interface SupervisorOptions {
 	heartbeat: HeartbeatPolicy
 	/** How long the edge and the workers get to finish on shutdown */
 	graceMs: number
+	/** the edge says the observability of the state changed: who applies it (it restarts the workers with restart()) */
+	onObservability?: (override: Record<string, any> | undefined) => void
 }
 
 /**
@@ -169,6 +171,24 @@ export class Supervisor {
 		schema.candidate = candidate
 	}
 
+	/**
+	 * The workers start again with what their runtime gives them now (a new observability): the edge always (it stops
+	 * taking requests, finishes the ones in flight, and a new one starts), the schemas when asked, blue-green as a reload
+	 * (the current version serves until the new one is ready).
+	 */
+	public async restart (options: { schemas: boolean }): Promise<void> {
+		if (this.stopping) return
+		if (options.schemas) for (const schema of [...this.schemas.values()]) this.reload(schema.spec)
+		const previous = this.edge.handle
+		this.edge.handle = undefined
+		if (this.edge.restartTimer) clearTimeout(this.edge.restartTimer)
+		this.edge.restartTimer = undefined
+		this.logger.info('[data-gateway] edge restarting')
+		await previous?.stop(this.options.graceMs).catch(error => this.logger.error(error))
+		this.edge.attempt = 0
+		this.startEdge()
+	}
+
 	/** Something changed in a workspace: the edge tells the clients that asked (WebSocket workspace.changed) */
 	public workspaceChanged (change: WorkspaceChange): void {
 		this.edge.handle?.workspace(change)
@@ -261,7 +281,8 @@ export class Supervisor {
 			},
 			failed: reason => this.edgeDown(handle, `edge did not start: ${reason}`),
 			exited: reason => this.edgeDown(handle, `edge exited: ${reason}`),
-			pong: () => { this.edge.lastPong = this.clock.now().getTime() }
+			pong: () => { this.edge.lastPong = this.clock.now().getTime() },
+			observability: override => { if (this.edge.handle === handle) this.options.onObservability?.(override) }
 		}, [...this.schemas.values()].map(s => s.spec))
 		this.edge.handle = handle
 		// a new edge learns every state and gets a channel to every ready schema

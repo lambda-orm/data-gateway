@@ -129,12 +129,16 @@ Sobre [`GATEWAY_STATE.md`](GATEWAY_STATE.md) §4 (el YAML es la base, la base ex
 - Cada cambio, en `ConfigChanges` (quién, cuándo, antes y después) y en la auditoría; llega a las réplicas
   (`GATEWAY_STATE.md` §5).
 - `GET/PUT/DELETE /admin/roles[/{name}]` (un `PUT` con `schema`, `400`: el rol dice sus `schemas`).
+- `GET /admin/me` (5.0.0, cualquier credencial, de sí misma): su nombre, su contexto y cada uno de sus roles como vale
+  (permisos, `schemas`, vistas y stages, la primera de cada uno la de quien no elige). El IDE lo muestra en la página
+  de la conexión.
 - `GET /admin/access` (5.0.0, con `roles`): quién puede entrar, como lo dice la configuración: las autenticaciones
   global, de cada transporte y de cada schema, con sus claves (nombre, `roles`, `context`), el emisor y los claims de
   un método `jwt`, y los permisos que existen. Nunca un secreto (clave, token, contraseña, secreto de un jwt).
-- En el IDE, la pestaña **Configuración** de una conexión (con `roles`): los roles (los del YAML de solo lectura, con
-  lo que la base les suma, y los de la base), el acceso (cada clave o token con sus roles y su contexto) y los
-  permisos por rol (una matriz rol × permiso, con sus schemas).
+- En el IDE, el nodo **Administration** del explorador de cada conexión, sobre sus schemas: **Roles** (la matriz rol ×
+  permiso con sus schemas, Add role, y cada rol: lo que le da el YAML, de solo lectura, y lo que la base le suma, una
+  casilla por permiso), **Access** (cada clave o token con sus roles y su contexto), **Sessions**, **Writes that wait**,
+  **Tools** y **Observability** (Metrics, Logs, Traces), cada uno según los permisos de la credencial.
 
 ## 6. El caché, las suscripciones, la auditoría
 

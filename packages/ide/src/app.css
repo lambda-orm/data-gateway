@@ -235,3 +235,16 @@ div.dg-error { border: 1px solid var(--bad); border-radius: 6px; padding: 6px 10
 .dg-matrix th code { font-size: 11px; writing-mode: vertical-rl; transform: rotate(180deg); }
 .dg-matrix td.dg-granted { color: var(--ok); background: color-mix(in srgb, var(--ok) 10%, transparent); }
 .dg-matrix td.dg-denied { color: var(--muted); }
+/* the administration: a role (its permissions, a box each), the facts of the configuration, who I am */
+.dg-permission-boxes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px 12px; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin: 0; }
+.dg-permission-boxes legend { color: var(--muted); padding: 0 4px; }
+.dg-role-form, .dg-observability-form { max-width: 640px; }
+.dg-facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }
+.dg-facts dt { color: var(--muted); }
+.dg-facts dd { margin: 0; }
+.dg-card-head { display: flex; align-items: center; gap: 8px; }
+.dg-card-head h3 { margin: 0; }
+.dg-link { background: none; border: 0; padding: 0; color: inherit; cursor: pointer; text-align: left; }
+.dg-link:hover { text-decoration: underline; }
+.dg-chip-default { border-color: var(--accent, var(--border)); font-weight: 600; }
+.dg-wrap { white-space: normal !important; }

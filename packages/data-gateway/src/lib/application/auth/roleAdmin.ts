@@ -7,6 +7,29 @@ import { ConfigChange, RoleStorePort, StoredRole } from '../ports/output/statePo
 import { RoleCatalog } from './roleCatalog'
 import { AccessDescription } from './accessView'
 
+/** One of the roles of who asks, as it applies (its configuration and its state together) */
+export interface MyRole {
+	name: string
+	permissions: string[]
+	/** where it applies; none, every schema */
+	schemas?: string[]
+	/** the first, the one of who doesn't choose; none, the one of the schema */
+	views?: string[]
+	stages?: string[]
+	maxRows?: number
+	approval?: 'writes'
+	/** a role its credential names that the gateway doesn't have: it gives nothing */
+	unknown?: boolean
+}
+
+/** Who asks: its name, its context (the user it is of) and its roles with what each gives */
+export interface Me {
+	name: string
+	permissions: string[]
+	context?: Record<string, unknown>
+	roles: MyRole[]
+}
+
 /** A role as the administration shows it: of the YAML (read only), of the state, and how it applies */
 export interface ListedRole {
 	name: string
@@ -82,6 +105,29 @@ export class RoleAdmin {
 		if (!who.permissions.has('roles')) throw forbidden(who.name, 'roles')
 	}
 
+	/** who asks and its roles, as they apply: any credential, about itself (no permission needed) */
+	public me (who: Principal): Me {
+		return {
+			name: who.name,
+			permissions: [...who.permissions],
+			...(who.context ? { context: who.context } : {}),
+			roles: (who.roles ?? []).map(name => {
+				const grant = this.catalog.grantOf(name)
+				if (!grant) return { name, permissions: [], unknown: true }
+				const schemas = this.catalog.schemasOf(name)
+				return {
+					name,
+					permissions: grant.permissions,
+					...(schemas ? { schemas } : {}),
+					...(grant.views ? { views: grant.views } : {}),
+					...(grant.stages ? { stages: grant.stages } : {}),
+					...(grant.maxRows !== undefined ? { maxRows: grant.maxRows } : {}),
+					...(grant.approval ? { approval: grant.approval } : {})
+				}
+			})
+		}
+	}
+
 	public async list (who: Principal): Promise<ListedRole[]> {
 		this.require(who)
 		return [
@@ -124,7 +170,7 @@ export class RoleAdmin {
 
 	public async changes (who: Principal, limit: number): Promise<ConfigChange[]> {
 		this.require(who)
-		return this.store.changes(Math.min(Math.max(Math.trunc(limit) || 100, 1), 1000))
+		return (await this.store.changes(Math.min(Math.max(Math.trunc(limit) || 100, 1), 1000))).filter(c => c.area === 'roles')
 	}
 
 	/** a role of the YAML, or another of the state, still gives roles */

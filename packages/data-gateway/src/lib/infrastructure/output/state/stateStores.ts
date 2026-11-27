@@ -5,7 +5,7 @@ import { StateSource } from '../../../domain/config/stateSource'
 import { ApprovalStorePort } from '../../../application/ports/output/approvalPorts'
 import { SessionStorePort } from '../../../application/ports/output/sessionPorts'
 import { SessionStatePort } from '../../../application/ports/output/adminPorts'
-import { ConfigChange, RoleStorePort, StoredRole } from '../../../application/ports/output/statePorts'
+import { ConfigArea, ConfigChange, RoleStorePort, SettingStorePort, StoredRole, StoredSetting } from '../../../application/ports/output/statePorts'
 import { MemoryApprovalStore, SqliteApprovalStore } from '../approval/approvalStores'
 import { MemorySessionStore, SqliteSessionStore } from '../session/sessionStores'
 import { SqliteSessionState } from '../admin/sqliteSessionState'
@@ -25,8 +25,8 @@ export const uiStateStoreOf = (source: StateSource): SessionStatePort | undefine
 export const approvalStoreOf = (source: StateSource): ApprovalStorePort =>
 	source.kind === 'sqlite' ? new SqliteApprovalStore(path.resolve(source.file)) : source.kind === 'orm' ? new OrmApprovalStore(OrmState.of(source.dialect, source.connection)) : new MemoryApprovalStore()
 
-/** The roles of the state */
-export const roleStoreOf = (source: StateSource): RoleStorePort =>
+/** The roles and the settings of the state (one store: the same database, the same changes and versions) */
+export const roleStoreOf = (source: StateSource): RoleStorePort & SettingStorePort =>
 	source.kind === 'sqlite' ? new SqliteRoleStore(path.resolve(source.file)) : source.kind === 'orm' ? new OrmRoleStore(OrmState.of(source.dialect, source.connection)) : new MemoryRoleStore()
 
 /** Ends what a source holds open (the λORM of a database) */
@@ -37,7 +37,7 @@ export const closeState = async (source: StateSource): Promise<void> => {
 const GLOBAL = '*'
 
 /** The roles in the SQLite of the volume, next to the sessions and the approvals */
-export class SqliteRoleStore implements RoleStorePort {
+export class SqliteRoleStore implements RoleStorePort, SettingStorePort {
 	private db?: DatabaseSync
 
 	constructor (private readonly file: string) {}
@@ -52,6 +52,7 @@ export class SqliteRoleStore implements RoleStorePort {
 			this.db.exec('CREATE TABLE IF NOT EXISTS config_changes (id TEXT PRIMARY KEY, area TEXT NOT NULL, change_key TEXT NOT NULL, before TEXT, after TEXT, changed_by TEXT NOT NULL, changed_at TEXT NOT NULL, reason TEXT)')
 			this.db.exec('CREATE INDEX IF NOT EXISTS config_changes_time ON config_changes (changed_at)')
 			this.db.exec('CREATE TABLE IF NOT EXISTS state_versions (area TEXT PRIMARY KEY, version INTEGER NOT NULL)')
+			this.db.exec('CREATE TABLE IF NOT EXISTS settings (key TEXT PRIMARY KEY, value TEXT NOT NULL, updated_at TEXT NOT NULL, updated_by TEXT NOT NULL)')
 		}
 		return this.db
 	}
@@ -100,14 +101,40 @@ export class SqliteRoleStore implements RoleStorePort {
 	public async changes (limit: number): Promise<ConfigChange[]> {
 		const rows = this.open().prepare('SELECT * FROM config_changes ORDER BY changed_at DESC LIMIT ?').all(limit) as Record<string, string | null>[]
 		return rows.map(r => ({
-			id: r.id!, area: r.area as 'roles', key: r.change_key!, ...(r.before ? { before: JSON.parse(r.before) } : {}), ...(r.after ? { after: JSON.parse(r.after) } : {}),
+			id: r.id!, area: r.area as ConfigArea, key: r.change_key!, ...(r.before ? { before: JSON.parse(r.before) } : {}), ...(r.after ? { after: JSON.parse(r.after) } : {}),
 			by: r.changed_by!, at: r.changed_at!, ...(r.reason ? { reason: r.reason } : {})
 		}))
 	}
 
 	public async version (): Promise<number> {
-		const row = this.open().prepare('SELECT version FROM state_versions WHERE area = ?').get('roles') as { version: number } | undefined
+		return this.areaVersion('roles')
+	}
+
+	public async areaVersion (area: ConfigArea): Promise<number> {
+		const row = this.open().prepare('SELECT version FROM state_versions WHERE area = ?').get(area) as { version: number } | undefined
 		return Number(row?.version ?? 0)
+	}
+
+	public async setting (key: ConfigArea): Promise<StoredSetting | undefined> {
+		const row = this.open().prepare('SELECT key, value, updated_at, updated_by FROM settings WHERE key = ?').get(key) as Record<string, string> | undefined
+		return row ? { key: row.key as ConfigArea, value: JSON.parse(row.value), updatedAt: row.updated_at, updatedBy: row.updated_by } : undefined
+	}
+
+	public async putSetting (setting: StoredSetting, change: ConfigChange): Promise<void> {
+		this.inTransaction(db => {
+			db.prepare('INSERT INTO settings (key, value, updated_at, updated_by) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at, updated_by = excluded.updated_by')
+				.run(setting.key, JSON.stringify(setting.value), setting.updatedAt, setting.updatedBy)
+			this.record(db, change)
+		})
+	}
+
+	public async removeSetting (key: ConfigArea, change: ConfigChange): Promise<boolean> {
+		return this.inTransaction(db => {
+			const removed = db.prepare('DELETE FROM settings WHERE key = ?').run(key)
+			if (!Number(removed.changes)) return false
+			this.record(db, change)
+			return true
+		})
 	}
 
 	public close (): void {
@@ -117,10 +144,34 @@ export class SqliteRoleStore implements RoleStorePort {
 }
 
 /** The roles in memory: one process (no volume); a restart forgets them */
-export class MemoryRoleStore implements RoleStorePort {
+export class MemoryRoleStore implements RoleStorePort, SettingStorePort {
 	private rows: StoredRole[] = []
 	private log: ConfigChange[] = []
 	private current = 0
+	private settings = new Map<ConfigArea, StoredSetting>()
+	private versions = new Map<ConfigArea, number>()
+
+	public async setting (key: ConfigArea): Promise<StoredSetting | undefined> {
+		const found = this.settings.get(key)
+		return found ? structuredClone(found) : undefined
+	}
+
+	public async putSetting (setting: StoredSetting, change: ConfigChange): Promise<void> {
+		this.settings.set(setting.key, structuredClone(setting))
+		this.log.unshift(structuredClone(change))
+		this.versions.set(setting.key, (this.versions.get(setting.key) ?? 0) + 1)
+	}
+
+	public async removeSetting (key: ConfigArea, change: ConfigChange): Promise<boolean> {
+		if (!this.settings.delete(key)) return false
+		this.log.unshift(structuredClone(change))
+		this.versions.set(key, (this.versions.get(key) ?? 0) + 1)
+		return true
+	}
+
+	public async areaVersion (area: ConfigArea): Promise<number> {
+		return area === 'roles' ? this.current : this.versions.get(area) ?? 0
+	}
 
 	public async roles (): Promise<StoredRole[]> { return this.rows.map(r => structuredClone(r)) }
 

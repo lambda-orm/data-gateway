@@ -868,9 +868,11 @@ observability:
     enabled: true                      # además por OTLP (en /metrics van siempre que metrics.enabled)
   logs:
     adapters: [{ type: opentelemetry }]   # la auditoría y los cambios del schema, a Loki
-  explore:                             # dónde se ven las trazas: el IDE enlaza cada entidad a ellas
+  explore:                             # dónde se ven: el IDE enlaza a ellas (cada entidad, sus trazas)
     grafana: https://grafana.example.com
     tempo: tempo                       # el uid del datasource de Tempo (tempo por defecto)
+    prometheus: prometheus             # el de Prometheus, las métricas (5.0.0; prometheus por defecto)
+    loki: loki                         # el de Loki, los logs (5.0.0; loki por defecto)
 ```
 
 - **Dónde se ven las trazas (`observability.explore`, 4.5.0):** es de la instalación, no de cada IDE. Con
@@ -878,6 +880,13 @@ observability:
   y `orgId`, opcionales), el `management` lo dice en `GET /observability` (sin credencial, como `/transports`: una URL,
   sin datos) y el IDE muestra en cada entidad el enlace a sus trazas en el Explore de Grafana. Sin `explore`,
   `GET /observability` responde `{}` y el IDE no muestra el enlace. No llega al SDK de λORM.
+- **Cambiarla desde la administración (5.0.0):** `GET /admin/observability` (permiso `observability`) dice la del
+  YAML, lo cambiado (`override`) y la que vale (`effective`); `PUT` con `{ config, reason }` reemplaza secciones enteras
+  (`exporter`, `traces`, `metrics`, `logs`, `explore`; `null` quita una), validadas como el YAML (sin `headers` en el
+  exportador) y guardadas en el estado (docs/GATEWAY_STATE.md); `DELETE` vuelve al YAML. Se aplica enseguida: el edge
+  se reinicia (las conexiones abiertas se reconectan; las sesiones siguen) y los workers cuyo SDK cambia se recargan
+  en blue-green. Las variables `OTEL_*` siguen mandando. En el IDE: **Administration › Observability** (Metrics, Logs,
+  Traces).
 - **Un SDK por hilo:** el proceso principal la resuelve una vez (con sus `OTEL_*`, que un worker aislado no recibe) y
   la pasa al edge y a cada worker de esquema, que inician el SDK de λORM **antes** de `Orm.init`: el `Orm` lo usa (un
   solo `service.name` y exportador). Un esquema sin `infrastructure.observability` toma la del gateway; con la suya,

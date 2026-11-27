@@ -135,7 +135,7 @@ export class TransportRegistry {
 				directory,
 				metrics,
 				logger,
-				admin: admin ? { ...admin, authenticator, ...(deps.state ? { roles: deps.state.roles } : {}) } : undefined,
+				admin: admin ? { ...admin, authenticator, ...(deps.state ? { roles: deps.state.roles, observability: deps.state.observability } : {}) } : undefined,
 				sessions: { service: buildSessions(deps), authenticator, address: new ClientAddress(management.trustedProxies) }
 			})
 		})

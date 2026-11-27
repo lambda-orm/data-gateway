@@ -7,6 +7,7 @@ import { zipOf } from '../../shared/zip'
 import { notFound } from '../../../domain/errors/gatewayError'
 import { SchemaDirectoryPort } from '../../../application/ports/input/schemaDirectoryPort'
 import { RoleAdmin } from '../../../application/auth/roleAdmin'
+import { ObservabilityAdmin } from '../../../application/observability/observabilityAdmin'
 
 /** A route in a URL path segment: iot%2Fv1, and ~ for the schema at the root */
 export const schemaParam = (raw: string | string[]): string => { const value = Array.isArray(raw) ? raw.join("/") : raw; return value === "~" ? "" : value }
@@ -16,7 +17,7 @@ export const schemaParam = (raw: string | string[]): string => { const value = A
  * the authentication of the http transport. A workspace is named by its route, encoded in one segment (iot%2Fv1; ~ is
  * the root). Every read answers its version (ETag), every write says the one it changes (If-Match).
  */
-export const adminRouter = (admin: AdminService, authenticate: express.RequestHandler, commands?: CommandService, directory?: SchemaDirectoryPort, roles?: RoleAdmin): express.Router => {
+export const adminRouter = (admin: AdminService, authenticate: express.RequestHandler, commands?: CommandService, directory?: SchemaDirectoryPort, roles?: RoleAdmin, observability?: ObservabilityAdmin): express.Router => {
 	const router = express.Router()
 	router.use(authenticate)
 	const principal = (res: express.Response) => res.locals.principal as Principal
@@ -36,6 +37,8 @@ export const adminRouter = (admin: AdminService, authenticate: express.RequestHa
 	if (roles) {
 		const schemaOf = (req: express.Request): string | undefined => typeof req.query.schema === 'string' ? schemaParam(req.query.schema) : undefined
 		router.get('/roles', handle(async (_req, res) => roles.list(principal(res))))
+		// who asks and what its roles give it (any credential, about itself)
+		router.get('/me', handle(async (_req, res) => roles.me(principal(res))))
 		// who may come in: the authentications with their keys and roles (never a secret), and the permissions there are
 		router.get('/access', handle(async (_req, res) => roles.access(principal(res))))
 		router.get('/roles/changes', handle(async (req, res) => roles.changes(principal(res), Number(req.query.limit ?? 100))))
@@ -44,6 +47,13 @@ export const adminRouter = (admin: AdminService, authenticate: express.RequestHa
 			await roles.remove(principal(res), String(req.params.name), schemaOf(req), typeof req.query.reason === 'string' ? req.query.reason : undefined)
 			return { removed: String(req.params.name) }
 		}))
+	}
+
+	// the observability of the gateway, over the YAML (docs/DATA_GATEWAY.md §8.2): saved, the gateway applies it
+	if (observability) {
+		router.get('/observability', handle(async (_req, res) => observability.get(principal(res))))
+		router.put('/observability', handle(async (req, res) => observability.put(principal(res), req.body?.config ?? req.body, req.body?.reason)))
+		router.delete('/observability', handle(async (req, res) => observability.remove(principal(res), typeof req.query.reason === 'string' ? req.query.reason : undefined)))
 	}
 
 	// what this credential may do here: the UI shows the actions with it

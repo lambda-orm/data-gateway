@@ -11,14 +11,18 @@ import { AuthenticatorRegistry, TransportRegistry } from './registries'
 import { control, EdgeWorkerData } from './workerControl'
 import { startObservability, stopObservability } from './observability'
 import { buildGatewayState } from './stateBuilder'
+import { effectiveExplore } from './observability'
 
 const run = async (): Promise<void> => {
 	const ctl = control()
 	const data = ctl.data<EdgeWorkerData>()
-	const { config } = data
-	const logger = buildLogger(config, '[edge]')
-	// the roles of the YAML and of the state of the gateway (docs/ROLE_SCOPES.md), before the transports
-	const state = await buildGatewayState(config, logger, new SystemClock())
+	const yaml = data.config
+	const logger = buildLogger(yaml, '[edge]')
+	// the roles of the YAML and of the state of the gateway (docs/ROLE_SCOPES.md), before the transports; an observability
+	// saved (here or in another replica) is told to the supervisor, which restarts the edge and the workers with it
+	const state = await buildGatewayState(yaml, logger, new SystemClock(), override => ctl.send({ type: 'observability', override }))
+	// where its traces, metrics and logs are seen: the YAML with what the administration changed
+	const config = { ...yaml, explore: effectiveExplore(yaml, data.observabilityOverride) }
 	const registry = new AuthenticatorRegistry(state.catalog)
 	const routed = ({ descriptor, settings }: EdgeWorkerData['schemas'][number]) => ({
 		path: descriptor.path,

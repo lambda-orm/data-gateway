@@ -22,6 +22,8 @@ export interface WorkerEvents {
 	/** ended without being asked (exception, out of memory, killed) */
 	exited (reason: string): void
 	pong (): void
+	/** the edge: the observability of the state changed (docs/DATA_GATEWAY.md §8.2), with what the state says now */
+	observability? (override: Record<string, any> | undefined): void
 }
 
 /** A running worker, as the supervisor sees it. What it carries to build channels is the runtime's business. */

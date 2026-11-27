@@ -14,7 +14,8 @@ import { SchemaDescriptor, SchemaSettings } from '../../domain/runtime/schemas'
 import { ConsoleLogger } from '../output/logger/loggers'
 import { YamlFileConfigSource } from '../output/config/yamlFileConfigSource'
 import { EdgeWorkerRuntime, SchemaWorkerRuntime } from '../output/runtime/workerRuntimes'
-import { resolveObservability, withPrometheus } from './observability'
+import { applicableObservability } from './observability'
+import { closeState, roleStoreOf, stateSourceOf } from '../output/state/stateStores'
 import { buildLogger, DataGatewayBuilder, maskSecrets, packageVersion, resolveConfiguredSchemas, RunningGateway } from './dataGatewayBuilder'
 
 export interface MainOptions {
@@ -67,8 +68,19 @@ export const startSupervisor = async (options: MainOptions = {}): Promise<Superv
 	})
 	const specs = schemas.map(specOf)
 	const version = packageVersion()
-	const observability = withPrometheus(resolveObservability(config.observability, gatewayEnv), config.metrics.enabled)
-	const runtimeSettings = { config, version, logger, observability }
+	// the observability changed from the administration (kept in the state) is over the one of the YAML from the start
+	const override = await storedObservability(config, logger)
+	const runtimeSettings: { config: DataGatewayConfig, version: string, logger: LoggerPort, observability: ReturnType<typeof applicableObservability>, observabilityOverride?: Record<string, any> } =
+		{ config, version, logger, observability: applicableObservability(config, override, gatewayEnv, logger), ...(override ? { observabilityOverride: override } : {}) }
+	// saved again (here or in another replica): the edge restarts with it, and the schemas when their SDK changes
+	const observe = (next: Record<string, any> | undefined) => {
+		const observability = applicableObservability(config, next, gatewayEnv, logger)
+		const schemas = JSON.stringify(observability) !== JSON.stringify(runtimeSettings.observability)
+		runtimeSettings.observability = observability
+		runtimeSettings.observabilityOverride = next
+		logger.info(`[data-gateway] observability changed: restarting the edge${schemas ? ' and reloading the schemas' : ''}`)
+		supervisor.restart({ schemas }).catch(error => logger.error(error))
+	}
 	const supervisor = new Supervisor(
 		specs,
 		new SchemaWorkerRuntime(runtimeSettings),
@@ -76,7 +88,8 @@ export const startSupervisor = async (options: MainOptions = {}): Promise<Superv
 		{
 			restart: new RestartPolicy(config.runtime.restart.initialDelayMs, config.runtime.restart.maxDelayMs),
 			heartbeat: new HeartbeatPolicy(config.runtime.heartbeat.intervalMs, config.runtime.heartbeat.timeoutMs),
-			graceMs: config.server.timeout
+			graceMs: config.server.timeout,
+			onObservability: observe
 		},
 		new SystemClock(),
 		logger
@@ -101,6 +114,22 @@ export const startSupervisor = async (options: MainOptions = {}): Promise<Superv
 		logger.info(`[data-gateway] watching the workspaces: ${roots.join(', ')} (scan every ${config.orm.watch.intervalMs} ms)`)
 	}
 	return supervisor
+}
+
+/** The observability the administration put in the state (none when it can't be read: the YAML's) */
+const storedObservability = async (config: DataGatewayConfig, logger: LoggerPort): Promise<Record<string, any> | undefined> => {
+	const source = stateSourceOf(config.state, config.orm.workspacePath)
+	if (source.kind === 'memory') return undefined
+	const store = roleStoreOf(source)
+	try {
+		return (await store.setting('observability'))?.value as Record<string, any> | undefined
+	} catch (error: any) {
+		logger.warn(`[data-gateway] state: the observability of the state can't be read (${error?.message ?? error}): the one of the configuration`)
+		return undefined
+	} finally {
+		(store as { close?: () => void }).close?.()
+		await closeState(source).catch(() => undefined)
+	}
 }
 
 /** The process: starts the supervisor; on SIGTERM / SIGINT the edge finishes its requests, then the schemas close. */

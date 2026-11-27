@@ -30,12 +30,12 @@ describe('configuration', () => {
 		expect(new ConfigReader().read({ ...minimal, observability: { exporter: { headers: 'Authorization=x' } } }).issues.join()).toContain('OTEL_EXPORTER_OTLP_HEADERS')
 		expect(new ConfigReader().read({ ...minimal, observability: 'on' }).issues.join()).toContain('observability must be an object')
 	})
-	test('explore: where the traces are seen, of the gateway (not of the SDK of λORM); its URL checked', () => {
+	test('explore: where the traces, metrics and logs are seen, of the gateway (not of the SDK of λORM); its URL checked', () => {
 		const reading = new ConfigReader().read({ ...minimal, observability: { traces: { enabled: true }, explore: { grafana: 'https://grafana.example.com/' } } })
 		expect(reading.issues).toEqual([])
-		expect(reading.config?.explore).toEqual({ grafana: 'https://grafana.example.com', tempo: 'tempo', orgId: 1 })
+		expect(reading.config?.explore).toEqual({ grafana: 'https://grafana.example.com', tempo: 'tempo', prometheus: 'prometheus', loki: 'loki', orgId: 1 })
 		expect(reading.config?.observability).toEqual({ traces: { enabled: true } })
-		expect(new ConfigReader().read({ ...minimal, observability: { explore: { grafana: 'https://g', tempo: 'tempo-eu', orgId: 3 } } }).config?.explore).toEqual({ grafana: 'https://g', tempo: 'tempo-eu', orgId: 3 })
+		expect(new ConfigReader().read({ ...minimal, observability: { explore: { grafana: 'https://g', tempo: 'tempo-eu', prometheus: 'vm', loki: 'loki-eu', orgId: 3 } } }).config?.explore).toEqual({ grafana: 'https://g', tempo: 'tempo-eu', prometheus: 'vm', loki: 'loki-eu', orgId: 3 })
 		expect(new ConfigReader().read({ ...minimal }).config?.explore).toBeUndefined()
 		expect(new ConfigReader().read({ ...minimal, observability: { explore: { grafana: 'grafana:3000' } } }).issues.join()).toContain('observability.explore.grafana')
 		expect(new ConfigReader().read({ ...minimal, observability: { explore: { grafana: 'http://g', datasource: 'x' } } }).issues.join()).toContain('unknown keys datasource')

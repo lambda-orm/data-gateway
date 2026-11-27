@@ -16,7 +16,7 @@ import { CodeEditor } from './CodeEditor'
 import { DiagramDialog, Icons, ItemDialog, NewSchemaDialog, RemoveSchemaDialog } from './dialogs'
 import { DomainDiagram } from './DomainDiagram'
 import { EntityView } from './EntityView'
-import { Explorer, problemText } from './Explorer'
+import { AdministrationNode, AdministrationTree, Explorer, problemText } from './Explorer'
 import { QueryWorkbench, QueryWorkbenchProps } from './QueryWorkbench'
 import { SchemaEditor } from './SchemaEditor'
 import { CommandsPanel } from './CommandsPanel'
@@ -105,6 +105,8 @@ export interface WorkspaceConnection {
 	session?: () => string | undefined
 	/** where to see the traces of an entity (Grafana / Tempo filtered by lambdaorm.entity), when the connection has it */
 	tracesUrl?: (schema: string, entity: string) => string | undefined
+	/** the administration of the gateway, above its schemas (an IDE: roles, sessions, observability…): its title and nodes */
+	administration?: { title: string, nodes: AdministrationNode[] }
 }
 
 /** A flag of this browser (a convenience: without storage it is never set) */
@@ -416,6 +418,7 @@ const ConnectionSection: React.FC<{
 							{format(a.browserItems, { n: inBrowser.length })} <button type="button" onClick={copyToWorkspace}>{a.copyToWorkspace}</button>
 						</div>
 					)}
+					{spec.administration && spec.administration.nodes.length > 0 && <AdministrationTree title={spec.administration.title} nodes={spec.administration.nodes} theme={theme} />}
 					<Explorer schemas={listed} controller={controller} api={api} refresh={refreshing} onRefreshSchema={refresh} locale={locale} theme={theme} activeId={activeId}
 						expanded={expanded} onExpandedChange={onExpandedChange}
 						loadDomain={domainOf} onOpen={item => open.saved(id, item)} onOpenDomain={schema => open.domain(id, schema)} onOpenEntity={(schema, entity) => open.entity(id, schema, entity)}

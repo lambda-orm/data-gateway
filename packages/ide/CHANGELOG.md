@@ -2,10 +2,16 @@
 
 ### Unreleased
 
-- **The configuration of the gateway:** a tab **Configuration** in the page of a connection (with the permission
-  `roles`) with its roles (moved from the tab Roles, now with the schemas where each applies), the access (each key or
-  token, where it applies, its roles and its context; never a secret) and the permissions by role (a role by row, a
-  permission by column). The access and the matrix need data-gateway 5.0 (`GET /admin/access`); before, the roles alone.
+- **Administration, in the explorer:** each connection has a node **Administration** above its schemas, with what its
+  credential may do: **Roles** (the permissions by role, a role by row and a permission by column, with its schemas;
+  Add role; and each role as a node: what the configuration gives it, read only, and what is added to it, a box per
+  permission), **Access** (each key or token, where it applies, its roles and its context; never a secret),
+  **Sessions**, **Writes that wait**, **Tools** (REST API, WebSocket, MCP) and **Observability** (Metrics, Logs,
+  Traces: what is sent, the OTLP exporter and where it is seen in Grafana, saved and applied at once). Needs
+  data-gateway 5.0.
+- **The page of a connection** has only the connection: its form and who it is there, its user and its roles with
+  their permissions, views, stages and schemas (`GET /admin/me`). Its tabs (Tools, Roles, Sessions, Writes that wait)
+  moved to Administration.
 - **The traces of an entity, from its gateway:** the link of an entity to its traces in Grafana comes from the
   configuration of the gateway (`observability.explore`, data-gateway 4.5, `GET /observability` of its management).
   The section **Observability** of a connection (Grafana URL, Tempo datasource) is gone: what was saved there is no

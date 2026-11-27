@@ -20,15 +20,17 @@
  * - approve: approve or reject the writes that wait for a person (docs/MUTATION_APPROVAL.md), never its own
  * - destructive: with ddl, a push or a migration that loses data (allowDestructive; docs/ROLE_SCOPES.md §3)
  * - roles: see and change the roles kept in the state of the gateway (docs/ROLE_SCOPES.md §5)
+ * - observability: see and change the observability of the gateway (its metrics, logs and traces, where they go and
+ *   where they are seen); a change restarts the edge and the workers whose SDK changes (docs/DATA_GATEWAY.md §8.2)
  */
 export type DataPermission = 'read' | 'write' | 'script' | 'queue' | 'stageImport'
-export type AdminPermission = 'schemaRead' | 'schemaWrite' | 'schemaAdmin' | 'workbenchWrite' | 'ddl' | 'build' | 'sessionAdmin' | 'approve' | 'destructive' | 'roles'
+export type AdminPermission = 'schemaRead' | 'schemaWrite' | 'schemaAdmin' | 'workbenchWrite' | 'ddl' | 'build' | 'sessionAdmin' | 'approve' | 'destructive' | 'roles' | 'observability'
 export type Permission = DataPermission | AdminPermission
 
 /** What a credential without a list of permissions gets: every permission of the data, none of the administration */
 export const ALL_PERMISSIONS: readonly Permission[] = ['read', 'write', 'script', 'queue', 'stageImport']
 
-export const ADMIN_PERMISSIONS: readonly AdminPermission[] = ['schemaRead', 'schemaWrite', 'schemaAdmin', 'workbenchWrite', 'ddl', 'build', 'sessionAdmin', 'approve', 'destructive', 'roles']
+export const ADMIN_PERMISSIONS: readonly AdminPermission[] = ['schemaRead', 'schemaWrite', 'schemaAdmin', 'workbenchWrite', 'ddl', 'build', 'sessionAdmin', 'approve', 'destructive', 'roles', 'observability']
 
 export const KNOWN_PERMISSIONS: readonly Permission[] = [...ALL_PERMISSIONS, ...ADMIN_PERMISSIONS]
 

@@ -123,6 +123,45 @@ const Action: React.FC<{ label: string, onClick: () => void, children: React.Rea
 	<button className="lw-icon-button" aria-label={label} title={label} onClick={onClick}>{children}</button>
 )
 
+/** A node of the administration of a connection, as its host says it (an IDE: its roles, its sessions, its observability) */
+export interface AdministrationNode {
+	key: string
+	label: string
+	icon?: React.ReactNode
+	title?: string
+	/** what a click opens (a page of the host) */
+	onOpen?: () => void
+	/** the buttons of its row (add one) */
+	actions?: { label: string, icon?: React.ReactNode, onClick: () => void }[]
+	children?: AdministrationNode[]
+}
+
+/**
+ * The administration of a connection, next to its schemas: a tree its host gives (what it is and what it opens are of
+ * the host); a node with children unfolds, one without them opens.
+ */
+export const AdministrationTree: React.FC<{ title: string, nodes: AdministrationNode[], theme?: 'light' | 'dark' }> = ({ title, nodes, theme }) => {
+	const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
+	const toggle = (key: string) => setExpanded(e => { const n = new Set(e); if (n.has(key)) n.delete(key); else n.add(key); return n })
+	const rows = (list: AdministrationNode[], level: number): React.ReactNode[] => list.flatMap(node => {
+		const parent = node.children !== undefined
+		return [
+			<Row key={node.key} level={level} label={node.label} icon={node.icon ?? <Icons.config />} title={node.title}
+				expanded={parent ? expanded.has(node.key) : undefined}
+				onToggle={parent ? () => toggle(node.key) : undefined}
+				onOpen={node.onOpen}
+				actions={node.actions?.length ? <>{node.actions.map(a => <Action key={a.label} label={a.label} onClick={a.onClick}>{a.icon ?? <Icons.plus />}</Action>)}</> : undefined} />,
+			...(parent && expanded.has(node.key) ? rows(node.children!, level + 1) : [])
+		]
+	})
+	return (
+		<nav className={`lw-explorer lw-administration lw-workbench lw-${theme ?? 'light'}`} aria-label={title}>
+			<div className="lw-explorer-head"><strong>{title}</strong></div>
+			<div role="tree" aria-label={title} className="lw-tree">{rows(nodes, 1)}</div>
+		</nav>
+	)
+}
+
 /**
  * The schemas on the left: for each, its domain (as YAML, read only), its entities with their properties, and what is
  * saved in it (folders, queries, diagrams) with a name and a description. Folders nest; items are dragged into them.

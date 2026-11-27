@@ -64,7 +64,7 @@ authorization:
     backend: { permissions: [read, write] }
     analyst: { permissions: [read], views: [support, default], stages: [default, reporting], schemas: [shop] }
     elsewhere: { permissions: [read, write], schemas: [sales] }
-    admin: { permissions: [read, write, schemaRead, roles] }
+    admin: { permissions: [read, write, schemaRead, roles, observability] }
 authentication:
   adapter: local
   type: apikey
@@ -149,4 +149,26 @@ test('the access: the keys with their roles and context, never their secrets; wi
 	expect(access.body.authentications[0]).toMatchObject({ where: { level: 'global' }, adapter: 'local', type: 'apikey', header: 'x-api-key' })
 	expect(access.body.authentications[0].credentials).toEqual(expect.arrayContaining([{ name: 'ana', roles: ['analyst'] }, { name: 'eve', roles: ['elsewhere'] }]))
 	expect(JSON.stringify(access.body)).not.toMatch(/(carla|ana|boss|legacy|eve)-key/)
+})
+
+test('the observability: over the YAML, kept in the state, with the permission observability; back to the YAML', async () => {
+	expect((await call(admin, '/admin/observability', { headers: await login(admin, key('ana-key')) })).status).toBe(403)
+	const session = await login(admin, key('boss-key'))
+	expect((await call(admin, '/admin/observability', { headers: session })).body).toEqual({ prometheus: true })
+	expect((await call(admin, '/admin/observability', { method: 'PUT', body: { config: { exporter: { endpoint: 'http://x', headers: 'Authorization=t' } } }, headers: session })).status).toBe(400)
+	const saved = await call(admin, '/admin/observability', { method: 'PUT', body: { config: { metrics: { enabled: true }, explore: { grafana: 'https://grafana.example.com', loki: 'logs' } }, reason: 'to Grafana' }, headers: session })
+	expect(saved.status).toBe(200)
+	expect(saved.body).toMatchObject({ override: { metrics: { enabled: true } }, effective: { explore: { loki: 'logs' } }, updatedBy: 'boss' })
+	// kept: a gateway that starts again applies it
+	expect((await call(admin, '/admin/observability', { headers: session })).body.override).toEqual({ metrics: { enabled: true }, explore: { grafana: 'https://grafana.example.com', loki: 'logs' } })
+	expect((await call(admin, '/admin/observability', { method: 'DELETE', headers: session })).body).toEqual({ prometheus: true })
+	expect((await call(admin, '/admin/observability', { method: 'DELETE', headers: session })).status).toBe(404)
+	// the changes of the roles are only theirs
+	expect((await call(admin, '/admin/roles/changes', { headers: session })).body.every((c: any) => c.area === 'roles')).toBe(true)
+})
+
+test('me: any credential, its own roles with what each gives, its context', async () => {
+	const me = await call(admin, '/admin/me', { headers: await login(admin, key('ana-key')) })
+	expect(me.status).toBe(200)
+	expect(me.body).toEqual({ name: 'ana', permissions: ['read'], roles: [{ name: 'analyst', permissions: ['read'], schemas: ['shop'], views: ['support', 'default'], stages: ['default', 'reporting'] }] })
 })

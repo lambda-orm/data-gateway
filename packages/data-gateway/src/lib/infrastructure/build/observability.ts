@@ -4,6 +4,8 @@ import { ObservabilitySdk } from '@lambdaorm/lib'
 import { NO_TRACING, LoggerPort, TracingPort } from '../../application/ports/output/supportPorts'
 import { requestTracer } from '../input/telemetry/requestTracer'
 import { OtelTracing } from '../output/telemetry/otelTracing'
+import { mergeObservability, readExplore, readObservabilitySdk } from '../../domain/config/observabilitySettings'
+import { DataGatewayConfig, ExploreConfig } from '../../domain/config/dataGatewayConfig'
 
 export const GATEWAY_SERVICE_NAME = 'data-gateway'
 
@@ -47,4 +49,38 @@ export const startObservability = async (config: ResolvedObservability | undefin
 export const stopObservability = async (): Promise<void> => {
 	requestTracer.enable(false)
 	await ObservabilitySdk.shutdown()
+}
+
+/**
+ * The problems of an observability as it would apply (the YAML with an override of the administration): the shape of
+ * λORM's (its validator), explore, no headers in the exporter. None: it can be applied.
+ */
+export const observabilityProblems = (merged: Record<string, any> | undefined): string[] => {
+	const issues: string[] = []
+	const sdk = readObservabilitySdk(merged ?? {}, issues)
+	readExplore(merged?.explore, issues)
+	if (sdk && !issues.length) issues.push(...new ObservabilityValidator(expressions).validate(sdk).errors.map(e => `observability: ${e}`))
+	return issues
+}
+
+/** where a person sees what the gateway sends: the explore of the YAML, or the one the administration put over it */
+export const effectiveExplore = (config: Pick<DataGatewayConfig, 'observability' | 'explore'>, override: Record<string, any> | undefined): ExploreConfig | undefined => {
+	if (!override || !('explore' in override)) return config.explore
+	return readExplore(mergeObservability(config, override)?.explore, [])
+}
+
+/**
+ * The observability that applies, from the YAML and what the administration changed: for the SDK of every worker
+ * (with the OTEL_* of the gateway) and its explore. Problems: they are said and the YAML's is used.
+ */
+export const applicableObservability = (config: DataGatewayConfig, override: Record<string, any> | undefined, env: Record<string, string | undefined>, logger: LoggerPort): ResolvedObservability | undefined => {
+	const yaml = () => withPrometheus(resolveObservability(config.observability, env), config.metrics.enabled)
+	if (!override) return yaml()
+	const problems = observabilityProblems(mergeObservability(config, override))
+	if (problems.length) {
+		logger.error(`[data-gateway] the observability of the state can't be used (${problems.join('; ')}): the one of the configuration`)
+		return yaml()
+	}
+	const sdk = readObservabilitySdk(mergeObservability(config, override) ?? {}, [])
+	return withPrometheus(resolveObservability(sdk, env), config.metrics.enabled)
 }
