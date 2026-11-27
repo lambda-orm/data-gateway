@@ -15,6 +15,10 @@ describe('the administration tree', () => {
 			{ key: 'sessions', label: 'Sessions', onOpen: () => opened.push('sessions') }
 		]} />)
 		expect(screen.getByRole('navigation', { name: 'Administration' })).toBeTruthy()
+		// a node of the tree of the connection, folded at first
+		expect(screen.queryByText('Roles')).toBeNull()
+		fireEvent.click(screen.getByText('Administration'))
+		expect(screen.getByText('Roles').closest('[role=treeitem]')?.getAttribute('aria-level')).toBe('2')
 		expect(screen.queryByText('admin')).toBeNull()
 		fireEvent.click(screen.getByText('Roles'))
 		expect(screen.getByText('admin')).toBeTruthy()

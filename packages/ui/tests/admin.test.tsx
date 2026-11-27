@@ -788,10 +788,10 @@ describe('the explorer as the workspace is', () => {
 		render(<Workspace api={new FakeApi()} admin={admin} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" refreshMs={0} />)
 		await waitFor(() => expect(row('State')).toBeTruthy())
 		const level = (n: number) => screen.getAllByRole('treeitem').filter(r => r.getAttribute('aria-level') === String(n)).map(r => r.querySelector('.lw-tree-label')?.textContent)
-		// the schema: its metadata, its state, its source code and its projects
-		expect(level(2)).toEqual(['Metadata', 'State', 'Source code', 'Workbench'])
+		// under the node Schemas, the schema: its metadata, its state, its source code and its projects
+		expect(level(3)).toEqual(['Metadata', 'State', 'Source code', 'Workbench'])
 		if (!row('config')) fireEvent.click(row('Metadata'))
-		await waitFor(() => expect(level(3)).toEqual(['config', 'domain', 'application', 'infrastructure']))
+		await waitFor(() => expect(level(4)).toEqual(['config', 'domain', 'application', 'infrastructure']))
 		fireEvent.click(row('State'))
 		fireEvent.click(await rowSoon('data'))
 		fireEvent.click(await rowSoon('seed.sql'))

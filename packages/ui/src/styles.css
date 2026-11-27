@@ -115,7 +115,8 @@
 .lw-icon-button:hover, .lw-icon-button:focus-visible { border-color: var(--lw-border); background: var(--lw-hover); }
 
 .lw-explorer { padding: 6px 4px; gap: 4px; background: var(--lw-bg); min-height: 100%; box-sizing: border-box; }
-.lw-explorer.lw-administration { min-height: 0; flex: none; padding-bottom: 4px; border-bottom: 1px solid var(--lw-border); }
+.lw-explorer.lw-administration { min-height: 0; flex: none; padding-bottom: 0; }
+.lw-explorer.lw-administration + .lw-explorer { padding-top: 0; }
 .lw-explorer-head { display: flex; align-items: center; gap: 2px; padding: 2px 4px 6px; }
 .lw-tree { display: flex; flex-direction: column; }
 .lw-tree-row { display: flex; align-items: center; gap: 4px; min-height: 24px; padding-right: 4px; border-radius: 4px; cursor: pointer; white-space: nowrap; outline: none; }

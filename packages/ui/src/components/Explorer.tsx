@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import React, { useContext, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { QueryApiPort, SchemaInfo } from '../application/ports'
 import { WorkspaceController, WorkspaceError } from '../application/workspaceController'
 import { cardinalityOf, DomainInfo, typeText } from '../domain/diagram'
@@ -89,15 +89,22 @@ export const problemText = (error: unknown, m: ExplorerMessages): string => {
 	return (error as any)?.message ?? String(error)
 }
 
+/** How many levels a tree is inside another (the schemas, under the node Schemas of a connection): its rows go that far in */
+const TreeDepth = React.createContext(0)
+/** in what is unfolded: the node Schemas folded (it starts unfolded) */
+const SCHEMAS_FOLDED = '!schemas'
+const INDENT = 14
+
 const Row: React.FC<{
 	level: number, label: React.ReactNode, icon: React.ReactNode, expanded?: boolean, active?: boolean, title?: string, muted?: boolean
 	onToggle?: () => void, onOpen?: () => void, actions?: React.ReactNode, drag?: string, dropTarget?: { onDrop: (id: string) => void }
 }> = ({ level, label, icon, expanded, active, title, muted, onToggle, onOpen, actions, drag, dropTarget }) => {
 	const [over, setOver] = useState(false)
+	const depth = useContext(TreeDepth)
 	return (
-		<div role="treeitem" aria-level={level} aria-expanded={expanded} aria-selected={active ?? false} tabIndex={0} title={title}
+		<div role="treeitem" aria-level={level + depth} aria-expanded={expanded} aria-selected={active ?? false} tabIndex={0} title={title}
 			className={`lw-tree-row ${active ? 'lw-active' : ''} ${over ? 'lw-drop' : ''} ${muted ? 'lw-muted' : ''}`}
-			style={{ paddingLeft: 6 + (level - 1) * 14 }}
+			style={{ paddingLeft: 6 + (level - 1 + depth) * INDENT }}
 			draggable={drag !== undefined}
 			onDragStart={drag !== undefined ? e => { e.dataTransfer.setData(MIME, drag); e.dataTransfer.effectAllowed = 'move' } : undefined}
 			onDragOver={dropTarget ? e => { if (e.dataTransfer.types.includes(MIME)) { e.preventDefault(); setOver(true) } } : undefined}
@@ -140,8 +147,9 @@ export interface AdministrationNode {
  * The administration of a connection, next to its schemas: a tree its host gives (what it is and what it opens are of
  * the host); a node with children unfolds, one without them opens.
  */
-export const AdministrationTree: React.FC<{ title: string, nodes: AdministrationNode[], theme?: 'light' | 'dark' }> = ({ title, nodes, theme }) => {
+export const AdministrationTree: React.FC<{ title: string, nodes: AdministrationNode[], theme?: 'light' | 'dark', icon?: React.ReactNode }> = ({ title, nodes, theme, icon }) => {
 	const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
+	const [open, setOpen] = useState(false)
 	const toggle = (key: string) => setExpanded(e => { const n = new Set(e); if (n.has(key)) n.delete(key); else n.add(key); return n })
 	const rows = (list: AdministrationNode[], level: number): React.ReactNode[] => list.flatMap(node => {
 		const parent = node.children !== undefined
@@ -156,8 +164,10 @@ export const AdministrationTree: React.FC<{ title: string, nodes: Administration
 	})
 	return (
 		<nav className={`lw-explorer lw-administration lw-workbench lw-${theme ?? 'light'}`} aria-label={title}>
-			<div className="lw-explorer-head"><strong>{title}</strong></div>
-			<div role="tree" aria-label={title} className="lw-tree">{rows(nodes, 1)}</div>
+			<div role="tree" aria-label={title} className="lw-tree">
+				<Row level={1} label={<strong>{title}</strong>} icon={icon ?? <Icons.administration />} expanded={open} onToggle={() => setOpen(!open)} />
+				{open && rows(nodes, 2)}
+			</div>
 		</nav>
 	)
 }
@@ -423,7 +433,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, sc
 				label={<span className="lw-property"><span>{r.name}</span><span className="lw-type">→ {r.entity} · {cardinalityOf(r)}</span></span>} />
 		}
 		const head = (
-			<div key="e-filter" className="lw-tree-filter" style={{ paddingLeft: 6 + 4 * 14 }}>
+			<div key="e-filter" className="lw-tree-filter" style={{ paddingLeft: 6 + 5 * INDENT }}>
 				<input type="search" value={filter} placeholder={m.filterEntities} aria-label={m.filterEntities} spellCheck={false}
 					onChange={e => setFilters(f => ({ ...f, [schema]: e.target.value }))}
 					onKeyDown={e => { if (e.key === 'Escape') setFilters(f => ({ ...f, [schema]: '' })) }} />
@@ -460,18 +470,19 @@ export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, sc
 
 	return (
 		<nav className={`lw-explorer lw-workbench lw-${theme ?? 'light'}`} aria-label={m.explorer}>
-			<div className="lw-explorer-head">
-				<strong>{a.schemas}</strong>
-				<span className="lw-spacer" />
-				{admin?.can.schemaAdmin && <Action label={a.newSchema} onClick={admin.onNewSchema}><Icons.schemaPlus /></Action>}
-				<Action label={m.exportWorkspace} onClick={download}><Icons.exportFolder /></Action>
-				<Action label={m.importWorkspace} onClick={() => file.current?.click()}><Icons.importFolder /></Action>
-				<input ref={file} type="file" accept="application/json,.json" hidden onChange={chooseFile} aria-label={m.importWorkspace} />
-			</div>
-			{!state.durable && <div className="lw-notice">{m.notDurable}</div>}
-			{state.error && <div className="lw-notice" role="alert">{state.error}</div>}
-			{message && <div className="lw-notice lw-toast" role="status">{message}</div>}
+			<input ref={file} type="file" accept="application/json,.json" hidden onChange={chooseFile} aria-label={m.importWorkspace} />
 			<div role="tree" aria-label={m.explorer} className="lw-tree">
+				{/* the node Schemas of the connection, next to its Administration: its schemas one level in */}
+				<Row level={1} label={<strong>{a.schemas}</strong>} icon={<Icons.schemas />} expanded={!expanded.has(SCHEMAS_FOLDED)} onToggle={() => toggle(SCHEMAS_FOLDED)}
+					actions={<>
+						{admin?.can.schemaAdmin && <Action label={a.newSchema} onClick={admin.onNewSchema}><Icons.schemaPlus /></Action>}
+						<Action label={m.exportWorkspace} onClick={download}><Icons.exportFolder /></Action>
+						<Action label={m.importWorkspace} onClick={() => file.current?.click()}><Icons.importFolder /></Action>
+					</>} />
+				{!state.durable && <div className="lw-notice">{m.notDurable}</div>}
+				{state.error && <div className="lw-notice" role="alert">{state.error}</div>}
+				{message && <div className="lw-notice lw-toast" role="status">{message}</div>}
+				{!expanded.has(SCHEMAS_FOLDED) && <TreeDepth.Provider value={1}>
 				{schemas.map(s => {
 					const key = `s:${s.path}`
 					if (s.status !== 'ready') {
@@ -480,7 +491,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, sc
 							<React.Fragment key={s.path}>
 								<Row level={1} label={<span>{s.path || '/'} <span className="lw-type">{format(m.schemaStatus, { status: s.status })}</span></span>}
 									icon={<Icons.schema />} muted expanded={expanded.has(key)} onToggle={() => toggle(key)} title={s.reason ?? s.status} actions={removeSchema(s.path)} />
-								{expanded.has(key) && <div className="lw-schema-reason" role="note" style={{ paddingLeft: 6 + 14 + 22 }}>{s.reason ?? m.noReason}</div>}
+								{expanded.has(key) && <div className="lw-schema-reason" role="note" style={{ paddingLeft: 6 + 2 * INDENT + 22 }}>{s.reason ?? m.noReason}</div>}
 								{expanded.has(key) && schemaFileRow(s.path)}
 							</React.Fragment>
 						)
@@ -502,7 +513,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, sc
 								actions={onRefreshSchema ? <Action label={format(m.refreshOf, { name: s.path || '/' })} onClick={() => onRefreshSchema(s.path)}><Icons.refresh /></Action> : undefined} />
 							{expanded.has(key) && (
 								<>
-									{s.pending && <div className="lw-schema-reason lw-schema-pending" role="note" style={{ paddingLeft: 6 + 14 + 22 }}>{m.schemaPending}: {s.pending}</div>}
+									{s.pending && <div className="lw-schema-reason lw-schema-pending" role="note" style={{ paddingLeft: 6 + 2 * INDENT + 22 }}>{m.schemaPending}: {s.pending}</div>}
 									<Row level={2} label={a.metadata} icon={<Icons.metadata />} expanded={expanded.has(k('md'))} onToggle={unfold('md')} />
 									{expanded.has(k('md')) && (
 										<>
@@ -556,6 +567,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, sc
 						</React.Fragment>
 					)
 				})}
+				</TreeDepth.Provider>}
 			</div>
 
 			{removingCode && admin?.api?.removeCode && (
