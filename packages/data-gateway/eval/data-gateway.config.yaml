@@ -9,13 +9,18 @@ logger: { level: warn }
 audit: { enabled: false }
 rateLimit: { max: 0 }
 scripts: { enabled: true }
+authorization:
+  roles:
+    reader: { permissions: [ read ] }
+    writer: { permissions: [ read, write ] }
+    runner: { permissions: [ read, write, script, queue, stageImport ] }
 authentication:
   adapter: local
   type: apikey
   keys:
-    - { name: reader, value: eval-reader, permissions: [ read ] }
-    - { name: writer, value: eval-writer, permissions: [ read, write ] }
-    - { name: runner, value: eval-runner }
+    - { name: reader, value: eval-reader, roles: [ reader ] }
+    - { name: writer, value: eval-writer, roles: [ writer ] }
+    - { name: runner, value: eval-runner, roles: [ runner ] }
 transports:
   http:
     port: ${EVAL_HTTP_PORT}

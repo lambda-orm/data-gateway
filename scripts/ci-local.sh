@@ -88,8 +88,10 @@ clients () {
 	node "$suite/runner/index.mjs"
 	step 'Conformance suite: the subscriptions (runner/subscriptions.mjs)'
 	node "$suite/runner/subscriptions.mjs"
-	step 'Conformance suite: the Node client (@lambdaorm/data-gateway-client)'
+	step 'Conformance suite: the Node client (@lambdaorm/data-gateway-client-node)'
 	(cd "$ROOT/packages/client-node" && npx tsx conformance/run.ts)
+	step 'Conformance suite: the Go client (github.com/lambda-orm/data-gateway-client-go)'
+	(cd "$ROOT/packages/client-go" && go run ./conformance)
 	ok 'conformance suite passed'
 }
 

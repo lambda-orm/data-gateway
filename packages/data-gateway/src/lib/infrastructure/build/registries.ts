@@ -22,7 +22,7 @@ import { GatewayState } from './stateBuilder'
 import { ClientAddress } from '../input/http/clientAddress'
 import { SystemClock } from '../output/clock/systemClock'
 import { StdoutAuditAdapter } from '../output/audit/stdoutAuditAdapter'
-import { RoleLookupPort } from '../../application/auth/roleCatalog'
+import { RoleCatalog, RoleLookupPort } from '../../application/auth/roleCatalog'
 
 /** The transports of the configuration as GET /transports tells them */
 export const transportsOf = (t: TransportsConfig): TransportInfo[] => [
@@ -38,13 +38,13 @@ type AuthenticatorFactory = (config: AuthenticationConfig) => AuthenticatorPort
 export class AuthenticatorRegistry {
 	private readonly factories = new Map<string, AuthenticatorFactory>()
 
-	/** roles: the catalog of the roles (docs/ROLE_SCOPES.md); without it, those of each method jwt */
-	constructor (roles?: RoleLookupPort) {
+	/** roles: the catalog of the roles (docs/ROLE_SCOPES.md): the only place where what a credential may do is said */
+	constructor (roles: RoleLookupPort) {
 		this.register('none', () => new NoneAuthenticator())
 		this.register('local:bearer', c => new BearerAuthenticator(c.credentials, roles))
-		this.register('local:apikey', c => new ApiKeyAuthenticator(c.credentials, c.header, roles))
+		this.register('local:apikey', c => new ApiKeyAuthenticator(c.credentials, roles, c.header))
 		this.register('local:basic', c => new BasicAuthenticator(c.credentials, roles))
-		this.register('jwt', c => new JwtAuthenticator(c.jwt!, undefined, undefined, roles))
+		this.register('jwt', c => new JwtAuthenticator(c.jwt!, roles))
 		this.register('methods', c => new MethodsAuthenticator((c.methods ?? []).map(m => this.build(m))))
 	}
 
@@ -120,7 +120,7 @@ export class TransportRegistry {
 		this.register('management', (deps) => {
 			const { config, directory, metrics, logger, admin } = deps
 			const management = config.transports.management!
-			const authenticator = new AuthenticatorRegistry(deps.state?.catalog).build(management.authentication ?? config.authentication)
+			const authenticator = new AuthenticatorRegistry(deps.state?.catalog ?? new RoleCatalog(config)).build(management.authentication ?? config.authentication)
 			return new HttpTransport({
 				name: 'management',
 				port: management.port,
@@ -129,12 +129,13 @@ export class TransportRegistry {
 				requestBodySize: config.server.requestBodySize,
 				rateLimit: { windowMs: config.rateLimit.windowMs, max: 0 },
 				swaggerEnabled: false,
-				transports: transportsOf(config.transports)
+				transports: transportsOf(config.transports),
+				observability: config.explore ? { explore: config.explore } : {}
 			}, {
 				directory,
 				metrics,
 				logger,
-				admin: admin ? { ...admin, authenticator, ...(deps.state ? { roles: deps.state.roles } : {}) } : undefined,
+				admin: admin ? { ...admin, authenticator, ...(deps.state ? { roles: deps.state.roles, observability: deps.state.observability, persist: deps.state.persist } : {}) } : undefined,
 				sessions: { service: buildSessions(deps), authenticator, address: new ClientAddress(management.trustedProxies) }
 			})
 		})
@@ -160,7 +161,7 @@ export class TransportRegistry {
 				maxConnections: t.maxConnections,
 				maxPayload: parseSize(config.server.requestBodySize) ?? 14 * 1024 * 1024,
 				asyncapiEnabled: t.asyncapi.enabled
-			}, { directory, logger, rootAuthenticator: new AuthenticatorRegistry(state?.catalog).build(t.authentication ?? config.authentication) })
+			}, { directory, logger, rootAuthenticator: new AuthenticatorRegistry(state?.catalog ?? new RoleCatalog(config)).build(t.authentication ?? config.authentication) })
 		})
 		this.register('mcpWebSocket', ({ config, directory, logger }) => {
 			const t = config.transports.mcpWebSocket!

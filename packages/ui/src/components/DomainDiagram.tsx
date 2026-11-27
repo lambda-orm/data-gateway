@@ -64,6 +64,13 @@ export interface DomainDiagramProps {
 	layout?: LayoutPort
 	/** Height of the drawing (default 70vh) */
 	height?: number | string
+	/**
+	 * The options of the diagram of an entity, in one list of several choices instead of the check of the names: the
+	 * names of the relations, its related entities (without them, only the entity), the entities it extends (with source)
+	 */
+	options?: boolean
+	/** The entities as the lambdaORM.yaml says them (their extends, the abstract ones): the completed domain has neither */
+	source?: EntityInfo[]
 }
 
 type Depth = 1 | 2 | 'all'
@@ -71,8 +78,8 @@ interface View { x: number, y: number, k: number }
 
 /** The colours are in the drawing (not in CSS): the exported SVG and PNG look the same as the screen */
 const PALETTES = {
-	light: { canvas: '#f6f7f9', box: '#ffffff', header: '#e8eefc', border: '#9aa4b2', text: '#1d1f23', muted: '#6b7280', pk: '#b54708', fk: '#2563eb', line: '#7c8594', accent: '#2563eb' },
-	dark: { canvas: '#16181d', box: '#1e2128', header: '#263049', border: '#4a515c', text: '#e6e8eb', muted: '#9aa1ab', pk: '#f5b971', fk: '#6ea0ff', line: '#7d8590', accent: '#6ea0ff' }
+	light: { canvas: '#f6f7f9', box: '#ffffff', header: '#e8eefc', abstractHeader: '#efe9fb', abstractBorder: '#8b7fb0', border: '#9aa4b2', text: '#1d1f23', muted: '#6b7280', pk: '#b54708', fk: '#2563eb', line: '#7c8594', accent: '#2563eb' },
+	dark: { canvas: '#16181d', box: '#1e2128', header: '#263049', abstractHeader: '#2e2942', abstractBorder: '#8f84b8', border: '#4a515c', text: '#e6e8eb', muted: '#9aa1ab', pk: '#f5b971', fk: '#6ea0ff', line: '#7d8590', accent: '#6ea0ff' }
 }
 const MONO = 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
 const SANS = 'system-ui, -apple-system, "Segoe UI", sans-serif'
@@ -133,14 +140,19 @@ const Box: React.FC<{
 }> = ({ entity, at, compact, focused, foreignKeys, colors, onClick, onDoubleClick, onPointerDown, onRemove, removeLabel, onAddRelated, addRelatedLabel, chosen, onToggleField, allChosen, onToggleAll, allLabel }) => {
 	const { width, height } = boxSize(entity, compact, !!onToggleAll)
 	const keys = new Set(entity.primaryKey ?? [])
+	// an abstract one (no table, only what others extend): its own header, a dashed border, «abstract»
+	const abstract = !!entity.abstract
+	const header = abstract ? colors.abstractHeader : colors.header
+	const border = focused ? colors.accent : abstract ? colors.abstractBorder : colors.border
+	const dash = abstract ? '5 3' : undefined
 	return (
-		<g transform={`translate(${at.x},${at.y})`} className={`lw-entity ${onPointerDown ? 'lw-movable' : ''}`} data-entity={entity.name} onClick={onClick} onDoubleClick={onDoubleClick} onPointerDown={onPointerDown}>
-			<title>{entity.name}</title>
-			<rect width={width} height={height} rx={6} fill={colors.box} stroke={focused ? colors.accent : colors.border} strokeWidth={focused ? 2 : 1} />
-			<rect width={width} height={HEADER} rx={6} fill={colors.header} />
-			{!compact && <rect y={HEADER - 6} width={width} height={6} fill={colors.header} />}
+		<g transform={`translate(${at.x},${at.y})`} className={`lw-entity ${abstract ? 'lw-abstract' : ''} ${onPointerDown ? 'lw-movable' : ''}`} data-entity={entity.name} onClick={onClick} onDoubleClick={onDoubleClick} onPointerDown={onPointerDown}>
+			<title>{abstract ? `${entity.name} (abstract)` : entity.name}</title>
+			<rect width={width} height={height} rx={6} fill={colors.box} stroke={border} strokeWidth={focused ? 2 : 1} strokeDasharray={dash} />
+			<rect width={width} height={HEADER} rx={6} fill={header} />
+			{!compact && <rect y={HEADER - 6} width={width} height={6} fill={header} />}
 			{!compact && <line x1={0} x2={width} y1={HEADER} y2={HEADER} stroke={colors.border} />}
-			<rect width={width} height={height} rx={6} fill="none" stroke={focused ? colors.accent : colors.border} strokeWidth={focused ? 2 : 1} />
+			<rect width={width} height={height} rx={6} fill="none" stroke={border} strokeWidth={focused ? 2 : 1} strokeDasharray={dash} />
 			{onToggleAll && (
 				<g role="checkbox" aria-checked={!!allChosen} aria-label={`${entity.name}: ${allLabel ?? 'all properties'}`} className="lw-field-row"
 					onPointerDown={e => e.stopPropagation()} onClick={e => { e.stopPropagation(); onToggleAll() }} onDoubleClick={e => e.stopPropagation()}>
@@ -151,6 +163,7 @@ const Box: React.FC<{
 			)}
 			<text x={onToggleAll ? 28 : 10} y={17} fontFamily={SANS} fontSize={13} fontWeight={700} fontStyle={entity.abstract ? 'italic' : undefined} fill={colors.text}>
 				{entity.name}{entity.extends && <tspan fill={colors.muted} fontWeight={400}> : {entity.extends}</tspan>}
+				{abstract && <tspan fill={colors.abstractBorder} fontWeight={400} fontStyle="normal" fontSize={10}> «abstract»</tspan>}
 			</text>
 			{!compact && (entity.properties ?? []).map((property, i) => {
 				const y = HEADER + 4 + i * ROW + 13
@@ -194,6 +207,25 @@ const Box: React.FC<{
 				</g>
 			)}
 		</g>
+	)
+}
+
+/** A list of choices, several at once, that opens below its button and closes on a click outside it */
+const MultiSelect: React.FC<{ label: string, choices: { label: string, on: boolean, set: (on: boolean) => void }[] }> = ({ label, choices }) => {
+	const ref = useRef<HTMLDetailsElement>(null)
+	useEffect(() => {
+		const away = (e: PointerEvent) => { if (ref.current?.open && !ref.current.contains(e.target as Node)) ref.current.open = false }
+		document.addEventListener('pointerdown', away)
+		return () => document.removeEventListener('pointerdown', away)
+	}, [])
+	const on = choices.filter(c => c.on).length
+	return (
+		<details ref={ref} className="lw-multi-select">
+			<summary aria-label={label}>{label}{on > 0 && <span className="lw-type"> ({on})</span>}</summary>
+			<div className="lw-multi-options" role="group" aria-label={label}>
+				{choices.map(c => <label key={c.label} className="lw-check"><input type="checkbox" checked={c.on} onChange={e => c.set(e.target.checked)} /> {c.label}</label>)}
+			</div>
+		</details>
 	)
 }
 
@@ -268,7 +300,23 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 	const api = useMemo(() => props.api ?? new RestQueryApi(props.baseUrl ?? '', props.headers), [props.api, props.baseUrl, props.headers])
 	const [schemas, setSchemas] = useState<SchemaInfo[]>([])
 	const [schema, setSchema] = useState<string | undefined>(fixedSchema)
-	const [domain, setDomain] = useState<DomainInfo>()
+	const [loaded, setDomain] = useState<DomainInfo>()
+	// the options of the diagram of an entity: its related entities, and the entities it extends (at first only these)
+	const [related, setRelated] = useState(false)
+	const [extended, setExtended] = useState(true)
+	const extending = !!props.options && extended && !!props.source?.length
+	// what is drawn: the domain, and with the entities it extends, the extends of each one and the abstract ones (their own
+	// properties; their relations are drawn from the entities that have them)
+	const domain = useMemo<DomainInfo | undefined>(() => {
+		if (!loaded || !extending) return loaded
+		const written = new Map(props.source!.map(e => [e.name, e]))
+		const entities: EntityInfo[] = loaded.entities.map(e => written.get(e.name)?.extends ? { ...e, extends: written.get(e.name)!.extends } : e)
+		const names = new Set(entities.map(e => e.name))
+		for (const e of props.source!) {
+			if (e.abstract && !names.has(e.name)) entities.push({ ...e, properties: (e.properties ?? []).map(p => ({ ...p, type: p.type ?? 'string' })), relations: [] })
+		}
+		return { ...loaded, entities }
+	}, [loaded, extending, props.source])
 	const [error, setError] = useState<string>()
 	const [focus, setFocus] = useState<string>()
 	const [search, setSearch] = useState('')
@@ -326,9 +374,22 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 	useEffect(() => { if (domain) setFocus(props.focus && domain.entities.some(e => e.name === props.focus) ? props.focus : only?.[0] ?? hubOf(domain, edges)) }, [domain, edges, props.focus])
 
 	const onlyKey = only?.join('\n')
-	const visible = useMemo(() => !domain ? new Set<string>() : only ? new Set(only) : neighbourhood(domain, edges, focus, depth),
+	const visible = useMemo(() => {
+		if (!domain) return new Set<string>()
+		if (only) return new Set(only)
+		if (!props.options) return neighbourhood(domain, edges, focus, depth)
+		// the related ones by their relations (an inheritance would bring every other entity of the same base)
+		const shown = related ? neighbourhood(domain, edges.filter(e => e.kind === 'relation'), focus, depth) : new Set(focus ? [focus] : [])
+		if (extending) {
+			const byName = new Map(domain.entities.map(e => [e.name, e]))
+			for (const name of [...shown]) {
+				let base = byName.get(name)?.extends
+				while (base && byName.has(base) && !shown.has(base)) { shown.add(base); base = byName.get(base)?.extends }
+			}
+		}
+		return shown
 		// only changes by its content
-		[domain, edges, focus, depth, onlyKey])
+	}, [domain, edges, focus, depth, onlyKey, props.options, related, extending])
 	// what a box shows of its entity: its keys only (PK, and FK), or all its properties
 	const detailed = useCallback((e: EntityInfo): EntityInfo => detail === 'all' || detail === 'name'
 		? e
@@ -727,7 +788,13 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 						<option value="name">{m.detailName}</option>
 					</select>
 				</label>
-				<label className="lw-check"><input type="checkbox" checked={relationNames} onChange={e => setRelationNames(e.target.checked)} /> {m.relationNames}</label>
+				{props.options
+					? <MultiSelect label={m.diagramOptions} choices={[
+						{ label: m.relationNames, on: relationNames, set: setRelationNames },
+						{ label: m.relatedEntities, on: related, set: setRelated },
+						...(props.source?.length ? [{ label: m.extendedEntities, on: extended, set: setExtended }] : [])
+					]} />
+					: <label className="lw-check"><input type="checkbox" checked={relationNames} onChange={e => setRelationNames(e.target.checked)} /> {m.relationNames}</label>}
 				<span className="lw-tool-group" role="group" aria-label={m.zoomIn}>
 					{editable && (
 						<>

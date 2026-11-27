@@ -71,33 +71,63 @@ describe('config reader', () => {
 	})
 
 	describe('authentication', () => {
-		test('one credential: every permission', () => {
-			const { config } = read({ ...base, authentication: { adapter: 'local', type: 'bearer', token: 's3cret' } })
+		const roles = { authorization: { roles: { reader: ['read'], backend: ['read', 'write', 'script', 'queue', 'stageImport'] } } }
+
+		test('one credential: its roles', () => {
+			const { config, issues } = read({ ...base, ...roles, authentication: { adapter: 'local', type: 'bearer', token: 's3cret', roles: ['backend'] } })
+			expect(issues).toEqual([])
 			expect(config?.authentication).toEqual({
 				adapter: 'local', type: 'bearer', header: undefined,
-				credentials: [{ name: 'default', value: 's3cret', permissions: ['read', 'write', 'script', 'queue', 'stageImport'] }]
+				credentials: [{ name: 'default', value: 's3cret', roles: ['backend'] }]
 			})
 		})
 
-		test('a list of credentials with permissions', () => {
+		test('a list of credentials: each one its roles, never its own permissions', () => {
 			const { config, issues } = read({
 				...base,
+				...roles,
 				authentication: {
 					adapter: 'local', type: 'apikey', header: 'X-Key',
-					keys: [{ name: 'agent', value: 'a', permissions: ['read'] }, { name: 'backend', value: 'b' }]
+					keys: [{ name: 'agent', value: 'a', roles: ['reader'] }, { name: 'backend', value: 'b', roles: ['backend', 'reader', 'backend'] }]
 				}
 			})
 			expect(issues).toEqual([])
 			expect(config?.authentication.header).toBe('x-key')
 			expect(config?.authentication.credentials).toEqual([
-				{ name: 'agent', value: 'a', permissions: ['read'] },
-				{ name: 'backend', value: 'b', permissions: ['read', 'write', 'script', 'queue', 'stageImport'] }
+				{ name: 'agent', value: 'a', roles: ['reader'] },
+				{ name: 'backend', value: 'b', roles: ['backend', 'reader'] }
 			])
+			const own = read({ ...base, ...roles, authentication: { adapter: 'local', type: 'apikey', keys: [{ name: 'agent', value: 'a', permissions: ['read'], view: 'v' }] } }).issues
+			expect(own).toEqual([
+				'authentication.keys[0]: permissions, view go in a role of authorization.roles, which the credential names in roles',
+				'authentication.keys[0].roles must be a non empty list of the names of roles of authorization.roles'
+			])
+			expect(read({ ...base, ...roles, authentication: { adapter: 'local', type: 'apikey', keys: [{ name: 'agent', value: 'a', roles: [] }] } }).issues)
+				.toEqual(['authentication.keys[0].roles must be a non empty list of the names of roles of authorization.roles'])
+		})
+
+		test('a key of a user: its context, as a token gives it from its claims', () => {
+			const { config, issues } = read({
+				...base,
+				...roles,
+				authentication: {
+					adapter: 'local', type: 'apikey',
+					keys: [{ name: 'ana', value: 'a', roles: ['reader'], context: { username: 'ana@acme', tenant: 7, staff: true } }, { name: 'backend', value: 'b', roles: ['backend'] }]
+				}
+			})
+			expect(issues).toEqual([])
+			expect(config?.authentication.credentials[0].context).toEqual({ username: 'ana@acme', tenant: 7, staff: true })
+			expect(config?.authentication.credentials[1].context).toBeUndefined()
+			const bad = (context: unknown) => read({ ...base, authentication: { adapter: 'local', type: 'apikey', keys: [{ name: 'a', value: 'a', roles: ['reader'], context }] } }).issues
+			expect(bad('ana')).toContain('authentication.keys[0].context must be an object (variable: value)')
+			expect(bad({ 'user-name': 'ana' })).toContain('authentication.keys[0].context: "user-name" is not a name of a variable')
+			expect(bad({ username: { first: 'ana' } })).toContain('authentication.keys[0].context.username must be a text, a number or a boolean')
+			expect(bad({ username: '' })).toContain('authentication.keys[0].context.username must be a text, a number or a boolean')
 		})
 
 		test('basic users', () => {
-			const { config } = read({ ...base, authentication: { adapter: 'local', type: 'basic', users: [{ username: 'ana', password: 'p', permissions: ['read'] }] } })
-			expect(config?.authentication.credentials).toEqual([{ name: 'ana', username: 'ana', password: 'p', permissions: ['read'] }])
+			const { config } = read({ ...base, ...roles, authentication: { adapter: 'local', type: 'basic', users: [{ username: 'ana', password: 'p', roles: ['reader'] }] } })
+			expect(config?.authentication.credentials).toEqual([{ name: 'ana', username: 'ana', password: 'p', roles: ['reader'] }])
 		})
 
 		test('a local credential without its secret stops the process (never open by mistake)', () => {
@@ -107,17 +137,17 @@ describe('config reader', () => {
 				.toMatch(/authentication.keys\[0\]: value is not defined/)
 		})
 
-		test('invalid type, adapter, permissions and duplicated names', () => {
+		test('invalid type, adapter, permissions of a role and duplicated names', () => {
 			expect(read({ ...base, authentication: { adapter: 'local', type: 'jwt', token: 'x' } }).issues).toContain('authentication.type must be bearer, apikey or basic')
 			expect(read({ ...base, authentication: { adapter: 'oauth' } }).issues).toContain('authentication.adapter "oauth" is not none, local or jwt')
-			expect(read({ ...base, authentication: { adapter: 'local', type: 'bearer', tokens: [{ name: 'a', value: 'x', permissions: ['admin'] }] } }).issues[0])
+			expect(read({ ...base, authorization: { roles: { root: ['admin'] } } }).issues[0])
 				.toMatch(/unknown permissions admin/)
-			expect(read({ ...base, authentication: { adapter: 'local', type: 'bearer', tokens: [{ name: 'a', value: 'x' }, { name: 'a', value: 'y' }] } }).issues[0])
+			expect(read({ ...base, ...roles, authentication: { adapter: 'local', type: 'bearer', tokens: [{ name: 'a', value: 'x', roles: ['reader'] }, { name: 'a', value: 'y', roles: ['reader'] }] } }).issues[0])
 				.toMatch(/duplicated credential names a/)
 		})
 
 		test('a transport can have its own authentication', () => {
-			const { config } = read({ ...base, transports: { http: { port: 1, authentication: { adapter: 'none' } } }, authentication: { adapter: 'local', type: 'bearer', token: 'x' } })
+			const { config } = read({ ...base, transports: { http: { port: 1, authentication: { adapter: 'none' } } }, authentication: { adapter: 'local', type: 'bearer', token: 'x', roles: ['backend'] } })
 			expect(config?.transports.http?.authentication).toEqual({ adapter: 'none', credentials: [] })
 			expect(config?.authentication.adapter).toBe('local')
 		})
@@ -135,7 +165,7 @@ describe('config reader', () => {
 					workspacePath: '/w',
 					schemas: [
 						{ path: '/iot/v1/', env: { DB: 'x', MISSING: undefined }, transports: ['http'], server: { maxConcurrent: '4', maxResponseBytes: '1MB' }, runtime: { mode: 'process' }, mcp: { maxRows: 10 }, scripts: { enabled: 'true' } },
-						{ path: 'accounts/v1', workspace: '/mnt/accounts', authentication: { adapter: 'local', type: 'bearer', token: 't' } }
+						{ path: 'accounts/v1', workspace: '/mnt/accounts', authentication: { adapter: 'local', type: 'bearer', token: 't', roles: ['backend'] } }
 					]
 				}
 			})
@@ -193,20 +223,18 @@ describe('config reader', () => {
 		expect(read({ ...base, server: { maxResponseBytes: 'huge' } }).issues).toEqual(['server.maxResponseBytes "huge" must be a size (bytes, or like 256MB)'])
 	})
 
-	test('approval (docs/MUTATION_APPROVAL.md): mcp.approval and its expiry, per schema; of a key or a role; approve', () => {
+	test('approval (docs/MUTATION_APPROVAL.md): mcp.approval and its expiry, per schema; of a role; approve', () => {
 		const { config, issues } = read({
 			...base,
 			mcp: { approval: 'writes', approvalExpires: '30m' },
 			orm: { workspacePath: '/workspace', schemas: [{ path: 'shop', mcp: { approval: 'none' } }] },
-			authentication: { adapter: 'local', type: 'apikey', keys: [{ name: 'agent', value: 'k', permissions: ['read', 'write'], approval: 'writes' }, { name: 'ops', value: 'o', permissions: ['read', 'approve'] }] }
+			authorization: { roles: { agent: { permissions: ['read', 'write'], approval: 'writes' }, ops: ['read', 'approve'] } },
+			authentication: { adapter: 'local', type: 'apikey', keys: [{ name: 'agent', value: 'k', roles: ['agent'] }, { name: 'ops', value: 'o', roles: ['ops'] }] }
 		})
 		expect(issues).toEqual([])
 		expect(config!.mcp).toMatchObject({ approval: 'writes', approvalExpiresMs: 1800000 })
 		expect(config!.orm.schemas[0].mcp).toEqual({ approval: 'none' })
-		expect(config!.authentication.credentials).toEqual([
-			{ name: 'agent', value: 'k', permissions: ['read', 'write'], approval: 'writes' },
-			{ name: 'ops', value: 'o', permissions: ['read', 'approve'] }
-		])
+		expect(config!.authorization.roles.agent).toEqual({ permissions: ['read', 'write'], approval: 'writes' })
 		expect(read({ ...base, mcp: { approval: 'always' } }).issues).toContain('mcp.approval must be none or writes')
 	})
 })

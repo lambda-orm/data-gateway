@@ -38,7 +38,7 @@ el estado de la gateway: lo que hay hoy y la configuración que vaya surgiendo.
 # data-gateway.config.yaml
 state:
   source:
-    dialect: SQLjs                                    # una sola instancia: un archivo, sin servidor
+    dialect: SQLite                                   # una sola instancia: un archivo, sin servidor
     connection: { file: /data/.data-gateway/state.sqlite }
   # varias instancias:
   # source:
@@ -74,16 +74,43 @@ Entidades tipadas para lo que tiene forma propia, y una genérica para los valor
 | Entidad | Qué guarda | Hoy |
 | --- | --- | --- |
 | `Roles` | los roles agregados o extendidos desde la administración ([`ROLE_SCOPES.md`](ROLE_SCOPES.md)) | — |
-| `Settings` | un valor de la configuración cambiado en caliente: `scope` (`global` o un schema), `key` (el camino, `cache.ttl`, `mcp.maxRows`…), `value` (JSON) | — |
+| `Settings` | un valor de la configuración cambiado en caliente: `settingKey` (el área: `observability` desde 5.0.0), `value` (JSON), quién y cuándo | `settings` |
 | `ConfigChanges` | cada cambio de `Roles` y `Settings`: quién, cuándo, el valor anterior y el nuevo, el motivo | — |
 | `Sessions`, `SessionConnections` | las sesiones de `management` (el hash del token, nunca el token) | `sessions`, `session_connections` |
 | `UiStates` | el estado de la UI de cada credencial | `session` |
 | `Approvals` | las escrituras que esperan una persona | `approval` |
-| `StateVersion` | un número por área (`roles`, `settings`): sube con cada cambio; las réplicas lo comparan | — |
+| `StateVersion` | un número por área (`roles`, `observability`): sube con cada cambio; las réplicas lo comparan | `state_versions` |
 
 Más adelante, cuando hagan falta: claves de API creadas desde la administración (su hash, sus permisos, su rol),
 la historia de los schemas (hoy en `changes.jsonl` de los logs de cada workspace), lo que la gateway necesite
 recordar.
+
+**La observabilidad (5.0.0)** es el primer valor de `Settings`: las secciones de `observability` (`exporter`,
+`traces`, `metrics`, `logs`, `explore`…) que la administración cambió, cada una reemplazando entera la del YAML
+(`PUT /admin/observability`, permiso `observability`; `DELETE` vuelve al YAML). Al guardarla, el edge que la guardó (y
+el de cada réplica, al ver subir la versión de `observability`) se lo dice al supervisor, que reinicia el edge y
+recarga en blue-green los workers cuyo SDK cambia; al arrancar, el supervisor la lee antes de iniciar los workers.
+
+**Dónde está, visto desde la administración (5.0.0):** `GET /admin/state` (permiso `roles`) dice la fuente (SQLite del
+volumen, una base por λORM o memoria), cómo se lee y escribe, si la dice `state.source`, cada cuánto la releen las
+réplicas, si es obligatoria, si se puede leer ahora, y el `lambdaORM.yaml` del schema de sistema; la conexión, sin
+secretos (contraseñas de una URL o de un objeto, `***`). En el IDE: **Administration › Persist** y **› Config** (en
+Monaco, de solo lectura).
+
+**Cambiar dónde está, desde la administración (5.0.0, permiso `persist`):**
+
+- `PUT /admin/persist/connection` `{ dialect, connection, reason }`: otra base. `PUT /admin/persist/schema` `{ text }`:
+  el `lambdaORM.yaml` del estado editado, del que **solo cambia el mapping** (la tabla de cada entidad y sus columnas);
+  el dominio es del gateway, la fuente es la de la conexión. `DELETE /admin/persist`: volver a `state` del YAML.
+- Se guarda en `.data-gateway/persist.yaml` del volumen (necesita `orm.workspacePath`), que reemplaza a
+  `state.source` y `state.mapping` del YAML al arrancar; la conexión puede nombrar variables (`$STATE_DB`).
+- **El estado se copia con λORM:** `push` de las tablas en la nueva, `export` de la actual e `import` en la nueva. El
+  SQLite del volumen se lee de una copia (con su WAL volcado antes) con un mapping a sus tablas, y se escribe con
+  SQLjs. En la misma base con otro mapping, solo las entidades cuya tabla o columnas cambian. Una base nueva que ya
+  tiene estado se rechaza (`409`); un SQLite con estado se guarda aparte (`.bak-<hora>`). Si la copia falla, nada
+  cambia.
+- Después, el supervisor reinicia el edge y recarga los schemas con la fuente nueva. Las sesiones siguen valiendo
+  (se copiaron). Las tablas viejas no se borran.
 
 `Settings` existe para no necesitar una migración por cada opción nueva: una opción de la configuración que se puede
 cambiar en caliente se declara en el código (su camino, su tipo, su validación) y su valor va a `Settings`. Una

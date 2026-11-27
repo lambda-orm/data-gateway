@@ -1,6 +1,6 @@
 import { DataChangeSummary } from '../../domain/runtime/channelProtocol'
 import { FileSchemaHistory } from '../output/admin/fileSchemaHistory'
-import { resolveObservability, startObservability, stopObservability, withPrometheus } from './observability'
+import { applicableObservability, effectiveExplore, startObservability, stopObservability } from './observability'
 import { otelMetricsAsPromJson } from '../output/metrics/otelPrometheus'
 import path from 'path'
 import fs from 'fs'
@@ -149,17 +149,19 @@ export const schemaAuthenticators = (config: DataGatewayConfig, descriptor: Sche
  * embed the gateway). The process runs the supervisor (supervisorMain), with a worker per schema and the edge.
  */
 export class DataGatewayBuilder {
-	public async build (config: DataGatewayConfig, options: BuildOptions = {}): Promise<RunningGateway> {
-		const logger = options.logger ?? buildLogger(config)
-		const metrics = options.metrics ?? (config.metrics.enabled ? new PromClientMetrics() : new NoMetrics())
+	public async build (yaml: DataGatewayConfig, options: BuildOptions = {}): Promise<RunningGateway> {
+		const logger = options.logger ?? buildLogger(yaml)
+		const metrics = options.metrics ?? (yaml.metrics.enabled ? new PromClientMetrics() : new NoMetrics())
 		const clock = options.clock ?? new SystemClock()
 		const audit = options.audit ?? new StdoutAuditAdapter()
 		const version = options.version ?? packageVersion()
 		// the roles of the YAML and of the state of the gateway (docs/ROLE_SCOPES.md)
-		const state = await buildGatewayState(config, logger, clock)
+		const state = await buildGatewayState(yaml, logger, clock)
+		// where its traces, metrics and logs are seen: the YAML with what the administration changed (applied at the start)
+		const config = { ...yaml, explore: effectiveExplore(yaml, state.observabilityOverride) }
 		const authenticators = options.authenticators ?? new AuthenticatorRegistry(state.catalog)
 		// the SDK before λORM (inline, one for every schema of this thread)
-		const observability = withPrometheus(resolveObservability(config.observability, process.env), config.metrics.enabled)
+		const observability = applicableObservability(yaml, state.observabilityOverride, process.env, logger)
 		await startObservability(observability, logger)
 		// λORM's metrics (OpenTelemetry) in /metrics, with the gateway's
 		if (metrics.enabled) metrics.addSource(() => otelMetricsAsPromJson('edge'))

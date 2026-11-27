@@ -22,12 +22,16 @@ orm: { workspacePath: ${root} }
 logger: { level: error }
 audit: { enabled: false }
 runtime: { checkConnections: false }
+authorization:
+  roles:
+    admin: { permissions: [ read, schemaRead, sessionAdmin ] }
+    reader: { permissions: [ read ] }
 authentication:
   adapter: local
   type: apikey
   keys:
-    - { name: admin, value: admin-key, permissions: [ read, schemaRead, sessionAdmin ] }
-    - { name: reader, value: reader-key, permissions: [ read ] }
+    - { name: admin, value: admin-key, roles: [ admin ] }
+    - { name: reader, value: reader-key, roles: [ reader ] }
 transports:
   management: { port: ${port}, host: 127.0.0.1 }
 `

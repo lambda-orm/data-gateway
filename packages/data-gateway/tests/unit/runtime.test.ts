@@ -38,12 +38,12 @@ describe('schemas and their settings', () => {
 			workspacePath: '/w',
 			schemas: [
 				{ path: 'iot/v1', env: { DB: 'one' }, server: { maxConcurrent: 4 }, mcp: { tools: { exclude: ['orm_execute_script'] } }, transports: ['mcpHttp'] },
-				{ path: 'accounts/v1', workspace: '/mnt/accounts', runtime: { mode: 'process', maxMemoryMb: 256 }, authentication: { adapter: 'local', type: 'bearer', token: 's' } }
+				{ path: 'accounts/v1', workspace: '/mnt/accounts', runtime: { mode: 'process', maxMemoryMb: 256 }, authentication: { adapter: 'local', type: 'bearer', token: 's', roles: ['backend'] } }
 			]
 		},
 		scripts: { enabled: true },
 		server: { timeout: 5000 },
-		authentication: { adapter: 'local', type: 'apikey', value: 'k' }
+		authentication: { adapter: 'local', type: 'apikey', value: 'k', roles: ['backend'] }
 	})
 	const discovered = [{ path: 'iot/v1', workspace: '/w/iot/v1' }, { path: 'iot/v2', workspace: '/w/iot/v2' }]
 
@@ -276,6 +276,38 @@ describe('supervisor', () => {
 		await supervisor.stop()
 		expect(edges[1].stopped).toBe(true)
 	})
+
+	test('restart (a new observability): the edge starts again, the schemas reload blue-green only when asked; the edge tells it', async () => {
+		const told: unknown[] = []
+		const workers: FakeWorker[] = []
+		const edges: FakeEdge[] = []
+		const specs = ['a'].map(path => ({ descriptor: { path, workspace: `/w/${path}`, origin: 'discovered' as const, overrides: {} }, settings: {} as any, env: {} }))
+		const supervisor = new Supervisor(specs,
+			{ start: (spec, events) => { const w = new FakeWorker('schema', events); workers.push(w); return w } },
+			{ start: events => { const e = new FakeEdge('edge', events); edges.push(e); return e as any } },
+			{ ...policies, onObservability: override => told.push(override) }, { now: () => new Date(), uptimeSeconds: () => 0 }, logger)
+		supervisor.start()
+		workers[0].events.ready({ name: 'a' })
+		edges[0].events.observability({ traces: { enabled: false } })
+		expect(told).toEqual([{ traces: { enabled: false } }])
+		await supervisor.restart({ schemas: false })
+		expect(edges).toHaveLength(2)
+		expect(edges[0].stopped).toBe(true)
+		expect(workers).toHaveLength(1)
+		// the new edge learns the states and gets a channel to the ready schema; the old one is not listened to
+		expect(edges[1].connections).toEqual(['a'])
+		edges[0].events.observability({})
+		expect(told).toHaveLength(1)
+		await supervisor.restart({ schemas: true })
+		expect(edges).toHaveLength(3)
+		// blue-green: the new version starts next to the current one, which serves until it is ready
+		expect(workers).toHaveLength(2)
+		expect(workers[0].stopped).toBe(false)
+		workers[1].events.ready({ name: 'a' })
+		expect(workers[0].stopped).toBe(true)
+		expect(supervisor.states()[0].status).toBe('ready')
+		await supervisor.stop()
+	})
 })
 
 describe('observability', () => {
@@ -308,7 +340,7 @@ describe('observability', () => {
 		const { maskSecrets } = await import('../../src/lib/infrastructure/build/dataGatewayBuilder')
 		const c = config({
 			orm: { workspacePath: '/w', schemas: [{ path: 'iot/v1', env: { DB: 'postgres://user:pass@host' } }] },
-			authentication: { adapter: 'local', type: 'basic', users: [{ username: 'u', password: 'p' }] },
+			authentication: { adapter: 'local', type: 'basic', users: [{ username: 'u', password: 'p', roles: ['backend'] }] },
 			runtime: { env: { passthrough: ['KAFKA'] } }
 		})
 		const masked = JSON.stringify(maskSecrets(c))

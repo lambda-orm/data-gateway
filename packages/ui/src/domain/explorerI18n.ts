@@ -84,6 +84,13 @@ export interface ExplorerMessages {
 	abstract: string
 	viewEntity: string
 	extendsEntity: string
+	/** the tab of an abstract entity with the entities that extend it */
+	extendedBy: string
+	inherited: string
+	inheritedFrom: string
+	inheritedHint: string
+	redefines: string
+	openNamed: string
 	openEntity: string
 	readOnlyData: string
 	dataEditHint: string
@@ -227,7 +234,13 @@ const ROWS: Row[] = [
 	['none', 'none', 'ninguno', 'nenhum', 'aucun', 'nessuno', 'keine', 'geen', 'cap', 'ningún', 'bat ere ez'],
 	['abstract', 'abstract', 'abstracta', 'abstrata', 'abstraite', 'astratta', 'abstrakt', 'abstract', 'abstracta', 'abstracta', 'abstraktua'],
 	['viewEntity', 'view', 'vista', 'visão', 'vue', 'vista', 'Sicht', 'view', 'vista', 'vista', 'ikuspegia'],
+	['extendedBy', 'Extended by', 'Extendida por', 'Estendida por', 'Étendue par', 'Estesa da', 'Erweitert von', 'Uitgebreid door', 'Estesa per', 'Estendida por', 'Hauek hedatzen dute'],
 	['extendsEntity', 'extends {name}', 'extiende {name}', 'estende {name}', 'étend {name}', 'estende {name}', 'erweitert {name}', 'breidt {name} uit', 'estén {name}', 'estende {name}', '{name} hedatzen du'],
+	['inherited', 'Inherited', 'Heredado', 'Herdado', 'Hérité', 'Ereditato', 'Geerbt', 'Geërfd', 'Heretat', 'Herdado', 'Heredatua'],
+	['inheritedFrom', 'Inherited from {name}', 'Heredado de {name}', 'Herdado de {name}', 'Hérité de {name}', 'Ereditato da {name}', 'Geerbt von {name}', 'Geërfd van {name}', 'Heretat de {name}', 'Herdado de {name}', '{name}(e)tik heredatua'],
+	['inheritedHint', 'Read only here: it is changed in {name}.', 'Acá es de solo lectura: se modifica en {name}.', 'Aqui é somente leitura: altera-se em {name}.', 'En lecture seule ici : il se modifie dans {name}.', 'Qui è in sola lettura: si modifica in {name}.', 'Hier nur lesbar: wird in {name} geändert.', 'Hier alleen-lezen: het wordt gewijzigd in {name}.', 'Aquí és només de lectura: es modifica a {name}.', 'Aquí é só lectura: modifícase en {name}.', 'Hemen irakurtzeko soilik: {name}(e)n aldatzen da.'],
+	['redefines', 'redefines {name}', 'redefine {name}', 'redefine {name}', 'redéfinit {name}', 'ridefinisce {name}', 'überschreibt {name}', 'herdefinieert {name}', 'redefineix {name}', 'redefine {name}', '{name} birdefinitzen du'],
+	['openNamed', 'Open {name}', 'Abrir {name}', 'Abrir {name}', 'Ouvrir {name}', 'Apri {name}', '{name} öffnen', '{name} openen', 'Obre {name}', 'Abrir {name}', 'Ireki {name}'],
 	['openEntity', 'double click: open its form', 'doble clic: abrir su formulario', 'duplo clique: abrir o formulário', 'double clic : ouvrir son formulaire', 'doppio clic: apri la scheda', 'Doppelklick: Formular öffnen', 'dubbelklik: formulier openen', 'doble clic: obre el formulari', 'dobre clic: abrir o formulario', 'klik bikoitza: ireki inprimakia'],
 	['readOnlyData', 'Read only: rows are not changed here.', 'Solo lectura: acá no se modifican filas.', 'Somente leitura: aqui não se alteram linhas.', 'Lecture seule : les lignes ne sont pas modifiées ici.', 'Sola lettura: qui non si modificano righe.', 'Nur lesen: Zeilen werden hier nicht geändert.', 'Alleen-lezen: rijen worden hier niet gewijzigd.', 'Només lectura: aquí no es modifiquen files.', 'Só lectura: aquí non se modifican filas.', 'Irakurtzeko soilik: hemen ez dira errenkadak aldatzen.'],
 	['dataEditHint', 'Double click a cell to change it (Enter saves, Esc cancels).', 'Doble clic en una celda para cambiarla (Enter guarda, Esc cancela).', 'Clique duas vezes numa célula para alterá-la (Enter salva, Esc cancela).', 'Double-cliquez sur une cellule pour la modifier (Entrée enregistre, Échap annule).', 'Doppio clic su una cella per modificarla (Invio salva, Esc annulla).', 'Doppelklick auf eine Zelle, um sie zu ändern (Enter speichert, Esc bricht ab).', 'Dubbelklik op een cel om die te wijzigen (Enter bewaart, Esc annuleert).', 'Doble clic en una cel·la per canviar-la (Enter desa, Esc cancel·la).', 'Dobre clic nunha cela para cambiala (Enter garda, Esc cancela).', 'Klik bikoitza gelaxka batean aldatzeko (Enter gordetzen du, Esc bertan behera uzten du).'],

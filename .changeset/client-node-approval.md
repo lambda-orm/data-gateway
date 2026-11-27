@@ -1,5 +1,5 @@
 ---
-'@lambdaorm/data-gateway-client': minor
+'@lambdaorm/data-gateway-client-node': minor
 ---
 
 `client.approval(id)` and `isApprovalPending(result)`: a write that waits for a person to approve it (gateway 4.3,

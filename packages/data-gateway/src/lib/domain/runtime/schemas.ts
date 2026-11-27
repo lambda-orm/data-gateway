@@ -76,19 +76,10 @@ export interface SchemaSettings {
 	stage?: string
 	/** authorization.stages open: a stage no role names may be chosen (docs/ROLE_SCOPES.md §8) */
 	openStages?: boolean
-	/** the views the credentials that reach it name (their keys, their roles): checked when it loads */
+	/** the views its roles name: checked when it loads */
 	namedViews: string[]
 }
 
-/** The views an authentication names: of its keys, of the roles of its tokens, of its methods */
-export const viewsOf = (authentication: AuthenticationConfig | undefined): string[] => {
-	if (!authentication) return []
-	return [
-		...authentication.credentials.map(c => c.view),
-		...Object.values(authentication.jwt?.principal.permissions?.roles ?? {}).flatMap(r => r.views ?? [r.view]),
-		...(authentication.methods ?? []).flatMap(viewsOf)
-	].filter((v): v is string => typeof v === 'string')
-}
 
 
 /** The most specific value replaces (they are not merged): a schema's tools replace the global tools */
@@ -126,10 +117,10 @@ export const effectiveSettings = (config: DataGatewayConfig, schema: SchemaDescr
 		...(o.view ? { view: o.view } : {}),
 		...(o.stage ? { stage: o.stage } : {}),
 		...(config.authorization?.stages === 'open' ? { openStages: true } : {}),
-		namedViews: [...new Set([
-			...viewsOf(o.authentication ?? config.authentication),
-			...Object.values(config.transports).flatMap(t => viewsOf((t as { authentication?: AuthenticationConfig } | undefined)?.authentication))
-		])]
+		// the views of the roles that apply in it (the only place a credential gets one)
+		namedViews: [...new Set(Object.values(config.authorization?.roles ?? {})
+			.filter(r => !r.schemas || r.schemas[schema.path])
+			.flatMap(r => [...(r.views ?? (r.view ? [r.view] : [])), ...(r.schemas?.[schema.path]?.views ?? [])]))]
 	}
 }
 

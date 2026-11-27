@@ -1,7 +1,9 @@
 import { ObservabilityConfig } from '@lambdaorm/base'
+import { readExplore, readObservabilitySdk } from './observabilitySettings'
+import { readRoleSchemas } from '../auth/roles'
 import { ALL_PERMISSIONS, isPermission, KNOWN_PERMISSIONS, Permission } from '../auth/permission'
 import {
-	AuthenticationConfig, AuthenticationType, AuthorizationConfig, StateConfig, StateDialect, STATE_DIALECTS, ConfigReading, CredentialConfig, DataGatewayConfig, JwtConfig, RoleConfig, CacheConfig, ClusterConfig, FilesConfig, FileStorageConfig, OutboxConfig, OutboxDestinationConfig, LoggerConfig, McpConfig,
+	AuthenticationConfig, AuthenticationType, AuthorizationConfig, StateConfig, StateDialect, STATE_DIALECTS, ConfigReading, CredentialConfig, DataGatewayConfig, ExploreConfig, JwtConfig, RoleConfig, CacheConfig, ClusterConfig, FilesConfig, FileStorageConfig, OutboxConfig, OutboxDestinationConfig, LoggerConfig, McpConfig,
 	OrmConfig, RuntimeConfig, RuntimeMode, SchemaConfig, SessionsConfig, TransportConfig, TransportName, TransportsConfig, WatchConfig
 } from './dataGatewayConfig'
 import { parseDuration } from './durations'
@@ -63,6 +65,7 @@ export class ConfigReader {
 			logger: this.logger(raw.logger),
 			metrics: { enabled: this.bool(raw.metrics?.enabled, true, 'metrics.enabled') },
 			observability: this.observability(raw.observability),
+			explore: this.explore(isObject(raw.observability) ? raw.observability.explore : undefined),
 			audit: {
 				enabled: this.bool(raw.audit?.enabled, true, 'audit.enabled'),
 				includeData: this.bool(raw.audit?.includeData, false, 'audit.includeData')
@@ -175,16 +178,8 @@ export class ConfigReader {
 			if (typeof entry.stage !== 'string' || !entry.stage) this.issues.push(`${key}.stage must be the name of a stage of the schema`)
 			else schema.stage = entry.stage
 		}
-		if (entry.roles !== undefined) {
-			if (!isObject(entry.roles)) this.issues.push(`${key}.roles must be an object (a role: what it adds in this schema)`)
-			else {
-				schema.roles = {}
-				for (const [name, value] of Object.entries(entry.roles)) {
-					const role = this.role(value, `${key}.roles.${name}`, true)
-					if (role) schema.roles[name] = role
-				}
-			}
-		}
+		// the roles are of the gateway (docs/ROLE_SCOPES.md §2): the schemas where a role applies are said by the role
+		if (entry.roles !== undefined) this.issues.push(`${key}.roles: the roles are of the gateway: in authorization.roles, with schemas: [${String(entry.path ?? '')}]`)
 		if (entry.cache !== undefined) schema.cache = this.cache(entry.cache, `${key}.cache`)
 		if (entry.outbox !== undefined) schema.outbox = this.outbox(entry.outbox, `${key}.outbox`)
 		if (entry.files !== undefined) schema.files = this.files(entry.files, `${key}.files`)
@@ -296,15 +291,11 @@ export class ConfigReader {
 
 	/** checked in full (with its trace rules) when the gateway starts, where 3xpr is: here only its form */
 	private observability (raw: unknown): ObservabilityConfig | undefined {
-		if (raw === undefined || raw === null) return undefined
-		if (typeof raw !== 'object' || Array.isArray(raw)) {
-			this.issues.push('observability must be an object (the same shape as infrastructure.observability of a lambdaORM.yaml)')
-			return undefined
-		}
-		if ((raw as any).exporter?.headers !== undefined) {
-			this.issues.push('observability.exporter.headers is not allowed: the headers carry tokens; use OTEL_EXPORTER_OTLP_HEADERS')
-		}
-		return raw as ObservabilityConfig
+		return readObservabilitySdk(raw, this.issues)
+	}
+
+	private explore (raw: unknown): ExploreConfig | undefined {
+		return readExplore(raw, this.issues)
 	}
 
 	private logger (raw: Raw | undefined): LoggerConfig {
@@ -528,7 +519,7 @@ export class ConfigReader {
 				if (credential) credentials.push(credential)
 			})
 		} else {
-			const credential = this.credential(type, { ...raw, permissions: undefined }, key, type === 'basic' ? this.str(raw.username, 'default') : 'default', false)
+			const credential = this.credential(type, raw, key, type === 'basic' ? this.str(raw.username, 'default') : 'default', false)
 			if (credential) credentials.push(credential)
 		}
 		const names = credentials.map(c => c.name)
@@ -600,16 +591,13 @@ export class ConfigReader {
 		let permissions: JwtConfig['principal']['permissions']
 		if (p.permissions !== undefined) {
 			const at = `${key}.principal.permissions`
-			// the roles may be in authorization.roles (docs/ROLE_SCOPES.md): here only the claim
-			if (!isObject(p.permissions) || !this.str(p.permissions.claim, '') || (p.permissions.roles !== undefined && !isObject(p.permissions.roles))) {
-				this.issues.push(`${at} needs claim (where the roles are); its roles (role → permissions) here or in authorization.roles`)
+			// the roles are those of authorization.roles (docs/ROLE_SCOPES.md): here only the claim that names them
+			if (!isObject(p.permissions) || !this.str(p.permissions.claim, '')) {
+				this.issues.push(`${at} needs claim (where the roles are)`)
+			} else if (p.permissions.roles !== undefined) {
+				this.issues.push(`${at}.roles: the roles go in authorization.roles; here only the claim that names them`)
 			} else {
-				const roles: Record<string, RoleConfig> = {}
-				for (const [role, value] of Object.entries(p.permissions.roles ?? {})) {
-					const config = this.role(value, `${at}.roles.${role}`, false)
-					if (config) roles[role] = config as RoleConfig
-				}
-				permissions = { claim: String(p.permissions.claim), roles }
+				permissions = { claim: String(p.permissions.claim) }
 			}
 		}
 		const context: Record<string, string> = {}
@@ -720,7 +708,7 @@ export class ConfigReader {
 	 * locked } (view: one, as before 4.4). partial: of a schema, what it adds (no permissions needed).
 	 */
 	private role (value: unknown, at: string, partial: boolean): Partial<RoleConfig> | undefined {
-		const known = ['permissions', 'view', 'views', 'stages', 'maxRows', 'approval', 'scope', 'locked']
+		const known = ['permissions', 'schemas', 'view', 'views', 'stages', 'maxRows', 'approval', 'scope', 'locked']
 		// a role says its permissions: one without them must not end up with all
 		const list = isObject(value) ? value.permissions : value
 		if (!Array.isArray(list) && !(partial && isObject(value) && list === undefined)) {
@@ -741,6 +729,8 @@ export class ConfigReader {
 		if (views) role.views = views
 		const stages = names(value.stages, 'stages')
 		if (stages) role.stages = stages
+		const schemas = readRoleSchemas(value.schemas, `${at}.schemas`, this.issues)
+		if (schemas) role.schemas = schemas
 		if (value.maxRows !== undefined) role.maxRows = this.int(value.maxRows, 0, `${at}.maxRows`, 1)
 		const approval = this.approvalMode(value.approval, `${at}.approval`)
 		if (approval === 'writes') role.approval = approval
@@ -775,15 +765,18 @@ export class ConfigReader {
 		return authorization
 	}
 
-	/** the roles of the methods jwt (as before 4.4) and of authorization.roles are one catalog: a name in both, an issue */
+	/** a role a key names that the configuration doesn't have: said (it may come from the state of the gateway) */
 	private rolesTogether (config: DataGatewayConfig): void {
 		const methods = config.authentication.adapter === 'methods' ? config.authentication.methods ?? [] : [config.authentication]
-		for (const method of methods) {
-			for (const name of Object.keys(method.jwt?.principal.permissions?.roles ?? {})) {
-				if (config.authorization.roles[name]) this.issues.push(`the role "${name}" is in authorization.roles and in a method jwt: keep it in one`)
+		const known = new Set(Object.keys(config.authorization.roles))
+		// a schema a role names that the configuration doesn't have, when it says them all (no workspacePath to discover)
+		if (!config.orm.workspacePath) {
+			const paths = new Set(config.orm.schemas.map(s => s.path))
+			for (const [name, role] of Object.entries(config.authorization.roles)) {
+				const missing = Object.keys(role.schemas ?? {}).filter(s => !paths.has(s))
+				if (missing.length) this.warnings.push(`the role "${name}" names the schemas ${missing.join(', ')}, which orm.schemas doesn't have`)
 			}
 		}
-		const known = new Set([...Object.keys(config.authorization.roles), ...methods.flatMap(m => Object.keys(m.jwt?.principal.permissions?.roles ?? {}))])
 		for (const method of methods) {
 			for (const credential of method.credentials ?? []) {
 				for (const role of credential.roles ?? []) {
@@ -898,22 +891,16 @@ export class ConfigReader {
 			this.issues.push(`${at}: username is required`)
 			return undefined
 		}
-		if (entry.roles !== undefined && (!Array.isArray(entry.roles) || entry.roles.some((r: unknown) => typeof r !== 'string' || !r))) {
-			this.issues.push(`${at}.roles must be a list of the names of roles of authorization.roles`)
+		// what a credential may do is said by its roles only (docs/ROLE_SCOPES.md): never by itself
+		const own = ['permissions', 'view', 'approval'].filter(k => entry[k] !== undefined)
+		if (own.length) this.issues.push(`${at}: ${own.join(', ')} go in a role of authorization.roles, which the credential names in roles`)
+		if (!Array.isArray(entry.roles) || entry.roles.length === 0 || entry.roles.some((r: unknown) => typeof r !== 'string' || !r)) {
+			this.issues.push(`${at}.roles must be a non empty list of the names of roles of authorization.roles`)
+			return undefined
 		}
-		const roles: string[] | undefined = Array.isArray(entry.roles) ? entry.roles.map(String) : undefined
-		if (roles && (entry.permissions !== undefined || entry.view !== undefined)) this.issues.push(`${at}: roles or its own permissions and view, not both`)
-		// with roles, its permissions are theirs (the role catalog fills them): none of its own
-		const permissions = roles ? [] : this.permissions(entry.permissions, `${at}.permissions`)
-		const credential: CredentialConfig = { name, permissions, ...(roles ? { roles } : {}) }
-		if (this.approvalMode(entry.approval, `${at}.approval`) === 'writes') credential.approval = 'writes'
-		if (entry.view !== undefined) {
-			const view = this.viewName(entry.view, `${at}.view`)
-			if (view) {
-				credential.view = view
-				this.stageWithView(permissions, at)
-			}
-		}
+		const credential: CredentialConfig = { name, roles: [...new Set(entry.roles.map(String))] }
+		const context = this.credentialContext(entry.context, `${at}.context`)
+		if (context) credential.context = context
 		if (type === 'basic') {
 			credential.username = String(entry.username)
 			credential.password = String(secret)
@@ -921,6 +908,22 @@ export class ConfigReader {
 			credential.value = String(secret)
 		}
 		return credential
+	}
+
+	/** the context of a local credential: variable → a text, a number or a boolean (who the key is, never a secret) */
+	private credentialContext (raw: unknown, key: string): Record<string, string | number | boolean> | undefined {
+		if (raw === undefined) return undefined
+		if (!isObject(raw)) {
+			this.issues.push(`${key} must be an object (variable: value)`)
+			return undefined
+		}
+		const context: Record<string, string | number | boolean> = {}
+		for (const [variable, value] of Object.entries(raw)) {
+			if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(variable)) this.issues.push(`${key}: "${variable}" is not a name of a variable`)
+			else if (!['string', 'number', 'boolean'].includes(typeof value) || value === '') this.issues.push(`${key}.${variable} must be a text, a number or a boolean`)
+			else context[variable] = value as string | number | boolean
+		}
+		return Object.keys(context).length ? context : undefined
 	}
 
 	private permissions (raw: unknown, key: string): Permission[] {

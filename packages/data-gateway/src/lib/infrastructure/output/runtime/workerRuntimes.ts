@@ -21,7 +21,7 @@ export const BOOTSTRAP = path.join(BUILD_DIR, 'workerBootstrap.js')
 export const SCHEMA_ENTRY = path.join(BUILD_DIR, `schemaWorkerMain${extension}`)
 export const EDGE_ENTRY = path.join(BUILD_DIR, `edgeWorkerMain${extension}`)
 
-type ControlEvent = { type: 'pong' } | { type: 'ready', info?: McpServerInfo, socketPath?: string } | { type: 'failed', reason: string }
+type ControlEvent = { type: 'pong' } | { type: 'ready', info?: McpServerInfo, socketPath?: string } | { type: 'failed', reason: string } | { type: 'observability', override?: Record<string, any> } | { type: 'persist' }
 
 /** Turns the control messages and the end of a worker into WorkerEvents, once: failed or exited, not both */
 class Lifecycle {
@@ -40,7 +40,8 @@ class Lifecycle {
 		} else if (event.type === 'failed' && !this.ended) {
 			this.ended = true
 			this.events.failed(event.reason)
-		}
+		} else if (event.type === 'observability') this.events.observability?.(event.override)
+		else if (event.type === 'persist') this.events.persist?.()
 	}
 
 	public exit (reason: string): void {
@@ -155,6 +156,8 @@ export interface WorkerRuntimeSettings {
 	logger: LoggerPort
 	/** the observability of the gateway, resolved in the main thread: the workers don't get the OTEL_* variables */
 	observability?: ResolvedObservability
+	/** what the administration changed of it (kept in the state): the edge serves its explore */
+	observabilityOverride?: Record<string, any>
 }
 
 /** Schema workers in threads or processes, by settings.runtime.mode */
@@ -225,7 +228,7 @@ export class EdgeWorkerRuntime implements EdgeRuntimePort {
 		const schemas = specs.map(withoutEnv)
 		// the edge has the gateway's variables only if they are passthrough: it doesn't need them, the config is resolved
 		const config = { ...this.settings.config, orm: { ...this.settings.config.orm, schemas: this.settings.config.orm.schemas.map(s => ({ ...s, env: undefined })) } }
-		return new EdgeThreadHandle('edge', EDGE_ENTRY, { config, schemas, version: this.settings.version, observability: this.settings.observability }, events, {
+		return new EdgeThreadHandle('edge', EDGE_ENTRY, { config, schemas, version: this.settings.version, observability: this.settings.observability, observabilityOverride: this.settings.observabilityOverride }, events, {
 			env: baseEnv(this.settings.config),
 			maxMemoryMb: this.settings.config.runtime.maxMemoryMb
 		})

@@ -25,6 +25,10 @@ export type ControlEvent =
 	| { type: 'pong' }
 	| { type: 'ready', info?: McpServerInfo, socketPath?: string }
 	| { type: 'failed', reason: string }
+	/** edge: the observability of the state changed (saved here or in another replica) */
+	| { type: 'observability', override?: Record<string, any> }
+	/** edge: where the state is kept changed (persist.yaml written): the gateway restarts with it */
+	| { type: 'persist' }
 
 /** What a schema worker gets: no secrets of the gateway or of other schemas (its env is apart) */
 export interface SchemaWorkerData {
@@ -50,6 +54,8 @@ export interface EdgeWorkerData {
 	schemas: { descriptor: SchemaDescriptor, settings: SchemaSettings }[]
 	version: string
 	observability?: ResolvedObservability
+	/** what the administration changed of the observability: the explore it serves comes with it */
+	observabilityOverride?: Record<string, any>
 }
 
 export interface Control {

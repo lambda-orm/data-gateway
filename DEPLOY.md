@@ -5,7 +5,7 @@ Everything is published by GitHub Actions from `main`; `main` and `develop` take
 | What | Where | Workflow | When |
 | --- | --- | --- | --- |
 | `@lambdaorm/ui` (`packages/ui`) | npm | `release.yml` (Changesets) | pending changesets reach `main` |
-| `@lambdaorm/data-gateway-client` (`packages/client-node`) | npm | `release.yml` (Changesets) | pending changesets reach `main` |
+| `@lambdaorm/data-gateway-client-node` (`packages/client-node`) | npm | `release.yml` (Changesets) | pending changesets reach `main` |
 | `flaviorita/data-gateway` (`packages/data-gateway`) | Docker Hub | `data-gateway-image.yml` | a version of `packages/data-gateway/package.json` not on Docker Hub reaches `main` |
 | `flaviorita/data-gateway-ide` (`packages/ide`) | Docker Hub | `ide-image.yml` | a version of `packages/ide/package.json` not on Docker Hub reaches `main` |
 | The desktop IDE (`packages/ide-desktop`): Linux, Windows, macOS | GitHub release `ide-v<version>` of this repository | `ide-desktop.yml` | a version of `packages/ide/package.json` without its release reaches `main` |
@@ -19,9 +19,9 @@ locally.
 
 Repository secrets (`Settings → Secrets and variables → Actions`):
 
-- `NPM_TOKEN`: an npm token that publishes `@lambdaorm/ui` and `@lambdaorm/data-gateway-client` (Automation, or
+- `NPM_TOKEN`: an npm token that publishes `@lambdaorm/ui` and `@lambdaorm/data-gateway-client-node` (Automation, or
   granular with Read and write on both; a granular token can't create a package, so the first publish of
-  `@lambdaorm/data-gateway-client` needs an Automation token).
+  `@lambdaorm/data-gateway-client-node` needs an Automation token).
 - `CHANGESET_TOKEN`: a GitHub token with write access to the repository (contents and pull requests). The default
   `GITHUB_TOKEN` can't trigger the CI of the pull request Changesets opens.
 - `DOCKERHUB_TOKEN`: a Docker Hub access token (Read & Write) of `flaviorita`.

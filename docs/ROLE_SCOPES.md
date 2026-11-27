@@ -33,7 +33,10 @@ Los roles salen de cada método de autenticación y pasan a un lugar propio, `au
 authorization:
   roles:
     support:
-      views: [support]                 # la primera, la de quien no elige
+      schemas:                         # dónde vale, y en cada uno qué puede usar; sin schemas, en todos
+        shop: { views: [support, public], view: public, stages: [default, reporting], stage: default }
+        sales: {}                      # las vistas y stages de abajo (o los del schema)
+      views: [support]                 # en todos sus schemas, salvo el que dice las suyas; la primera, la de quien no elige
       permissions: [read]
     analyst:
       views: [analytics, support]
@@ -58,19 +61,25 @@ authentication:
       type: apikey
       keys:
         - { name: billing, value: '${BILLING_KEY}', roles: [backend] }
-        - { name: legacy, value: '${LEGACY_KEY}', permissions: [read], view: public }   # como hoy: un rol propio
 orm:
   schemas:
     - path: shop
       view: public                     # la vista del schema (como hoy)
       stage: default                   # el stage del schema
-      roles:                           # por schema: extiende o reemplaza (decisión 3) los globales
-        support: { views: [support, public] }
 ```
 
-- **Lo de hoy sigue valiendo:** `roles` dentro de un método `jwt` (`support: { permissions, view }`), `view` en una
-  clave o un rol (= `views: [view]`), los permisos en la clave. Se leen como un rol más; un nombre en los dos lugares,
-  error.
+- **Un rol es del gateway (5.0.0):** dice en qué schemas vale (`schemas: [shop, sales]`, sus rutas; sin `schemas`, en
+  todos) y en otro no da nada. Por schema puede decir las vistas y stages que usa ahí y los de quien no elige
+  (`schemas: { shop: { views, view, stages, stage } }`): reemplazan los del rol en ese schema; `view` y `stage` tienen
+  que ser de sus `views` y `stages`. Desde la administración se extiende igual: más vistas o stages en un schema, otro
+  default. `GET /admin/scopes` (con `roles`) dice las vistas y stages de cada schema servido, para elegirlos. `orm.schemas[].roles` ya no existe (la gateway no arranca y el error dice que va en
+  `authorization.roles` con `schemas`): si en dos schemas un rol necesita otros permisos o vistas, son dos roles.
+
+- **Un solo camino (5.0.0):** los permisos, las vistas, los stages y la aprobación los dice un rol. Una clave (o un
+  token local, o un usuario basic) solo nombra sus `roles` (obligatorio) y puede decir su `context`; un método `jwt`
+  solo dice el claim de los roles (`principal.permissions.claim`). Con `permissions`, `view` o `approval` en una clave,
+  o `roles` dentro de un método `jwt`, la gateway no arranca y el error dice dónde van. `view` en un rol sigue siendo
+  `views: [view]`.
 - Un rol que no dice `views` tiene la vista del schema; uno que no dice `stages`, el stage del schema. Así una
   instalación de hoy no cambia de comportamiento.
 - Un nombre de `views` o `stages` que el schema no tiene: aviso al cargar y `403` en el pedido (como hoy la vista).
@@ -114,16 +123,27 @@ rol: hoy cualquiera con `ddl` los corre en cualquier stage del schema.
 
 Sobre [`GATEWAY_STATE.md`](GATEWAY_STATE.md) §4 (el YAML es la base, la base extiende):
 
-- **Un rol nuevo:** su nombre, sus permisos, vistas, stages, `maxRows`, `approval`; global o de un schema. Un token que
-  trae ese nombre en su claim ya lo tiene; una clave local, si la clave es de la base (después).
-- **Extender un rol del YAML:** agregar vistas, stages o permisos, cambiar el default o `maxRows`. No se le quita lo
-  que el YAML le da (eso es del despliegue); un rol `locked` no se toca.
+- **Un rol nuevo:** su nombre, sus permisos, `schemas`, vistas, stages, `maxRows`, `approval`. Un token que trae ese
+  nombre en su claim ya lo tiene; una clave local, si la clave es de la base (después).
+- **Extender un rol del YAML:** agregar schemas (a uno que nombra algunos; uno sin `schemas` sigue valiendo en todos),
+  vistas, stages o permisos, cambiar el default o `maxRows`. No se le quita lo que el YAML le da (eso es del
+  despliegue); un rol `locked` no se toca. Un rol que la 4.4 guardó para un schema no vale: se lista como ignorado
+  para quitarlo (`DELETE /admin/roles/{name}?schema=`).
 - **El permiso `roles`:** ver y cambiar los roles; nadie se da a sí mismo un permiso que no tiene (un cambio que suma
   permisos que quien lo hace no tiene, `403`), y nadie se quita `roles` a sí mismo si es el último.
 - Cada cambio, en `ConfigChanges` (quién, cuándo, antes y después) y en la auditoría; llega a las réplicas
   (`GATEWAY_STATE.md` §5).
-- `GET/PUT/DELETE /admin/roles[/{name}]` (y `/admin/workspaces/{schema}/roles`); en el IDE, una página de roles en la
-  administración: los del YAML (de solo lectura, con lo que la base les suma) y los de la base.
+- `GET/PUT/DELETE /admin/roles[/{name}]` (un `PUT` con `schema`, `400`: el rol dice sus `schemas`).
+- `GET /admin/me` (5.0.0, cualquier credencial, de sí misma): su nombre, su contexto y cada uno de sus roles como vale
+  (permisos, `schemas`, vistas y stages, la primera de cada uno la de quien no elige). El IDE lo muestra en la página
+  de la conexión.
+- `GET /admin/access` (5.0.0, con `roles`): quién puede entrar, como lo dice la configuración: las autenticaciones
+  global, de cada transporte y de cada schema, con sus claves (nombre, `roles`, `context`), el emisor y los claims de
+  un método `jwt`, y los permisos que existen. Nunca un secreto (clave, token, contraseña, secreto de un jwt).
+- En el IDE, el nodo **Administration** del explorador de cada conexión, sobre sus schemas: **Roles** (la matriz rol ×
+  permiso con sus schemas, Add role, y cada rol: lo que le da el YAML, de solo lectura, y lo que la base le suma, una
+  casilla por permiso), **Access** (cada clave o token con sus roles y su contexto), **Sessions**, **Writes that wait**,
+  **Tools** y **Observability** (Metrics, Logs, Traces), cada uno según los permisos de la credencial.
 
 ## 6. El caché, las suscripciones, la auditoría
 
@@ -140,8 +160,9 @@ No son reglas con expresiones sobre los claims (`when: claims.x == …`): los ro
 
 | Hoy | Después |
 | --- | --- |
-| `roles` en un método `jwt` | sigue; se lee como `authorization.roles` (aviso de que se mueve) |
-| `view` en un rol o una clave | `views: [view]` |
+| `roles` en un método `jwt` | 4.4: se leía como `authorization.roles`; **5.0.0: error**, van en `authorization.roles` |
+| `permissions`, `view`, `approval` en una clave | 4.4: un rol propio; **5.0.0: error**, van en un rol que la clave nombra en `roles` |
+| `view` en un rol | `views: [view]` |
 | `options.stage` del cliente, cualquiera | **solo los del rol**: un cliente que hoy pide otro stage recibe `403` (el único cambio que rompe: va en el CHANGELOG; `authorization.stages: open` lo deja como hoy por una versión) |
 | `options.maxRows` mayor | recortado |
 | `options.allowDestructive` | ignorado: hace falta `destructive` |
@@ -150,7 +171,7 @@ No son reglas con expresiones sobre los claims (`when: claims.x == …`): los ro
 
 | # | Tema | Recomendación | Alternativa |
 | --- | --- | --- | --- |
-| 1 | Dónde van los roles | **`authorization.roles`**, compartidos por los métodos; los de hoy siguen leyéndose | Dentro de cada método, como hoy |
+| 1 | Dónde van los roles | **`authorization.roles`**, compartidos por los métodos (desde 5.0.0 el único lugar) | Dentro de cada método, como en 4.3 |
 | 2 | Los permisos con varios roles | **Los de los roles que permiten la vista y el stage elegidos** (`scope: any` para sumar todo) | La suma de todos sus roles (como hoy) |
 | 3 | Los roles de un schema | **Extienden los globales** (agregan vistas, stages, permisos) | Reemplazan al global del mismo nombre |
 | 4 | El stage del cliente | **Solo entre los de sus roles**, `403` fuera; `authorization.stages: open` por una versión | Abierto como hoy |

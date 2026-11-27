@@ -10,6 +10,7 @@ import { ExpressionView } from './ExpressionView'
 import { EXPRESSION_HELP, PROPERTY_EXPRESSIONS, propertiesIn } from '../domain/diagram'
 import { Icons } from './dialogs'
 import { CodeEditor } from './CodeEditor'
+import { inheritanceOf, inheritedByBase } from '../domain/inheritance'
 
 export interface SchemaFormsProps {
 	admin: AdminApiPort
@@ -34,6 +35,8 @@ export interface SchemaFormsProps {
 	removeRequest?: number
 	/** The schema itself removed (its Remove, next to Edit in what it is) */
 	onRemoveSchema?: () => void
+	/** With focus: another element it names (the abstract an entity extends), opened in a tab of its own */
+	onOpenElement?: (focus: FormFocus) => void
 }
 
 /** The variables of the connections (.env): defined or not, and where used; a value is set, never shown */
@@ -92,7 +95,8 @@ const Variables: React.FC<{ admin: AdminApiPort, schema: string, canAdmin: boole
 type Json = any
 type Section = 'entities' | 'enums' | 'sources' | 'mappings' | 'stages'
 /** What a tab of one element shows: an element of a section, the application section as YAML, or the variables */
-export type FormFocus = { section: Section, name?: string } | { section: 'application' } | { section: 'variables' } | { section: 'about' }
+/** abstract: a new entity that starts abstract (Abstracts of the explorer) */
+export type FormFocus = { section: Section, name?: string, abstract?: boolean } | { section: 'application' } | { section: 'variables' } | { section: 'about' }
 
 const SECTIONS: { key: Section, at: string[] }[] = [
 	{ key: 'entities', at: ['domain', 'entities'] },
@@ -146,7 +150,9 @@ const Rows: React.FC<{
 	expressionLabel?: string
 	/** what is shown under the table for the row whose expressions are open */
 	detail?: (row: Json, set: (key: string, value: unknown) => void) => React.ReactNode
-}> = ({ rows, columns, readOnly, addLabel, onChange, label, expressionLabel = 'ƒ', detail }) => {
+	/** a note after the first cell of a row (an own property that redefines an inherited one) */
+	rowNote?: (row: Json) => string | undefined
+}> = ({ rows, columns, readOnly, addLabel, onChange, label, expressionLabel = 'ƒ', detail, rowNote }) => {
 	const [open, setOpen] = useState<number>()
 	const set = (i: number, key: string, value: unknown) => onChange(rows.map((row, k) => k === i ? { ...row, [key]: value } : row))
 	const has = (row: Json, keys: readonly string[] = []) => keys.filter(k => typeof row[k] === 'string' && row[k].trim() !== '')
@@ -157,8 +163,9 @@ const Rows: React.FC<{
 				<tbody>
 					{rows.map((row, i) => (
 						<tr key={i} className={open === i ? 'lw-active' : undefined}>
-							{columns.map(c => (
+							{columns.map((c, ci) => (
 								<td key={c.key} className={`lw-col-${c.kind ?? 'text'}`}>
+									{ci === 0 && rowNote?.(row) && <span className="lw-badge lw-row-note">{rowNote(row)}</span>}
 									{c.kind === 'check'
 										? <input type="checkbox" aria-label={`${row.name ?? i} ${c.key}`} disabled={readOnly} checked={row[c.key] === true} onChange={e => set(i, c.key, e.target.checked ? true : undefined)} />
 										: c.kind === 'expressions'
@@ -205,7 +212,7 @@ type About = Record<typeof ABOUT[number], string>
  * with the element as it was read: someone else's change to another element doesn't collide; to the same one, the
  * form shows what it has now. The gateway writes it keeping the comments and the rest of the file.
  */
-export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, theme, schema, writable, revision, locale, canAdmin = false, focus, onChanged, editRequest, onDone, removeRequest, onRemoveSchema }) => {
+export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, theme, schema, writable, revision, locale, canAdmin = false, focus, onChanged, editRequest, onDone, removeRequest, onRemoveSchema, onOpenElement }) => {
 	const [showVariables, setShowVariables] = useState(focus?.section === 'variables')
 	const [showApplication] = useState(focus?.section === 'application')
 	// a focused element is read first: Edit to change it; the forms of the whole schema edit at once
@@ -220,7 +227,7 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, theme, schema, 
 	const [doc, setDoc] = useState<Json>()
 	const [selected, setSelected] = useState<{ section: Section, name?: string } | undefined>(
 		focus && focus.section !== 'application' && focus.section !== 'variables' && focus.section !== 'about' ? { section: focus.section, name: (focus as any).name } : undefined)
-	const [draft, setDraft] = useState<Json>(creating ? {} : undefined)
+	const [draft, setDraft] = useState<Json>(creating ? ((focus as any).abstract ? { abstract: true } : {}) : undefined)
 	const [read, setRead] = useState<Json>()
 	const [error, setError] = useState<string>()
 	const [notice, setNotice] = useState<string>()
@@ -249,6 +256,14 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, theme, schema, 
 		setRead(element)
 		setDraft((d: Json) => d !== undefined && d.name === selected.name ? d : element ? JSON.parse(JSON.stringify(element)) : undefined)
 	}, [doc, selected])
+
+	// what the entity being shown inherits (docs: λORM's extends), from the draft: a change of extends shows it at once
+	const inheritance = useMemo(() => {
+		if (selected?.section !== 'entities' || !draft) return inheritanceOf([], undefined)
+		const name = typeof draft.name === 'string' && draft.name ? draft.name : selected.name ?? '\u0000'
+		const others = listAt(doc, sectionAt('entities')).filter((x: Json) => x?.name !== selected.name && x?.name !== name)
+		return inheritanceOf([...others, { ...draft, name }], name)
+	}, [doc, draft, selected])
 
 	const names = useMemo(() => Object.fromEntries(SECTIONS.map(s => [s.key, listAt(doc, s.at).map((e: Json) => e?.name).filter(Boolean)])) as Record<Section, string[]>, [doc])
 
@@ -361,24 +376,49 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, theme, schema, 
 			{options.map(o => <option key={o} value={o}>{o}</option>)}
 		</select>
 	))
-	const rows = (key: string, columns: RowColumn[], detail?: Parameters<typeof Rows>[0]['detail'], legend = true) => (
+	const rows = (key: string, columns: RowColumn[], detail?: Parameters<typeof Rows>[0]['detail'], legend = true, rowNote?: (row: Json) => string | undefined) => (
 		<fieldset className="lw-form-group">{legend && <legend>{key}</legend>}
 			<Rows label={key} rows={Array.isArray(draft?.[key]) ? draft[key] : []} columns={columns} readOnly={!editable} addLabel={m.addRow}
-				expressionLabel={m.expression} detail={detail} onChange={value => setDraft({ ...draft, [key]: value })} />
+				expressionLabel={m.expression} detail={detail} rowNote={rowNote} onChange={value => setDraft({ ...draft, [key]: value })} />
 		</fieldset>
 	)
+	// an own property or relation with the name of an inherited one redefines it
+	const redefinedNote = (key: 'properties' | 'relations') => (row: Json) => {
+		const of = inheritance[key].find(i => i.row.name === row.name && i.redefines)
+		return of ? format(e.redefines, { name: of.redefines! }) : undefined
+	}
+	const openBase = (base: string) => { setSelected({ section: 'entities', name: base }); setDraft(undefined); setRenaming(undefined); setRemoving(undefined); setError(undefined) }
+	// what it inherits, by the base that declares it: read only, it is changed in that base
+	const inheritedRows = (key: 'properties' | 'relations', columns: RowColumn[], detail?: Parameters<typeof Rows>[0]['detail']) => inheritedByBase(inheritance, key).map(([base, list]) => (
+		<fieldset key={base} className="lw-form-group lw-inherited" aria-label={`${key} ${format(e.inheritedFrom, { name: base })}`}>
+			<legend>
+				{format(e.inheritedFrom, { name: base })}
+				{(!focus || onOpenElement) && (
+					<button type="button" className="lw-link" disabled={!focus && changed}
+						onClick={() => focus ? onOpenElement!({ section: 'entities', name: base }) : openBase(base)}>{format(e.openNamed, { name: base })}</button>
+				)}
+			</legend>
+			<p className="lw-type">{format(e.inheritedHint, { name: base })}</p>
+			<Rows label={`${key} ${base}`} rows={list} columns={columns} readOnly addLabel="" expressionLabel={m.expression} detail={detail} onChange={() => undefined} />
+		</fieldset>
+	))
+	// the variables of its expressions: its properties, the inherited ones too
+	const propertyNames = () => inheritance.properties.length
+		? inheritance.properties.map(i => i.row.name)
+		: (Array.isArray(draft?.properties) ? draft.properties : []).map((p: Json) => p?.name).filter(Boolean)
 
 	// the expressions of a property, under the table: editors while editing, the colored expressions otherwise
-	const propertyExpressions = (row: Json, set: (key: string, value: unknown) => void) => {
-		const variables = (Array.isArray(draft?.properties) ? draft.properties : []).map((p: Json) => p?.name).filter(Boolean)
+	const propertyExpressions = (row: Json, set: (key: string, value: unknown) => void, readOnly = false) => {
+		const canEdit = editable && !readOnly
+		const variables = propertyNames()
 		const title = format(m.expressionsOf, { name: row.name ?? '' })
 		return (
 			<section className="lw-expression-detail" aria-label={title}>
 				<h4>{title}</h4>
-				{PROPERTY_EXPRESSIONS.filter(k => editable || (typeof row[k] === 'string' && row[k].trim())).map(k => (
+				{PROPERTY_EXPRESSIONS.filter(k => canEdit || (typeof row[k] === 'string' && row[k].trim())).map(k => (
 					<div key={k} className="lw-expression-item">
 						<p className="lw-expression-label"><code>{k}</code>: {m[EXPRESSION_HELP[k]]}</p>
-						{editable
+						{canEdit
 							? <ExpressionInput admin={admin} value={typeof row[k] === 'string' ? row[k] : ''} onChange={value => set(k, value.trim() ? value : undefined)}
 								variables={variables} height={52} ariaLabel={`${row.name ?? ''} ${k}`} theme={theme} locale={locale} />
 							: <ExpressionView expression={row[k]} variables={variables} />}
@@ -405,7 +445,7 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, theme, schema, 
 
 	// the condition of a validation (constraint), under its table: an editor while editing
 	const constraintCondition = (row: Json, set: (key: string, value: unknown) => void) => {
-		const variables = (Array.isArray(draft?.properties) ? draft.properties : []).map((p: Json) => p?.name).filter(Boolean)
+		const variables = propertyNames()
 		const title = row.message || m.condition
 		return (
 			<section className="lw-expression-detail" aria-label={title}>
@@ -432,7 +472,11 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, theme, schema, 
 					{select('extends', names.entities.filter(n => n !== draft.name))}
 					<div className="lw-form-inline">{check('abstract')}{check('view')}</div>
 					{(() => {
-						const count = (key: string) => Array.isArray(draft?.[key]) ? draft[key].length : 0
+						const own = (key: string) => Array.isArray(draft?.[key]) ? draft[key].length : 0
+						const inheritedCount = (key: string) => key === 'properties' || key === 'relations' ? inheritedByBase(inheritance, key).reduce((n, [, list]) => n + list.length, 0) : 0
+						const count = (key: string) => inheritedCount(key) ? `${own(key)} + ${inheritedCount(key)}` : String(own(key))
+						const propertyColumns: RowColumn[] = [{ key: 'name' }, { key: 'type', kind: 'select', options: TYPES, placeholder: 'string' }, { key: 'length', kind: 'number' }, { key: 'required', kind: 'check' }, { key: 'autoIncrement', kind: 'check' }, { key: 'default' }, { key: 'enum', kind: 'select', options: names.enums }, { key: 'expressions', kind: 'expressions', keys: PROPERTY_EXPRESSIONS }]
+						const relationColumns: RowColumn[] = [{ key: 'name' }, { key: 'type', kind: 'select', options: RELATION_TYPES, placeholder: 'oneToMany' }, { key: 'from', kind: 'fields' }, { key: 'entity', kind: 'select', options: names.entities }, { key: 'to', kind: 'fields' }, { key: 'target' }, { key: 'weak', kind: 'check' }]
 						// as the view of the entity: its keys and its indexes in one tab, which counts nothing (as there)
 						const tabs: [EntityTab, string][] = [['properties', e.properties], ['relations', e.relations], ['indexes', e.keysIndexes], ['constraints', e.constraints]]
 						return (
@@ -442,8 +486,10 @@ export const SchemaForms: React.FC<SchemaFormsProps> = ({ admin, theme, schema, 
 										<button key={key} type="button" role="tab" aria-selected={entityTab === key} className={entityTab === key ? 'lw-active' : ''} onClick={() => setEntityTab(key)}>{label}{key === 'indexes' ? '' : ` (${count(key)})`}</button>
 									))}
 								</div>
-								{entityTab === 'properties' && rows('properties', [{ key: 'name' }, { key: 'type', kind: 'select', options: TYPES, placeholder: 'string' }, { key: 'length', kind: 'number' }, { key: 'required', kind: 'check' }, { key: 'autoIncrement', kind: 'check' }, { key: 'default' }, { key: 'enum', kind: 'select', options: names.enums }, { key: 'expressions', kind: 'expressions', keys: PROPERTY_EXPRESSIONS }], propertyExpressions, false)}
-								{entityTab === 'relations' && rows('relations', [{ key: 'name' }, { key: 'type', kind: 'select', options: RELATION_TYPES, placeholder: 'oneToMany' }, { key: 'from', kind: 'fields' }, { key: 'entity', kind: 'select', options: names.entities }, { key: 'to', kind: 'fields' }, { key: 'target' }, { key: 'weak', kind: 'check' }], undefined, false)}
+								{entityTab === 'properties' && rows('properties', propertyColumns, propertyExpressions, false, redefinedNote('properties'))}
+								{entityTab === 'properties' && inheritedRows('properties', propertyColumns, (row, set) => propertyExpressions(row, set, true))}
+								{entityTab === 'relations' && rows('relations', relationColumns, undefined, false, redefinedNote('relations'))}
+								{entityTab === 'relations' && inheritedRows('relations', relationColumns)}
 								{entityTab === 'indexes' && (
 									<>
 										{text('primaryKey', { fields: true })}

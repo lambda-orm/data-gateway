@@ -1,9 +1,11 @@
 // Authenticators: the right secret gives the credential's principal, anything else a reason (never an exception).
 import { ApiKeyAuthenticator, BasicAuthenticator, BearerAuthenticator, NoneAuthenticator, secretEquals } from '../../src/lib/infrastructure/output/auth/authenticators'
+import { catalogOf } from '../helpers/roles'
 
+const roles = catalogOf({ reader: ['read'], writer: ['read', 'write'], analyst: { permissions: ['read'], approval: 'writes' } })
 const credentials = [
-	{ name: 'agent', value: 'k-agent', permissions: ['read' as const] },
-	{ name: 'backend', value: 'k-backend', permissions: ['read' as const, 'write' as const] }
+	{ name: 'agent', value: 'k-agent', roles: ['reader'] },
+	{ name: 'backend', value: 'k-backend', roles: ['writer'] }
 ]
 
 describe('authenticators', () => {
@@ -15,7 +17,7 @@ describe('authenticators', () => {
 	})
 
 	test('bearer', async () => {
-		const auth = new BearerAuthenticator(credentials)
+		const auth = new BearerAuthenticator(credentials, roles)
 		const ok = await auth.authenticate({ authorization: 'Bearer k-backend' })
 		expect(ok.principal?.name).toBe('backend')
 		expect([...ok.principal!.permissions]).toEqual(['read', 'write'])
@@ -27,14 +29,27 @@ describe('authenticators', () => {
 	})
 
 	test('api key, on its header', async () => {
-		const auth = new ApiKeyAuthenticator(credentials, 'x-api-key')
+		const auth = new ApiKeyAuthenticator(credentials, roles, 'x-api-key')
 		expect((await auth.authenticate({ 'x-api-key': 'k-agent' })).principal?.name).toBe('agent')
 		expect((await auth.authenticate({ 'x-api-key': ['k-agent'] })).principal?.name).toBe('agent')
 		expect((await auth.authenticate({ authorization: 'Bearer k-agent' })).valid).toBe(false)
 	})
 
+	test('a key: the permissions and the approval of its roles, its context; without context, none', async () => {
+		const auth = new ApiKeyAuthenticator([
+			{ name: 'ana', value: 'k-ana', roles: ['reader'], context: { username: 'ana@acme' } },
+			{ name: 'bob', value: 'k-bob', roles: ['analyst'], context: { username: 'bob@acme' } },
+			...credentials
+		], roles, 'x-api-key')
+		expect((await auth.authenticate({ 'x-api-key': 'k-ana' })).principal?.context).toEqual({ username: 'ana@acme' })
+		const bob = (await auth.authenticate({ 'x-api-key': 'k-bob' })).principal!
+		expect(bob).toMatchObject({ roles: ['analyst'], approval: 'writes', context: { username: 'bob@acme' } })
+		expect([...bob.permissions]).toEqual(['read'])
+		expect((await auth.authenticate({ 'x-api-key': 'k-agent' })).principal?.context).toBeUndefined()
+	})
+
 	test('basic', async () => {
-		const auth = new BasicAuthenticator([{ name: 'ana', username: 'ana', password: 'p:ss', permissions: ['read'] }])
+		const auth = new BasicAuthenticator([{ name: 'ana', username: 'ana', password: 'p:ss', roles: ['reader'] }], roles)
 		const basic = (text: string) => 'Basic ' + Buffer.from(text).toString('base64')
 		expect((await auth.authenticate({ authorization: basic('ana:p:ss') })).principal?.name).toBe('ana')
 		expect((await auth.authenticate({ authorization: basic('ana:wrong') })).valid).toBe(false)

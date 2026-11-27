@@ -233,7 +233,7 @@ describe('Workspace', () => {
 		fireEvent.change(within(dialog).getByRole('textbox', { name: 'description' }), { target: { value: 'todos' } })
 		fireEvent.click(within(dialog).getByRole('button', { name: 'Guardar' }))
 		await waitFor(() => expect(screen.getByRole('tab', { selected: true }).textContent).toBe(' Productos'))
-		expect(row('Productos').getAttribute('aria-level')).toBe('4')
+		expect(row('Productos').getAttribute('aria-level')).toBe('5')
 		expect((await store.all()).find(i => i.name === 'Productos')).toMatchObject({ kind: 'query', query: 'Products', description: 'todos', schema: 'northwind/v1' })
 
 		fireEvent.change(within(panel()).getByRole('textbox', { name: 'query' }), { target: { value: 'Products.page(1, 2)' } })

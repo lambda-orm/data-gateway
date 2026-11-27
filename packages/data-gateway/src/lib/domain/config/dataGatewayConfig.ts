@@ -1,3 +1,4 @@
+import { RoleSchemaConfig } from '../auth/roles'
 import { ObservabilityConfig } from '@lambdaorm/base'
 import { Permission } from '../auth/permission'
 
@@ -7,13 +8,16 @@ export interface CredentialConfig {
 	value?: string
 	username?: string
 	password?: string
-	permissions: Permission[]
-	/** the view of λORM of its requests (docs/VIEWS_BY_IDENTITY.md); none, the one of the schema */
-	view?: string
-	/** its writes wait for a person to approve them, on every transport (docs/MUTATION_APPROVAL.md) */
-	approval?: 'writes'
-	/** the roles of authorization.roles it has (docs/ROLE_SCOPES.md): instead of its own permissions and view */
-	roles?: string[]
+	/**
+	 * the roles of authorization.roles it has (docs/ROLE_SCOPES.md): what it may do (its permissions, views, stages,
+	 * approval) is theirs, never its own
+	 */
+	roles: string[]
+	/**
+	 * the context of λORM of its requests (variable → value), as a token gives it from its claims (docs/JWT.md): the user
+	 * a key is of (context.username), what the views, the defaults and the writeValue read
+	 */
+	context?: Record<string, string | number | boolean>
 }
 
 /**
@@ -23,6 +27,11 @@ export interface CredentialConfig {
  */
 export interface RoleConfig {
 	permissions: Permission[]
+	/**
+	 * the schemas (their paths) where it applies, each with the views and stages it may use there and its defaults;
+	 * none, every schema (with the views and stages below)
+	 */
+	schemas?: Record<string, RoleSchemaConfig>
 	/** @deprecated a single view: views: [view] */
 	view?: string
 	/** the views it may use; none, the one of the schema */
@@ -60,7 +69,16 @@ export interface StateConfig {
 	refreshMs: number
 	/** without the source the gateway doesn't start (else it starts with the YAML alone) */
 	required: boolean
+	/** the tables and columns of the system schema in a database through λORM, by entity (else dg_ and its names) */
+	mapping?: StateMapping
+	/** state.source and mapping come from the administration (.data-gateway/persist.yaml), not from the YAML */
+	persisted?: boolean
+	/** with persisted: the state of the YAML (to go back to it) */
+	yaml?: Omit<StateConfig, 'yaml'>
 }
+
+/** By entity of the system schema: its table and, by property, its column (docs/GATEWAY_STATE.md §3) */
+export type StateMapping = Record<string, { table?: string, columns?: Record<string, string> }>
 
 export type AuthenticationType = 'bearer' | 'apikey' | 'basic'
 
@@ -79,10 +97,8 @@ export interface JwtConfig {
 		/** the claim of the name (a path with dots); default sub */
 		name: string
 		permissions?: {
-			/** the claim of the roles: a list, or a text separated by spaces (as scope) */
+			/** the claim of the roles (those of authorization.roles): a list, or a text separated by spaces (as scope) */
 			claim: string
-			/** role → its permissions and its view */
-			roles: Record<string, RoleConfig>
 		}
 	}
 	/** variable of the context of λORM → the claim it takes (a path with dots) */
@@ -111,8 +127,6 @@ export interface SchemaOverrides {
 	view?: string
 	/** the stage of λORM of a caller without one (docs/ROLE_SCOPES.md); none, the first of the schema */
 	stage?: string
-	/** the roles in this schema (docs/ROLE_SCOPES.md): they extend the ones of authorization.roles */
-	roles?: Record<string, Partial<RoleConfig>>
 	/** Variables its worker receives on top of its .env and the base variables */
 	env?: Record<string, string>
 	scripts?: Partial<ScriptsConfig>
@@ -377,6 +391,23 @@ export interface AdminConfig {
 	commandTimeoutMs: number
 }
 
+/**
+ * Where a person sees the traces of this gateway (docs/OBSERVABILITY.md §explore): its Grafana and the datasource of
+ * Tempo there. Of the installation, not of each IDE: the IDE shows a link to the traces of an entity when it is given.
+ */
+export interface ExploreConfig {
+	/** the URL of Grafana, as the person opens it (http or https) */
+	grafana: string
+	/** the uid of the datasource of Tempo in that Grafana (tempo when it isn't given) */
+	tempo: string
+	/** the uid of the datasource of Prometheus, where the metrics are (prometheus when it isn't given) */
+	prometheus: string
+	/** the uid of the datasource of Loki, where the logs are (loki when it isn't given) */
+	loki: string
+	/** the organization of Grafana (1 when it isn't given) */
+	orgId: number
+}
+
 export interface DataGatewayConfig {
 	orm: OrmConfig
 	admin: AdminConfig
@@ -388,6 +419,8 @@ export interface DataGatewayConfig {
 	 * lambdaORM.yaml; the OTEL_* variables override it. Its SDK is the one of λORM too.
 	 */
 	observability?: ObservabilityConfig
+	/** where the traces of this gateway are seen (observability.explore): told to the IDE at GET /observability of management */
+	explore?: ExploreConfig
 	audit: AuditConfig
 	authentication: AuthenticationConfig
 	rateLimit: RateLimitConfig

@@ -2,7 +2,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 // The REST transport over a real socket, with the real facade and use cases on fake λORM ports.
-import { HttpTransport, TransportInfo } from '../../src/lib/infrastructure/input/http/httpTransport'
+import { HttpTransport, ObservabilityInfo, TransportInfo } from '../../src/lib/infrastructure/input/http/httpTransport'
 import { ApiKeyAuthenticator, BearerAuthenticator } from '../../src/lib/infrastructure/output/auth/authenticators'
 import { NoMetrics, PromClientMetrics } from '../../src/lib/infrastructure/output/metrics/promClientMetrics'
 import { ConsoleLogger } from '../../src/lib/infrastructure/output/logger/loggers'
@@ -10,15 +10,19 @@ import { fakeGateway, FixedClock, GatewayFixture } from '../helpers/fakes'
 import { InlineSchemaDirectory } from '../../src/lib/application/runtime/inlineSchemaDirectory'
 import { call } from '../helpers/net'
 import { AuthenticatorPort } from '../../src/lib/application/ports/output/supportPorts'
+import { ownRoles, withGrants } from '../helpers/roles'
 
-const credentials = [
-	{ name: 'agent', value: 'agent-token', permissions: ['read' as const] },
-	{ name: 'backend', value: 'backend-token', permissions: ['read' as const, 'write' as const, 'script' as const, 'queue' as const, 'stageImport' as const] }
-]
+const { credentials, roles } = ownRoles([
+	{ name: 'agent', value: 'agent-token', permissions: ['read'] },
+	{ name: 'backend', value: 'backend-token', permissions: ['read', 'write', 'script', 'queue', 'stageImport'] },
+	{ name: 'svc', value: 'svc-key', permissions: ['read'] },
+	{ name: 'ana', value: 'ana-key', permissions: ['read'], context: { username: 'ana@acme' } },
+	{ name: 'reader', permissions: ['read'] }
+])
 const agent = { Authorization: 'Bearer agent-token' }
 const backend = { Authorization: 'Bearer backend-token' }
 
-const start = async (fixture: GatewayFixture, options: Partial<{ basePath: string, rateLimit: { windowMs: number, max: number }, metrics: boolean, requestBodySize: string, authenticator: AuthenticatorPort, transports: TransportInfo[] }> = {}) => {
+const start = async (fixture: GatewayFixture, options: Partial<{ basePath: string, rateLimit: { windowMs: number, max: number }, metrics: boolean, requestBodySize: string, authenticator: AuthenticatorPort, transports: TransportInfo[], observability: ObservabilityInfo }> = {}) => {
 	const transport = new HttpTransport({
 		port: 0,
 		host: '127.0.0.1',
@@ -26,11 +30,12 @@ const start = async (fixture: GatewayFixture, options: Partial<{ basePath: strin
 		requestBodySize: options.requestBodySize ?? '1mb',
 		rateLimit: options.rateLimit ?? { windowMs: 1000, max: 0 },
 		swaggerEnabled: true,
-		transports: options.transports
+		transports: options.transports,
+		observability: options.observability
 	}, {
-		directory: new InlineSchemaDirectory([{
-			path: '', gateway: fixture.gateway, mcp: undefined as any, transports: ['http'], authenticators: { http: options.authenticator ?? new BearerAuthenticator(credentials) }
-		}], new FixedClock(), '9.9.9'),
+		directory: withGrants(new InlineSchemaDirectory([{
+			path: '', gateway: fixture.gateway, mcp: undefined as any, transports: ['http'], authenticators: { http: options.authenticator ?? new BearerAuthenticator(credentials.slice(0, 2), roles) }
+		}], new FixedClock(), '9.9.9'), roles),
 		metrics: options.metrics ? new PromClientMetrics() : new NoMetrics(),
 		logger: new ConsoleLogger('error')
 	})
@@ -160,6 +165,16 @@ describe('http transport options', () => {
 		}
 	})
 
+	test('where its traces are seen (observability.explore), without a credential', async () => {
+		const explore = { grafana: 'https://grafana.example.com', tempo: 'tempo', prometheus: 'prometheus', loki: 'loki', orgId: 1 }
+		const { transport, base } = await start(fakeGateway(), { observability: { explore } })
+		try {
+			expect(await (await fetch(`${base}/observability`)).json()).toEqual({ explore })
+		} finally {
+			await transport.stop()
+		}
+	})
+
 	test('its transports and its OpenAPI document, without a credential (an IDE finds there its WebSocket and MCP)', async () => {
 		const transports: TransportInfo[] = [
 			{ name: 'http', port: 9291, basePath: '/data-gateway', docs: '/openapi.json' },
@@ -194,7 +209,7 @@ describe('http transport options', () => {
 	test('Authorize offers the credential of the configuration: the bearer token, or the API key in its header', async () => {
 		const spec = async (base: string) => fetch(`${base}/doc/swagger-ui-init.js`).then(r => r.text())
 		const bearer = await start(fakeGateway())
-		const apikey = await start(fakeGateway(), { authenticator: new ApiKeyAuthenticator(credentials, 'x-api-key') })
+		const apikey = await start(fakeGateway(), { authenticator: new ApiKeyAuthenticator(credentials.slice(0, 2), roles, 'x-api-key') })
 		try {
 			const withBearer = await spec(bearer.base)
 			expect(withBearer).toMatch(/"bearerAuth"/)
@@ -228,10 +243,10 @@ describe('http transport with JWT (docs/JWT.md)', () => {
 		fixture = fakeGateway()
 		const jwt = new JwtAuthenticator({
 			issuer: ISSUER, audience: ['data-gateway'], secret: SECRET, algorithms: ['HS256'], clockToleranceSec: 0,
-			principal: { name: 'sub', permissions: { claim: 'roles', roles: { reader: { permissions: ['read'] } } } },
+			principal: { name: 'sub', permissions: { claim: 'roles' } },
 			context: { tenant: 'tenant_id' }
-		})
-		;({ transport, base } = await start(fixture, { authenticator: new MethodsAuthenticator([jwt, new ApiKeyAuthenticator([{ name: 'svc', value: 'svc-key', permissions: ['read'] }])]) }))
+		}, roles)
+		;({ transport, base } = await start(fixture, { authenticator: new MethodsAuthenticator([jwt, new ApiKeyAuthenticator(credentials.slice(2, 4), roles)]) }))
 	})
 	afterAll(() => transport.stop())
 
@@ -251,6 +266,12 @@ describe('http transport with JWT (docs/JWT.md)', () => {
 		expect(service.status).toBe(200)
 		expect(fixture.orm.executed.at(-1)!.options).not.toHaveProperty('context')
 		expect((await call(base, '/execute', { body: { query: 'Products' } })).headers.get('www-authenticate')).toBe('Bearer')
+	})
+
+	test('a key of a user: its context reaches λORM as the one of a token; the one sent by the client never', async () => {
+		const res = await call(base, '/execute', { body: { query: 'Products', options: { context: { username: 'other' } } }, headers: { 'X-Api-Key': 'ana-key' } })
+		expect(res.status).toBe(200)
+		expect(fixture.orm.executed.at(-1)!.options).toMatchObject({ context: { username: 'ana@acme' }, actor: { credential: 'ana' } })
 	})
 })
 

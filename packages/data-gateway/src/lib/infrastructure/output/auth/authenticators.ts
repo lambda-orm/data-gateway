@@ -26,19 +26,21 @@ const match = (credentials: CredentialConfig[], test: (credential: CredentialCon
 }
 
 /** recognized: the request brought a credential of its kind (another method of authentication.methods may take it if not) */
-const result = (credential: CredentialConfig | undefined, reason: string, recognized: boolean, roles?: RoleLookupPort): AuthenticationResult =>
+const result = (credential: CredentialConfig | undefined, reason: string, recognized: boolean, roles: RoleLookupPort): AuthenticationResult =>
 	credential ? { valid: true, principal: principalOf(credential, roles) } : { valid: false, reason, recognized }
 
 /**
- * Who a key is: with roles (docs/ROLE_SCOPES.md), their names, and before a schema the permissions of them all (the
- * schema chooses among them); without them, its own permissions and view (as before 4.4)
+ * Who a key is: the names of its roles and, before a schema, the permissions of them all (the schema chooses among
+ * them); its context (the user it is of), if it says one
  */
-export const principalOf = (credential: CredentialConfig, roles?: RoleLookupPort): Principal => {
-	if (credential.roles) {
-		const approval = credential.approval ?? roles?.approvalOf(credential.roles)
-		return { ...principal(credential.name, roles?.permissionsOf(credential.roles) ?? []), roles: credential.roles, ...(approval ? { approval } : {}) }
+export const principalOf = (credential: CredentialConfig, roles: RoleLookupPort): Principal => {
+	const approval = roles.approvalOf(credential.roles)
+	return {
+		...principal(credential.name, roles.permissionsOf(credential.roles)),
+		roles: credential.roles,
+		...(approval ? { approval } : {}),
+		...(credential.context ? { context: { ...credential.context } } : {})
 	}
-	return { ...principal(credential.name, credential.permissions), ...(credential.view ? { view: credential.view } : {}), ...(credential.approval ? { approval: credential.approval } : {}) }
 }
 
 /** adapter: none — open access, every permission. */
@@ -53,7 +55,7 @@ export class NoneAuthenticator implements AuthenticatorPort {
 /** Authorization: Bearer <token> */
 export class BearerAuthenticator implements AuthenticatorPort {
 	// eslint-disable-next-line no-useless-constructor
-	constructor (private readonly credentials: CredentialConfig[], private readonly roles?: RoleLookupPort) {}
+	constructor (private readonly credentials: CredentialConfig[], private readonly roles: RoleLookupPort) {}
 
 	public async authenticate (headers: Headers): Promise<AuthenticationResult> {
 		const authorization = header(headers, 'authorization')
@@ -67,7 +69,7 @@ export class BearerAuthenticator implements AuthenticatorPort {
 /** <header>: <key> (default X-Api-Key) */
 export class ApiKeyAuthenticator implements AuthenticatorPort {
 	// eslint-disable-next-line no-useless-constructor
-	constructor (private readonly credentials: CredentialConfig[], private readonly headerName = 'x-api-key', private readonly roles?: RoleLookupPort) {}
+	constructor (private readonly credentials: CredentialConfig[], private readonly roles: RoleLookupPort, private readonly headerName = 'x-api-key') {}
 
 	public async authenticate (headers: Headers): Promise<AuthenticationResult> {
 		const key = header(headers, this.headerName)
@@ -80,7 +82,7 @@ export class ApiKeyAuthenticator implements AuthenticatorPort {
 /** Authorization: Basic base64(username:password) */
 export class BasicAuthenticator implements AuthenticatorPort {
 	// eslint-disable-next-line no-useless-constructor
-	constructor (private readonly credentials: CredentialConfig[], private readonly roles?: RoleLookupPort) {}
+	constructor (private readonly credentials: CredentialConfig[], private readonly roles: RoleLookupPort) {}
 
 	public async authenticate (headers: Headers): Promise<AuthenticationResult> {
 		const authorization = header(headers, 'authorization')

@@ -16,7 +16,7 @@ import { CodeEditor } from './CodeEditor'
 import { DiagramDialog, Icons, ItemDialog, NewSchemaDialog, RemoveSchemaDialog } from './dialogs'
 import { DomainDiagram } from './DomainDiagram'
 import { EntityView } from './EntityView'
-import { Explorer, problemText } from './Explorer'
+import { AdministrationNode, AdministrationTree, Explorer, problemText } from './Explorer'
 import { QueryWorkbench, QueryWorkbenchProps } from './QueryWorkbench'
 import { SchemaEditor } from './SchemaEditor'
 import { CommandsPanel } from './CommandsPanel'
@@ -105,6 +105,8 @@ export interface WorkspaceConnection {
 	session?: () => string | undefined
 	/** where to see the traces of an entity (Grafana / Tempo filtered by lambdaorm.entity), when the connection has it */
 	tracesUrl?: (schema: string, entity: string) => string | undefined
+	/** the administration of the gateway, above its schemas (an IDE: roles, sessions, observability…): its title and nodes */
+	administration?: { title: string, nodes: AdministrationNode[] }
 }
 
 /** A flag of this browser (a convenience: without storage it is never set) */
@@ -258,11 +260,14 @@ const ConnectionSection: React.FC<{
 	const [can, setCan] = useState<AdminCapabilities>()
 	// what the gateway allows is known (or there is no administration): until then nothing saved is read
 	const [known, setKnown] = useState(false)
+	// asked again when its problem goes (its key entered after the page opened: the same fetch, now with a session)
+	const solved = !spec.problem
 	useEffect(() => {
+		if (!solved && can) return
 		setCan(undefined)
 		setKnown(!adminApi)
 		adminApi?.capabilities().then(setCan, () => setCan(undefined)).finally(() => setKnown(true))
-	}, [adminApi])
+	}, [adminApi, solved])
 	// with workbenchWrite what is saved goes to the workspaces of the gateway, shared; without it, to this browser
 	const shared = !spec.store && !!adminApi && !!can?.workbenchWrite
 	const browserKey = spec.workspaceKey ?? spec.baseUrl ?? 'default'
@@ -360,6 +365,12 @@ const ConnectionSection: React.FC<{
 		if (known) controller.load()
 		setRefreshing(r => ({ n: r.n + 1, schema }))
 	}, [controller, known])
+	// its problem gone (its key entered): what was read while it failed (the domains) is read again
+	const wasSolved = useRef(solved)
+	useEffect(() => {
+		if (solved && !wasSolved.current) refresh()
+		wasSolved.current = solved
+	}, [solved, refresh])
 	const revision = useMemo(() => revisionOf(listed), [listed])
 	const schemas = useMemo(() => listed.filter(s => s.status === 'ready'), [listed])
 
@@ -416,6 +427,7 @@ const ConnectionSection: React.FC<{
 							{format(a.browserItems, { n: inBrowser.length })} <button type="button" onClick={copyToWorkspace}>{a.copyToWorkspace}</button>
 						</div>
 					)}
+					{spec.administration && spec.administration.nodes.length > 0 && <AdministrationTree title={spec.administration.title} nodes={spec.administration.nodes} theme={theme} />}
 					<Explorer schemas={listed} controller={controller} api={api} refresh={refreshing} onRefreshSchema={refresh} locale={locale} theme={theme} activeId={activeId}
 						expanded={expanded} onExpandedChange={onExpandedChange}
 						loadDomain={domainOf} onOpen={item => open.saved(id, item)} onOpenDomain={schema => open.domain(id, schema)} onOpenEntity={(schema, entity) => open.entity(id, schema, entity)}
@@ -660,8 +672,8 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 	const openSchema = (conn: string, schema: string) => {
 		if (!reuse(t => same(conn, t) && t.kind === 'schema' && t.schema === schema)) add({ kind: 'schema', title: format(a.commandsOf, { name: schema || '/' }), schema, connection: conn })
 	}
-	const focusKey = (f: FormFocus) => `${f.section}:${(f as any).name ?? ''}`
-	const focusTitle = (f: FormFocus) => (f as any).name ?? (f.section === 'application' || f.section === 'variables' || f.section === 'about' ? a[f.section] : format(a.newNamed, { name: a[f.section] }))
+	const focusKey = (f: FormFocus) => `${f.section}:${(f as any).name ?? ''}${(f as any).abstract ? ':abstract' : ''}`
+	const focusTitle = (f: FormFocus) => (f as any).name ?? (f.section === 'application' || f.section === 'variables' || f.section === 'about' ? a[f.section] : format(a.newNamed, { name: (f as any).abstract ? a.abstracts : a[f.section] }))
 	// one element of the schema; a new one (no name) is always a tab of its own
 	// edit: asked by Edit, it opens in edit (an open tab of it goes to edit too)
 	// remove: asked by Remove in the view of the element (its form says what uses it and asks to confirm)
@@ -946,7 +958,7 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 								{r && tab.kind === 'element' && adminApi && tab.focus && (
 									<SchemaForms admin={adminApi} theme={theme} schema={tab.schema ?? ''} writable={!!can?.schemaWrite} canAdmin={!!can?.schemaAdmin} revision={sinceOf(conn, tab.schema)} locale={workbench.locale}
 										focus={tab.focus} editRequest={tab.editRequest} removeRequest={tab.removeRequest} onChanged={focus => elementChanged(tab.id, focus)}
-										onDone={() => elementDone(conn, tab)} />
+										onDone={() => elementDone(conn, tab)} onOpenElement={focus => openElement(conn, tab.schema ?? '', focus)} />
 								)}
 								{r && tab.kind === 'schema' && adminApi && (
 									<CommandsPanel admin={adminApi} schema={tab.schema ?? ''} canSave={!!can?.workbenchWrite} canBuild={!!can?.build} locale={workbench.locale}

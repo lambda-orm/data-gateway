@@ -15,11 +15,12 @@ import { ConsoleLogger } from '../../src/lib/infrastructure/output/logger/logger
 import { fakeGateway, FixedClock, GatewayFixture } from '../helpers/fakes'
 import { InlineSchemaDirectory } from '../../src/lib/application/runtime/inlineSchemaDirectory'
 import { call } from '../helpers/net'
+import { ownRoles, withGrants } from '../helpers/roles'
 
-const credentials = [
-	{ name: 'agent', value: 'agent-token', permissions: ['read' as const] },
-	{ name: 'backend', value: 'backend-token', permissions: ['read' as const, 'write' as const, 'script' as const, 'queue' as const, 'stageImport' as const] }
-]
+const { credentials, roles } = ownRoles([
+	{ name: 'agent', value: 'agent-token', permissions: ['read'] },
+	{ name: 'backend', value: 'backend-token', permissions: ['read', 'write', 'script', 'queue', 'stageImport'] }
+])
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` })
 const logger = new ConsoleLogger('error')
 
@@ -28,13 +29,13 @@ const mcpServer = (fixture: GatewayFixture) => new DataGatewayMcpServer(new Tool
 })
 
 /** One schema at the root, on the MCP transports */
-const directory = (fixture: GatewayFixture) => new InlineSchemaDirectory([{
+const directory = (fixture: GatewayFixture) => withGrants(new InlineSchemaDirectory([{
 	path: '',
 	gateway: fixture.gateway,
 	mcp: mcpServer(fixture),
 	transports: ['mcpHttp', 'mcpWebSocket'],
-	authenticators: { mcpHttp: new BearerAuthenticator(credentials), mcpWebSocket: new BearerAuthenticator(credentials) }
-}], new FixedClock(), '9.9.9')
+	authenticators: { mcpHttp: new BearerAuthenticator(credentials, roles), mcpWebSocket: new BearerAuthenticator(credentials, roles) }
+}], new FixedClock(), '9.9.9'), roles)
 
 const startHttp = async (fixture: GatewayFixture, options: { stateful?: boolean, maxConnections?: number, basePath?: string } = {}) => {
 	const transport = new McpHttpTransport({

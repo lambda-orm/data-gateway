@@ -20,25 +20,27 @@ Hoy (R2) λORM corre sin vista: el dominio entero para todos.
 
 ## 2. Configuración
 
-Una clave local dice su vista; un token, por sus roles (G1: los roles ya dan los permisos):
+La vista la dice un rol (desde 5.0.0, solo un rol: ni una clave ni un método `jwt` dicen la suya), y la tienen los
+tokens y las claves que lo nombran:
 
 ```yaml
+authorization:
+  roles:
+    support: { permissions: [read], views: [support] }       # un rol: sus permisos y su vista
+    analyst: { permissions: [read], views: [analytics] }
+    billing: { permissions: [read, write], views: [billing] }
+    admin: [read, write, script]                             # sin vista: la del schema (abajo)
 authentication:
   methods:
     - adapter: jwt
       issuer: https://auth.example.com/realms/shop
       principal:
-        permissions:
-          claim: realm_access.roles
-          roles:
-            support: { permissions: [read], view: support }       # un rol: sus permisos y su vista
-            analyst: { permissions: [read], view: analytics }
-            admin: [read, write, script]                          # sin vista: la del schema (abajo)
+        permissions: { claim: realm_access.roles }           # los nombres de authorization.roles
       context: { tenant: tenant_id }
     - adapter: local
       type: apikey
       keys:
-        - { name: billing, value: '${BILLING_KEY}', permissions: [read, write], view: billing }
+        - { name: billing, value: '${BILLING_KEY}', roles: [billing] }
 orm:
   schemas:
     - path: shop
@@ -52,7 +54,7 @@ orm:
 
 | Dónde | Qué cambia |
 | --- | --- |
-| El principal | Lleva `view` (de su clave o de sus roles); viaja al worker como el contexto (G1) |
+| El principal | Lleva sus roles, y el schema elige con ellos la vista; viaja al worker como el contexto (G1) |
 | `requestOptions` | Pone `options.view` del principal (el del cliente se sigue borrando, R2) en `execute`, `script`, `execute-queued`, `plan` |
 | `metadata`, `model`, `parameters`, `constraints` | Pasan `{ view }` a λORM |
 | `/schema`, `/domain`, `/entities`, `/entity/{name}`, `/schema/search`, `/schema/describe` | El dominio de la vista (`getSchemaDomain(view)`, `getSchemaEntities(view)`) |

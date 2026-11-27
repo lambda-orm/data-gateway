@@ -2,7 +2,7 @@ import { createRemoteJWKSet, errors, jwtVerify, JWTPayload, JWTVerifyGetKey } fr
 import { AuthenticatorPort, CredentialScheme, Headers } from '../../../application/ports/output/supportPorts'
 import { JwtConfig } from '../../../domain/config/dataGatewayConfig'
 import { AuthenticationResult, principal } from '../../../domain/auth/principal'
-import { RoleCatalog, RoleLookupPort } from '../../../application/auth/roleCatalog'
+import { RoleLookupPort } from '../../../application/auth/roleCatalog'
 
 /** header.payload.signature, base64url: what a JWT looks like (an opaque token is left to another method) */
 const JWT_SHAPE = /^[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]*$/
@@ -67,14 +67,14 @@ export class JwtAuthenticator implements AuthenticatorPort {
 	 */
 	private readonly roles: RoleLookupPort
 
-	/** roles: the catalog of the roles (docs/ROLE_SCOPES.md); without it, the roles of this method */
+	/** roles: the catalog of the roles (docs/ROLE_SCOPES.md), where the roles of the claim are */
 	constructor (
 		private readonly config: JwtConfig,
+		roles: RoleLookupPort,
 		private readonly discover: (issuer: string) => Promise<string> = discoverJwksUri,
-		private readonly jwks: { cacheMaxAgeMs: number, cooldownMs: number } = { cacheMaxAgeMs: 600_000, cooldownMs: 30_000 },
-		roles?: RoleLookupPort
+		private readonly jwks: { cacheMaxAgeMs: number, cooldownMs: number } = { cacheMaxAgeMs: 600_000, cooldownMs: 30_000 }
 	) {
-		this.roles = roles ?? new RoleCatalog({ authorization: { roles: config.principal.permissions?.roles ?? {}, stages: 'restricted' }, authentication: { adapter: 'none', credentials: [] }, orm: { schemas: [] } as any })
+		this.roles = roles
 	}
 
 	public scheme (): CredentialScheme { return { type: 'bearer' } }

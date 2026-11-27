@@ -1,5 +1,5 @@
 name: Release
-# npm: @lambdaorm/ui and @lambdaorm/data-gateway-client (packages/ui, packages/client-node) through Changesets. On a
+# npm: @lambdaorm/ui and @lambdaorm/data-gateway-client-node (packages/ui, packages/client-node) through Changesets. On a
 # push to main with pending changesets it opens (or updates) the "chore: version packages" pull request; when that is
 # merged, it publishes from each package's dist/ the versions that aren't on npm (scripts/publish.mjs) and merges main
 # back into develop. The gateway and the IDE are images (data-gateway-image.yml, ide-image.yml), not npm packages.

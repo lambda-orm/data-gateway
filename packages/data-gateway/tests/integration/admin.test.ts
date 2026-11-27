@@ -45,13 +45,18 @@ logger: { level: error }
 audit: { enabled: false }
 rateLimit: { max: 0 }
 runtime: { checkConnections: false, heartbeat: { intervalMs: 200, timeoutMs: 3000 }, restart: { initialDelayMs: 200, maxDelayMs: 1000 } }
+authorization:
+  roles:
+    admin: { permissions: [ read, schemaRead, schemaWrite, schemaAdmin, workbenchWrite, build, sessionAdmin ] }
+    analyst: { permissions: [ read, workbenchWrite ] }
+    reader: { permissions: [ read ] }
 authentication:
   adapter: local
   type: apikey
   keys:
-    - { name: admin, value: admin-key, permissions: [ read, schemaRead, schemaWrite, schemaAdmin, workbenchWrite, build, sessionAdmin ] }
-    - { name: analyst, value: analyst-key, permissions: [ read, workbenchWrite ] }
-    - { name: reader, value: reader-key, permissions: [ read ] }
+    - { name: admin, value: admin-key, roles: [ admin ] }
+    - { name: analyst, value: analyst-key, roles: [ analyst ] }
+    - { name: reader, value: reader-key, roles: [ reader ] }
 transports:
   management: { port: ${port}, host: 127.0.0.1 }
 `
@@ -96,6 +101,9 @@ describe('admin over REST (inline)', () => {
 			// management serves the data routes too (the IDE talks to one port), and tells the data transports
 			expect((await call(`http://127.0.0.1:${port}`, '/iot/v1/whoami', { headers: ADMIN })).body).toMatchObject({ name: 'admin' })
 			expect((await call(`http://127.0.0.1:${port}`, '/transports')).body).toEqual([{ name: 'http', port: httpPort, basePath: '', docs: '/openapi.json' }])
+			// where its traces are seen: nothing when observability.explore isn't given; never on http
+			expect((await call(`http://127.0.0.1:${port}`, '/observability')).body).toEqual({})
+			expect((await call(data, '/observability')).status).toBe(404)
 		} finally {
 			await both.stop()
 		}

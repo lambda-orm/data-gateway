@@ -230,3 +230,32 @@ div.dg-error { border: 1px solid var(--bad); border-radius: 6px; padding: 6px 10
 .dg-roles .dg-form { margin-top: 12px; }
 .dg-roles .dg-list { margin: 6px 0; padding-left: 18px; color: var(--muted); }
 .dg-roles > button { margin-top: 10px; align-self: flex-start; }
+/* the permissions by role: a column by permission, a mark where the role has it */
+.dg-matrix th:nth-child(n+3), .dg-matrix td:nth-child(n+3) { text-align: center; padding: 5px 4px; }
+.dg-matrix th code { font-size: 11px; writing-mode: vertical-rl; transform: rotate(180deg); }
+.dg-matrix td.dg-granted { color: var(--ok); background: color-mix(in srgb, var(--ok) 10%, transparent); }
+.dg-matrix td.dg-denied { color: var(--muted); }
+/* the administration: a role (its permissions, a box each), the facts of the configuration, who I am */
+.dg-permission-boxes { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 4px 12px; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin: 0; }
+.dg-permission-boxes legend { color: var(--muted); padding: 0 4px; }
+.dg-role-form, .dg-observability-form { max-width: 640px; }
+.dg-facts { display: grid; grid-template-columns: max-content 1fr; gap: 4px 16px; margin: 0; }
+.dg-facts dt { color: var(--muted); }
+.dg-facts dd { margin: 0; }
+.dg-card-head { display: flex; align-items: center; gap: 8px; }
+.dg-card-head h3 { margin: 0; }
+.dg-link { background: none; border: 0; padding: 0; color: inherit; cursor: pointer; text-align: left; }
+.dg-link:hover { text-decoration: underline; }
+.dg-chip-default { border-color: var(--accent, var(--border)); font-weight: 600; }
+.dg-wrap { white-space: normal !important; }
+/* a role: its permissions in a grid, its schemas with their views and stages */
+.dg-permission-grid { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 4px 12px; }
+.dg-permission-grid li { display: flex; align-items: center; gap: 6px; }
+.dg-permission-grid li.dg-granted { color: var(--ok); }
+.dg-permission-grid li.dg-granted code { color: var(--fg); }
+.dg-permission-grid li.dg-denied { color: var(--muted); }
+.dg-schema-boxes { display: flex; flex-direction: column; gap: 8px; border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; margin: 0; }
+.dg-schema-boxes legend { color: var(--muted); padding: 0 4px; }
+.dg-schema-scope { border-top: 1px solid var(--border); padding-top: 6px; }
+.dg-schema-scope-body { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 4px 0 4px 24px; }
+.dg-schema-scope-body > div { display: flex; flex-direction: column; gap: 4px; }

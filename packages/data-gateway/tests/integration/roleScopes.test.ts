@@ -1,5 +1,5 @@
 // The roles with their views and stages (docs/ROLE_SCOPES.md) in a real gateway: λORM on SQLite with a view and two
-// stages, keys with roles of authorization.roles and of the schema, a key of before (its own permissions); over REST
+// stages, keys with roles of authorization.roles and of the schema, a role without views nor stages; over REST
 // the view and the stage asked for only among those of the roles, the permissions of the roles that allow both;
 // /whoami says what it may choose; a role extended from the administration (the state of the gateway) applies at once.
 import fs from 'fs'
@@ -56,16 +56,15 @@ orm:
   workspacePath: ${dir}
   schemas:
     - path: shop
-      roles:
-        analyst: { stages: [default, reporting] }
 logger: { level: error }
 rateLimit: { max: 0 }
 authorization:
   roles:
     support: { permissions: [read], views: [support] }
     backend: { permissions: [read, write] }
-    analyst: { permissions: [read], views: [support, default] }
-    admin: { permissions: [read, write, schemaRead, roles] }
+    analyst: { permissions: [read], views: [support, default], stages: [default, reporting], schemas: [shop] }
+    elsewhere: { permissions: [read, write], schemas: [sales] }
+    admin: { permissions: [read, write, schemaRead, roles, observability, persist] }
 authentication:
   adapter: local
   type: apikey
@@ -73,7 +72,8 @@ authentication:
     - { name: carla, value: carla-key, roles: [support, backend] }
     - { name: ana, value: ana-key, roles: [analyst] }
     - { name: boss, value: boss-key, roles: [admin] }
-    - { name: legacy, value: legacy-key, permissions: [read, write] }
+    - { name: legacy, value: legacy-key, roles: [backend] }
+    - { name: eve, value: eve-key, roles: [elsewhere] }
 transports:
   http: { port: ${port}, host: 127.0.0.1 }
   management: { port: ${management}, host: 127.0.0.1 }
@@ -95,7 +95,7 @@ afterAll(async () => {
 
 const execute = (k: string, query: string, options?: object, data?: object) => call(base, '/execute', { body: { query, ...(data ? { data } : {}), ...(options ? { options } : {}) }, headers: key(k) })
 
-test('a key of before: its own permissions, in the stage of the schema; another stage, 403', async () => {
+test('a role without views nor stages: the view and the stage of the schema; another stage, 403', async () => {
 	expect((await execute('legacy-key', 'Customers.map(p => p.phone)')).body).toEqual([{ phone: '030-007' }])
 	expect((await execute('legacy-key', 'Customers.map(p => p.name)', { stage: 'reporting' })).status).toBe(403)
 })
@@ -112,27 +112,93 @@ test('two roles of different views: the permissions of the one that allows the v
 	expect((await execute('carla-key', 'Customers.map(p => p.name)', { view: 'analytics' })).status).toBe(403)
 })
 
-test('a stage its role allows in this schema (extended by the schema); the view chosen with it', async () => {
+test('a stage its role allows; the view chosen with it; a role of other schemas gives nothing here', async () => {
 	expect((await execute('ana-key', 'Customers.map(p => p.name)', { stage: 'reporting' })).body).toEqual([{ name: 'Alfreds' }])
 	expect((await execute('ana-key', 'Customers.update(p => ({ name: n })).filter(p => p.id == 1)', {}, { n: 'x' })).status).toBe(403)
 	const whoami = await call(base, '/whoami', { headers: key('ana-key') })
 	expect(whoami.body).toMatchObject({ name: 'ana', view: 'support', stage: 'default', views: ['support', 'default'], stages: ['default', 'reporting'], roles: ['analyst'], permissions: ['read'] })
+	// elsewhere applies in sales, not in shop
+	expect((await execute('eve-key', 'Customers.map(p => p.name)')).status).toBe(403)
 })
 
 test('a role extended from the administration applies at once; each change recorded', async () => {
 	const session = await login(admin, key('boss-key'))
 	expect((await call(admin, '/admin/roles', { headers: await login(admin, key('ana-key')) })).status).toBe(403)
-	const saved = await call(admin, '/admin/roles/analyst', { method: 'PUT', body: { schema: 'shop', config: { permissions: ['write'] }, reason: 'they fix names' }, headers: session })
+	// a role is of the gateway: not of one schema
+	expect((await call(admin, '/admin/roles/analyst', { method: 'PUT', body: { schema: 'shop', config: { permissions: ['write'] } }, headers: session })).status).toBe(400)
+	const saved = await call(admin, '/admin/roles/analyst', { method: 'PUT', body: { config: { permissions: ['write'] }, reason: 'they fix names' }, headers: session })
 	expect(saved.status).toBe(200)
 	expect((await execute('ana-key', 'Customers.update(p => ({ name: n })).filter(p => p.id == 1)', {}, { n: 'Alfreds Futterkiste' })).status).toBe(200)
 	// nobody gives what it doesn't have
 	expect((await call(admin, '/admin/roles/analyst', { method: 'PUT', body: { config: { permissions: ['ddl'] } }, headers: session })).status).toBe(403)
 	const listed = await call(admin, '/admin/roles', { headers: session })
-	expect(listed.body).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'analyst', schema: 'shop', source: 'state', config: { permissions: ['write'] }, updatedBy: 'boss' })]))
+	expect(listed.body).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'analyst', source: 'state', config: { permissions: ['write'] }, updatedBy: 'boss' })]))
 	const changes = await call(admin, '/admin/roles/changes', { headers: session })
-	expect(changes.body[0]).toMatchObject({ key: 'analyst@shop', by: 'boss', reason: 'they fix names', after: { permissions: ['write'] } })
-	expect((await call(admin, '/admin/roles/analyst?schema=shop', { method: 'DELETE', headers: session })).status).toBe(200)
+	expect(changes.body[0]).toMatchObject({ key: 'analyst', by: 'boss', reason: 'they fix names', after: { permissions: ['write'] } })
+	expect((await call(admin, '/admin/roles/analyst', { method: 'DELETE', headers: session })).status).toBe(200)
 	expect((await execute('ana-key', 'Customers.update(p => ({ name: n })).filter(p => p.id == 1)', {}, { n: 'x' })).status).toBe(403)
 	// kept in the SQLite of the volume, next to the sessions
 	expect(fs.existsSync(path.join(dir, '.data-gateway', 'state.sqlite'))).toBe(true)
+})
+
+test('the access: the keys with their roles and context, never their secrets; with the permission roles', async () => {
+	expect((await call(admin, '/admin/access', { headers: await login(admin, key('ana-key')) })).status).toBe(403)
+	const access = await call(admin, '/admin/access', { headers: await login(admin, key('boss-key')) })
+	expect(access.status).toBe(200)
+	expect(access.body.permissions).toEqual(expect.arrayContaining(['read', 'write', 'roles']))
+	expect(access.body.authentications[0]).toMatchObject({ where: { level: 'global' }, adapter: 'local', type: 'apikey', header: 'x-api-key' })
+	expect(access.body.authentications[0].credentials).toEqual(expect.arrayContaining([{ name: 'ana', roles: ['analyst'] }, { name: 'eve', roles: ['elsewhere'] }]))
+	expect(JSON.stringify(access.body)).not.toMatch(/(carla|ana|boss|legacy|eve)-key/)
+})
+
+test('the observability: over the YAML, kept in the state, with the permission observability; back to the YAML', async () => {
+	expect((await call(admin, '/admin/observability', { headers: await login(admin, key('ana-key')) })).status).toBe(403)
+	const session = await login(admin, key('boss-key'))
+	expect((await call(admin, '/admin/observability', { headers: session })).body).toEqual({ prometheus: true })
+	expect((await call(admin, '/admin/observability', { method: 'PUT', body: { config: { exporter: { endpoint: 'http://x', headers: 'Authorization=t' } } }, headers: session })).status).toBe(400)
+	const saved = await call(admin, '/admin/observability', { method: 'PUT', body: { config: { metrics: { enabled: true }, explore: { grafana: 'https://grafana.example.com', loki: 'logs' } }, reason: 'to Grafana' }, headers: session })
+	expect(saved.status).toBe(200)
+	expect(saved.body).toMatchObject({ override: { metrics: { enabled: true } }, effective: { explore: { loki: 'logs' } }, updatedBy: 'boss' })
+	// kept: a gateway that starts again applies it
+	expect((await call(admin, '/admin/observability', { headers: session })).body.override).toEqual({ metrics: { enabled: true }, explore: { grafana: 'https://grafana.example.com', loki: 'logs' } })
+	expect((await call(admin, '/admin/observability', { method: 'DELETE', headers: session })).body).toEqual({ prometheus: true })
+	expect((await call(admin, '/admin/observability', { method: 'DELETE', headers: session })).status).toBe(404)
+	// the changes of the roles are only theirs
+	expect((await call(admin, '/admin/roles/changes', { headers: session })).body.every((c: any) => c.area === 'roles')).toBe(true)
+})
+
+test('me: any credential, its own roles with what each gives, its context', async () => {
+	const me = await call(admin, '/admin/me', { headers: await login(admin, key('ana-key')) })
+	expect(me.status).toBe(200)
+	expect(me.body).toEqual({ name: 'ana', permissions: ['read'], roles: [{ name: 'analyst', permissions: ['read'], schemas: { shop: {} }, views: ['support', 'default'], stages: ['default', 'reporting'] }] })
+})
+
+test('scopes: the views and the stages of every schema, for the roles; with the permission roles', async () => {
+	expect((await call(admin, '/admin/scopes', { headers: await login(admin, key('ana-key')) })).status).toBe(403)
+	const scopes = await call(admin, '/admin/scopes', { headers: await login(admin, key('boss-key')) })
+	expect(scopes.body).toEqual([{ path: 'shop', views: ['default', 'support'], stages: ['default', 'reporting'] }])
+})
+
+test('state: where the gateway keeps it and its schema, with the permission roles', async () => {
+	expect((await call(admin, '/admin/state', { headers: await login(admin, key('ana-key')) })).status).toBe(403)
+	const state = await call(admin, '/admin/state', { headers: await login(admin, key('boss-key')) })
+	expect(state.body).toMatchObject({ kind: 'sqlite', dialect: 'SQLite', managedBy: 'node:sqlite', available: true })
+	expect(state.body.schema).toContain('name: Sessions')
+})
+
+// last: it moves the state of this gateway
+test('persist: another database, the state copied there with λORM and written in persist.yaml; back to the YAML', async () => {
+	expect((await call(admin, '/admin/persist/connection', { method: 'PUT', body: { dialect: 'SQLite', connection: { file: 'x' } }, headers: await login(admin, key('ana-key')) })).status).toBe(403)
+	const session = await login(admin, key('boss-key'))
+	const moved = path.join(dir, 'moved', 'state.sqlite')
+	const answer = await call(admin, '/admin/persist/connection', { method: 'PUT', body: { dialect: 'SQLite', connection: { file: moved }, reason: 'to another disk' }, headers: session })
+	expect(answer.status).toBe(200)
+	expect(answer.body.rows).toBeGreaterThan(0)
+	expect(answer.body.where).toBe(`SQLite ${moved}`)
+	expect(fs.existsSync(moved)).toBe(true)
+	expect(fs.readFileSync(path.join(dir, '.data-gateway', 'persist.yaml'), 'utf8')).toContain(moved)
+	// back to the YAML: the SQLite of the volume, the one it had kept aside
+	expect((await call(admin, '/admin/persist', { method: 'DELETE', headers: session })).status).toBe(200)
+	expect(fs.existsSync(path.join(dir, '.data-gateway', 'persist.yaml'))).toBe(false)
+	expect(fs.readdirSync(path.join(dir, '.data-gateway')).some(f => f.startsWith('state.sqlite.bak-'))).toBe(true)
 })

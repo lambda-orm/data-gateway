@@ -314,6 +314,22 @@ export class AdminService {
 
 	// ─── the schema ──────────────────────────────────────────────────────────
 
+	/**
+	 * The views and the stages of every schema served, as its lambdaORM.yaml names them (what a role may be given in
+	 * it: docs/ROLE_SCOPES.md §2). Who asks is checked by the caller (the permission roles); a schema whose file can't
+	 * be read, none.
+	 */
+	public async scopes (): Promise<{ path: string, views: string[], stages: string[] }[]> {
+		const names = (list: unknown): string[] => Array.isArray(list) ? list.map((x: any) => x?.name).filter((n: unknown): n is string => typeof n === 'string' && !!n) : []
+		return Promise.all(this.schemas().map(async s => {
+			const file = await this.store.read(s.workspace, SCHEMA_FILE).catch(() => undefined)
+			let doc: any
+			try { doc = file ? this.yaml.parse(file.text) : undefined } catch { doc = undefined }
+			const views = names(doc?.infrastructure?.views)
+			return { path: s.path, views: views.includes('default') ? views : ['default', ...views], stages: names(doc?.infrastructure?.stages) }
+		}))
+	}
+
 	public async readSchema (principal: Principal, path: string): Promise<{ text: string, version: string }> {
 		this.require(principal, 'schemaRead')
 		const file = await this.store.read(this.workspaceOf(path), SCHEMA_FILE)

@@ -130,6 +130,61 @@ describe('DomainDiagram', () => {
 		expect(container.querySelectorAll('[data-edge]')).toHaveLength(4)
 	})
 
+	test('the options of the diagram of an entity, several at once: relation names, related entities, extended entities', async () => {
+		// as Ilusor: the completed domain without extends nor abstracts; the lambdaORM.yaml with Areas → Located → Audited
+		const completed: DomainInfo = {
+			entities: [
+				{ name: 'Locations', primaryKey: ['id'], properties: [{ name: 'id', type: 'string' }], relations: [] },
+				{ name: 'Areas', primaryKey: ['locationId', 'code'], properties: [{ name: 'code', type: 'string' }, { name: 'locationId', type: 'string' }, { name: 'createdAt', type: 'dateTime' }],
+					relations: [{ name: 'location', type: 'oneToMany', from: 'locationId', entity: 'Locations', to: 'id' }] },
+				{ name: 'Zones', primaryKey: ['locationId', 'code'], properties: [{ name: 'code', type: 'string' }, { name: 'locationId', type: 'string' }, { name: 'createdAt', type: 'dateTime' }],
+					relations: [{ name: 'location', type: 'oneToMany', from: 'locationId', entity: 'Locations', to: 'id' }] }
+			]
+		}
+		const source = [
+			{ name: 'Audited', abstract: true, properties: [{ name: 'createdAt', type: 'dateTime' }] },
+			{ name: 'Located', abstract: true, extends: 'Audited', properties: [{ name: 'locationId' }], relations: [{ name: 'location', type: 'oneToMany', from: 'locationId', entity: 'Locations', to: 'id' }] },
+			{ name: 'Areas', extends: 'Located', properties: [{ name: 'code' }] },
+			{ name: 'Zones', extends: 'Located', properties: [{ name: 'code' }] },
+			{ name: 'Locations', properties: [{ name: 'id' }] }
+		]
+		class IlusorApi extends FakeApi { async domain () { return completed } }
+		const { container } = render(<DomainDiagram api={new IlusorApi()} schema="ilusor" layout={rowLayout} focus="Areas" options source={source as any} />)
+		const shown = () => [...container.querySelectorAll('.lw-diagram-svg [data-entity]')].map(e => e.getAttribute('data-entity')).sort()
+		// at first: the entity and the entities it extends, up its chain (not the other entities of the same base: Zones)
+		await waitFor(() => expect(shown()).toEqual(['Areas', 'Audited', 'Located']))
+		// one list of choices, several at once; the check of the names is in it
+		const group = screen.getByRole('group', { name: 'options' })
+		const option = (name: string) => screen.getByRole('checkbox', { name }) as HTMLInputElement
+		expect([...group.querySelectorAll('label')].map(l => l.textContent?.trim())).toEqual(['relation names', 'related entities', 'extended entities'])
+		expect([option('relation names').checked, option('related entities').checked, option('extended entities').checked]).toEqual([false, false, true])
+		expect([...container.querySelectorAll('[data-edge^="extends:"]')].map(e => e.getAttribute('data-edge')).sort()).toEqual(['extends:Audited>Located', 'extends:Located>Areas'])
+		expect(container.querySelector('[data-entity=Located]')!.textContent).toContain('Located : Audited «abstract»')
+		// an abstract one is drawn apart: its class, a dashed border, «abstract»; a concrete one is not
+		const located = container.querySelector('.lw-diagram-svg [data-entity=Located]')!
+		expect(located.classList.contains('lw-abstract')).toBe(true)
+		expect(located.querySelector('rect')!.getAttribute('stroke-dasharray')).toBe('5 3')
+		const areas = container.querySelector('.lw-diagram-svg [data-entity=Areas]')!
+		expect(areas.classList.contains('lw-abstract')).toBe(false)
+		expect(areas.querySelector('rect')!.getAttribute('stroke-dasharray')).toBeNull()
+		expect(areas.textContent).not.toContain('«abstract»')
+		// its related ones too
+		fireEvent.click(option('related entities'))
+		await waitFor(() => expect(shown()).toEqual(['Areas', 'Audited', 'Located', 'Locations']))
+		// without the entities it extends: the entity and its related ones
+		fireEvent.click(option('extended entities'))
+		await waitFor(() => expect(shown()).toEqual(['Areas', 'Locations']))
+		fireEvent.click(option('extended entities'))
+		fireEvent.click(option('relation names'))
+		await waitFor(() => expect(container.querySelector('.lw-line-name')?.textContent).toBe('location'))
+		expect(screen.getByText('(3)')).toBeTruthy()
+		// open, it closes on a click outside it
+		const list = container.querySelector('details.lw-multi-select') as HTMLDetailsElement
+		list.open = true
+		fireEvent.pointerDown(document.body)
+		expect(list.open).toBe(false)
+	})
+
 	test('in Spanish; an api without domain says so', async () => {
 		const api = new FakeApi()
 		render(<DomainDiagram api={api} schema="northwind/v1" layout={rowLayout} locale="es" />)

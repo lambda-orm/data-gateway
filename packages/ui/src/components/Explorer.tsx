@@ -1,9 +1,10 @@
-import React, { useEffect, useRef, useState, useSyncExternalStore } from 'react'
+import React, { useContext, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { QueryApiPort, SchemaInfo } from '../application/ports'
 import { WorkspaceController, WorkspaceError } from '../application/workspaceController'
-import { cardinalityOf, DomainInfo, typeText } from '../domain/diagram'
+import { cardinalityOf, DomainInfo, EntityInfo, typeText } from '../domain/diagram'
 import { ExplorerMessages, explorerMessagesOf, format } from '../domain/explorerI18n'
 import { filterEntities } from '../domain/entityFilter'
+import { abstractEntityOf, sourceEntitiesOf } from '../domain/inheritance'
 import { Locale } from '../domain/i18n'
 import { childrenOf, folderPaths, SavedItem, subtreeOf } from '../domain/savedItems'
 import { ConfirmDialog, Icons, ItemDialog, MenuButton, Modal } from './dialogs'
@@ -89,15 +90,22 @@ export const problemText = (error: unknown, m: ExplorerMessages): string => {
 	return (error as any)?.message ?? String(error)
 }
 
+/** How many levels a tree is inside another (the schemas, under the node Schemas of a connection): its rows go that far in */
+const TreeDepth = React.createContext(0)
+/** in what is unfolded: the node Schemas folded (it starts unfolded) */
+const SCHEMAS_FOLDED = '!schemas'
+const INDENT = 14
+
 const Row: React.FC<{
 	level: number, label: React.ReactNode, icon: React.ReactNode, expanded?: boolean, active?: boolean, title?: string, muted?: boolean
 	onToggle?: () => void, onOpen?: () => void, actions?: React.ReactNode, drag?: string, dropTarget?: { onDrop: (id: string) => void }
 }> = ({ level, label, icon, expanded, active, title, muted, onToggle, onOpen, actions, drag, dropTarget }) => {
 	const [over, setOver] = useState(false)
+	const depth = useContext(TreeDepth)
 	return (
-		<div role="treeitem" aria-level={level} aria-expanded={expanded} aria-selected={active ?? false} tabIndex={0} title={title}
+		<div role="treeitem" aria-level={level + depth} aria-expanded={expanded} aria-selected={active ?? false} tabIndex={0} title={title}
 			className={`lw-tree-row ${active ? 'lw-active' : ''} ${over ? 'lw-drop' : ''} ${muted ? 'lw-muted' : ''}`}
-			style={{ paddingLeft: 6 + (level - 1) * 14 }}
+			style={{ paddingLeft: 6 + (level - 1 + depth) * INDENT }}
 			draggable={drag !== undefined}
 			onDragStart={drag !== undefined ? e => { e.dataTransfer.setData(MIME, drag); e.dataTransfer.effectAllowed = 'move' } : undefined}
 			onDragOver={dropTarget ? e => { if (e.dataTransfer.types.includes(MIME)) { e.preventDefault(); setOver(true) } } : undefined}
@@ -122,6 +130,48 @@ const Row: React.FC<{
 const Action: React.FC<{ label: string, onClick: () => void, children: React.ReactNode }> = ({ label, onClick, children }) => (
 	<button className="lw-icon-button" aria-label={label} title={label} onClick={onClick}>{children}</button>
 )
+
+/** A node of the administration of a connection, as its host says it (an IDE: its roles, its sessions, its observability) */
+export interface AdministrationNode {
+	key: string
+	label: string
+	icon?: React.ReactNode
+	title?: string
+	/** what a click opens (a page of the host) */
+	onOpen?: () => void
+	/** the buttons of its row (add one) */
+	actions?: { label: string, icon?: React.ReactNode, onClick: () => void }[]
+	children?: AdministrationNode[]
+}
+
+/**
+ * The administration of a connection, next to its schemas: a tree its host gives (what it is and what it opens are of
+ * the host); a node with children unfolds, one without them opens.
+ */
+export const AdministrationTree: React.FC<{ title: string, nodes: AdministrationNode[], theme?: 'light' | 'dark', icon?: React.ReactNode }> = ({ title, nodes, theme, icon }) => {
+	const [expanded, setExpanded] = useState<Set<string>>(() => new Set())
+	const [open, setOpen] = useState(false)
+	const toggle = (key: string) => setExpanded(e => { const n = new Set(e); if (n.has(key)) n.delete(key); else n.add(key); return n })
+	const rows = (list: AdministrationNode[], level: number): React.ReactNode[] => list.flatMap(node => {
+		const parent = node.children !== undefined
+		return [
+			<Row key={node.key} level={level} label={node.label} icon={node.icon ?? <Icons.config />} title={node.title}
+				expanded={parent ? expanded.has(node.key) : undefined}
+				onToggle={parent ? () => toggle(node.key) : undefined}
+				onOpen={node.onOpen}
+				actions={node.actions?.length ? <>{node.actions.map(a => <Action key={a.label} label={a.label} onClick={a.onClick}>{a.icon ?? <Icons.plus />}</Action>)}</> : undefined} />,
+			...(parent && expanded.has(node.key) ? rows(node.children!, level + 1) : [])
+		]
+	})
+	return (
+		<nav className={`lw-explorer lw-administration lw-workbench lw-${theme ?? 'light'}`} aria-label={title}>
+			<div role="tree" aria-label={title} className="lw-tree">
+				<Row level={1} label={<strong>{title}</strong>} icon={icon ?? <Icons.administration />} expanded={open} onToggle={() => setOpen(!open)} />
+				{open && rows(nodes, 2)}
+			</div>
+		</nav>
+	)
+}
 
 /**
  * The schemas on the left: for each, its domain (as YAML, read only), its entities with their properties, and what is
@@ -238,6 +288,21 @@ export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, sc
 		})
 	}
 	const namesIn = (list: unknown): string[] => Array.isArray(list) ? list.map((e: any) => e?.name).filter((n: unknown): n is string => typeof n === 'string') : []
+	// the abstract entities, as the lambdaORM.yaml says them (the completed domain has none): `abstract: true` among the
+	// entities, and domain.abstracts once λORM has it (L52); by name
+	const abstractsIn = (doc: any): { name: string, extends?: string }[] => [
+		...(Array.isArray(doc?.domain?.abstracts) ? doc.domain.abstracts : []),
+		...(Array.isArray(doc?.domain?.entities) ? doc.domain.entities.filter((e: any) => e?.abstract === true) : [])
+	].filter((e: any) => typeof e?.name === 'string').map((e: any) => ({ name: e.name, ...(typeof e.extends === 'string' ? { extends: e.extends } : {}) }))
+		.sort((x, y) => x.name.localeCompare(y.name))
+	// as the entities, from the lambdaORM.yaml with what each inherits: each opens its view (Edit there, as an entity)
+	const abstractRows = (schema: string, doc: any, level: number): React.ReactNode[] => {
+		if (doc === undefined) return [<Row key="abstracts-loading" level={level} label={m.loading} icon={null} muted />]
+		const all = sourceEntitiesOf(doc)
+		const list = abstractsIn(doc).map(e => abstractEntityOf(all, e.name)).filter(Boolean)
+		if (list.length === 0) return [<Row key="abstracts-none" level={level} label={m.none} icon={null} muted />]
+		return list.flatMap(entity => entityNode(schema, entity, level, 'abstract', entity.extends ? format(m.extendsEntity, { name: entity.extends }) : undefined))
+	}
 	const removeSchema = (schema: string) => admin?.can.schemaAdmin
 		? <Action label={`${a.removeSchema} ${schema || '/'}`} onClick={() => admin.onRemoveSchema(schema)}><Icons.trash /></Action>
 		: null
@@ -268,19 +333,21 @@ export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, sc
 			const has = (part: string) => expanded.has(`${part}:${s.path}`)
 			const once = (id: string, load: () => void) => { if (!requested.current.has(id)) { requested.current.add(id); load() } }
 			if (has('d') || has('e') || has('n')) loadDomain(s.path)
-			if (has('i') || has('mappings') || has('sources') || has('stages')) once(`doc:${s.path}`, () => loadDoc(s.path))
+			if (has('i') || has('ab') || has('mappings') || has('sources') || has('stages')) once(`doc:${s.path}`, () => loadDoc(s.path))
 			if (has('da')) once(`data:${s.path}`, () => loadFolder(s.path, 'data'))
 			if (has('sc')) once(`src:${s.path}`, () => loadFolder(s.path, 'src'))
 		}
 	}, [expanded, schemas])
 
-	// a schema reloaded (another since): its domain again, if it was read
+	// a schema reloaded (another since): its domain and its YAML again (abstracts, infrastructure), if they were read
 	const seen = useRef<Record<string, string | undefined>>({})
 	useEffect(() => {
 		for (const s of schemas) {
 			const before = seen.current[s.path]
 			seen.current[s.path] = s.since
-			if (before === undefined || before === s.since || domains[s.path] === undefined) continue
+			if (before === undefined || before === s.since) continue
+			if (docs[s.path] !== undefined) loadDoc(s.path)
+			if (domains[s.path] === undefined) continue
 			const read = domainOf ?? (api.domain ? (path: string) => api.domain!(path) : undefined)
 			if (read) read(s.path).then(domain => setDomains(d => ({ ...d, [s.path]: domain })), () => undefined)
 		}
@@ -364,27 +431,53 @@ export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, sc
 			return isFolder && expanded.has(key) ? [row, ...savedRows(schema, item.id, level + 1)] : [row]
 		})
 
+	// an entity of the tree (an abstract one too): its name opens its view; unfolded, its properties and relations
+	const propertyRow = (entity: EntityInfo, name: string, key: string, level: number) => {
+		const p = (entity.properties ?? []).find(q => q.name === name)!
+		const isKey = (entity.primaryKey ?? []).includes(name)
+		return <Row key={key} level={level} icon={null} muted={!isKey}
+			label={<span className="lw-property"><span className={isKey ? 'lw-pk' : ''}>{p.name}</span><span className="lw-type">{typeText(p)}</span></span>} />
+	}
+	const relationRow = (schema: string, entity: EntityInfo, name: string, key: string, level: number) => {
+		const r = (entity.relations ?? []).find(q => q.name === name)!
+		return <Row key={key} level={level} icon={null} title={`${r.name}: ${r.from} → ${r.entity}.${r.to} (${r.type})`}
+			onOpen={() => onOpenEntity(schema, r.entity)}
+			actions={<Action label={`${m.open} ${r.entity}`} onClick={() => onOpenEntity(schema, r.entity)}><Icons.open /></Action>}
+			label={<span className="lw-property"><span>{r.name}</span><span className="lw-type">→ {r.entity} · {cardinalityOf(r)}</span></span>} />
+	}
+	// kind: of the entities (the keys a saved session has unfolded) or of the abstracts
+	const entityNode = (schema: string, entity: EntityInfo, level: number, kind: 'entity' | 'abstract', title?: string, matched?: { properties: string[], relations: string[] }): React.ReactNode[] => {
+		const [k, kp, kr] = kind === 'entity' ? ['en', 'ep', 'er'] : ['ab', 'abp', 'abr']
+		const key = `${k}:${schema}:${entity.name}`
+		const propertiesKey = `${kp}:${schema}:${entity.name}`
+		const relationsKey = `${kr}:${schema}:${entity.name}`
+		const relations = entity.relations ?? []
+		const rows: React.ReactNode[] = [
+			<Row key={key} level={level} label={entity.name} icon={<Icons.entity />} title={title ?? `${entity.name} — ${m.openEntity}`}
+				expanded={expanded.has(key)} onToggle={() => { if (!expanded.has(key)) onOpenEntity(schema, entity.name); toggle(key) }} onOpen={() => onOpenEntity(schema, entity.name)} />
+		]
+		if (!expanded.has(key)) {
+			// what the filter found in it, without opening it
+			rows.push(...(matched?.properties ?? []).map(name => propertyRow(entity, name, `${key}.p.${name}`, level + 1)))
+			rows.push(...(matched?.relations ?? []).map(name => relationRow(schema, entity, name, `${key}.r.${name}`, level + 1)))
+			return rows
+		}
+		rows.push(<Row key={propertiesKey} level={level + 1} label={`${m.properties} (${entity.properties?.length ?? 0})`} icon={null}
+			expanded={expanded.has(propertiesKey)} onToggle={() => toggle(propertiesKey)} />)
+		if (expanded.has(propertiesKey)) rows.push(...(entity.properties ?? []).map(p => propertyRow(entity, p.name, `${propertiesKey}.${p.name}`, level + 2)))
+		rows.push(<Row key={relationsKey} level={level + 1} label={`${m.relations} (${relations.length})`} icon={null}
+			expanded={expanded.has(relationsKey)} onToggle={() => toggle(relationsKey)} />)
+		if (expanded.has(relationsKey)) rows.push(...relations.map(r => relationRow(schema, entity, r.name, `${relationsKey}.${r.name}`, level + 2)))
+		return rows
+	}
 	const entityRows = (schema: string): React.ReactNode[] => {
 		const domain = domains[schema]
 		if (domain === undefined) return []
 		if (typeof domain === 'string') return [<Row key="e-status" level={5} label={domain} icon={null} muted />]
 		const filter = filters[schema] ?? ''
 		const found = filterEntities(domain.entities, filter)
-		const propertyRow = (entity: typeof domain.entities[number], name: string, key: string, level: number) => {
-			const p = (entity.properties ?? []).find(q => q.name === name)!
-			const isKey = (entity.primaryKey ?? []).includes(name)
-			return <Row key={key} level={level} icon={null} muted={!isKey}
-				label={<span className="lw-property"><span className={isKey ? 'lw-pk' : ''}>{p.name}</span><span className="lw-type">{typeText(p)}</span></span>} />
-		}
-		const relationRow = (entity: typeof domain.entities[number], name: string, key: string, level: number) => {
-			const r = (entity.relations ?? []).find(q => q.name === name)!
-			return <Row key={key} level={level} icon={null} title={`${r.name}: ${r.from} → ${r.entity}.${r.to} (${r.type})`}
-				onOpen={() => onOpenEntity(schema, r.entity)}
-				actions={<Action label={`${m.open} ${r.entity}`} onClick={() => onOpenEntity(schema, r.entity)}><Icons.open /></Action>}
-				label={<span className="lw-property"><span>{r.name}</span><span className="lw-type">→ {r.entity} · {cardinalityOf(r)}</span></span>} />
-		}
 		const head = (
-			<div key="e-filter" className="lw-tree-filter" style={{ paddingLeft: 6 + 4 * 14 }}>
+			<div key="e-filter" className="lw-tree-filter" style={{ paddingLeft: 6 + 5 * INDENT }}>
 				<input type="search" value={filter} placeholder={m.filterEntities} aria-label={m.filterEntities} spellCheck={false}
 					onChange={e => setFilters(f => ({ ...f, [schema]: e.target.value }))}
 					onKeyDown={e => { if (e.key === 'Escape') setFilters(f => ({ ...f, [schema]: '' })) }} />
@@ -392,47 +485,26 @@ export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, sc
 			</div>
 		)
 		if (found.length === 0) return [head, <Row key="e-none" level={5} label={m.noMatches} icon={null} muted />]
-		return [head, ...found.flatMap(({ entity, properties: matchedProperties, relations: matchedRelations }) => {
-			const key = `en:${schema}:${entity.name}`
-			const propertiesKey = `ep:${schema}:${entity.name}`
-			const relationsKey = `er:${schema}:${entity.name}`
-			const relations = entity.relations ?? []
-			const rows: React.ReactNode[] = [
-				<Row key={key} level={5} label={entity.name} icon={<Icons.entity />} title={`${entity.name} — ${m.openEntity}`}
-					expanded={expanded.has(key)} onToggle={() => { if (!expanded.has(key)) onOpenEntity(schema, entity.name); toggle(key) }} onOpen={() => onOpenEntity(schema, entity.name)} />
-			]
-			if (!expanded.has(key)) {
-				// what the filter found in it, without opening it
-				rows.push(...matchedProperties.map(name => propertyRow(entity, name, `${key}.p.${name}`, 6)))
-				rows.push(...matchedRelations.map(name => relationRow(entity, name, `${key}.r.${name}`, 6)))
-				return rows
-			}
-			rows.push(<Row key={propertiesKey} level={6} label={`${m.properties} (${entity.properties?.length ?? 0})`} icon={null}
-				expanded={expanded.has(propertiesKey)} onToggle={() => toggle(propertiesKey)} />)
-			if (expanded.has(propertiesKey)) rows.push(...(entity.properties ?? []).map(p => propertyRow(entity, p.name, `${propertiesKey}.${p.name}`, 7)))
-			rows.push(<Row key={relationsKey} level={6} label={`${m.relations} (${relations.length})`} icon={null}
-				expanded={expanded.has(relationsKey)} onToggle={() => toggle(relationsKey)} />)
-			if (expanded.has(relationsKey)) rows.push(...relations.map(r => relationRow(entity, r.name, `${relationsKey}.${r.name}`, 7)))
-			return rows
-		})]
+		return [head, ...found.flatMap(({ entity, properties, relations }) => entityNode(schema, entity, 5, 'entity', undefined, { properties, relations }))]
 	}
 
 	const folders = (schema: string) => folderPaths(state.items, schema)
 
 	return (
 		<nav className={`lw-explorer lw-workbench lw-${theme ?? 'light'}`} aria-label={m.explorer}>
-			<div className="lw-explorer-head">
-				<strong>{a.schemas}</strong>
-				<span className="lw-spacer" />
-				{admin?.can.schemaAdmin && <Action label={a.newSchema} onClick={admin.onNewSchema}><Icons.schemaPlus /></Action>}
-				<Action label={m.exportWorkspace} onClick={download}><Icons.exportFolder /></Action>
-				<Action label={m.importWorkspace} onClick={() => file.current?.click()}><Icons.importFolder /></Action>
-				<input ref={file} type="file" accept="application/json,.json" hidden onChange={chooseFile} aria-label={m.importWorkspace} />
-			</div>
-			{!state.durable && <div className="lw-notice">{m.notDurable}</div>}
-			{state.error && <div className="lw-notice" role="alert">{state.error}</div>}
-			{message && <div className="lw-notice lw-toast" role="status">{message}</div>}
+			<input ref={file} type="file" accept="application/json,.json" hidden onChange={chooseFile} aria-label={m.importWorkspace} />
 			<div role="tree" aria-label={m.explorer} className="lw-tree">
+				{/* the node Schemas of the connection, next to its Administration: its schemas one level in */}
+				<Row level={1} label={<strong>{a.schemas}</strong>} icon={<Icons.schemas />} expanded={!expanded.has(SCHEMAS_FOLDED)} onToggle={() => toggle(SCHEMAS_FOLDED)}
+					actions={<>
+						{admin?.can.schemaAdmin && <Action label={a.newSchema} onClick={admin.onNewSchema}><Icons.schemaPlus /></Action>}
+						<Action label={m.exportWorkspace} onClick={download}><Icons.exportFolder /></Action>
+						<Action label={m.importWorkspace} onClick={() => file.current?.click()}><Icons.importFolder /></Action>
+					</>} />
+				{!state.durable && <div className="lw-notice">{m.notDurable}</div>}
+				{state.error && <div className="lw-notice" role="alert">{state.error}</div>}
+				{message && <div className="lw-notice lw-toast" role="status">{message}</div>}
+				{!expanded.has(SCHEMAS_FOLDED) && <TreeDepth.Provider value={1}>
 				{schemas.map(s => {
 					const key = `s:${s.path}`
 					if (s.status !== 'ready') {
@@ -441,7 +513,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, sc
 							<React.Fragment key={s.path}>
 								<Row level={1} label={<span>{s.path || '/'} <span className="lw-type">{format(m.schemaStatus, { status: s.status })}</span></span>}
 									icon={<Icons.schema />} muted expanded={expanded.has(key)} onToggle={() => toggle(key)} title={s.reason ?? s.status} actions={removeSchema(s.path)} />
-								{expanded.has(key) && <div className="lw-schema-reason" role="note" style={{ paddingLeft: 6 + 14 + 22 }}>{s.reason ?? m.noReason}</div>}
+								{expanded.has(key) && <div className="lw-schema-reason" role="note" style={{ paddingLeft: 6 + 2 * INDENT + 22 }}>{s.reason ?? m.noReason}</div>}
 								{expanded.has(key) && schemaFileRow(s.path)}
 							</React.Fragment>
 						)
@@ -463,7 +535,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, sc
 								actions={onRefreshSchema ? <Action label={format(m.refreshOf, { name: s.path || '/' })} onClick={() => onRefreshSchema(s.path)}><Icons.refresh /></Action> : undefined} />
 							{expanded.has(key) && (
 								<>
-									{s.pending && <div className="lw-schema-reason lw-schema-pending" role="note" style={{ paddingLeft: 6 + 14 + 22 }}>{m.schemaPending}: {s.pending}</div>}
+									{s.pending && <div className="lw-schema-reason lw-schema-pending" role="note" style={{ paddingLeft: 6 + 2 * INDENT + 22 }}>{m.schemaPending}: {s.pending}</div>}
 									<Row level={2} label={a.metadata} icon={<Icons.metadata />} expanded={expanded.has(k('md'))} onToggle={unfold('md')} />
 									{expanded.has(k('md')) && (
 										<>
@@ -472,6 +544,15 @@ export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, sc
 												onOpen={() => onOpenDomain(s.path)} title={`${m.domainYaml} — ${m.readOnly}`} />
 											{expanded.has(k('d')) && (
 												<>
+													{/* the abstract ones first: the entities extend them */}
+													{admin?.can.schemaRead && admin.loadSchemaDoc && admin.onOpenElement && (
+														<>
+															<Row level={4} label={a.abstracts} icon={<Icons.entity />} expanded={expanded.has(k('ab'))}
+																onToggle={unfold('ab', () => loadDoc(s.path))}
+																actions={canWrite ? <Action label={format(a.newNamed, { name: a.abstracts })} onClick={() => admin.onOpenElement!(s.path, { section: 'entities', abstract: true })}><Icons.plus /></Action> : null} />
+															{expanded.has(k('ab')) && abstractRows(s.path, doc, 5)}
+														</>
+													)}
 													<Row level={4} label={m.entities} icon={<Icons.entity />} expanded={expanded.has(k('e'))}
 														onToggle={unfold('e', () => loadDomain(s.path))} actions={newOf(s.path, 'entities')} />
 													{expanded.has(k('e')) && entityRows(s.path)}
@@ -517,6 +598,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, sc
 						</React.Fragment>
 					)
 				})}
+				</TreeDepth.Provider>}
 			</div>
 
 			{removingCode && admin?.api?.removeCode && (

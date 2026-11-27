@@ -1,14 +1,14 @@
-import { tracesOfEntity } from './observability'
+import { Explore, tracesOfEntity } from './observability'
 import { OidcSettings, OidcTokens, renew, signIn, signOut as oidcSignOut } from './oidc'
-import React, { useEffect, useMemo, useRef, useState } from 'react'
-import { BrowserSessionStore, Workspace } from '@lambdaorm/ui'
-import { Cable, Plus, Settings } from 'lucide-react'
-import { ConnectionPage, ConnectionTools, Credential, CredentialFields, getJson, headersOf, Kind, PreferencesPage, usePrefs, Who } from './shared'
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AdministrationNode, BrowserSessionStore, Workspace } from '@lambdaorm/ui'
+import { Activity, BarChart3, Cable, Database, FileCode, ClipboardCheck, KeyRound, Plus, ScrollText, Settings, Shield, UserCog, Users, Waypoints, Wrench } from 'lucide-react'
+import { ConnectionPage, ConnectionTools, Credential, CredentialFields, getJson, headersOf, Kind, PermissionsOf, PreferencesPage, usePrefs, Who } from './shared'
 import { AppMenu } from './appMenu'
 import { ManagementClient, ManagementState, testConnection } from './management'
 import { SessionsPanel } from './sessions'
 import { ApprovalsPanel } from './approvals'
-import { RolesPanel } from './roles'
+import { AccessPage, ListedRole, MeCard, ObservabilityPage, PersistConnectionPage, PersistPage, RolePage, RolesPage, roleNamesOf, Signal, StateConfigPage } from './administration'
 import { endpointsOf, McpTab, SwaggerTab, useTransports, WebSocketTab } from './tools'
 import { forbiddenTarget, unreachable, viaProxy } from './proxy'
 
@@ -36,9 +36,6 @@ export interface IdeConnection {
 	restUrl?: string
 	webSocketUrl?: string
 	mcpUrl?: string
-	/** where its traces are seen: Grafana, with a Tempo datasource (its uid; tempo by default) */
-	grafanaUrl?: string
-	tempoDatasource?: string
 	/** OpenID Connect (kind oidc, docs/OIDC_LOGIN.md): its identity provider and its public client */
 	issuer?: string
 	clientId?: string
@@ -72,12 +69,11 @@ const ConnectionEditor: React.FC<{
 	problem?: string
 	onSave: (connection: IdeConnection, secret: string) => void
 	onRemove?: () => void
-	onOpenTool?: (tool: 'swagger' | 'websocket' | 'mcp') => void
-	/** its session of management: its lists of sessions */
+	/** its session of management: who it is there (its user and its roles) */
 	client?: ManagementClient
 	/** OpenID Connect: who signed in and until when; sign in, sign out */
 	oidc?: { user?: string, expiresAt?: number, signIn: () => Promise<void>, signOut: () => void }
-}> = ({ initial, secret: givenSecret, who, problem, onSave, onRemove, onOpenTool, client, oidc }) => {
+}> = ({ initial, secret: givenSecret, who, problem, onSave, onRemove, client, oidc }) => {
 	const { t } = usePrefs()
 	const [draft, setDraft] = useState<IdeConnection>(initial ?? { id: '', name: '', protocol: 'http', address: '', kind: 'apikey', header: 'X-Api-Key', user: '', remember: false })
 	const [secret, setSecret] = useState(givenSecret)
@@ -147,12 +143,6 @@ const ConnectionEditor: React.FC<{
 					<label>{t.webSocketUrl}<input aria-label={t.webSocketUrl} value={draft.webSocketUrl ?? ''} onChange={e => set({ webSocketUrl: e.target.value || undefined })} placeholder="ws://host:port" spellCheck={false} /></label>
 					<label>{t.mcpUrl}<input aria-label={t.mcpUrl} value={draft.mcpUrl ?? ''} onChange={e => set({ mcpUrl: e.target.value || undefined })} placeholder="http://host:port" spellCheck={false} /></label>
 				</details>
-				<details className="dg-advanced">
-					<summary>{t.observability}</summary>
-					<span className="dg-muted">{t.observabilityNote}</span>
-					<label>{t.grafanaUrl}<input aria-label={t.grafanaUrl} value={draft.grafanaUrl ?? ''} onChange={e => set({ grafanaUrl: e.target.value || undefined })} placeholder="http://grafana:3000" spellCheck={false} /></label>
-					<label>{t.tempoDatasource}<input aria-label={t.tempoDatasource} value={draft.tempoDatasource ?? ''} onChange={e => set({ tempoDatasource: e.target.value || undefined })} placeholder="tempo" spellCheck={false} /></label>
-				</details>
 				<span className="dg-muted">{t.connectionNote}</span>
 				{tested && <div className={tested.ok ? 'dg-ok' : 'dg-error'} role="status">{tested.text}</div>}
 				{!tested && problem && <div className="dg-error" role="alert">{problem}</div>}
@@ -169,10 +159,7 @@ const ConnectionEditor: React.FC<{
 	)
 	return initial
 		? <ConnectionPage name={initial.name} url={urlOf(initial)} credential={credentialOf(initial, { [initial.id]: givenSecret })} who={who}
-			tools={onOpenTool && <ToolsOf connection={initial} onOpen={onOpenTool} />}
-			sessions={client && who && <SessionsPanel client={client} who={who} />}
-			approvals={client && who && who.permissions.includes('approve') && <ApprovalsPanel client={client} self={who.name} />}
-			gatewayRoles={client && who && who.permissions.includes('roles') && <RolesPanel client={client} />}>{form}</ConnectionPage>
+			account={client && who && <MeCard client={client} fallback={<PermissionsOf who={who} />} />}>{form}</ConnectionPage>
 		: <div className="dg-pane"><h2>{t.newConnection}</h2>{form}</div>
 }
 
@@ -261,6 +248,31 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 	}, [connections, secrets, t])
 	useEffect(() => () => { for (const { client } of clients.current.values()) client.close() }, [])
 	const whos = useMemo(() => Object.fromEntries(Object.entries(states).map(([id, state]) => [id, state.who])), [states])
+	// where the traces of each gateway are seen: its configuration tells it (observability.explore), not the connection
+	const [explores, setExplores] = useState<Record<string, Explore | undefined>>({})
+	const addresses = connections.map(c => `${c.id}|${urlOf(c)}`).join(',')
+	useEffect(() => {
+		let alive = true
+		for (const c of connections) {
+			getJson(apiOf(c), '/observability').then((o: { explore?: Explore }) => o?.explore, () => undefined)
+				.then(explore => { if (alive) setExplores(e => ({ ...e, [c.id]: explore })) })
+		}
+		return () => { alive = false }
+	}, [addresses])
+	// the roles of each gateway (with the permission roles): the children of Roles in its Administration
+	const [adminRoles, setAdminRoles] = useState<Record<string, string[]>>({})
+	const [adminRefresh, setAdminRefresh] = useState(0)
+	const canRoles = connections.filter(c => whos[c.id]?.permissions.includes('roles')).map(c => c.id).join(',')
+	const loadRoles = useCallback(async (id: string): Promise<void> => {
+		const client = clients.current.get(id)?.client
+		if (!client) return
+		const response = await client.fetch(`${client.base}/admin/roles`).catch(() => undefined)
+		const roles: ListedRole[] = response?.ok ? await response.json() : []
+		setAdminRoles(all => ({ ...all, [id]: roleNamesOf(roles) }))
+	}, [])
+	useEffect(() => { for (const id of canRoles.split(',').filter(Boolean)) loadRoles(id).catch(() => undefined) }, [canRoles, adminRefresh, loadRoles])
+	/** a role saved or removed: the tree and the pages read the roles again */
+	const rolesChanged = async (id: string) => { await loadRoles(id); setAdminRefresh(n => n + 1) }
 	const problems = useMemo(() => Object.fromEntries(Object.entries(states).map(([id, state]) => [id, state.problem ?? (state.expiring ? t.sessionExpiring : undefined)])), [states, t])
 	const save = (existing: IdeConnection | undefined) => (connection: IdeConnection, secret: string) => {
 		const id = existing?.id ?? `c${Date.now().toString(36)}`
@@ -303,8 +315,44 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 		})
 		return () => { for (const timer of timers) if (timer) clearTimeout(timer) }
 	}, [oidcTokens, connections])
+	/**
+	 * The administration of a gateway in its explorer, by what its credential may do: its roles (and each one), who may
+	 * come in, the sessions, the writes that wait, its tools and its observability (metrics, logs, traces)
+	 */
+	const administrationOf = (c: IdeConnection): { title: string, nodes: AdministrationNode[] } | undefined => {
+		const who = whos[c.id]
+		if (!who) return undefined
+		const has = (p: string) => who.permissions.includes(p)
+		const icon = (I: React.FC<any>) => <I size={14} aria-hidden="true" />
+		const page = (key: string, label: string, I: React.FC<any>, extra: Partial<AdministrationNode> = {}): AdministrationNode => ({ key, label, icon: icon(I), onOpen: () => openOf(`admin:${key}:${c.id}`), ...extra })
+		const nodes: AdministrationNode[] = []
+		if (has('roles')) {
+			nodes.push(page('roles', t.roles, Shield, {
+				actions: [{ label: t.addRole, icon: icon(Plus), onClick: () => openOf(`admin:role-new:${c.id}`) }],
+				children: (adminRoles[c.id] ?? []).map(name => ({ key: `role:${name}`, label: name, icon: icon(UserCog), onOpen: () => openOf(`admin:role:${c.id}:${name}`) }))
+			}))
+			nodes.push(page('access', t.accessTitle, KeyRound))
+		}
+		// where the administration is kept: its lambdaORM.yaml (the mapping) and its database
+		if (has('roles') || has('persist')) {
+			nodes.push(page('persist', t.persistTitle, Database, {
+				children: [page('config', t.stateConfigTitle, FileCode), page('connection', t.persistConnectionTitle, Cable)]
+			}))
+		}
+		nodes.push(page('sessions', t.sessions, Users))
+		if (has('approve')) nodes.push(page('approvals', t.approvals, ClipboardCheck))
+		nodes.push(page('tools', t.tools, Wrench))
+		if (has('observability')) {
+			nodes.push({
+				key: 'observability', label: t.obsTitle, icon: icon(Activity),
+				children: [page('metrics', t.obsMetrics, BarChart3), page('logs', t.obsLogs, ScrollText), page('traces', t.obsTraces, Waypoints)]
+			})
+		}
+		return { title: t.administration, nodes }
+	}
 	const specs = useMemo(() => connections.map(c => {
 		return {
+			administration: administrationOf(c),
 			id: c.id,
 			name: c.name,
 			description: urlOf(c),
@@ -315,8 +363,8 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 			changes: clients.current.get(c.id)?.client.changes,
 			// its session: a change of another session is announced (with who), one's own is not
 			session: clients.current.get(c.id)?.client.session,
-			// the link of an entity to its traces, when the connection says where Grafana is
-			tracesUrl: c.grafanaUrl ? (_schema: string, entity: string) => tracesOfEntity(c.grafanaUrl!, c.tempoDatasource || 'tempo', entity) : undefined,
+			// the link of an entity to its traces, when its gateway says where Grafana is
+			tracesUrl: explores[c.id] ? (_schema: string, entity: string) => tracesOfEntity(explores[c.id]!, entity) : undefined,
 			refreshMs: states[c.id]?.live ? 60000 : undefined,
 			// what is saved without the gateway's workspaces: per gateway and per user of the credential
 			workspaceKey: `${urlOf(c)}|${whos[c.id]?.name ?? c.user ?? ''}`,
@@ -324,7 +372,7 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 			// its page (edit, test, remove): a click on its name
 			onOpen: () => openOf(`connection:${c.id}`)
 		}
-	}), [connections, states, problems, whos, t])
+	}), [connections, states, problems, whos, explores, adminRoles, t])
 	const pages = useMemo(() => ({
 		preferences: { title: t.preferences, icon: <Settings size={14} aria-hidden="true" />, render: () => <PreferencesPage /> },
 		'connection:new': { title: t.newConnection, icon: <Plus size={14} aria-hidden="true" />, render: () => <ConnectionEditor secret="" onSave={save(undefined)} /> },
@@ -332,15 +380,47 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 			title: `${t.connection}: ${c.name}`,
 			icon: <Cable size={14} aria-hidden="true" />,
 			render: () => <ConnectionEditor key={c.id} initial={c} secret={credentialOf(c, secrets).secret} who={whos[c.id]} problem={problems[c.id]} onSave={save(c)} onRemove={() => remove(c.id)}
-				onOpenTool={tool => openOf(`${tool}:${c.id}`)} client={clients.current.get(c.id)?.client} oidc={oidcOf(c)} />
+				client={clients.current.get(c.id)?.client} oidc={oidcOf(c)} />
 		}])),
+		// its administration (the nodes of its explorer), with its session
+		...Object.fromEntries(connections.flatMap(c => {
+			const client = clients.current.get(c.id)?.client
+			const who = whos[c.id]
+			if (!client || !who) return []
+			const of = (key: string, title: string, icon: React.ReactNode, render: () => React.ReactNode) => [`admin:${key}:${c.id}`, { title: `${title} · ${c.name}`, icon, render }] as const
+			const openRole = (name: string) => openOf(`admin:role:${c.id}:${name}`)
+			const signal = (s: Signal, title: string, icon: React.ReactNode) => of(s, title, icon, () => <ObservabilityPage key={`${c.id}:${s}`} client={client} signal={s} />)
+			return [
+				of('roles', t.roles, <Shield size={14} aria-hidden="true" />, () => <RolesPage client={client} refresh={adminRefresh} onOpenRole={openRole} onAddRole={() => openOf(`admin:role-new:${c.id}`)} onChanged={() => { rolesChanged(c.id).catch(() => undefined) }} />),
+				[`admin:role-new:${c.id}`, {
+					title: `${t.newRole} · ${c.name}`,
+					icon: <UserCog size={14} aria-hidden="true" />,
+					render: () => <RolePage client={client} refresh={adminRefresh} onSaved={name => { rolesChanged(c.id).then(() => openRole(name), () => undefined) }} onRemoved={() => undefined} />
+				}] as const,
+				...(adminRoles[c.id] ?? []).map(name => [`admin:role:${c.id}:${name}`, {
+					title: `${t.roleName}: ${name} · ${c.name}`,
+					icon: <UserCog size={14} aria-hidden="true" />,
+					render: () => <RolePage key={name} client={client} name={name} refresh={adminRefresh} onSaved={() => { rolesChanged(c.id).catch(() => undefined) }} onRemoved={() => { rolesChanged(c.id).catch(() => undefined) }} />
+				}] as const),
+				of('access', t.accessTitle, <KeyRound size={14} aria-hidden="true" />, () => <AccessPage client={client} onOpenRole={openRole} />),
+				of('persist', t.persistTitle, <Database size={14} aria-hidden="true" />, () => <PersistPage client={client} />),
+				of('config', t.stateConfigTitle, <FileCode size={14} aria-hidden="true" />, () => <StateConfigPage client={client} theme={dark ? 'dark' : 'light'} canEdit={who.permissions.includes('persist')} />),
+				of('connection', t.persistConnectionTitle, <Cable size={14} aria-hidden="true" />, () => <PersistConnectionPage client={client} canEdit={who.permissions.includes('persist')} />),
+				of('sessions', t.sessions, <Users size={14} aria-hidden="true" />, () => <div className="dg-pane"><h2>{t.sessions}</h2><SessionsPanel client={client} who={who} /></div>),
+				of('approvals', t.approvals, <ClipboardCheck size={14} aria-hidden="true" />, () => <div className="dg-pane"><h2>{t.approvals}</h2><ApprovalsPanel client={client} self={who.name} /></div>),
+				of('tools', t.tools, <Wrench size={14} aria-hidden="true" />, () => <div className="dg-pane"><ToolsOf connection={c} onOpen={tool => openOf(`${tool}:${c.id}`)} /></div>),
+				signal('metrics', t.obsMetrics, <BarChart3 size={14} aria-hidden="true" />),
+				signal('logs', t.obsLogs, <ScrollText size={14} aria-hidden="true" />),
+				signal('traces', t.obsTraces, <Waypoints size={14} aria-hidden="true" />)
+			]
+		})),
 		// its tools, with its credential
 		...Object.fromEntries(connections.flatMap(c => (['swagger', 'websocket', 'mcp'] as const).map(tool => [`${tool}:${c.id}`, {
 			title: `${tool === 'swagger' ? 'REST API' : tool === 'websocket' ? 'WebSocket' : 'MCP'} · ${c.name}`,
 			icon: <Cable size={14} aria-hidden="true" />,
 			render: () => <ToolTab connection={c} tool={tool} headers={() => headersOf(credentialOf(c, secrets))} theme={dark ? 'dark' : 'light'} />
 		}])))
-	}), [connections, secrets, whos, problems, t, dark, oidcTokens])
+	}), [connections, secrets, whos, problems, t, dark, oidcTokens, adminRoles, adminRefresh])
 	// where the IDE was (its tabs across the connections): in this browser; its active tab, told to the gateways as what
 	// the person is looking at (session.activity)
 	const session = useMemo(() => {

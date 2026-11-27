@@ -1,5 +1,5 @@
 ---
-'@lambdaorm/data-gateway-client': minor
+'@lambdaorm/data-gateway-client-node': minor
 ---
 
 `client.subscribe({ entity } | { query, data } | { name, data }, listener)` over a `ws(s)://` connection: the writes

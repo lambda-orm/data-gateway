@@ -788,10 +788,10 @@ describe('the explorer as the workspace is', () => {
 		render(<Workspace api={new FakeApi()} admin={admin} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" refreshMs={0} />)
 		await waitFor(() => expect(row('State')).toBeTruthy())
 		const level = (n: number) => screen.getAllByRole('treeitem').filter(r => r.getAttribute('aria-level') === String(n)).map(r => r.querySelector('.lw-tree-label')?.textContent)
-		// the schema: its metadata, its state, its source code and its projects
-		expect(level(2)).toEqual(['Metadata', 'State', 'Source code', 'Workbench'])
+		// under the node Schemas, the schema: its metadata, its state, its source code and its projects
+		expect(level(3)).toEqual(['Metadata', 'State', 'Source code', 'Workbench'])
 		if (!row('config')) fireEvent.click(row('Metadata'))
-		await waitFor(() => expect(level(3)).toEqual(['config', 'domain', 'application', 'infrastructure']))
+		await waitFor(() => expect(level(4)).toEqual(['config', 'domain', 'application', 'infrastructure']))
 		fireEvent.click(row('State'))
 		fireEvent.click(await rowSoon('data'))
 		fireEvent.click(await rowSoon('seed.sql'))
@@ -965,6 +965,27 @@ describe('several data-gateways', () => {
 		await readAgain()
 	})
 
+	test('its key entered after it opened: what the credential may do and its domains are read again', async () => {
+		// without its key the gateway refuses; with it (the same admin, the same fetch) it answers
+		const key = { entered: false }
+		class KeyedAdmin extends FakeAdmin { async capabilities () { if (!key.entered) throw new Error('401'); return super.capabilities() } }
+		class KeyedApi extends FakeApi { async domain () { if (!key.entered) throw new Error('Its key'); return { entities: [{ name: 'Products', primaryKey: ['id'], properties: [{ name: 'id', type: 'integer' }], relations: [] }], enums: [] } as any } }
+		const admin = new KeyedAdmin()
+		const api = new KeyedApi()
+		const of = (problem?: string) => ({ id: 'a', name: 'local', api, admin, store: new MemoryWorkspaceStore([], true), ...(problem ? { problem } : {}) })
+		const { rerender } = render(<Workspace locale="en" refreshMs={0} history={false} connections={[of('Its key: open the connection to enter it')]} />)
+		fireEvent.click(await rowSoon('Metadata'))
+		fireEvent.click(await rowSoon('domain'))
+		fireEvent.click(await rowSoon('Entities'))
+		await rowSoon('Its key')
+		expect(row('config')).toBeFalsy()
+		key.entered = true
+		rerender(<Workspace locale="en" refreshMs={0} history={false} connections={[of()]} />)
+		await rowSoon('config')
+		await rowSoon('Products')
+		expect(row('Its key')).toBeFalsy()
+	})
+
 	test('a connection opens its page by a click on its name (its edit and remove are there)', async () => {
 		let opened = 0
 		const a = { id: 'a', name: 'local', description: 'http://localhost:8097/data-gateway', api: new FakeApi(), admin: false as const, store: new MemoryWorkspaceStore([], true), onOpen: () => { opened++ } }
@@ -1002,5 +1023,153 @@ describe('several data-gateways', () => {
 		rerender(<Workspace locale="en" refreshMs={0} history={false} session={session} connections={[a]} />)
 		await waitFor(() => expect(screen.queryAllByRole('tab')).toHaveLength(0))
 		expect(screen.queryByRole('region', { name: 'staging' })).toBeNull()
+	})
+})
+
+describe('what an entity inherits from the abstract one it extends', () => {
+	// Customers extends Audited: createdAt comes from it, createdBy is redefined (required); the completed domain no
+	// longer says extends, the lambdaORM.yaml does
+	const SCHEMA = 'domain:\n  entities:\n    - name: Audited\n      abstract: true\n      properties:\n        - { name: createdAt, type: dateTime }\n        - { name: createdBy, length: 128 }\n    - name: Customers\n      extends: Audited\n      primaryKey: [id]\n      properties:\n        - { name: id, type: integer }\n        - { name: createdBy, required: true }\n'
+	class InheritedApi extends FakeApi {
+		async domain () {
+			return { entities: [{ name: 'Customers', primaryKey: ['id'], relations: [],
+				properties: [{ name: 'id', type: 'integer' }, { name: 'createdBy', length: 128, required: true }, { name: 'createdAt', type: 'dateTime' }] }], enums: [] } as any
+		}
+	}
+	const openCustomers = async () => {
+		const admin = new FakeAdmin()
+		admin.text = SCHEMA
+		render(<Workspace api={new InheritedApi()} admin={admin} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" refreshMs={0} />)
+		await waitFor(() => expect(row('domain')).toBeTruthy())
+		fireEvent.click(row('domain'))
+		fireEvent.click(await rowSoon('Entities'))
+		fireEvent.click(await rowSoon('Customers'))
+		return waitFor(() => { const v = document.querySelector('[role=tabpanel]:not([hidden]) .lw-entity-view'); expect(v).toBeTruthy(); return v as HTMLElement })
+	}
+
+	test('its view: extends Audited, and where each property comes from', async () => {
+		const view = await openCustomers()
+		await within(view).findByText('extends Audited')
+		const table = view.querySelector('.lw-form-table') as HTMLElement
+		expect([...table.querySelectorAll('th')].map(th => th.textContent).at(-1)).toBe('Inherited')
+		const origin = (name: string) => [...table.querySelectorAll('tbody tr')].find(tr => tr.children[1]?.textContent === name)?.lastElementChild?.textContent
+		expect(origin('id')).toBe('')
+		expect(origin('createdBy')).toBe('redefines Audited')
+		expect(origin('createdAt')).toBe('Audited')
+	})
+
+	test('its form: the inherited ones read only, apart; the own ones editable, the redefined one says so', async () => {
+		const view = await openCustomers()
+		fireEvent.click(await within(view).findByRole('button', { name: 'Edit' }))
+		const form = await waitFor(() => { const f = document.querySelector('[role=tabpanel]:not([hidden]) .lw-schema-forms'); expect(f).toBeTruthy(); return f as HTMLElement })
+		await within(form).findByRole('button', { name: 'Save' })
+		expect(within(form).getAllByRole('tab').map(t => t.textContent)[0]).toBe('Properties (2 + 1)')
+		const inherited = within(form).getByRole('group', { name: 'properties Inherited from Audited' })
+		expect(inherited.textContent).toContain('Read only here: it is changed in Audited.')
+		const name = within(inherited).getByRole('textbox', { name: 'createdAt name' }) as HTMLInputElement
+		expect(name.readOnly).toBe(true)
+		expect(within(inherited).queryByRole('button', { name: /^remove/ })).toBeNull()
+		expect(within(inherited).queryByRole('button', { name: 'Add' })).toBeNull()
+		// the own ones: editable, the redefined one with its note
+		const own = within(form).getByRole('table', { name: 'properties' })
+		expect((within(own).getByRole('textbox', { name: 'id name' }) as HTMLInputElement).readOnly).toBe(false)
+		expect(within(own).getByText('redefines Audited')).toBeTruthy()
+		expect(within(own).queryByRole('textbox', { name: 'createdAt name' })).toBeNull()
+	})
+
+	// the abstract isn't in the completed domain: its view is made from the lambdaORM.yaml, as an entity's
+	const viewOf = (name: string) => waitFor(() => {
+		const v = document.querySelector('[role=tabpanel]:not([hidden]) .lw-entity-view')
+		expect(v?.querySelector('.lw-entity-title')?.textContent).toBe(name)
+		return v as HTMLElement
+	})
+	const formOf = (name: string) => waitFor(() => {
+		const f = document.querySelector('[role=tabpanel]:not([hidden]) .lw-schema-forms')
+		expect(f?.textContent).toContain(`Entities / ${name}`)
+		return f as HTMLElement
+	})
+
+	test('its view opens the view of the abstract it extends: the same, without data nor diagram; Edit as an entity', async () => {
+		const view = await openCustomers()
+		fireEvent.click(await within(view).findByRole('button', { name: 'extends Audited' }))
+		const abstract = await viewOf('Audited')
+		expect(within(abstract).getByText('abstract')).toBeTruthy()
+		expect(within(abstract).getAllByRole('tab').map(t => t.textContent)).toEqual(['Properties (2)', 'Relations (0)', 'Keys and indexes', 'Constraints (0)', 'Extended by (1)'])
+		expect(within(abstract).queryByRole('button', { name: 'Query' })).toBeNull()
+		const table = abstract.querySelector('.lw-form-table') as HTMLElement
+		expect([...table.querySelectorAll('tbody tr')].map(tr => [tr.children[1]?.textContent, tr.children[2]?.textContent])).toEqual([['createdAt', 'dateTime'], ['createdBy', 'string']])
+		fireEvent.click(within(abstract).getByRole('button', { name: 'Edit' }))
+		const form = await formOf('Audited')
+		await within(form).findByRole('button', { name: 'Save' })
+		expect((within(form).getByRole('checkbox', { name: 'abstract' }) as HTMLInputElement).checked).toBe(true)
+	})
+
+	test('its form opens the form of the abstract in a tab of its own, keeping what is being edited', async () => {
+		const view = await openCustomers()
+		fireEvent.click(await within(view).findByRole('button', { name: 'Edit' }))
+		const form = await formOf('Customers')
+		fireEvent.click(within(within(form).getByRole('group', { name: 'properties Inherited from Audited' })).getByRole('button', { name: 'Open Audited' }))
+		await formOf('Audited')
+		expect(screen.getAllByRole('tab').map(t => t.textContent)).toEqual(expect.arrayContaining([expect.stringContaining('Customers'), expect.stringContaining('Audited')]))
+	})
+
+	const openDomain = async () => {
+		const admin = new FakeAdmin()
+		admin.text = SCHEMA
+		render(<Workspace api={new InheritedApi()} admin={admin} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" refreshMs={0} />)
+		await waitFor(() => expect(row('domain')).toBeTruthy())
+		fireEvent.click(row('domain'))
+		return admin
+	}
+
+	test('the domain lists its abstracts apart, from the lambdaORM.yaml, by name', async () => {
+		const admin = await openDomain()
+		admin.text = 'domain:\n  entities:\n    - { name: Located, abstract: true, extends: Audited }\n    - { name: Customers, extends: Catalog }\n    - { name: Audited, abstract: true }\n    - { name: Catalog, abstract: true, extends: Audited }\n'
+		fireEvent.click(await rowSoon('Abstracts'))
+		await rowSoon('Located')
+		const names = screen.getAllByRole('treeitem').map(r => r.querySelector('.lw-tree-label')?.textContent)
+		// in the domain the abstract ones go first: the entities extend them
+		const sections = names.filter(n => ['Abstracts', 'Entities', 'Enums'].includes(n ?? ''))
+		expect(sections).toEqual(['Abstracts', 'Entities', 'Enums'])
+		const at = names.indexOf('Abstracts')
+		expect(names.slice(at + 1, at + 4)).toEqual(['Audited', 'Catalog', 'Located'])
+	})
+
+	test('the domain lists its abstracts apart, as its entities: each opens its view, unfolded its properties', async () => {
+		await openDomain()
+		fireEvent.click(await rowSoon('Entities'))
+		await rowSoon('Customers')
+		expect(row('Audited')).toBeFalsy()
+		fireEvent.click(await rowSoon('Abstracts'))
+		fireEvent.click(await rowSoon('Audited'))
+		await viewOf('Audited')
+		fireEvent.click(await rowSoon('Properties (2)'))
+		// each with its type, as an entity's
+		await waitFor(() => expect(screen.getAllByRole('treeitem').map(r => r.querySelector('.lw-tree-label')?.textContent)).toEqual(expect.arrayContaining(['createdAtdateTime', 'createdBystring(128)'])))
+	})
+
+	test('an abstract one lists the entities that extend it, also through another abstract one; each opens its view', async () => {
+		const admin = await openDomain()
+		admin.text = 'domain:\n  entities:\n    - { name: Audited, abstract: true, properties: [{ name: createdAt, type: dateTime }] }\n    - { name: Located, abstract: true, extends: Audited, properties: [{ name: locationId }] }\n    - { name: Zones, extends: Located, properties: [{ name: code }] }\n    - { name: Customers, extends: Audited, properties: [{ name: id }] }\n    - { name: Areas, extends: Located, properties: [{ name: code }] }\n    - { name: Notes, properties: [{ name: id }] }\n'
+		fireEvent.click(await rowSoon('Abstracts'))
+		fireEvent.click(await rowSoon('Audited'))
+		const view = await viewOf('Audited')
+		fireEvent.click(within(view).getByRole('tab', { name: 'Extended by (4)' }))
+		const table = within(view).getByRole('table', { name: 'Extended by' })
+		expect([...table.querySelectorAll('tbody tr')].map(tr => [tr.children[1].textContent, tr.children[2].textContent])).toEqual([
+			['Areas', 'Located'], ['Customers', 'Audited'], ['Located abstract', 'Audited'], ['Zones', 'Located']
+		])
+		fireEvent.click(within(table).getAllByRole('button', { name: 'Located' })[0])
+		await viewOf('Located')
+	})
+
+	test('a new abstract starts abstract', async () => {
+		const admin = await openDomain()
+		fireEvent.click(within(await rowSoon('Abstracts')).getByRole('button', { name: 'New in Abstracts' }))
+		const form = await waitFor(() => { const f = document.querySelector('[role=tabpanel]:not([hidden]) .lw-schema-forms'); expect(f).toBeTruthy(); return f as HTMLElement })
+		expect((within(form).getByRole('checkbox', { name: 'abstract' }) as HTMLInputElement).checked).toBe(true)
+		fireEvent.change(within(form).getByLabelText('name'), { target: { value: 'Located' } })
+		fireEvent.click(within(form).getByRole('button', { name: 'Save' }))
+		await waitFor(() => expect(admin.patches[0]).toMatchObject({ op: 'add', at: ['domain', 'entities'], value: { name: 'Located', abstract: true } }))
 	})
 })

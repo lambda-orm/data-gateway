@@ -19,6 +19,7 @@ import { NoMetrics } from '../../src/lib/infrastructure/output/metrics/promClien
 import { InlineSchemaDirectory } from '../../src/lib/application/runtime/inlineSchemaDirectory'
 import { FixedClock } from '../helpers/fakes'
 import { call } from '../helpers/net'
+import { ownRoles, withGrants } from '../helpers/roles'
 
 class MovableClock implements ClockPort {
 	public time = Date.parse('2026-11-26T12:00:00.000Z')
@@ -137,11 +138,12 @@ test('a script of an agent always waits (it may write); a queued write can\'t wa
 })
 
 test('by REST: a write that waits answers 202 with its approval; GET /approvals/{id} its state', async () => {
+	const backend = ownRoles([{ name: 'backend', value: 'backend-token', permissions: ['read', 'write'], approval: 'writes' }])
 	const transport = new HttpTransport({ port: 0, host: '127.0.0.1', basePath: '', requestBodySize: '1mb', rateLimit: { windowMs: 1000, max: 0 }, swaggerEnabled: false }, {
-		directory: new InlineSchemaDirectory([{
+		directory: withGrants(new InlineSchemaDirectory([{
 			path: 'shop', gateway: schema.gateway, mcp: schema.mcp, transports: ['http'],
-			authenticators: { http: new BearerAuthenticator([{ name: 'backend', value: 'backend-token', permissions: ['read', 'write'], approval: 'writes' }]) }
-		}], new FixedClock(), '9.9.9'),
+			authenticators: { http: new BearerAuthenticator(backend.credentials, backend.roles) }
+		}], new FixedClock(), '9.9.9'), backend.roles),
 		metrics: new NoMetrics(),
 		logger: new ConsoleLogger('error')
 	})

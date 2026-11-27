@@ -235,7 +235,7 @@ orm:
         adapter: local
         type: apikey
         keys:
-          - { name: accounts-backend, value: $ACCOUNTS_KEY, permissions: [ read, write ] }
+          - { name: accounts-backend, value: $ACCOUNTS_KEY, roles: [ editor ] }
 
 runtime:
   transports: shared
@@ -253,13 +253,21 @@ logger: { adapter: winston, level: info }
 metrics: { enabled: true }
 audit: { enabled: true, includeData: false }
 
+authorization:                     # los roles que nombran las keys y los tokens (docs/ROLE_SCOPES.md)
+  roles:
+    reader:  { permissions: [ read ] }
+    editor:  { permissions: [ read, write ] }
+    backend: { permissions: [ read, write, script, queue, stageImport ] }
+
 authentication:                    # política global
   adapter: local
   type: apikey
   header: X-Api-Key
   keys:
-    - { name: agent,   value: $AGENT_KEY,   permissions: [ read ] }
-    - { name: backend, value: $BACKEND_KEY, permissions: [ read, write, script, queue, stageImport ] }
+    - { name: agent,   value: $AGENT_KEY,   roles: [ reader ] }
+    - { name: backend, value: $BACKEND_KEY, roles: [ backend ] }
+    # la key de una persona: su contexto de λORM (variable: valor), como el de un token (docs/JWT.md §4)
+    - { name: ana, value: $ANA_KEY, roles: [ editor ], context: { username: ana@acme.com } }
 
 rateLimit: { windowMs: 30000, max: 0 }   # solo http; max: 0 = sin límite
 
@@ -408,12 +416,16 @@ data-gateway:
       workspacePath: /workspace
     runtime:
       env: { passthrough: [ DB_CONNECTION ] }
+    authorization:
+      roles:
+        backend: { permissions: [ read, write, script ] }
+        agent:   { permissions: [ read ] }
     authentication:
       adapter: local
       type: bearer
       tokens:
-        - { name: backend, value: $BACKEND_TOKEN, permissions: [ read, write, script ] }
-        - { name: agent,   value: $AGENT_TOKEN,   permissions: [ read ] }
+        - { name: backend, value: $BACKEND_TOKEN, roles: [ backend ] }
+        - { name: agent,   value: $AGENT_TOKEN,   roles: [ agent ] }
     transports:
       http:         { port: $DATA_GATEWAY_HTTP_PORT }
       mcpHttp:      { port: $DATA_GATEWAY_MCP_HTTP_PORT }
@@ -722,13 +734,18 @@ Bloque `authentication` en tres niveles: global, por transporte (`transports.<t>
 en el edge, antes de enviar nada al esquema. Cada tipo es un `AuthenticatorPort` registrado en el
 `AuthenticatorRegistry`:
 
-| `adapter` | Credencial única (todos los permisos) | Varias credenciales con permisos | Valida |
+| `adapter` | Credencial única | Varias credenciales | Valida |
 | --- | --- | --- | --- |
 | `none` (por defecto) | — | — | todo (principal anónimo con todos los permisos) |
-| `local`, `type: bearer` | `token` | `tokens: [{ name, value, permissions }]` | `Authorization: Bearer <token>` |
-| `local`, `type: apikey` | `value` (+ `header`, def. `X-Api-Key`) | `keys: [{ name, value, permissions }]` | el header |
-| `local`, `type: basic` | `username`, `password` | `users: [{ username, password, permissions }]` | `Authorization: Basic …` |
-| `jwt` (fase posterior) | — | roles / scopes del token mapeados a permisos | JWT firmado (Keycloak, Entra ID) |
+| `local`, `type: bearer` | `token`, `roles` | `tokens: [{ name, value, roles, context }]` | `Authorization: Bearer <token>` |
+| `local`, `type: apikey` | `value`, `roles` (+ `header`, def. `X-Api-Key`) | `keys: [{ name, value, roles, context }]` | el header |
+| `local`, `type: basic` | `username`, `password`, `roles` | `users: [{ username, password, roles, context }]` | `Authorization: Basic …` |
+| `jwt` | — | los roles del claim `principal.permissions.claim` | JWT firmado (Keycloak, Entra ID; docs/JWT.md) |
+
+Lo que una credencial puede hacer lo dicen **solo sus roles** (5.0.0): `roles` es obligatorio y nombra roles de
+`authorization.roles` (o de `orm.schemas[].roles`, o de la administración), que dicen los permisos, las vistas, los
+stages y la aprobación (docs/ROLE_SCOPES.md). Una credencial con `permissions`, `view` o `approval` propios, o un método
+`jwt` con sus `roles`, detiene la gateway con el error que dice dónde van.
 
 - Una credencial `local` sin su secreto (o con su `$VAR` no definida) es error de configuración: el proceso no
   arranca. Abierto es solo `adapter: none`, explícito.
@@ -851,8 +868,25 @@ observability:
     enabled: true                      # además por OTLP (en /metrics van siempre que metrics.enabled)
   logs:
     adapters: [{ type: opentelemetry }]   # la auditoría y los cambios del schema, a Loki
+  explore:                             # dónde se ven: el IDE enlaza a ellas (cada entidad, sus trazas)
+    grafana: https://grafana.example.com
+    tempo: tempo                       # el uid del datasource de Tempo (tempo por defecto)
+    prometheus: prometheus             # el de Prometheus, las métricas (5.0.0; prometheus por defecto)
+    loki: loki                         # el de Loki, los logs (5.0.0; loki por defecto)
 ```
 
+- **Dónde se ven las trazas (`observability.explore`, 4.5.0):** es de la instalación, no de cada IDE. Con
+  `explore: { grafana: https://grafana.example.com, tempo: tempo, orgId: 1 }` (`tempo`, el uid del datasource de Tempo,
+  y `orgId`, opcionales), el `management` lo dice en `GET /observability` (sin credencial, como `/transports`: una URL,
+  sin datos) y el IDE muestra en cada entidad el enlace a sus trazas en el Explore de Grafana. Sin `explore`,
+  `GET /observability` responde `{}` y el IDE no muestra el enlace. No llega al SDK de λORM.
+- **Cambiarla desde la administración (5.0.0):** `GET /admin/observability` (permiso `observability`) dice la del
+  YAML, lo cambiado (`override`) y la que vale (`effective`); `PUT` con `{ config, reason }` reemplaza secciones enteras
+  (`exporter`, `traces`, `metrics`, `logs`, `explore`; `null` quita una), validadas como el YAML (sin `headers` en el
+  exportador) y guardadas en el estado (docs/GATEWAY_STATE.md); `DELETE` vuelve al YAML. Se aplica enseguida: el edge
+  se reinicia (las conexiones abiertas se reconectan; las sesiones siguen) y los workers cuyo SDK cambia se recargan
+  en blue-green. Las variables `OTEL_*` siguen mandando. En el IDE: **Administration › Observability** (Metrics, Logs,
+  Traces).
 - **Un SDK por hilo:** el proceso principal la resuelve una vez (con sus `OTEL_*`, que un worker aislado no recibe) y
   la pasa al edge y a cada worker de esquema, que inician el SDK de λORM **antes** de `Orm.init`: el `Orm` lo usa (un
   solo `service.name` y exportador). Un esquema sin `infrastructure.observability` toma la del gateway; con la suya,
@@ -1187,7 +1221,7 @@ comentarios; las conexiones como `${VARIABLES}`), `admin_schema_validate` (un ca
 (el esquema, `push`, `drop`, …) no se ofrece por MCP: un modelo lo haría sin la vista previa ni la confirmación de la
 UI. Un agente propone el cambio; una persona lo aplica.
 
-La administración es una API REST para la UI: los clientes de la gateway (`@lambdaorm/data-gateway-client` y los que
+La administración es una API REST para la UI: los clientes de la gateway (`@lambdaorm/data-gateway-client-node` y los que
 vienen) no la cubren, y por eso no entra en la suite de conformidad de los clientes; la prueban las pruebas de
 integración de la gateway.
 
@@ -1308,7 +1342,7 @@ transports:
   ignoran; los demás `admin.*` (`allowAnonymous`, `maxFileBytes`, `commandTimeoutMs`) siguen y aplican a `management`.
   Las tools `admin_*` de MCP (§11.6) están si `management` está expuesto.
 - **Sin CORS en ningún transporte:** ni `management` ni los de datos responden a un navegador de otro origen. Los
-  clientes de servidor (`@lambdaorm/client`, `@lambdaorm/data-gateway-client`, agentes MCP) no lo usan; una app web que
+  clientes de servidor (`@lambdaorm/client`, `@lambdaorm/data-gateway-client-node`, agentes MCP) no lo usan; una app web que
   llamaba a la gateway desde el navegador pasa por su propio backend, como el IDE.
 - **Red:** `management` escribe el esquema, sus variables (`.env`) y ejecuta DDL: se publica solo en la red del IDE (en
   un compose, sin `ports:`; en Kubernetes, un `Service` interno sin ingress).

@@ -41,11 +41,14 @@ orm:
 ${CONNECTIONS.map(name => `        ${name}: '${unreachable(name)}'`).join('\n')}
 runtime: { checkConnections: false }
 logger: { level: error }
+authorization:
+  roles:
+    reader: { permissions: [ read ] }
 authentication:
   adapter: local
   type: apikey
   keys:
-    - { name: reader, value: reader-key, permissions: [ read ] }
+    - { name: reader, value: reader-key, roles: [ reader ] }
 rateLimit: { max: 0 }
 transports:
   http: { port: $PORT, host: 127.0.0.1 }

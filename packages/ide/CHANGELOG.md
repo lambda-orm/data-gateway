@@ -2,6 +2,26 @@
 
 ### Unreleased
 
+- **Administration, in the explorer:** each connection has a node **Administration** above its schemas, with what its
+  credential may do: **Roles** (the permissions by role, a role by row and a permission by column, with its schemas;
+  Add role; and each role as a node: all it gives, its permissions and, by schema, its views and stages with the
+  defaults marked, with Edit and Remove; Edit has a box per permission and, for each schema chosen, its views and
+  stages to check and the default view and stage), **Access** (each key or token, where it applies, its roles and its context; never a secret),
+  **Persist** (where the gateway keeps its administration; inside it **Config**, its lambdaORM.yaml in Monaco whose
+  mapping can be edited, and **Connection**, its database, to move it: the state is copied and the gateway restarts),
+  **Sessions**, **Writes that wait**, **Tools** (REST API, WebSocket, MCP) and **Observability** (Metrics, Logs,
+  Traces: what is sent, the OTLP exporter and where it is seen in Grafana, saved and applied at once). Needs
+  data-gateway 5.0.
+- **The page of a connection** has only the connection: its form and who it is there, its user and its roles with
+  their permissions, views, stages and schemas (`GET /admin/me`). Its tabs (Tools, Roles, Sessions, Writes that wait)
+  moved to Administration.
+- **The traces of an entity, from its gateway:** the link of an entity to its traces in Grafana comes from the
+  configuration of the gateway (`observability.explore`, data-gateway 4.5, `GET /observability` of its management).
+  The section **Observability** of a connection (Grafana URL, Tempo datasource) is gone: what was saved there is no
+  longer used.
+- **The explorer on the left:** the box of the connection fills the height of the side and grows with its tree; past
+  the height, the side scrolls and its heading stays.
+
 ### 1.4.0 (2026-11-26)
 
 Works with any data-gateway 4.x; the roles of the gateway and the view in the options need data-gateway 4.4.
