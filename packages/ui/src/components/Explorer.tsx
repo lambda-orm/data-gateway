@@ -288,11 +288,12 @@ export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, sc
 	}
 	const namesIn = (list: unknown): string[] => Array.isArray(list) ? list.map((e: any) => e?.name).filter((n: unknown): n is string => typeof n === 'string') : []
 	// the abstract entities, as the lambdaORM.yaml says them (the completed domain has none): `abstract: true` among the
-	// entities, and domain.abstracts once λORM has it (L52)
+	// entities, and domain.abstracts once λORM has it (L52); by name
 	const abstractsIn = (doc: any): { name: string, extends?: string }[] => [
 		...(Array.isArray(doc?.domain?.abstracts) ? doc.domain.abstracts : []),
 		...(Array.isArray(doc?.domain?.entities) ? doc.domain.entities.filter((e: any) => e?.abstract === true) : [])
 	].filter((e: any) => typeof e?.name === 'string').map((e: any) => ({ name: e.name, ...(typeof e.extends === 'string' ? { extends: e.extends } : {}) }))
+		.sort((x, y) => x.name.localeCompare(y.name))
 	const abstractRows = (schema: string, doc: any, level: number) => {
 		if (doc === undefined) return [<Row key="abstracts-loading" level={level} label={m.loading} icon={null} muted />]
 		const list = abstractsIn(doc)

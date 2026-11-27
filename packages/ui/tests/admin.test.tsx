@@ -1102,6 +1102,16 @@ describe('what an entity inherits from the abstract one it extends', () => {
 		return admin
 	}
 
+	test('the domain lists its abstracts apart, from the lambdaORM.yaml, by name', async () => {
+		const admin = await openDomain()
+		admin.text = 'domain:\n  entities:\n    - { name: Located, abstract: true, extends: Audited }\n    - { name: Customers, extends: Catalog }\n    - { name: Audited, abstract: true }\n    - { name: Catalog, abstract: true, extends: Audited }\n'
+		fireEvent.click(await rowSoon('Abstracts'))
+		await rowSoon('Located')
+		const names = screen.getAllByRole('treeitem').map(r => r.querySelector('.lw-tree-label')?.textContent)
+		const at = names.indexOf('Abstracts')
+		expect(names.slice(at + 1, at + 4)).toEqual(['Audited', 'Catalog', 'Located'])
+	})
+
 	test('the domain lists its abstracts apart, from the lambdaORM.yaml; each opens its form', async () => {
 		await openDomain()
 		fireEvent.click(await rowSoon('Entities'))
