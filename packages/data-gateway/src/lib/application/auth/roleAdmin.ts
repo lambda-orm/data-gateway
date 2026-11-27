@@ -23,6 +23,26 @@ export interface MyRole {
 	unknown?: boolean
 }
 
+/** Where the gateway keeps what is its own (docs/GATEWAY_STATE.md): the source, how it is read, its schema */
+export interface StateDescription {
+	kind: 'sqlite' | 'orm' | 'memory'
+	dialect?: string
+	/** without secrets */
+	connection?: unknown
+	file?: string
+	/** in words: SQLite /workspace/.data-gateway/state.sqlite */
+	where: string
+	managedBy: 'node:sqlite' | 'lambdaORM' | 'memory'
+	/** state.source said in the configuration (else the SQLite of the volume, or memory) */
+	configured: boolean
+	refreshMs: number
+	required: boolean
+	/** it could be read the last time */
+	available: boolean
+	/** the lambdaORM.yaml of the system schema of the state (its entities, its mapping, its source) */
+	schema?: string
+}
+
 /** Who asks: its name, its context (the user it is of) and its roles with what each gives */
 export interface Me {
 	name: string
@@ -99,8 +119,16 @@ export class RoleAdmin {
 		private readonly clock: ClockPort,
 		private readonly id: () => string,
 		private readonly logger: LoggerPort,
-		private readonly accessOf: () => AccessDescription = () => ({ permissions: KNOWN_PERMISSIONS, authentications: [] })
+		private readonly accessOf: () => AccessDescription = () => ({ permissions: KNOWN_PERMISSIONS, authentications: [] }),
+		private readonly stateOf?: () => StateDescription
 	) {}
+
+	/** where the gateway keeps its state (sessions, roles, its observability) and its schema, without secrets */
+	public state (who: Principal): StateDescription {
+		this.require(who)
+		if (!this.stateOf) throw notFound('this gateway says nothing of its state')
+		return this.stateOf()
+	}
 
 	/** who may come in (the authentications, their keys and roles, never a secret) and every permission there is */
 	public access (who: Principal): AccessDescription {

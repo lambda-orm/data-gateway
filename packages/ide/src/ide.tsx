@@ -2,13 +2,13 @@ import { Explore, tracesOfEntity } from './observability'
 import { OidcSettings, OidcTokens, renew, signIn, signOut as oidcSignOut } from './oidc'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AdministrationNode, BrowserSessionStore, Workspace } from '@lambdaorm/ui'
-import { Activity, BarChart3, Cable, ClipboardCheck, KeyRound, Plus, ScrollText, Settings, Shield, UserCog, Users, Waypoints, Wrench } from 'lucide-react'
+import { Activity, BarChart3, Cable, Database, FileCode, ClipboardCheck, KeyRound, Plus, ScrollText, Settings, Shield, UserCog, Users, Waypoints, Wrench } from 'lucide-react'
 import { ConnectionPage, ConnectionTools, Credential, CredentialFields, getJson, headersOf, Kind, PermissionsOf, PreferencesPage, usePrefs, Who } from './shared'
 import { AppMenu } from './appMenu'
 import { ManagementClient, ManagementState, testConnection } from './management'
 import { SessionsPanel } from './sessions'
 import { ApprovalsPanel } from './approvals'
-import { AccessPage, ListedRole, MeCard, ObservabilityPage, RolePage, RolesPage, roleNamesOf, Signal } from './administration'
+import { AccessPage, ListedRole, MeCard, ObservabilityPage, PersistPage, RolePage, RolesPage, roleNamesOf, Signal, StateConfigPage } from './administration'
 import { endpointsOf, McpTab, SwaggerTab, useTransports, WebSocketTab } from './tools'
 import { forbiddenTarget, unreachable, viaProxy } from './proxy'
 
@@ -332,6 +332,9 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 				children: (adminRoles[c.id] ?? []).map(name => ({ key: `role:${name}`, label: name, icon: icon(UserCog), onOpen: () => openOf(`admin:role:${c.id}:${name}`) }))
 			}))
 			nodes.push(page('access', t.accessTitle, KeyRound))
+			// where the administration is kept, and its lambdaORM.yaml
+			nodes.push(page('persist', t.persistTitle, Database))
+			nodes.push(page('config', t.stateConfigTitle, FileCode))
 		}
 		nodes.push(page('sessions', t.sessions, Users))
 		if (has('approve')) nodes.push(page('approvals', t.approvals, ClipboardCheck))
@@ -397,6 +400,8 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 					render: () => <RolePage key={name} client={client} name={name} refresh={adminRefresh} onSaved={() => { rolesChanged(c.id).catch(() => undefined) }} onRemoved={() => { rolesChanged(c.id).catch(() => undefined) }} />
 				}] as const),
 				of('access', t.accessTitle, <KeyRound size={14} aria-hidden="true" />, () => <AccessPage client={client} onOpenRole={openRole} />),
+				of('persist', t.persistTitle, <Database size={14} aria-hidden="true" />, () => <PersistPage client={client} />),
+				of('config', t.stateConfigTitle, <FileCode size={14} aria-hidden="true" />, () => <StateConfigPage client={client} theme={dark ? 'dark' : 'light'} />),
 				of('sessions', t.sessions, <Users size={14} aria-hidden="true" />, () => <div className="dg-pane"><h2>{t.sessions}</h2><SessionsPanel client={client} who={who} /></div>),
 				of('approvals', t.approvals, <ClipboardCheck size={14} aria-hidden="true" />, () => <div className="dg-pane"><h2>{t.approvals}</h2><ApprovalsPanel client={client} self={who.name} /></div>),
 				of('tools', t.tools, <Wrench size={14} aria-hidden="true" />, () => <div className="dg-pane"><ToolsOf connection={c} onOpen={tool => openOf(`${tool}:${c.id}`)} /></div>),

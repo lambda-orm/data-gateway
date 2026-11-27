@@ -8,6 +8,44 @@ import { ClockPort, LoggerPort } from '../../application/ports/output/supportPor
 import { closeState, roleStoreOf } from '../output/state/stateStores'
 import { ObservabilityAdmin, ObservabilityRefresher } from '../../application/observability/observabilityAdmin'
 import { observabilityProblems } from './observability'
+import { stringify } from 'yaml'
+import { systemSchema } from '../output/state/ormState'
+import { StateDescription } from '../../application/auth/roleAdmin'
+
+/** A connection without its secrets: the values of keys like password, the password of a URL */
+export const maskConnection = (connection: unknown): unknown => {
+	if (typeof connection === 'string') {
+		return connection.replace(/(\/\/[^:/@\s]+:)[^@\s]*@/, '$1***@').replace(/((?:password|pwd|secret|token)\s*=\s*)[^;&\s]*/gi, '$1***')
+	}
+	if (Array.isArray(connection)) return connection.map(maskConnection)
+	if (connection && typeof connection === 'object') {
+		return Object.fromEntries(Object.entries(connection).map(([k, v]) => [k, /pass|secret|token|key|credential/i.test(k) ? '***' : maskConnection(v)]))
+	}
+	return connection
+}
+
+/**
+ * Where the gateway keeps its state and its schema as λORM sees it (docs/GATEWAY_STATE.md §3), without secrets: what
+ * the administration shows in Persist and Config
+ */
+export const describeStateOf = (source: StateSource, config: DataGatewayConfig, available: boolean): StateDescription => {
+	const dialect = source.kind === 'orm' ? source.dialect : source.kind === 'sqlite' ? 'SQLite' : undefined
+	const connection = source.kind === 'orm' ? maskConnection(source.connection) : source.kind === 'sqlite' ? { file: source.file } : undefined
+	return {
+		kind: source.kind,
+		...(dialect ? { dialect } : {}),
+		...(connection !== undefined ? { connection } : {}),
+		...(source.kind === 'sqlite' ? { file: source.file } : {}),
+		where: describeState(source),
+		// the SQLite of the volume is used directly (node:sqlite); another database, through λORM with this schema
+		managedBy: source.kind === 'orm' ? 'lambdaORM' : source.kind === 'sqlite' ? 'node:sqlite' : 'memory',
+		configured: !!config.state?.source,
+		refreshMs: config.state?.refreshMs ?? 30000,
+		required: config.state?.required ?? false,
+		available,
+		...(dialect ? { schema: stringify(systemSchema(dialect, connection, '<the temporary folder of the gateway>')) } : {})
+	}
+}
 
 /** The state of the gateway in this process (docs/GATEWAY_STATE.md): its source, the catalog of the roles and theirs */
 export interface GatewayState {
@@ -51,7 +89,7 @@ export const buildGatewayState = async (
 		...(override ? { observabilityOverride: override } : {}),
 		source,
 		catalog,
-		roles: new RoleAdmin(store, catalog, clock, randomUUID, logger, () => describeAccess(config)),
+		roles: new RoleAdmin(store, catalog, clock, randomUUID, logger, () => describeAccess(config), () => describeStateOf(source, config, refresher.available)),
 		refresher,
 		observability: new ObservabilityAdmin(store, config, config.metrics.enabled, clock, randomUUID, logger, observabilityProblems, () => observed.refresh()),
 		close: async () => {

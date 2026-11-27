@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react'
 import { Check, Minus } from 'lucide-react'
+import { CodeEditor } from '@lambdaorm/ui'
 import { ManagementClient } from './management'
 import { usePrefs } from './shared'
 
@@ -767,5 +768,72 @@ export const MeCard: React.FC<{ client: ManagementClient, fallback?: React.React
 				: <p className="dg-muted">{t.meNoRoles}: {me.value.permissions.join(', ')}</p>}
 			<p className="dg-muted">{t.meNote}</p>
 		</section>
+	)
+}
+
+// ─── where the administration is kept ───────────────────────────────────────
+
+/** Where the gateway keeps what is its own (GET /admin/state): never a secret */
+interface StateDescription {
+	kind: 'sqlite' | 'orm' | 'memory'
+	dialect?: string
+	connection?: unknown
+	file?: string
+	where: string
+	managedBy: string
+	configured: boolean
+	refreshMs: number
+	required: boolean
+	available: boolean
+	schema?: string
+}
+
+/**
+ * Persist: where the gateway keeps its administration (sessions, roles, its observability, the writes that wait): the
+ * source, how it is read, how often the replicas read it again, and whether it can be read now
+ */
+export const PersistPage: React.FC<{ client: ManagementClient }> = ({ client }) => {
+	const { t } = usePrefs()
+	const state = useAdmin<StateDescription>(client, '/admin/state')
+	const s = state.value
+	const connection = s?.connection === undefined ? undefined : typeof s.connection === 'string' ? s.connection : JSON.stringify(s.connection)
+	return (
+		<div className="dg-pane">
+			<h2>{t.persistTitle}</h2>
+			<p className="dg-muted">{t.persistNote}</p>
+			{state.error && <div className="dg-error" role="alert">{state.error}</div>}
+			{s && (
+				<section className="dg-card">
+					<dl className="dg-facts">
+						<dt>{t.persistWhere}</dt><dd><strong>{s.where}</strong></dd>
+						{s.dialect && <><dt>{t.persistDialect}</dt><dd>{s.dialect}</dd></>}
+						{s.file && <><dt>{t.persistFile}</dt><dd><code>{s.file}</code></dd></>}
+						{connection && s.kind === 'orm' && <><dt>{t.persistConnection}</dt><dd><code className="dg-wrap">{connection}</code></dd></>}
+						<dt>{t.persistManagedBy}</dt><dd>{s.managedBy}</dd>
+						<dt>{t.persistFrom}</dt><dd>{s.configured ? t.persistConfigured : s.kind === 'memory' ? t.persistMemory : t.persistVolume}</dd>
+						<dt>{t.persistRefresh}</dt><dd>{s.refreshMs ? `${s.refreshMs / 1000} s` : '—'}</dd>
+						<dt>{t.persistRequired}</dt><dd>{s.required ? '✓' : '—'}</dd>
+						<dt>{t.persistAvailable}</dt><dd className={s.available ? 'dg-ok' : 'dg-error'}>{s.available ? '✓' : t.persistUnavailable}</dd>
+					</dl>
+					{s.kind === 'memory' && <p className="dg-muted">{t.persistMemoryNote}</p>}
+				</section>
+			)}
+		</div>
+	)
+}
+
+/** Config: the lambdaORM.yaml of the administration (the system schema of the state), read only, without secrets */
+export const StateConfigPage: React.FC<{ client: ManagementClient, theme: 'light' | 'dark' }> = ({ client, theme }) => {
+	const { t } = usePrefs()
+	const state = useAdmin<StateDescription>(client, '/admin/state')
+	return (
+		<div className="dg-pane dg-pane-editor">
+			<h2>{t.stateConfigTitle}</h2>
+			<p className="dg-muted">{state.value?.managedBy === 'node:sqlite' ? t.stateConfigSqliteNote : t.stateConfigNote}</p>
+			{state.error && <div className="dg-error" role="alert">{state.error}</div>}
+			{state.value && (state.value.schema
+				? <CodeEditor value={state.value.schema} onChange={() => undefined} language="yaml" readOnly height="calc(100vh - 170px)" theme={theme} ariaLabel="lambdaORM.yaml" />
+				: <p className="dg-muted">{t.persistMemoryNote}</p>)}
+		</div>
 	)
 }

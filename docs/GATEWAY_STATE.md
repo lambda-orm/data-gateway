@@ -91,6 +91,12 @@ recordar.
 el de cada réplica, al ver subir la versión de `observability`) se lo dice al supervisor, que reinicia el edge y
 recarga en blue-green los workers cuyo SDK cambia; al arrancar, el supervisor la lee antes de iniciar los workers.
 
+**Dónde está, visto desde la administración (5.0.0):** `GET /admin/state` (permiso `roles`) dice la fuente (SQLite del
+volumen, una base por λORM o memoria), cómo se lee y escribe, si la dice `state.source`, cada cuánto la releen las
+réplicas, si es obligatoria, si se puede leer ahora, y el `lambdaORM.yaml` del schema de sistema; la conexión, sin
+secretos (contraseñas de una URL o de un objeto, `***`). En el IDE: **Administration › Persist** y **› Config** (en
+Monaco, de solo lectura).
+
 `Settings` existe para no necesitar una migración por cada opción nueva: una opción de la configuración que se puede
 cambiar en caliente se declara en el código (su camino, su tipo, su validación) y su valor va a `Settings`. Una
 opción con estructura propia (los roles) tiene su entidad.

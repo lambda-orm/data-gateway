@@ -178,3 +178,10 @@ test('scopes: the views and the stages of every schema, for the roles; with the 
 	const scopes = await call(admin, '/admin/scopes', { headers: await login(admin, key('boss-key')) })
 	expect(scopes.body).toEqual([{ path: 'shop', views: ['default', 'support'], stages: ['default', 'reporting'] }])
 })
+
+test('state: where the gateway keeps it and its schema, with the permission roles', async () => {
+	expect((await call(admin, '/admin/state', { headers: await login(admin, key('ana-key')) })).status).toBe(403)
+	const state = await call(admin, '/admin/state', { headers: await login(admin, key('boss-key')) })
+	expect(state.body).toMatchObject({ kind: 'sqlite', dialect: 'SQLite', managedBy: 'node:sqlite', available: true })
+	expect(state.body.schema).toContain('name: Sessions')
+})

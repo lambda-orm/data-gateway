@@ -28,6 +28,9 @@ All notable changes to this project will be documented in this file.
   watches the version); it reads it before starting the workers too.
 - **`observability.explore`** says where the metrics and the logs are seen too: `prometheus` and `loki`, the uids of
   their datasources in Grafana (`prometheus`, `loki` by default).
+- **`GET /admin/state`** (permission `roles`): where the gateway keeps its state (the SQLite of the volume, a
+  database through λORM, memory), how it is read, how often the replicas read it again, whether it can be read now,
+  and the lambdaORM.yaml of its system schema; the connection without its secrets.
 - **`GET /admin/me`** (any credential, about itself): its name, its context and each of its roles as it applies
   (permissions, schemas, views, stages).
 - **`GET /admin/access`** (permission `roles`): who may come in, as the configuration says it: the authentications of

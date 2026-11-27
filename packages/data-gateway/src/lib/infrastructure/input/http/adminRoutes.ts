@@ -39,6 +39,8 @@ export const adminRouter = (admin: AdminService, authenticate: express.RequestHa
 		router.get('/roles', handle(async (_req, res) => roles.list(principal(res))))
 		// who asks and what its roles give it (any credential, about itself)
 		router.get('/me', handle(async (_req, res) => roles.me(principal(res))))
+		// where the gateway keeps its state, and its schema (without secrets)
+		router.get('/state', handle(async (_req, res) => roles.state(principal(res))))
 		// who may come in: the authentications with their keys and roles (never a secret), and the permissions there are
 		router.get('/access', handle(async (_req, res) => roles.access(principal(res))))
 		// what a role may be given in each schema: its views and its stages
