@@ -2,6 +2,20 @@
 
 ### Unreleased
 
+### 1.5.0 (2026-11-27)
+
+Needs data-gateway 5.0 for its administration (Roles by schema, Access, Persist, Observability) and who a connection
+is; with a gateway of 4.x the rest works as in 1.4.
+
+- **Abstract entities:** the domain of the explorer lists them apart, in **Abstracts** (before Entities and Enums),
+  read from the lambdaORM.yaml; each one is shown and edited as an entity, and its view has the tab **Extended by
+  (n)** with every entity that extends it. An entity says what it inherits: its form shows the inherited properties
+  and relations apart, by the base that declares them (read only, with a link to it), and its view says
+  `extends <base>` and, by property and relation, where each one comes from. In the diagrams an abstract entity is
+  drawn apart (a dashed border, its name in italics with «abstract»), and the diagram of an entity has **options**:
+  the names of the relations, its related entities and the entities it extends (checked at first).
+- **A key entered after opening the IDE** asks again what its credential may do: its administration appears and its
+  domains are read again, without reloading the page.
 - **Administration, in the explorer:** each connection has a node **Administration** above its schemas, with what its
   credential may do: **Roles** (the permissions by role, a role by row and a permission by column, with its schemas;
   Add role; and each role as a node: all it gives, its permissions and, by schema, its views and stages with the
@@ -16,7 +30,7 @@
   their permissions, views, stages and schemas (`GET /admin/me`). Its tabs (Tools, Roles, Sessions, Writes that wait)
   moved to Administration.
 - **The traces of an entity, from its gateway:** the link of an entity to its traces in Grafana comes from the
-  configuration of the gateway (`observability.explore`, data-gateway 4.5, `GET /observability` of its management).
+  configuration of the gateway (`observability.explore`, data-gateway 5.0, `GET /observability` of its management).
   The section **Observability** of a connection (Grafana URL, Tempo datasource) is gone: what was saved there is no
   longer used.
 - **The explorer on the left:** the box of the connection fills the height of the side and grows with its tree; past
