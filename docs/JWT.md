@@ -103,7 +103,7 @@ Una conexión larga (WebSocket, MCP) se corta cuando vence el token (código 440
 
 - **IDE:** la autenticación de una connection suma *Bearer token (JWT)*: se pega el token; al vencer, el IDE lo dice y
   pide otro. (Login con el IdP desde el IDE, con PKCE, queda fuera: decisión 5.)
-- **Cliente Node** (`@lambdaorm/data-gateway-client`): ya manda `Authorization: Bearer`; suma una función que da el token
+- **Cliente Node** (`@lambdaorm/data-gateway-client-node`): ya manda `Authorization: Bearer`; suma una función que da el token
   en cada pedido (para refrescarlo).
 
 ## 8. Decisiones

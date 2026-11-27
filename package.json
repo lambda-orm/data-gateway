@@ -17,7 +17,7 @@
 	"scripts": {
 		"build": "pnpm --filter @lambdaorm/ui run build && tsc -b && pnpm --filter @lambdaorm/data-gateway-ide run build",
 		"build:data-gateway": "pnpm --filter @lambdaorm/data-gateway build",
-		"build:client-node": "pnpm --filter @lambdaorm/data-gateway-client build",
+		"build:client-node": "pnpm --filter @lambdaorm/data-gateway-client-node build",
 		"build:ui": "pnpm --filter @lambdaorm/ui build",
 		"build:ide": "pnpm --filter @lambdaorm/data-gateway-ide build",
 		"test": "pnpm -r test",

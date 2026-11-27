@@ -1,5 +1,5 @@
 ---
-'@lambdaorm/data-gateway-client': minor
+'@lambdaorm/data-gateway-client-node': minor
 ---
 
 `token` can be a function that gives it (`token: () => idp.accessToken()`): it is asked for on every request of REST

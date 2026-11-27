@@ -4,7 +4,8 @@ The cases every client of the [Data Gateway](../data-gateway/README.md) must pas
 transports: the same query gives the same result, and the same error the same code, whether it goes by REST, by
 WebSocket or by MCP. The plan of the clients: [`docs/DATA_GATEWAY_CLIENTS_PLAN.md`](../../docs/DATA_GATEWAY_CLIENTS_PLAN.md).
 
-Not published: the clients of this repository (Node, Go, Rust, the CLI) run it from here.
+Not published: the clients of this repository run it from here: Node (`packages/client-node`, `npx tsx
+conformance/run.ts`) and Go (`packages/client-go`, `go run ./conformance`); Rust and the CLI when they exist.
 
 ## Run it
 

@@ -39,7 +39,7 @@ Lo que dicen [`CLAUDE.md`](../CLAUDE.md), [`README.md`](../README.md) y [`DEPLOY
 | `packages/data-gateway` | `@lambdaorm/data-gateway` 3.2.0, con *Unreleased* en su CHANGELOG | la imagen `flaviorita/data-gateway` (workflow `data-gateway-image.yml`) |
 | `packages/ide` | `@lambdaorm/data-gateway-ide` 1.0.0, sin publicar | la imagen `flaviorita/data-gateway-ide` (`ide-image.yml`) |
 | `packages/ui` | `@lambdaorm/ui` 0.5.0, con el changeset pendiente `.changeset/ui-workspace-tree.md` (minor) | npm (`release.yml`, Changesets) |
-| `packages/client-node` | `@lambdaorm/data-gateway-client` 0.1.1, nunca publicado | npm (`release.yml`): la primera publicación necesita un token Automation |
+| `packages/client-node` | `@lambdaorm/data-gateway-client-node` 0.1.1, nunca publicado | npm (`release.yml`): la primera publicación necesita un token Automation |
 | `packages/conformance` | — | no se publica: los clientes la pasan |
 | `packages/lab-ilusor` | `@lambdaorm/lab-ilusor`, privado | no se publica: es el lab ilusor-cloud que estaba en `packages/lib/src/dev/labs/ilusor-cloud` de core, traído con su historia. Usa λORM de npm, Postgres y FerretDB (`npm run up && npm run setup && npm run lab`, o `scripts/ci-local.sh lab`; el workflow es `lab-ilusor.yml`) |
 
@@ -142,7 +142,7 @@ Ilusor usa la gateway de este repo, construida a mano. Su compose está en `~/il
      las expresiones y los temas;
    - IDE **1.0.0**, la primera imagen;
    - `@lambdaorm/ui`, la minor del changeset pendiente;
-   - la primera publicación de `@lambdaorm/data-gateway-client`.
+   - la primera publicación de `@lambdaorm/data-gateway-client-node`.
 4. **El lab encontró un problema en el modelo de Ilusor:** `model.spec.ts` lee el modelo real, en
    `~/ilusor/dev/cloud/data-gateway/workspace/ilusor/lambdaORM.yaml`. Antes se salteaba sin avisar, porque buscaba el
    modelo en la raíz del workspace y ese archivo ya no existía.

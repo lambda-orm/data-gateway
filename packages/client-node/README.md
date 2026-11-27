@@ -1,6 +1,6 @@
-# @lambdaorm/data-gateway-client
+# @lambdaorm/data-gateway-client-node
 
-[![npm version](https://img.shields.io/npm/v/@lambdaorm/data-gateway-client.svg)](https://www.npmjs.com/package/@lambdaorm/data-gateway-client)
+[![npm version](https://img.shields.io/npm/v/@lambdaorm/data-gateway-client-node.svg)](https://www.npmjs.com/package/@lambdaorm/data-gateway-client-node)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
 The Node client of the [λORM Data Gateway](https://lambda-orm.github.io/wiki/data-gateway/). One API, five transports:
@@ -8,11 +8,11 @@ the scheme of the connection string chooses REST, WebSocket or MCP, and the same
 same error the same code, whichever you use.
 
 ```sh
-npm install @lambdaorm/data-gateway-client
+npm install @lambdaorm/data-gateway-client-node
 ```
 
 ```ts
-import { connect } from '@lambdaorm/data-gateway-client'
+import { connect } from '@lambdaorm/data-gateway-client-node'
 
 const gateway = await connect('http://localhost:8080/northwind', { apiKey: process.env.GATEWAY_KEY })
 const products = await gateway.execute(
@@ -71,7 +71,7 @@ A query is the text of a λORM expression, with its variables in `data`; it can 
 Every operation that fails throws a `GatewayError`. Its `code` is the same on the five transports:
 
 ```ts
-import { GatewayError } from '@lambdaorm/data-gateway-client'
+import { GatewayError } from '@lambdaorm/data-gateway-client-node'
 
 try {
 	await gateway.execute('Categories.insert()', { name: 'Beverages' })

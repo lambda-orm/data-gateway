@@ -17,7 +17,8 @@ released from core first, then its version is bumped here.
 | `ide` | `@lambdaorm/data-gateway-ide` | **no** (image `flaviorita/data-gateway-ide`) | Vite app (connections in the browser, no login) and its backend `server/server.mjs` (Node, no dependencies), which serves it and proxies to the gateways' `management` (`/gw/{base64url}/…`, `DATA_GATEWAY_IDE_TARGETS`). Depends on `ui`. |
 | `ide-desktop` | `@lambdaorm/data-gateway-ide-desktop` | **no** (GitHub releases `ide-v<version>`) | The IDE as a desktop app (Electron): `packages/ide/dist` and its `server.mjs` inside, served at `app://ide`, the proxy on 127.0.0.1 with a token per run. electron-builder (`electron-builder.config.cjs`), built by `ide-desktop.yml`. |
 | `ui` | `@lambdaorm/ui` | yes | React components (Vite library mode, Vitest). Reads `@lambdaorm/base`'s `queryable.d.ts` from node_modules at build time. |
-| `client-node` | `@lambdaorm/data-gateway-client` | yes | Node client over REST, WebSocket, MCP. Depends on `@lambdaorm/base` (npm). |
+| `client-node` | `@lambdaorm/data-gateway-client-node` | yes | Node client over REST, WebSocket, MCP. Depends on `@lambdaorm/base` (npm). |
+| `client-go` | `github.com/lambda-orm/data-gateway-client-go` (package `gateway`) | yes, by its public read-only mirror (Go has no registry; tag `v<version>`) | Go client over REST, WebSocket, MCP, the same API as `client-node`. Go ≥ 1.22, only `github.com/coder/websocket`. Its `package.json` is only so that `pnpm -r` builds, lints (`gofmt`, `go vet`) and tests it. |
 | `conformance` | — | no | The conformance suite (cases, compose, reference runner) the clients pass. |
 | `lab-ilusor` | `@lambdaorm/lab-ilusor` | no | The ilusor-cloud lab (from core's `packages/lib/src/dev/labs/ilusor-cloud`): λORM from npm on Postgres and FerretDB as Ilusor's Cloud uses it; specs named after the items `L<n>` of core's `docs/LAMBDAORM_PENDING.md`. No `test` script: `npm run up && npm run setup && npm run lab`. |
 
@@ -36,7 +37,7 @@ scripts/ci-local.sh clients [<image>] # the conformance suite (Docker)
 scripts/ci-local.sh lab               # the ilusor-cloud lab (Docker)
 ```
 
-Per package (`packages/<pkg>`): `npm run lint|build|test|dist`. `client-node` and `ui` use the shared
+Per package (`packages/<pkg>`): `npm run lint|build|test|dist` (`client-go`: `go test ./...`, `go run ./conformance`). `client-node` and `ui` use the shared
 `scripts/dist.mjs` for `dist`; `data-gateway` uses Grunt.
 
 ## Releasing

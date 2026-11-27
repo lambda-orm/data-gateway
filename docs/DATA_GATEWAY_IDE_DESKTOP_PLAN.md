@@ -250,7 +250,7 @@ Los releases del IDE comparten el repositorio con el código de todos los paquet
 
 | Quién | Hoy | Qué cambia |
 | --- | --- | --- |
-| `release.yml` (Changesets: `@lambdaorm/ui`, `@lambdaorm/data-gateway-client`) | `changesets/action` crea por defecto un release por paquete publicado, y queda como *latest* | `createGithubReleases: false`. Las versiones de npm se siguen viendo en sus CHANGELOG y en npm |
+| `release.yml` (Changesets: `@lambdaorm/ui`, `@lambdaorm/data-gateway-client-node`) | `changesets/action` crea por defecto un release por paquete publicado, y queda como *latest* | `createGithubReleases: false`. Las versiones de npm se siguen viendo en sus CHANGELOG y en npm |
 | `data-gateway-image.yml` (la gateway) | crea solo el tag `data-gateway-v*`, sin release | nada; si algún día crea releases, con `make_latest: false` |
 | `ide-image.yml` (la imagen del IDE) | crea el tag `ide-v*` | nada: el release lo crea `ide-desktop.yml` sobre ese tag |
 | `ide-desktop.yml` (nuevo) | — | crea el release `ide-v<versión>` con `make_latest: true`; un prerelease (`-rc.N`), con `prerelease: true` y `make_latest: false` |

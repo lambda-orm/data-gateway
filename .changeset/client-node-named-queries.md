@@ -1,5 +1,5 @@
 ---
-'@lambdaorm/data-gateway-client': minor
+'@lambdaorm/data-gateway-client-node': minor
 ---
 
 `client.queries()` lists the queries of `application.queries` that the credential can use (their parameters and

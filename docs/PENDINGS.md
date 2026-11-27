@@ -23,7 +23,7 @@ Las fuentes:
 | Imagen `flaviorita/data-gateway` | En Docker Hub solo hasta **3.2.0**. La **4.0.0 no se publicó**: el workflow `data-gateway-image.yml` falló el 2026-11-23 en el paso *Test the image (conformance suite)* y no se volvió a correr ([run 45222346894](https://github.com/lambda-orm/data-gateway/actions/runs/45222346894)) |
 | Imagen `flaviorita/data-gateway-ide` | `1.0.0` publicada (y el release `ide-v1.0.0` del escritorio) |
 | `@lambdaorm/ui` | 0.5.0 en npm; 17 changesets en `.changeset/` |
-| `@lambdaorm/data-gateway-client` | 0.1.1, nunca publicado (la primera vez necesita un token Automation de npm) |
+| `@lambdaorm/data-gateway-client-node` | 0.1.1, nunca publicado (la primera vez necesita un token Automation de npm) |
 | λORM que usa la gateway | `@lambdaorm/base ^3.7.0`, `lib ^3.9.0`, `client ^0.10.8` |
 | λORM disponible | `base` 3.11.1, `lib` 3.15.0 (3.15.1 en camino: `merge` como `upsert`, secuencias de MongoDB desde 1, funciones de SQLite), `client` 0.10.13, `cli` 1.10.0 |
 | La wiki | Ya describe la gateway 4.0.0 y la UI de `develop` del IDE: lo que necesita la 4.1.0 está marcado como *"not in the image 4.0.0"* |
@@ -119,7 +119,7 @@ Después: `scripts/ci-local.sh check`, `clients` y `lab`.
 ### R4. Liberar 4.1.0 y el IDE 1.1.0
 
 > **Estado (2026-11-25):** ramas `release/data-gateway-4.1.0` y `release/ide-1.1.0` listas para `main` (los workflows
-> publican las imágenes; el PR de versiones de Changesets, `@lambdaorm/ui` y `@lambdaorm/data-gateway-client`). La wiki
+> publican las imágenes; el PR de versiones de Changesets, `@lambdaorm/ui` y `@lambdaorm/data-gateway-client-node`). La wiki
 > de la 4.1.0 en `lambda-orm/wiki` → `feature/data-gateway-4.1.0`. **Después de publicar:** llevar `main` a `develop`,
 > la guía de la wiki a `flaviorita/data-gateway:4.1.0` (y el IDE 1.1.0), y quitar sus marcas *"not in the image
 > 4.0.0"*. La corrección de core de R3 (validación entre fuentes, `IOrm.observeWith`, typings) sale en una 4.1.1.
@@ -134,7 +134,7 @@ publicar, quitar las marcas *"not in the image 4.0.0"* de sus páginas de la gat
 > CHANGELOG). Ramas `release/data-gateway-4.2.0` y `release/ide-1.2.0` sobre esa, listas para `main`. La wiki en
 > `lambda-orm/wiki` → `feature/data-gateway-4.2.0` (la página nueva *Data changes*, el caché en *Configuration*, la
 > pestaña *Data* del IDE; ya con las imágenes `4.2.0` / `1.2.0`: mergearla **después** de publicarlas). Changesets:
-> `@lambdaorm/ui` (la tabla) y `@lambdaorm/data-gateway-client` (`subscribe`). Fuera: caché y suscripciones entre
+> `@lambdaorm/ui` (la tabla) y `@lambdaorm/data-gateway-client-node` (`subscribe`). Fuera: caché y suscripciones entre
 > réplicas (Redis), G6b.
 
 ### R6. Liberar 4.3.0 y el IDE 1.3.0
@@ -143,7 +143,7 @@ publicar, quitar las marcas *"not in the image 4.0.0"* de sus páginas de la gat
 > Keycloak y el login con PKCE, vectores y puntos en el IDE y SQLite para desarrollo, en `develop` (#36–#40). Ramas
 > `release/data-gateway-4.3.0` y `release/ide-1.3.0`, listas para `main`. La wiki en `lambda-orm/wiki` →
 > `feature/data-gateway-4.3.0` (mergearla **después** de publicar las imágenes). Changesets: `@lambdaorm/ui` (vectores
-> y puntos, archivos, paneles, la fila de la connection) y `@lambdaorm/data-gateway-client` (`approval`).
+> y puntos, archivos, paneles, la fila de la connection) y `@lambdaorm/data-gateway-client-node` (`approval`).
 
 ### R7. Liberar 4.4.0 y el IDE 1.4.0
 

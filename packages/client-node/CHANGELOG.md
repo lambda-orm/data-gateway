@@ -1,4 +1,4 @@
-# @lambdaorm/data-gateway-client
+# @lambdaorm/data-gateway-client-node
 
 ## 0.1.1
 

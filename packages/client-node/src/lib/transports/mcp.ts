@@ -5,7 +5,7 @@ import { RpcMessage, RpcSocket } from './rpcSocket'
 import { Transport, withTimeout } from './transport'
 
 const PROTOCOL_VERSION = '2025-03-26'
-const INITIALIZE = { protocolVersion: PROTOCOL_VERSION, capabilities: {}, clientInfo: { name: '@lambdaorm/data-gateway-client', version: '0' } }
+const INITIALIZE = { protocolVersion: PROTOCOL_VERSION, capabilities: {}, clientInfo: { name: '@lambdaorm/data-gateway-client-node', version: '0' } }
 
 interface ToolResult {
 	content?: { type: string, text?: string }[]

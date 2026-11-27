@@ -26,8 +26,8 @@ clientes).
 
 | Tema | Decisión |
 | --- | --- |
-| Repo | **todo en este monorepo** (decisión del usuario, 2026-11-20), como paquetes: `packages/client-node`, `packages/data-gateway-client-go`, `packages/data-gateway-client-rust`, `packages/data-gateway-cli` y `packages/conformance` (la suite común, §7). Lo de Go se publica además en espejos públicos de solo lectura (§1.1) |
-| Nombres de paquete | según el ecosistema: npm `@lambdaorm/data-gateway-client`, Go `github.com/lambda-orm/data-gateway-client-go` (paquete `gateway`), crates.io `lambdaorm-data-gateway-client` (crate `lambdaorm_gateway`), binario `dgw` |
+| Repo | **todo en este monorepo** (decisión del usuario, 2026-11-20), como paquetes: `packages/client-node`, `packages/client-go`, `packages/data-gateway-client-rust`, `packages/data-gateway-cli` y `packages/conformance` (la suite común, §7). Lo de Go se publica además en espejos públicos de solo lectura (§1.1) |
+| Nombres de paquete | según el ecosistema: npm `@lambdaorm/data-gateway-client-node` (con el sufijo del lenguaje, como `-go`: decisión del usuario, 2026-11-27, antes de su primera publicación), Go `github.com/lambda-orm/data-gateway-client-go` (paquete `gateway`), crates.io `lambdaorm-data-gateway-client` (crate `lambdaorm_gateway`), binario `dgw` |
 | Transporte | el **esquema de la URL** de la cadena de conexión (§2); nunca una opción aparte |
 | Credenciales | aparte de la URL (opciones o variables de entorno), para que no queden en logs ni en el historial |
 | Consulta | siempre **texto** con la expresión de λORM (`"Orders.filter(p => p.id == id)"`) y `data` aparte; Node acepta además una función (como hoy: se envía su texto) |
@@ -42,12 +42,12 @@ clientes).
 | --- | --- | --- | --- |
 | Node | `packages/client-node` (workspace de pnpm, Changesets) | npm | no: npm publica el `dist/`, como `@lambdaorm/lib` |
 | Rust | `packages/data-gateway-client-rust` (`cargo`) | crates.io (`cargo publish` sube el código del crate) | no |
-| Go | `packages/data-gateway-client-go` | **espejo público** `lambda-orm/data-gateway-client-go` | **sí**: Go no tiene registro; `go get` baja el código del repo de la ruta del módulo, y un repo privado no se puede bajar |
+| Go | `packages/client-go` | **espejo público** `lambda-orm/data-gateway-client-go` | **sí**: Go no tiene registro; `go get` baja el código del repo de la ruta del módulo, y un repo privado no se puede bajar |
 | CLI | `packages/data-gateway-cli` | binarios en las releases del espejo público `lambda-orm/data-gateway-cli`, tap de Homebrew, `go install` | **sí**, por lo mismo (y las releases de un repo privado no se pueden bajar) |
 | Conformidad | `packages/conformance` | — (la usan los paquetes de acá) | no |
 
 - **Espejos de Go:** repos públicos que solo reciben lo que publica `scripts/ci-local.sh`: el contenido de
-  `packages/data-gateway-client-go` (o `-cli`) en la raíz (`git subtree split`), su commit y su tag `v<versión>`.
+  `packages/client-go` (o `-cli`) en la raíz (`git subtree split`), su commit y su tag `v<versión>`.
   Nadie desarrolla en ellos; los issues se reciben en el espejo y se resuelven en el monorepo. El `go.mod` del
   paquete ya declara la ruta del espejo, así que dentro del monorepo la CLI lo usa con un `replace` local
   (`go.work`).
@@ -182,15 +182,15 @@ mismo por cualquier vía.
 
 ## 8. Cada proyecto
 
-### Node — `packages/client-node` → `@lambdaorm/data-gateway-client`
+### Node — `packages/client-node` → `@lambdaorm/data-gateway-client-node`
 
 - TypeScript, ESM + CJS, Node ≥ 20; `fetch` nativo en lugar de axios; WebSocket de Node 22 o `ws`.
 - Parte del código de `packages/client` (API y adaptador WebSocket) y le suma los transportes MCP.
 - `connect(url, options)` además de la forma actual `orm.init(url, options)` (compatibilidad).
 - Migración: `@lambdaorm/client` 1.0.0 reexporta el nuevo y queda deprecado (`npm deprecate`, lo corre el usuario);
-  `@lambdaorm/cli` pasa a depender de `@lambdaorm/data-gateway-client`.
+  `@lambdaorm/cli` pasa a depender de `@lambdaorm/data-gateway-client-node`.
 
-### Go — `packages/data-gateway-client-go`
+### Go — `packages/client-go`
 
 - Go ≥ 1.22, sin dependencias salvo un cliente WebSocket (`github.com/coder/websocket`).
 - `gateway.Connect(url, opts...)` con opciones funcionales (`WithAPIKey`, `WithToken`, `WithTimeout`);
@@ -221,9 +221,9 @@ mismo por cualquier vía.
 | Fase | Contenido | Se publica |
 | --- | --- | --- |
 | 0 | Este plan; `packages/conformance` con el compose, 27 casos y el runner de referencia (135 en verde: 27 × 5 transportes); `ci-local.sh clients`; los arreglos que la suite encontró en lib y en la gateway | lib 3.7.1, gateway 3.1.0 |
-| 1 | Node: `packages/client-node`, los cinco transportes con `fetch` y el `WebSocket` de Node (sin axios), la cadena de conexión, los errores, la suite en verde con su API pública (135/135); documentación en la wiki al publicarlo | `@lambdaorm/data-gateway-client` 0.1.0 |
+| 1 | Node: `packages/client-node`, los cinco transportes con `fetch` y el `WebSocket` de Node (sin axios), la cadena de conexión, los errores, la suite en verde con su API pública (135/135); documentación en la wiki al publicarlo | `@lambdaorm/data-gateway-client-node` 0.1.0 |
 | 2 | Migrar `@lambdaorm/cli` al cliente nuevo; `@lambdaorm/client` 1.0.0 como alias deprecado | `@lambdaorm/cli`, `@lambdaorm/client` |
-| 3 | Go: los cinco transportes, la suite en verde; `release-go` y el espejo público | `v0.1.0` |
+| 3 | Go: `packages/client-go`, los cinco transportes, la suite en verde con su API pública (196/196: 41 casos × 5 transportes y las suscripciones), tests con `httptest`; falta `release-go` y el espejo público (lo crea el usuario) | `v0.1.0` |
 | 4 | CLI `dgw`; `release-cli` y su espejo | `v0.1.0` (binarios, Homebrew) |
 | 5 | Rust; `release-rust` | crates.io 0.1.0 |
 | 6 | Con la suite en verde en los cuatro: `1.0.0`; página de la wiki "Clients" (en los cuatro idiomas) y README de cada paquete con el mismo ejemplo en cada lenguaje | `1.0.0` de cada uno |

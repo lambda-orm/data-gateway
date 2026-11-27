@@ -1221,7 +1221,7 @@ comentarios; las conexiones como `${VARIABLES}`), `admin_schema_validate` (un ca
 (el esquema, `push`, `drop`, …) no se ofrece por MCP: un modelo lo haría sin la vista previa ni la confirmación de la
 UI. Un agente propone el cambio; una persona lo aplica.
 
-La administración es una API REST para la UI: los clientes de la gateway (`@lambdaorm/data-gateway-client` y los que
+La administración es una API REST para la UI: los clientes de la gateway (`@lambdaorm/data-gateway-client-node` y los que
 vienen) no la cubren, y por eso no entra en la suite de conformidad de los clientes; la prueban las pruebas de
 integración de la gateway.
 
@@ -1342,7 +1342,7 @@ transports:
   ignoran; los demás `admin.*` (`allowAnonymous`, `maxFileBytes`, `commandTimeoutMs`) siguen y aplican a `management`.
   Las tools `admin_*` de MCP (§11.6) están si `management` está expuesto.
 - **Sin CORS en ningún transporte:** ni `management` ni los de datos responden a un navegador de otro origen. Los
-  clientes de servidor (`@lambdaorm/client`, `@lambdaorm/data-gateway-client`, agentes MCP) no lo usan; una app web que
+  clientes de servidor (`@lambdaorm/client`, `@lambdaorm/data-gateway-client-node`, agentes MCP) no lo usan; una app web que
   llamaba a la gateway desde el navegador pasa por su propio backend, como el IDE.
 - **Red:** `management` escribe el esquema, sus variables (`.env`) y ejecuta DDL: se publica solo en la red del IDE (en
   un compose, sin `ports:`; en Kubernetes, un `Service` interno sin ingress).

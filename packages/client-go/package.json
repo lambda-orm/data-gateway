@@ -1,0 +1,13 @@
+{
+	"name": "@lambdaorm/data-gateway-client-go",
+	"version": "0.1.0",
+	"private": true,
+	"description": "Go client of the λORM Data Gateway (module github.com/lambda-orm/data-gateway-client-go); not on npm: these scripts only let pnpm -r build, lint and test it",
+	"license": "MIT",
+	"scripts": {
+		"build": "go build ./...",
+		"lint": "test -z \"$(gofmt -l .)\" || { gofmt -l .; exit 1; } && go vet ./...",
+		"test": "go test ./...",
+		"conformance": "go run ./conformance"
+	}
+}

@@ -1,5 +1,5 @@
 {
-	"name": "@lambdaorm/data-gateway-client",
+	"name": "@lambdaorm/data-gateway-client-node",
 	"version": "0.1.1",
 	"description": "Client of the λORM Data Gateway: the same queries and the same API over REST, WebSocket or MCP, chosen by the connection string",
 	"author": "Flavio Lionel Rita <flaviolrita@proton.me>",
