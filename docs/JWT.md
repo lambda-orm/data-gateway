@@ -52,7 +52,7 @@ authentication:
   authentication:
     methods:
       - { adapter: jwt, issuer: https://auth.example.com/realms/ilusor, audience: data-gateway, … }
-      - { adapter: local, type: apikey, keys: [ { name: billing, value: '${BILLING_KEY}', permissions: [read, write] } ] }
+      - { adapter: local, type: apikey, keys: [ { name: billing, value: '${BILLING_KEY}', roles: [backend] } ] }
   ```
 
 - Un rol de `roles` dice sus permisos: uno sin lista es un error de configuración (nunca *todos*, como una credencial

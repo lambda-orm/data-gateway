@@ -235,7 +235,7 @@ orm:
         adapter: local
         type: apikey
         keys:
-          - { name: accounts-backend, value: $ACCOUNTS_KEY, permissions: [ read, write ] }
+          - { name: accounts-backend, value: $ACCOUNTS_KEY, roles: [ editor ] }
 
 runtime:
   transports: shared
@@ -253,15 +253,21 @@ logger: { adapter: winston, level: info }
 metrics: { enabled: true }
 audit: { enabled: true, includeData: false }
 
+authorization:                     # los roles que nombran las keys y los tokens (docs/ROLE_SCOPES.md)
+  roles:
+    reader:  { permissions: [ read ] }
+    editor:  { permissions: [ read, write ] }
+    backend: { permissions: [ read, write, script, queue, stageImport ] }
+
 authentication:                    # política global
   adapter: local
   type: apikey
   header: X-Api-Key
   keys:
-    - { name: agent,   value: $AGENT_KEY,   permissions: [ read ] }
-    - { name: backend, value: $BACKEND_KEY, permissions: [ read, write, script, queue, stageImport ] }
+    - { name: agent,   value: $AGENT_KEY,   roles: [ reader ] }
+    - { name: backend, value: $BACKEND_KEY, roles: [ backend ] }
     # la key de una persona: su contexto de λORM (variable: valor), como el de un token (docs/JWT.md §4)
-    - { name: ana, value: $ANA_KEY, permissions: [ read, write ], context: { username: ana@acme.com } }
+    - { name: ana, value: $ANA_KEY, roles: [ editor ], context: { username: ana@acme.com } }
 
 rateLimit: { windowMs: 30000, max: 0 }   # solo http; max: 0 = sin límite
 
@@ -728,7 +734,7 @@ en el edge, antes de enviar nada al esquema. Cada tipo es un `AuthenticatorPort`
 | --- | --- | --- | --- |
 | `none` (por defecto) | — | — | todo (principal anónimo con todos los permisos) |
 | `local`, `type: bearer` | `token` | `tokens: [{ name, value, permissions }]` | `Authorization: Bearer <token>` |
-| `local`, `type: apikey` | `value` (+ `header`, def. `X-Api-Key`) | `keys: [{ name, value, permissions, context }]` | el header |
+| `local`, `type: apikey` | `value` (+ `header`, def. `X-Api-Key`) | `keys: [{ name, value, roles, context }]` | el header |
 | `local`, `type: basic` | `username`, `password` | `users: [{ username, password, permissions }]` | `Authorization: Basic …` |
 | `jwt` (fase posterior) | — | roles / scopes del token mapeados a permisos | JWT firmado (Keycloak, Entra ID) |
 
