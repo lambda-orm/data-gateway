@@ -50,10 +50,19 @@ Los rodeos que quedan en el modelo mientras λORM no los arregle (cada abstracta
 - Cada hija de `Catalog` y `LocatedCatalog` repite su `primaryKey` (L46).
 - Areas, Subjects y Zones repiten `{name: name, type: text, required: true}`.
 
+### I3. El mapping de `Audited` una vez, ya
+
+Hoy funciona (`L50 today`, `packages/lab-ilusor/tests/extends.spec.ts`): una entidad abstracta `Audited` en cada
+mapping con sus columnas, y cada entidad del mapping con `extends: Audited`, toma `created_at`, `created_by`,
+`updated_at`, `updated_by` y su `dbType`. Son 4 líneas por entidad que pasan a 1 (588 → 147, más una abstracta por
+mapping). Lo que falta en λORM (L50) es no tener que repetir `extends` en el mapping. Verificar igual: el schema
+completado antes y después, iguales (también los mappings).
+
 ## 3. Cuando λORM publique L45–L53
 
 Pasar antes `docs/LAMBDAORM_PENDING.md` de Ilusor a core (como §8 de su `docs/LAMBDAORM_PENDING.md`, renumerando si
-L45–L53 ya están tomados), con un test en `packages/lab-ilusor` de este repo por ítem.
+L45–L53 ya están tomados). Sus tests ya están en este repo: `packages/lab-ilusor/tests/extends.spec.ts` (`npm run
+model`, sin Postgres), uno o dos por ítem, todos fallando hoy (`@lambdaorm/lib` 3.15.0, `base` 3.11.1).
 
 | # | Qué cambia en el modelo de Ilusor |
 | --- | --- |
@@ -61,7 +70,7 @@ L45–L53 ya están tomados), con un test en `packages/lab-ilusor` de este repo 
 | L46 | Quitar `primaryKey` de las 30 hijas de `Catalog` y `LocatedCatalog` |
 | L47 | Abstractas para las constraints repetidas: el `color` hex de las 6 *ThresholdBands* y `periodUnit` / `periodValue > 0` de las 5 *RateThresholds* |
 | L48 | Con `extends: [Audited, Located]`: un `Located` sin auditoría para las 25 entidades de iot_location que no la tienen (bindings, vértices, contextos, `DeviceLinks`…) |
-| L50 | El mapping de `Audited` una vez, en vez de en 147 entidades (588 líneas) |
+| L50 | Quitar el `extends: Audited` de las 147 entidades de los mappings (I3) |
 | L52 | Mover `Audited`, `Catalog`, `Located` y `LocatedCatalog` a `domain.abstracts` |
 
 Cada paso, verificado igual: el schema completado antes y después, iguales. Fijar la versión de `@lambdaorm/base` de
@@ -83,7 +92,9 @@ La 5.0 (rama `feature/credential-context`, sin publicar) no arranca con la confi
 
 ## 5. Otros avisos
 
-- El lab de este repo falla en *model ilusor*: 8 relaciones compuestas del modelo real que no emparejan `locationId`
-  ([`PENDINGS.md`](PENDINGS.md)). Es del modelo de Ilusor, no de λORM.
+- El lab de este repo falla en *model ilusor* (`npm run model`): 8 relaciones del modelo real que no emparejan
+  `locationId` — `GalleryVectors.sample`, `RecognitionVectors.sample`, `ScanJobs.scan` / `areaScans`, `AreaScans.job` /
+  `scanJobs`, `BiometricSamples.galleryVectors`, `DeviceStateSamples.recognitionVectors`: una fila llega a la de otra
+  location (y Postgres lee todas las particiones). Es del modelo de Ilusor, no de λORM.
 - `ed3e5ee0` y los 45 commits de `feat/data-gateway` no tienen upstream.
 - La rama tiene muchos cambios sin commitear (`ci/deploy`, `local-*`, `cloud/docker-compose.yml`…), aparte de esto.

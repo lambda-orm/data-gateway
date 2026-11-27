@@ -60,6 +60,7 @@ and in any order (`--randomize`).
 | `composite.spec.ts` | relations of several fields, `(locationId, x)` as Ilusor's iot_location (schema `lab_composite`, created by push) (L34) |
 | `documents.spec.ts` | FerretDB (MongoDB API) next to Postgres: no transactions, UUIDs and Decimal128 (L35, L37); FerretDB on 127.0.0.1:57017 (`up` starts it) |
 | `model.spec.ts` | the relations of a model, without a database: pairs of existing fields of the same type, the one side a key, `locationId` never dropped, no relation of several fields to MongoDB (L34). The lab's models, and Ilusor's real one when it is on this machine (`ILUSOR_MODEL`, by default `~/ilusor/dev/cloud/data-gateway/workspace/ilusor/lambdaORM.yaml`). `npm run model` runs it alone, without Postgres |
+| `extends.spec.ts` | abstract entities and `extends` as Ilusor's Cloud uses them (Audited → Located → LocatedCatalog): what a child inherits of a relation it says again, its key, constraints, two bases, `properties:` null, the mapping, the order of the columns, `domain.abstracts`, where an inherited one comes from (L45–L53). On the completed schema, without a database: `npm run model` runs it too |
 | `uuid.spec.ts` | `uuid` columns, with a model and tables of its own (schema `lab_uuid`, `tests/uuid/lambdaORM.yaml`) so the lab's drift check is untouched (L36, L38) |
 
 ### Adding a test

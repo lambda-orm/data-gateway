@@ -1,7 +1,8 @@
 {
 	"rootDir": ".",
 	"testMatch": [
-		"<rootDir>/tests/model.spec.ts"
+		"<rootDir>/tests/model.spec.ts",
+		"<rootDir>/tests/extends.spec.ts"
 	],
 	"testTimeout": 30000,
 	"maxWorkers": 1,
