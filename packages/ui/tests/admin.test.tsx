@@ -1128,6 +1128,9 @@ describe('what an entity inherits from the abstract one it extends', () => {
 		fireEvent.click(await rowSoon('Abstracts'))
 		await rowSoon('Located')
 		const names = screen.getAllByRole('treeitem').map(r => r.querySelector('.lw-tree-label')?.textContent)
+		// in the domain the abstract ones go first: the entities extend them
+		const sections = names.filter(n => ['Abstracts', 'Entities', 'Enums'].includes(n ?? ''))
+		expect(sections).toEqual(['Abstracts', 'Entities', 'Enums'])
 		const at = names.indexOf('Abstracts')
 		expect(names.slice(at + 1, at + 4)).toEqual(['Audited', 'Catalog', 'Located'])
 	})

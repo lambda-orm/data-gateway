@@ -544,12 +544,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, sc
 												onOpen={() => onOpenDomain(s.path)} title={`${m.domainYaml} — ${m.readOnly}`} />
 											{expanded.has(k('d')) && (
 												<>
-													<Row level={4} label={m.entities} icon={<Icons.entity />} expanded={expanded.has(k('e'))}
-														onToggle={unfold('e', () => loadDomain(s.path))} actions={newOf(s.path, 'entities')} />
-													{expanded.has(k('e')) && entityRows(s.path)}
-													<Row level={4} label={a.enums} icon={<Icons.enums />} expanded={expanded.has(k('n'))}
-														onToggle={unfold('n', () => loadDomain(s.path))} actions={newOf(s.path, 'enums')} />
-													{expanded.has(k('n')) && elementRows(s.path, 'enums', enums, 5)}
+													{/* the abstract ones first: the entities extend them */}
 													{admin?.can.schemaRead && admin.loadSchemaDoc && admin.onOpenElement && (
 														<>
 															<Row level={4} label={a.abstracts} icon={<Icons.entity />} expanded={expanded.has(k('ab'))}
@@ -558,6 +553,12 @@ export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, sc
 															{expanded.has(k('ab')) && abstractRows(s.path, doc, 5)}
 														</>
 													)}
+													<Row level={4} label={m.entities} icon={<Icons.entity />} expanded={expanded.has(k('e'))}
+														onToggle={unfold('e', () => loadDomain(s.path))} actions={newOf(s.path, 'entities')} />
+													{expanded.has(k('e')) && entityRows(s.path)}
+													<Row level={4} label={a.enums} icon={<Icons.enums />} expanded={expanded.has(k('n'))}
+														onToggle={unfold('n', () => loadDomain(s.path))} actions={newOf(s.path, 'enums')} />
+													{expanded.has(k('n')) && elementRows(s.path, 'enums', enums, 5)}
 												</>
 											)}
 											{admin?.can.schemaRead && admin.onOpenElement && (
