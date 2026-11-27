@@ -301,9 +301,9 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 	const [schemas, setSchemas] = useState<SchemaInfo[]>([])
 	const [schema, setSchema] = useState<string | undefined>(fixedSchema)
 	const [loaded, setDomain] = useState<DomainInfo>()
-	// the options of the diagram of an entity: its related entities, and the entities it extends
-	const [related, setRelated] = useState(true)
-	const [extended, setExtended] = useState(false)
+	// the options of the diagram of an entity: its related entities, and the entities it extends (at first only these)
+	const [related, setRelated] = useState(false)
+	const [extended, setExtended] = useState(true)
 	const extending = !!props.options && extended && !!props.source?.length
 	// what is drawn: the domain, and with the entities it extends, the extends of each one and the abstract ones (their own
 	// properties; their relations are drawn from the entities that have them)

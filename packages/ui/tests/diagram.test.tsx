@@ -151,15 +151,13 @@ describe('DomainDiagram', () => {
 		class IlusorApi extends FakeApi { async domain () { return completed } }
 		const { container } = render(<DomainDiagram api={new IlusorApi()} schema="ilusor" layout={rowLayout} focus="Areas" options source={source as any} />)
 		const shown = () => [...container.querySelectorAll('.lw-diagram-svg [data-entity]')].map(e => e.getAttribute('data-entity')).sort()
-		await waitFor(() => expect(shown()).toEqual(['Areas', 'Locations']))
+		// at first: the entity and the entities it extends, up its chain (not the other entities of the same base: Zones)
+		await waitFor(() => expect(shown()).toEqual(['Areas', 'Audited', 'Located']))
 		// one list of choices, several at once; the check of the names is in it
 		const group = screen.getByRole('group', { name: 'options' })
 		const option = (name: string) => screen.getByRole('checkbox', { name }) as HTMLInputElement
 		expect([...group.querySelectorAll('label')].map(l => l.textContent?.trim())).toEqual(['relation names', 'related entities', 'extended entities'])
-		expect([option('relation names').checked, option('related entities').checked, option('extended entities').checked]).toEqual([false, true, false])
-		// the entities it extends, up its chain (not the other entities of the same base: Zones)
-		fireEvent.click(option('extended entities'))
-		await waitFor(() => expect(shown()).toEqual(['Areas', 'Audited', 'Located', 'Locations']))
+		expect([option('relation names').checked, option('related entities').checked, option('extended entities').checked]).toEqual([false, false, true])
 		expect([...container.querySelectorAll('[data-edge^="extends:"]')].map(e => e.getAttribute('data-edge')).sort()).toEqual(['extends:Audited>Located', 'extends:Located>Areas'])
 		expect(container.querySelector('[data-entity=Located]')!.textContent).toContain('Located : Audited «abstract»')
 		// an abstract one is drawn apart: its class, a dashed border, «abstract»; a concrete one is not
@@ -170,10 +168,13 @@ describe('DomainDiagram', () => {
 		expect(areas.classList.contains('lw-abstract')).toBe(false)
 		expect(areas.querySelector('rect')!.getAttribute('stroke-dasharray')).toBeNull()
 		expect(areas.textContent).not.toContain('«abstract»')
-		// without its related ones: the entity and what it extends
+		// its related ones too
 		fireEvent.click(option('related entities'))
-		await waitFor(() => expect(shown()).toEqual(['Areas', 'Audited', 'Located']))
-		fireEvent.click(option('related entities'))
+		await waitFor(() => expect(shown()).toEqual(['Areas', 'Audited', 'Located', 'Locations']))
+		// without the entities it extends: the entity and its related ones
+		fireEvent.click(option('extended entities'))
+		await waitFor(() => expect(shown()).toEqual(['Areas', 'Locations']))
+		fireEvent.click(option('extended entities'))
 		fireEvent.click(option('relation names'))
 		await waitFor(() => expect(container.querySelector('.lw-line-name')?.textContent).toBe('location'))
 		expect(screen.getByText('(3)')).toBeTruthy()
