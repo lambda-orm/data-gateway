@@ -223,6 +223,11 @@
 .lw-forms-element .lw-toolbar { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .lw-form-field { display: grid; grid-template-columns: 120px minmax(0, 360px); gap: 8px; align-items: center; margin: 4px 0; }
 .lw-form-group { border: 1px solid var(--lw-border); border-radius: 6px; margin: 8px 0; padding: 6px; overflow-x: auto; }
+/* what an entity inherits from the entity it extends: read only, changed in that one */
+.lw-form-group.lw-inherited { border-style: dashed; background: var(--lw-panel); }
+.lw-form-group.lw-inherited legend { display: flex; gap: 8px; align-items: baseline; color: var(--lw-muted); }
+.lw-form-group.lw-inherited .lw-type { margin: 0 0 4px; color: var(--lw-muted); font-size: var(--lw-text-xs); }
+.lw-row-note { margin-right: 6px; white-space: nowrap; }
 .lw-form-rows { width: 100%; table-layout: auto; }
 .lw-form-rows td, .lw-form-rows th { padding: 3px 4px; vertical-align: middle; }
 .lw-form-rows th { white-space: nowrap; }

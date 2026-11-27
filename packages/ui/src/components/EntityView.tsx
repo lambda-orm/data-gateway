@@ -8,6 +8,8 @@ import { explorerMessagesOf, format } from '../domain/explorerI18n'
 import { Locale } from '../domain/i18n'
 import { DomainDiagram } from './DomainDiagram'
 import { ExpressionView } from './ExpressionView'
+import { Inheritance, inheritanceOf } from '../domain/inheritance'
+import { fromYaml } from '../domain/results'
 
 export interface EntityViewProps {
 	api: QueryApiPort
@@ -65,6 +67,26 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 
 	useEffect(() => { loadDomain().then(setDomain, e => setError(e?.message ?? String(e))) }, [loadDomain])
 
+	// what it inherits: the completed domain no longer says extends, the lambdaORM.yaml does (with schemaRead)
+	const [inheritance, setInheritance] = useState<Inheritance>()
+	useEffect(() => {
+		if (!admin) { setInheritance(undefined); return }
+		let live = true
+		// (a port without readSchema, or that fails: nothing is said of the inheritance)
+		Promise.resolve().then(() => admin.readSchema(schema)).then(file => {
+			if (live) setInheritance(inheritanceOf((fromYaml(file.text) as any)?.domain?.entities, name))
+		}, () => { if (live) setInheritance(undefined) })
+		return () => { live = false }
+	}, [admin, schema, name, revision])
+	const inherits = !!inheritance?.bases.length
+	// where a property or relation comes from: the base that declares it, or the one an own one redefines
+	const originOf = (key: 'properties' | 'relations', itemName: string): React.ReactNode => {
+		const item = inheritance?.[key].find(i => i.row.name === itemName)
+		if (!item) return ''
+		if (item.from !== name) return <span className="lw-muted" title={format(m.inheritedHint, { name: item.from })}>{item.from}</span>
+		return item.redefines ? <span className="lw-muted">{format(m.redefines, { name: item.redefines })}</span> : ''
+	}
+
 	const entity: EntityInfo | undefined = domain?.entities.find(e => e.name === name)
 	const references = useMemo(() => {
 		const map = new Map<string, string>()
@@ -101,7 +123,11 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 				<code>/{schema}</code>
 				{entity.abstract && <span className="lw-badge">{m.abstract}</span>}
 				{entity.view && <span className="lw-badge">{m.viewEntity}</span>}
-				{entity.extends && <span className="lw-badge">{format(m.extendsEntity, { name: entity.extends })}</span>}
+				{(entity.extends ?? inheritance?.bases[0]) && (
+					<span className="lw-badge" title={inheritance?.bases.length ? [entity.name, ...inheritance.bases].join(' → ') : undefined}>
+						{format(m.extendsEntity, { name: entity.extends ?? inheritance!.bases[0] })}
+					</span>
+				)}
 				<span className="lw-spacer" />
 				{tracesUrl && <a href={tracesUrl} target="_blank" rel="noopener noreferrer">{a.viewTraces}</a>}
 				{onRemove && <button className="lw-danger" onClick={() => onRemove(schema, entity.name)}>{removeLabel}</button>}
@@ -119,7 +145,7 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 			{section === 'properties' && (
 				<div className="lw-view">
 					<table className="lw-table lw-form-table">
-						<thead><tr><th>#</th><th>{m.name}</th><th>{m.type}</th><th>{m.length}</th><th>{m.required}</th><th>PK</th><th>{m.auto}</th><th>{m.defaultValue}</th><th>{m.references}</th><th>{m.expressions}</th></tr></thead>
+						<thead><tr><th>#</th><th>{m.name}</th><th>{m.type}</th><th>{m.length}</th><th>{m.required}</th><th>PK</th><th>{m.auto}</th><th>{m.defaultValue}</th><th>{m.references}</th><th>{m.expressions}</th>{inherits && <th>{m.inherited}</th>}</tr></thead>
 						<tbody>
 							{(entity.properties ?? []).map((p, i) => (
 								<tr key={p.name} className={expressionsShown === p.name ? 'lw-active' : undefined}>
@@ -137,6 +163,7 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 											title={[...expressionsOf(p), ...(constraintsOf(entity, p.name).length ? [`${m.constraints} (${constraintsOf(entity, p.name).length})`] : [])].join(', ')}
 											onClick={() => setExpressionsShown(expressionsShown === p.name ? undefined : p.name)}>ƒ {m.expression}</button>
 									)}</td>
+									{inherits && <td>{originOf('properties', p.name)}</td>}
 								</tr>
 							))}
 						</tbody>
@@ -171,10 +198,10 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 					<h4>{m.relations}</h4>
 					{(entity.relations ?? []).length === 0 ? <p className="lw-muted">{m.none}</p> : (
 						<table className="lw-table lw-form-table">
-							<thead><tr><th>{m.name}</th><th>{m.type}</th><th>{m.entity}</th><th>{m.from}</th><th>{m.to}</th><th>{m.cardinality}</th><th>{m.weak}</th></tr></thead>
+							<thead><tr><th>{m.name}</th><th>{m.type}</th><th>{m.entity}</th><th>{m.from}</th><th>{m.to}</th><th>{m.cardinality}</th><th>{m.weak}</th>{inherits && <th>{m.inherited}</th>}</tr></thead>
 							<tbody>
 								{(entity.relations ?? []).map(r => (
-									<tr key={r.name}><td>{r.name}</td><td>{r.type}</td><td>{link(r.entity)}</td><td>{r.from}</td><td>{r.to}</td><td>{cardinalityOf(r)}</td><td><Check on={r.weak} /></td></tr>
+									<tr key={r.name}><td>{r.name}</td><td>{r.type}</td><td>{link(r.entity)}</td><td>{r.from}</td><td>{r.to}</td><td>{cardinalityOf(r)}</td><td><Check on={r.weak} /></td>{inherits && <td>{originOf('relations', r.name)}</td>}</tr>
 								))}
 							</tbody>
 						</table>

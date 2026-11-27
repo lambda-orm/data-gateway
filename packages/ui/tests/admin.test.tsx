@@ -1004,3 +1004,55 @@ describe('several data-gateways', () => {
 		expect(screen.queryByRole('region', { name: 'staging' })).toBeNull()
 	})
 })
+
+describe('what an entity inherits from the abstract one it extends', () => {
+	// Customers extends Audited: createdAt comes from it, createdBy is redefined (required); the completed domain no
+	// longer says extends, the lambdaORM.yaml does
+	const SCHEMA = 'domain:\n  entities:\n    - name: Audited\n      abstract: true\n      properties:\n        - { name: createdAt, type: dateTime }\n        - { name: createdBy, length: 128 }\n    - name: Customers\n      extends: Audited\n      primaryKey: [id]\n      properties:\n        - { name: id, type: integer }\n        - { name: createdBy, required: true }\n'
+	class InheritedApi extends FakeApi {
+		async domain () {
+			return { entities: [{ name: 'Customers', primaryKey: ['id'], relations: [],
+				properties: [{ name: 'id', type: 'integer' }, { name: 'createdBy', length: 128, required: true }, { name: 'createdAt', type: 'dateTime' }] }], enums: [] } as any
+		}
+	}
+	const openCustomers = async () => {
+		const admin = new FakeAdmin()
+		admin.text = SCHEMA
+		render(<Workspace api={new InheritedApi()} admin={admin} store={new MemoryWorkspaceStore([], true)} history={false} locale="en" refreshMs={0} />)
+		await waitFor(() => expect(row('domain')).toBeTruthy())
+		fireEvent.click(row('domain'))
+		fireEvent.click(await rowSoon('Entities'))
+		fireEvent.click(await rowSoon('Customers'))
+		return waitFor(() => { const v = document.querySelector('[role=tabpanel]:not([hidden]) .lw-entity-view'); expect(v).toBeTruthy(); return v as HTMLElement })
+	}
+
+	test('its view: extends Audited, and where each property comes from', async () => {
+		const view = await openCustomers()
+		await within(view).findByText('extends Audited')
+		const table = view.querySelector('.lw-form-table') as HTMLElement
+		expect([...table.querySelectorAll('th')].map(th => th.textContent).at(-1)).toBe('Inherited')
+		const origin = (name: string) => [...table.querySelectorAll('tbody tr')].find(tr => tr.children[1]?.textContent === name)?.lastElementChild?.textContent
+		expect(origin('id')).toBe('')
+		expect(origin('createdBy')).toBe('redefines Audited')
+		expect(origin('createdAt')).toBe('Audited')
+	})
+
+	test('its form: the inherited ones read only, apart; the own ones editable, the redefined one says so', async () => {
+		const view = await openCustomers()
+		fireEvent.click(await within(view).findByRole('button', { name: 'Edit' }))
+		const form = await waitFor(() => { const f = document.querySelector('[role=tabpanel]:not([hidden]) .lw-schema-forms'); expect(f).toBeTruthy(); return f as HTMLElement })
+		await within(form).findByRole('button', { name: 'Save' })
+		expect(within(form).getAllByRole('tab').map(t => t.textContent)[0]).toBe('Properties (2 + 1)')
+		const inherited = within(form).getByRole('group', { name: 'properties Inherited from Audited' })
+		expect(inherited.textContent).toContain('Read only here: it is changed in Audited.')
+		const name = within(inherited).getByRole('textbox', { name: 'createdAt name' }) as HTMLInputElement
+		expect(name.readOnly).toBe(true)
+		expect(within(inherited).queryByRole('button', { name: /^remove/ })).toBeNull()
+		expect(within(inherited).queryByRole('button', { name: 'Add' })).toBeNull()
+		// the own ones: editable, the redefined one with its note
+		const own = within(form).getByRole('table', { name: 'properties' })
+		expect((within(own).getByRole('textbox', { name: 'id name' }) as HTMLInputElement).readOnly).toBe(false)
+		expect(within(own).getByText('redefines Audited')).toBeTruthy()
+		expect(within(own).queryByRole('textbox', { name: 'createdAt name' })).toBeNull()
+	})
+})
