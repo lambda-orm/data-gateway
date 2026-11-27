@@ -95,8 +95,10 @@ if (!pkg.bin) {
     symlinkSync(distDir, link, 'dir')
     // dependencies resolve from the package's own node_modules (NODE_PATH), the package itself through its name
     execSync(`node -e "require('${pkg.name}')"`, { cwd: smoke, stdio: 'pipe', env: { ...process.env, NODE_PATH: join(pkgDir, 'node_modules') } })
+    // and imported, as from an ES module (an "exports" with only "require" can't be imported)
+    execSync(`node --input-type=module -e "await import('${pkg.name}')"`, { cwd: smoke, stdio: 'pipe' })
   } finally {
     rmSync(smoke, { recursive: true, force: true })
   }
 }
-console.log(`✓ ${pkg.name}@${pkg.version}: dist/ loads by its name`)
+console.log(`✓ ${pkg.name}@${pkg.version}: dist/ loads by its name (require and import)`)
