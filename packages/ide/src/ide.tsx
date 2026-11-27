@@ -3,7 +3,7 @@ import { OidcSettings, OidcTokens, renew, signIn, signOut as oidcSignOut } from 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { AdministrationNode, BrowserSessionStore, Workspace } from '@lambdaorm/ui'
 import { Activity, BarChart3, Cable, ClipboardCheck, KeyRound, Plus, ScrollText, Settings, Shield, UserCog, Users, Waypoints, Wrench } from 'lucide-react'
-import { ConnectionPage, ConnectionTools, Credential, CredentialFields, getJson, headersOf, Kind, PreferencesPage, usePrefs, Who } from './shared'
+import { ConnectionPage, ConnectionTools, Credential, CredentialFields, getJson, headersOf, Kind, PermissionsOf, PreferencesPage, usePrefs, Who } from './shared'
 import { AppMenu } from './appMenu'
 import { ManagementClient, ManagementState, testConnection } from './management'
 import { SessionsPanel } from './sessions'
@@ -159,7 +159,7 @@ const ConnectionEditor: React.FC<{
 	)
 	return initial
 		? <ConnectionPage name={initial.name} url={urlOf(initial)} credential={credentialOf(initial, { [initial.id]: givenSecret })} who={who}
-			account={client && who && <MeCard client={client} />}>{form}</ConnectionPage>
+			account={client && who && <MeCard client={client} fallback={<PermissionsOf who={who} />} />}>{form}</ConnectionPage>
 		: <div className="dg-pane"><h2>{t.newConnection}</h2>{form}</div>
 }
 

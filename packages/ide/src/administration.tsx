@@ -558,10 +558,11 @@ interface Me { name: string, permissions: string[], context?: Record<string, unk
  * Who the connection is in its gateway (GET /admin/me): its user (its context), and each of its roles with its
  * permissions, its views and its stages (the first of each, the one used when nothing is chosen) and its schemas
  */
-export const MeCard: React.FC<{ client: ManagementClient }> = ({ client }) => {
+export const MeCard: React.FC<{ client: ManagementClient, fallback?: React.ReactNode }> = ({ client, fallback }) => {
 	const { t } = usePrefs()
 	const me = useAdmin<Me>(client, '/admin/me')
-	if (me.error) return <div className="dg-error" role="alert">{me.error}</div>
+	// a gateway before 5.0 has no /admin/me: what its session says (its permissions)
+	if (me.error) return <>{fallback ?? <div className="dg-error" role="alert">{me.error}</div>}</>
 	if (!me.value) return null
 	const list = (items: string[] | undefined, none: string) => items?.length
 		? <>{items.map((x, i) => <span key={x} className={i === 0 ? 'dg-chip dg-chip-default' : 'dg-chip'} title={i === 0 ? t.meDefault : undefined}>{x}</span>)}</>
