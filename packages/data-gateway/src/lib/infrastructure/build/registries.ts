@@ -129,7 +129,8 @@ export class TransportRegistry {
 				requestBodySize: config.server.requestBodySize,
 				rateLimit: { windowMs: config.rateLimit.windowMs, max: 0 },
 				swaggerEnabled: false,
-				transports: transportsOf(config.transports)
+				transports: transportsOf(config.transports),
+				observability: config.explore ? { explore: config.explore } : {}
 			}, {
 				directory,
 				metrics,

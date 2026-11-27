@@ -1,4 +1,4 @@
-import { tracesOfEntity } from './observability'
+import { Explore, tracesOfEntity } from './observability'
 import { OidcSettings, OidcTokens, renew, signIn, signOut as oidcSignOut } from './oidc'
 import React, { useEffect, useMemo, useRef, useState } from 'react'
 import { BrowserSessionStore, Workspace } from '@lambdaorm/ui'
@@ -36,9 +36,6 @@ export interface IdeConnection {
 	restUrl?: string
 	webSocketUrl?: string
 	mcpUrl?: string
-	/** where its traces are seen: Grafana, with a Tempo datasource (its uid; tempo by default) */
-	grafanaUrl?: string
-	tempoDatasource?: string
 	/** OpenID Connect (kind oidc, docs/OIDC_LOGIN.md): its identity provider and its public client */
 	issuer?: string
 	clientId?: string
@@ -146,12 +143,6 @@ const ConnectionEditor: React.FC<{
 					<label>{t.restUrl}<input aria-label={t.restUrl} value={draft.restUrl ?? ''} onChange={e => set({ restUrl: e.target.value || undefined })} placeholder="http://host:port" spellCheck={false} /></label>
 					<label>{t.webSocketUrl}<input aria-label={t.webSocketUrl} value={draft.webSocketUrl ?? ''} onChange={e => set({ webSocketUrl: e.target.value || undefined })} placeholder="ws://host:port" spellCheck={false} /></label>
 					<label>{t.mcpUrl}<input aria-label={t.mcpUrl} value={draft.mcpUrl ?? ''} onChange={e => set({ mcpUrl: e.target.value || undefined })} placeholder="http://host:port" spellCheck={false} /></label>
-				</details>
-				<details className="dg-advanced">
-					<summary>{t.observability}</summary>
-					<span className="dg-muted">{t.observabilityNote}</span>
-					<label>{t.grafanaUrl}<input aria-label={t.grafanaUrl} value={draft.grafanaUrl ?? ''} onChange={e => set({ grafanaUrl: e.target.value || undefined })} placeholder="http://grafana:3000" spellCheck={false} /></label>
-					<label>{t.tempoDatasource}<input aria-label={t.tempoDatasource} value={draft.tempoDatasource ?? ''} onChange={e => set({ tempoDatasource: e.target.value || undefined })} placeholder="tempo" spellCheck={false} /></label>
 				</details>
 				<span className="dg-muted">{t.connectionNote}</span>
 				{tested && <div className={tested.ok ? 'dg-ok' : 'dg-error'} role="status">{tested.text}</div>}
@@ -261,6 +252,17 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 	}, [connections, secrets, t])
 	useEffect(() => () => { for (const { client } of clients.current.values()) client.close() }, [])
 	const whos = useMemo(() => Object.fromEntries(Object.entries(states).map(([id, state]) => [id, state.who])), [states])
+	// where the traces of each gateway are seen: its configuration tells it (observability.explore), not the connection
+	const [explores, setExplores] = useState<Record<string, Explore | undefined>>({})
+	const addresses = connections.map(c => `${c.id}|${urlOf(c)}`).join(',')
+	useEffect(() => {
+		let alive = true
+		for (const c of connections) {
+			getJson(apiOf(c), '/observability').then((o: { explore?: Explore }) => o?.explore, () => undefined)
+				.then(explore => { if (alive) setExplores(e => ({ ...e, [c.id]: explore })) })
+		}
+		return () => { alive = false }
+	}, [addresses])
 	const problems = useMemo(() => Object.fromEntries(Object.entries(states).map(([id, state]) => [id, state.problem ?? (state.expiring ? t.sessionExpiring : undefined)])), [states, t])
 	const save = (existing: IdeConnection | undefined) => (connection: IdeConnection, secret: string) => {
 		const id = existing?.id ?? `c${Date.now().toString(36)}`
@@ -315,8 +317,8 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 			changes: clients.current.get(c.id)?.client.changes,
 			// its session: a change of another session is announced (with who), one's own is not
 			session: clients.current.get(c.id)?.client.session,
-			// the link of an entity to its traces, when the connection says where Grafana is
-			tracesUrl: c.grafanaUrl ? (_schema: string, entity: string) => tracesOfEntity(c.grafanaUrl!, c.tempoDatasource || 'tempo', entity) : undefined,
+			// the link of an entity to its traces, when its gateway says where Grafana is
+			tracesUrl: explores[c.id] ? (_schema: string, entity: string) => tracesOfEntity(explores[c.id]!, entity) : undefined,
 			refreshMs: states[c.id]?.live ? 60000 : undefined,
 			// what is saved without the gateway's workspaces: per gateway and per user of the credential
 			workspaceKey: `${urlOf(c)}|${whos[c.id]?.name ?? c.user ?? ''}`,
@@ -324,7 +326,7 @@ export const IdeApp: React.FC<{ dark: boolean }> = ({ dark }) => {
 			// its page (edit, test, remove): a click on its name
 			onOpen: () => openOf(`connection:${c.id}`)
 		}
-	}), [connections, states, problems, whos, t])
+	}), [connections, states, problems, whos, explores, t])
 	const pages = useMemo(() => ({
 		preferences: { title: t.preferences, icon: <Settings size={14} aria-hidden="true" />, render: () => <PreferencesPage /> },
 		'connection:new': { title: t.newConnection, icon: <Plus size={14} aria-hidden="true" />, render: () => <ConnectionEditor secret="" onSave={save(undefined)} /> },

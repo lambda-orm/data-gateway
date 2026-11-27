@@ -38,7 +38,7 @@ el estado de la gateway: lo que hay hoy y la configuración que vaya surgiendo.
 # data-gateway.config.yaml
 state:
   source:
-    dialect: SQLjs                                    # una sola instancia: un archivo, sin servidor
+    dialect: SQLite                                   # una sola instancia: un archivo, sin servidor
     connection: { file: /data/.data-gateway/state.sqlite }
   # varias instancias:
   # source:

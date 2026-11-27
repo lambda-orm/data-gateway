@@ -851,8 +851,16 @@ observability:
     enabled: true                      # además por OTLP (en /metrics van siempre que metrics.enabled)
   logs:
     adapters: [{ type: opentelemetry }]   # la auditoría y los cambios del schema, a Loki
+  explore:                             # dónde se ven las trazas: el IDE enlaza cada entidad a ellas
+    grafana: https://grafana.example.com
+    tempo: tempo                       # el uid del datasource de Tempo (tempo por defecto)
 ```
 
+- **Dónde se ven las trazas (`observability.explore`, 4.5.0):** es de la instalación, no de cada IDE. Con
+  `explore: { grafana: https://grafana.example.com, tempo: tempo, orgId: 1 }` (`tempo`, el uid del datasource de Tempo,
+  y `orgId`, opcionales), el `management` lo dice en `GET /observability` (sin credencial, como `/transports`: una URL,
+  sin datos) y el IDE muestra en cada entidad el enlace a sus trazas en el Explore de Grafana. Sin `explore`,
+  `GET /observability` responde `{}` y el IDE no muestra el enlace. No llega al SDK de λORM.
 - **Un SDK por hilo:** el proceso principal la resuelve una vez (con sus `OTEL_*`, que un worker aislado no recibe) y
   la pasa al edge y a cada worker de esquema, que inician el SDK de λORM **antes** de `Orm.init`: el `Orm` lo usa (un
   solo `service.name` y exportador). Un esquema sin `infrastructure.observability` toma la del gateway; con la suya,

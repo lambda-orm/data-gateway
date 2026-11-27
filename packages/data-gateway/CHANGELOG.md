@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### Unreleased
 
+- **`observability.explore`**: where the traces of the gateway are seen (`grafana`, the URL of Grafana; `tempo`, the uid
+  of the datasource of Tempo; `orgId`), of the installation and not of each IDE. `management` tells it at
+  `GET /observability` (no credential, as `/transports`); `{}` without it. It doesn't reach the SDK of λORM.
+- **Docs:** the example of `state.source` in `docs/GATEWAY_STATE.md` said `dialect: SQLjs`, which the gateway refuses
+  for the state: `SQLite`.
+
 ### 4.4.0 (2026-11-26)
 
 With `@lambdaorm/base` 3.11.1 and `@lambdaorm/lib` 3.15.0, the exact versions the image installs.

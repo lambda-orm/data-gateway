@@ -96,6 +96,9 @@ describe('admin over REST (inline)', () => {
 			// management serves the data routes too (the IDE talks to one port), and tells the data transports
 			expect((await call(`http://127.0.0.1:${port}`, '/iot/v1/whoami', { headers: ADMIN })).body).toMatchObject({ name: 'admin' })
 			expect((await call(`http://127.0.0.1:${port}`, '/transports')).body).toEqual([{ name: 'http', port: httpPort, basePath: '', docs: '/openapi.json' }])
+			// where its traces are seen: nothing when observability.explore isn't given; never on http
+			expect((await call(`http://127.0.0.1:${port}`, '/observability')).body).toEqual({})
+			expect((await call(data, '/observability')).status).toBe(404)
 		} finally {
 			await both.stop()
 		}
