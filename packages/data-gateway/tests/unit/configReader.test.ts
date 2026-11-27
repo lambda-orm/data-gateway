@@ -95,6 +95,24 @@ describe('config reader', () => {
 			])
 		})
 
+		test('a key of a user: its context, as a token gives it from its claims', () => {
+			const { config, issues } = read({
+				...base,
+				authentication: {
+					adapter: 'local', type: 'apikey',
+					keys: [{ name: 'ana', value: 'a', context: { username: 'ana@acme', tenant: 7, staff: true } }, { name: 'backend', value: 'b' }]
+				}
+			})
+			expect(issues).toEqual([])
+			expect(config?.authentication.credentials[0].context).toEqual({ username: 'ana@acme', tenant: 7, staff: true })
+			expect(config?.authentication.credentials[1].context).toBeUndefined()
+			const bad = (context: unknown) => read({ ...base, authentication: { adapter: 'local', type: 'apikey', keys: [{ name: 'a', value: 'a', context }] } }).issues
+			expect(bad('ana')).toContain('authentication.keys[0].context must be an object (variable: value)')
+			expect(bad({ 'user-name': 'ana' })).toContain('authentication.keys[0].context: "user-name" is not a name of a variable')
+			expect(bad({ username: { first: 'ana' } })).toContain('authentication.keys[0].context.username must be a text, a number or a boolean')
+			expect(bad({ username: '' })).toContain('authentication.keys[0].context.username must be a text, a number or a boolean')
+		})
+
 		test('basic users', () => {
 			const { config } = read({ ...base, authentication: { adapter: 'local', type: 'basic', users: [{ username: 'ana', password: 'p', permissions: ['read'] }] } })
 			expect(config?.authentication.credentials).toEqual([{ name: 'ana', username: 'ana', password: 'p', permissions: ['read'] }])

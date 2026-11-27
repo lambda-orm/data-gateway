@@ -30,15 +30,16 @@ const result = (credential: CredentialConfig | undefined, reason: string, recogn
 	credential ? { valid: true, principal: principalOf(credential, roles) } : { valid: false, reason, recognized }
 
 /**
- * Who a key is: with roles (docs/ROLE_SCOPES.md), their names, and before a schema the permissions of them all (the
+ * Who a key is (its context, the user it is of, if it says one): with roles (docs/ROLE_SCOPES.md), their names, and before a schema the permissions of them all (the
  * schema chooses among them); without them, its own permissions and view (as before 4.4)
  */
 export const principalOf = (credential: CredentialConfig, roles?: RoleLookupPort): Principal => {
+	const context = credential.context ? { context: { ...credential.context } } : {}
 	if (credential.roles) {
 		const approval = credential.approval ?? roles?.approvalOf(credential.roles)
-		return { ...principal(credential.name, roles?.permissionsOf(credential.roles) ?? []), roles: credential.roles, ...(approval ? { approval } : {}) }
+		return { ...principal(credential.name, roles?.permissionsOf(credential.roles) ?? []), roles: credential.roles, ...(approval ? { approval } : {}), ...context }
 	}
-	return { ...principal(credential.name, credential.permissions), ...(credential.view ? { view: credential.view } : {}), ...(credential.approval ? { approval: credential.approval } : {}) }
+	return { ...principal(credential.name, credential.permissions), ...(credential.view ? { view: credential.view } : {}), ...(credential.approval ? { approval: credential.approval } : {}), ...context }
 }
 
 /** adapter: none — open access, every permission. */

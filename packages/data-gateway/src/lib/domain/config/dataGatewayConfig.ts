@@ -14,6 +14,11 @@ export interface CredentialConfig {
 	approval?: 'writes'
 	/** the roles of authorization.roles it has (docs/ROLE_SCOPES.md): instead of its own permissions and view */
 	roles?: string[]
+	/**
+	 * the context of λORM of its requests (variable → value), as a token gives it from its claims (docs/JWT.md): the user
+	 * a key is of (context.username), what the views, the defaults and the writeValue read
+	 */
+	context?: Record<string, string | number | boolean>
 }
 
 /**

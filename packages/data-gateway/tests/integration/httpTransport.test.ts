@@ -242,7 +242,7 @@ describe('http transport with JWT (docs/JWT.md)', () => {
 			principal: { name: 'sub', permissions: { claim: 'roles', roles: { reader: { permissions: ['read'] } } } },
 			context: { tenant: 'tenant_id' }
 		})
-		;({ transport, base } = await start(fixture, { authenticator: new MethodsAuthenticator([jwt, new ApiKeyAuthenticator([{ name: 'svc', value: 'svc-key', permissions: ['read'] }])]) }))
+		;({ transport, base } = await start(fixture, { authenticator: new MethodsAuthenticator([jwt, new ApiKeyAuthenticator([{ name: 'svc', value: 'svc-key', permissions: ['read'] }, { name: 'ana', value: 'ana-key', permissions: ['read'], context: { username: 'ana@acme' } }])]) }))
 	})
 	afterAll(() => transport.stop())
 
@@ -262,6 +262,12 @@ describe('http transport with JWT (docs/JWT.md)', () => {
 		expect(service.status).toBe(200)
 		expect(fixture.orm.executed.at(-1)!.options).not.toHaveProperty('context')
 		expect((await call(base, '/execute', { body: { query: 'Products' } })).headers.get('www-authenticate')).toBe('Bearer')
+	})
+
+	test('a key of a user: its context reaches λORM as the one of a token; the one sent by the client never', async () => {
+		const res = await call(base, '/execute', { body: { query: 'Products', options: { context: { username: 'other' } } }, headers: { 'X-Api-Key': 'ana-key' } })
+		expect(res.status).toBe(200)
+		expect(fixture.orm.executed.at(-1)!.options).toMatchObject({ context: { username: 'ana@acme' }, actor: { credential: 'ana' } })
 	})
 })
 

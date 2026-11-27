@@ -19,7 +19,8 @@ Google…) y la gateway:
   defaults, las condiciones y el `forward` de las fuentes Http (C7), que ya leen `context`.
 
 Hoy la autenticación es `adapter: none` o `local` con una lista fija de claves (`bearer`, `apikey`, `basic`): sirve para
-servicios, no para usuarios de un IdP, y no da contexto.
+servicios, no para usuarios de un IdP. Desde 4.5 una clave local puede decir su contexto, fijo (`context: { username:
+ana@acme.com }`, ver §4); sin él, no da contexto.
 
 ## 2. Configuración
 
@@ -79,6 +80,10 @@ Una conexión larga (WebSocket, MCP) se corta cuando vence el token (código 440
   worker del schema (como hoy el actor) y `requestOptions` lo pone en `options.context`: el cliente sigue sin poder
   mandarlo (R2). Un claim que falta deja la variable sin valor: si una vista la necesita, λORM responde
   `ContextError` (400).
+- **Contexto de una clave local** (4.5): una entrada de `keys`, `tokens` o `users` puede tener `context` (variable →
+  texto, número o booleano), el que tendría el token de esa persona: `context: { username: ana@acme.com }` llena el
+  `default: context.username` o el `writeValue` de un schema. Viaja igual que el de un token (también a una sesión
+  abierta con la clave) y el cliente tampoco puede reemplazarlo. Una clave sin `context` no da ninguno.
 
 ## 5. Errores
 

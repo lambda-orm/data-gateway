@@ -929,6 +929,8 @@ export class ConfigReader {
 		const permissions = roles ? [] : this.permissions(entry.permissions, `${at}.permissions`)
 		const credential: CredentialConfig = { name, permissions, ...(roles ? { roles } : {}) }
 		if (this.approvalMode(entry.approval, `${at}.approval`) === 'writes') credential.approval = 'writes'
+		const context = this.credentialContext(entry.context, `${at}.context`)
+		if (context) credential.context = context
 		if (entry.view !== undefined) {
 			const view = this.viewName(entry.view, `${at}.view`)
 			if (view) {
@@ -943,6 +945,22 @@ export class ConfigReader {
 			credential.value = String(secret)
 		}
 		return credential
+	}
+
+	/** the context of a local credential: variable → a text, a number or a boolean (who the key is, never a secret) */
+	private credentialContext (raw: unknown, key: string): Record<string, string | number | boolean> | undefined {
+		if (raw === undefined) return undefined
+		if (!isObject(raw)) {
+			this.issues.push(`${key} must be an object (variable: value)`)
+			return undefined
+		}
+		const context: Record<string, string | number | boolean> = {}
+		for (const [variable, value] of Object.entries(raw)) {
+			if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(variable)) this.issues.push(`${key}: "${variable}" is not a name of a variable`)
+			else if (!['string', 'number', 'boolean'].includes(typeof value) || value === '') this.issues.push(`${key}.${variable} must be a text, a number or a boolean`)
+			else context[variable] = value as string | number | boolean
+		}
+		return Object.keys(context).length ? context : undefined
 	}
 
 	private permissions (raw: unknown, key: string): Permission[] {
