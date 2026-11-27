@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"net/http"
+	"sync"
 )
 
 // Version is the version of this client.
@@ -371,25 +372,12 @@ func (c *Client) Subscribe(ctx context.Context, to SubscribeTarget, listener fun
 	if !ok {
 		return nil, unsupported(c.Transport(), "subscribeEntity")
 	}
-	var started struct {
-		Subscription string `json:"subscription"`
-		Result       any    `json:"result"`
-	}
-	var err error
-	switch {
-	case to.Entity != "":
-		started.Subscription, started.Result, err = subscribeCall(ctx, c, "subscribeEntity", args{"entity": to.Entity})
-	case to.Name != "":
-		started.Subscription, started.Result, err = subscribeCall(ctx, c, "subscribeQuery", args{"name": to.Name, "data": to.Data})
-	case to.Query != "":
-		started.Subscription, started.Result, err = subscribeCall(ctx, c, "subscribeQuery", args{"query": to.Query, "data": to.Data})
-	default:
-		return nil, errors.New("subscribe: an Entity, a Query or a Name")
-	}
-	if err != nil {
-		return nil, err
-	}
-	s := &Subscription{ID: started.Subscription, Result: started.Result, client: c}
+	// the listeners go first: an event may arrive right behind the answer that says the id of the subscription
+	s := &Subscription{client: c}
+	// mu guards known and early; deliver keeps the order: the early events before the later ones
+	var mu, deliver sync.Mutex
+	known := false
+	var early []Event
 	for _, event := range []string{EventDataChanged, EventQueryChanged, EventSubscriptionFailed} {
 		event := event
 		s.offs = append(s.offs, n.on(event, func(raw json.RawMessage) {
@@ -397,10 +385,56 @@ func (c *Client) Subscribe(ctx context.Context, to SubscribeTarget, listener fun
 			if json.Unmarshal(raw, &params) != nil {
 				return
 			}
-			if id, _ := params["subscription"].(string); id == s.ID {
-				listener(Event{Type: event, Subscription: id, Params: params})
+			id, _ := params["subscription"].(string)
+			e := Event{Type: event, Subscription: id, Params: params}
+			mu.Lock()
+			if !known {
+				early = append(early, e)
+				mu.Unlock()
+				return
+			}
+			mine := id == s.ID
+			mu.Unlock()
+			if mine {
+				deliver.Lock()
+				listener(e)
+				deliver.Unlock()
 			}
 		}))
+	}
+	stop := func() {
+		for _, off := range s.offs {
+			off()
+		}
+	}
+	var id string
+	var result any
+	var err error
+	switch {
+	case to.Entity != "":
+		id, result, err = subscribeCall(ctx, c, "subscribeEntity", args{"entity": to.Entity})
+	case to.Name != "":
+		id, result, err = subscribeCall(ctx, c, "subscribeQuery", args{"name": to.Name, "data": to.Data})
+	case to.Query != "":
+		id, result, err = subscribeCall(ctx, c, "subscribeQuery", args{"query": to.Query, "data": to.Data})
+	default:
+		err = errors.New("subscribe: an Entity, a Query or a Name")
+	}
+	if err != nil {
+		stop()
+		return nil, err
+	}
+	deliver.Lock()
+	defer deliver.Unlock()
+	mu.Lock()
+	s.ID, s.Result, known = id, result, true
+	pending := early
+	early = nil
+	mu.Unlock()
+	for _, e := range pending {
+		if e.Subscription == id {
+			listener(e)
+		}
 	}
 	return s, nil
 }
