@@ -84,6 +84,8 @@ export interface ExplorerMessages {
 	abstract: string
 	viewEntity: string
 	extendsEntity: string
+	/** the tab of an abstract entity with the entities that extend it */
+	extendedBy: string
 	inherited: string
 	inheritedFrom: string
 	inheritedHint: string
@@ -232,6 +234,7 @@ const ROWS: Row[] = [
 	['none', 'none', 'ninguno', 'nenhum', 'aucun', 'nessuno', 'keine', 'geen', 'cap', 'ningún', 'bat ere ez'],
 	['abstract', 'abstract', 'abstracta', 'abstrata', 'abstraite', 'astratta', 'abstrakt', 'abstract', 'abstracta', 'abstracta', 'abstraktua'],
 	['viewEntity', 'view', 'vista', 'visão', 'vue', 'vista', 'Sicht', 'view', 'vista', 'vista', 'ikuspegia'],
+	['extendedBy', 'Extended by', 'Extendida por', 'Estendida por', 'Étendue par', 'Estesa da', 'Erweitert von', 'Uitgebreid door', 'Estesa per', 'Estendida por', 'Hauek hedatzen dute'],
 	['extendsEntity', 'extends {name}', 'extiende {name}', 'estende {name}', 'étend {name}', 'estende {name}', 'erweitert {name}', 'breidt {name} uit', 'estén {name}', 'estende {name}', '{name} hedatzen du'],
 	['inherited', 'Inherited', 'Heredado', 'Herdado', 'Hérité', 'Ereditato', 'Geerbt', 'Geërfd', 'Heretat', 'Herdado', 'Heredatua'],
 	['inheritedFrom', 'Inherited from {name}', 'Heredado de {name}', 'Herdado de {name}', 'Hérité de {name}', 'Ereditato da {name}', 'Geerbt von {name}', 'Geërfd van {name}', 'Heretat de {name}', 'Herdado de {name}', '{name}(e)tik heredatua'],

@@ -45,7 +45,7 @@ export interface EntityViewProps {
 	revision?: string | number
 }
 
-type Section = 'properties' | 'relations' | 'keys' | 'constraints' | 'data' | 'diagram' | 'history'
+type Section = 'properties' | 'relations' | 'keys' | 'constraints' | 'extendedBy' | 'data' | 'diagram' | 'history'
 
 const Check: React.FC<{ on?: boolean }> = ({ on }) => <>{on ? '✓' : ''}</>
 
@@ -103,6 +103,22 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 		return map
 	}, [domain, name, served, entity])
 	const referencedBy = useMemo(() => domain ? referencesTo(domain, name) : [], [domain, name])
+	// an abstract one: the entities that extend it, also through another abstract one (Areas → Located → Audited), by name
+	const extendedBy = useMemo(() => {
+		if (!entity?.abstract || !source) return []
+		const found: { name: string, base: string, abstract: boolean }[] = []
+		const seen = new Set([name])
+		const down = (base: string) => {
+			for (const e of source) {
+				if (e.extends !== base || seen.has(e.name)) continue
+				seen.add(e.name)
+				found.push({ name: e.name, base, abstract: e.abstract === true })
+				down(e.name)
+			}
+		}
+		down(name)
+		return found.sort((x, y) => x.name.localeCompare(y.name))
+	}, [entity, source, name])
 	// the variables of its expressions: its properties (colored apart)
 	const names = useMemo(() => (entity?.properties ?? []).map(p => p.name), [entity])
 
@@ -146,7 +162,7 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 			</div>
 			<div className="lw-toolbar" role="tablist" aria-label={entity.name}>
 				{([['properties', `${m.properties} (${entity.properties?.length ?? 0})`], ['relations', `${m.relations} (${entity.relations?.length ?? 0})`],
-					['keys', m.keysIndexes], ['constraints', `${m.constraints} (${entity.constraints?.length ?? 0})`], ...(entity.abstract ? [] : [['data', m.data]]), ...(served ? [['diagram', m.diagram]] : []), ...(admin?.history ? [['history', a.history]] : [])] as [Section, string][]).map(([key, label]) => (
+					['keys', m.keysIndexes], ['constraints', `${m.constraints} (${entity.constraints?.length ?? 0})`], ...(entity.abstract ? [['extendedBy', `${m.extendedBy} (${extendedBy.length})`]] : [['data', m.data]]), ...(served ? [['diagram', m.diagram]] : []), ...(admin?.history ? [['history', a.history]] : [])] as [Section, string][]).map(([key, label]) => (
 					<button key={key} role="tab" aria-selected={section === key} className={section === key ? 'lw-active' : ''} onClick={() => setSection(key)}>{label}</button>
 				))}
 			</div>
@@ -203,6 +219,24 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 				</div>
 			)}
 
+			{section === 'extendedBy' && (
+				<div className="lw-view">
+					{extendedBy.length === 0 ? <p className="lw-muted">{m.none}</p> : (
+						<table className="lw-table lw-form-table" aria-label={m.extendedBy}>
+							<thead><tr><th>#</th><th>{m.entity}</th><th>{format(m.extendsEntity, { name: '' }).trim()}</th></tr></thead>
+							<tbody>
+								{extendedBy.map((e, i) => (
+									<tr key={e.name}>
+										<td className="lw-muted">{i + 1}</td>
+										<td>{link(e.name)}{e.abstract && <> <span className="lw-badge">{m.abstract}</span></>}</td>
+										<td>{e.base === name ? <span className="lw-muted">{e.base}</span> : link(e.base)}</td>
+									</tr>
+								))}
+							</tbody>
+						</table>
+					)}
+				</div>
+			)}
 			{section === 'relations' && (
 				<div className="lw-view">
 					<h4>{m.relations}</h4>

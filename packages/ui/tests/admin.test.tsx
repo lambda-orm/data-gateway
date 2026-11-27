@@ -1094,7 +1094,7 @@ describe('what an entity inherits from the abstract one it extends', () => {
 		fireEvent.click(await within(view).findByRole('button', { name: 'extends Audited' }))
 		const abstract = await viewOf('Audited')
 		expect(within(abstract).getByText('abstract')).toBeTruthy()
-		expect(within(abstract).getAllByRole('tab').map(t => t.textContent)).toEqual(['Properties (2)', 'Relations (0)', 'Keys and indexes', 'Constraints (0)'])
+		expect(within(abstract).getAllByRole('tab').map(t => t.textContent)).toEqual(['Properties (2)', 'Relations (0)', 'Keys and indexes', 'Constraints (0)', 'Extended by (1)'])
 		expect(within(abstract).queryByRole('button', { name: 'Query' })).toBeNull()
 		const table = abstract.querySelector('.lw-form-table') as HTMLElement
 		expect([...table.querySelectorAll('tbody tr')].map(tr => [tr.children[1]?.textContent, tr.children[2]?.textContent])).toEqual([['createdAt', 'dateTime'], ['createdBy', 'string']])
@@ -1146,6 +1146,21 @@ describe('what an entity inherits from the abstract one it extends', () => {
 		fireEvent.click(await rowSoon('Properties (2)'))
 		// each with its type, as an entity's
 		await waitFor(() => expect(screen.getAllByRole('treeitem').map(r => r.querySelector('.lw-tree-label')?.textContent)).toEqual(expect.arrayContaining(['createdAtdateTime', 'createdBystring(128)'])))
+	})
+
+	test('an abstract one lists the entities that extend it, also through another abstract one; each opens its view', async () => {
+		const admin = await openDomain()
+		admin.text = 'domain:\n  entities:\n    - { name: Audited, abstract: true, properties: [{ name: createdAt, type: dateTime }] }\n    - { name: Located, abstract: true, extends: Audited, properties: [{ name: locationId }] }\n    - { name: Zones, extends: Located, properties: [{ name: code }] }\n    - { name: Customers, extends: Audited, properties: [{ name: id }] }\n    - { name: Areas, extends: Located, properties: [{ name: code }] }\n    - { name: Notes, properties: [{ name: id }] }\n'
+		fireEvent.click(await rowSoon('Abstracts'))
+		fireEvent.click(await rowSoon('Audited'))
+		const view = await viewOf('Audited')
+		fireEvent.click(within(view).getByRole('tab', { name: 'Extended by (4)' }))
+		const table = within(view).getByRole('table', { name: 'Extended by' })
+		expect([...table.querySelectorAll('tbody tr')].map(tr => [tr.children[1].textContent, tr.children[2].textContent])).toEqual([
+			['Areas', 'Located'], ['Customers', 'Audited'], ['Located abstract', 'Audited'], ['Zones', 'Located']
+		])
+		fireEvent.click(within(table).getAllByRole('button', { name: 'Located' })[0])
+		await viewOf('Located')
 	})
 
 	test('a new abstract starts abstract', async () => {
