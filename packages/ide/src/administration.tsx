@@ -18,7 +18,32 @@ export interface ListedRole {
 	updatedBy?: string
 }
 
-interface RoleBody { permissions?: string[], schemas?: string[], views?: string[], stages?: string[], maxRows?: number, approval?: string }
+/** A role in one schema: the views and stages it may use there, and the ones of who doesn't choose */
+interface SchemaEntry { views?: string[], stages?: string[], view?: string, stage?: string }
+interface RoleBody { permissions?: string[], schemas?: Record<string, SchemaEntry>, views?: string[], stages?: string[], maxRows?: number, approval?: string }
+
+/** what a level adds to the entry of a schema: more views and stages; its defaults when it says them (as the gateway) */
+const extendEntry = (base: SchemaEntry | undefined, more: SchemaEntry | undefined): SchemaEntry => {
+	const union = (a?: string[], b?: string[]) => a || b ? [...new Set([...(a ?? []), ...(b ?? [])])] : undefined
+	const views = union(base?.views, more?.views)
+	const stages = union(base?.stages, more?.stages)
+	const view = more?.view ?? base?.view
+	const stage = more?.stage ?? base?.stage
+	return { ...(views ? { views } : {}), ...(stages ? { stages } : {}), ...(view ? { view } : {}), ...(stage ? { stage } : {}) }
+}
+
+/** A role as it applies: its configuration and its state together (the state adds, unless the role is locked) */
+const roleAsApplies = (yaml: RoleBody | undefined, stored: RoleBody | undefined): RoleBody => {
+	const union = (a?: string[], b?: string[]) => a || b ? [...new Set([...(a ?? []), ...(b ?? [])])] : undefined
+	const schemas = !yaml ? stored?.schemas : !yaml.schemas ? undefined : !stored?.schemas ? yaml.schemas
+		: Object.fromEntries([...new Set([...Object.keys(yaml.schemas), ...Object.keys(stored.schemas)])].map(path => [path, extendEntry(yaml.schemas![path], stored.schemas![path])]))
+	const permissions = union(yaml?.permissions, stored?.permissions)
+	const views = union(yaml?.views, stored?.views)
+	const stages = union(yaml?.stages, stored?.stages)
+	const maxRows = stored?.maxRows ?? yaml?.maxRows
+	const approval = stored?.approval ?? yaml?.approval
+	return { ...(permissions ? { permissions } : {}), ...(schemas ? { schemas } : {}), ...(views ? { views } : {}), ...(stages ? { stages } : {}), ...(maxRows !== undefined ? { maxRows } : {}), ...(approval ? { approval } : {}) }
+}
 
 /** A local credential as the administration shows it: who it is and its roles, never its secret */
 interface DescribedCredential { name: string, username?: string, roles: string[], context?: Record<string, string | number | boolean> }
@@ -65,14 +90,15 @@ const effective = (roles: ListedRole[]): { name: string, permissions: Set<string
 	const byName = new Map<string, { name: string, permissions: Set<string>, schemas?: string[], everywhere: boolean, locked: boolean, source: 'yaml' | 'state' }>()
 	for (const role of roles.filter(r => !r.ignored)) {
 		const current = byName.get(role.name)
+		const schemas = role.config.schemas ? Object.keys(role.config.schemas) : undefined
 		if (!current) {
-			byName.set(role.name, { name: role.name, permissions: new Set(role.config.permissions ?? []), schemas: role.config.schemas, everywhere: !role.config.schemas, locked: !!role.locked, source: role.source })
+			byName.set(role.name, { name: role.name, permissions: new Set(role.config.permissions ?? []), schemas, everywhere: !schemas, locked: !!role.locked, source: role.source })
 			continue
 		}
 		if (current.locked) continue
 		for (const p of role.config.permissions ?? []) current.permissions.add(p)
 		// an extension adds schemas to a role that names some; one that applies everywhere keeps applying everywhere
-		if (!current.everywhere && role.config.schemas) current.schemas = [...new Set([...(current.schemas ?? []), ...role.config.schemas])]
+		if (!current.everywhere && schemas) current.schemas = [...new Set([...(current.schemas ?? []), ...schemas])]
 	}
 	return [...byName.values()].map(r => ({ name: r.name, permissions: r.permissions, ...(r.schemas ? { schemas: r.schemas } : {}), source: r.source, locked: r.locked }))
 }
@@ -146,39 +172,88 @@ export const RolesPage: React.FC<{ client: ManagementClient, refresh: number, on
 	)
 }
 
-interface RoleDraft { name: string, permissions: Set<string>, schemas: string, views: string, stages: string, maxRows: string, approval: boolean, reason: string }
+/** What a schema has, for a role to be given in it (GET /admin/scopes) */
+interface SchemaScopes { path: string, views: string[], stages: string[] }
+
+interface SchemaDraft { on: boolean, views: Set<string>, stages: Set<string>, view: string, stage: string }
+interface RoleDraft {
+	name: string
+	permissions: Set<string>
+	/** every schema (no schemas), or these */
+	everywhere: boolean
+	schemas: Record<string, SchemaDraft>
+	/** every schema: its views and stages (by name, they may differ from one schema to another) */
+	views: string
+	stages: string
+	maxRows: string
+	approval: boolean
+	reason: string
+}
+
+/** A list with its default first and marked */
+const Defaulted: React.FC<{ items?: string[], chosen?: string, none: string, title: string }> = ({ items, chosen, none, title }) => {
+	const list = chosen ? [chosen, ...(items ?? []).filter(x => x !== chosen)] : items ?? []
+	return list.length
+		? <>{list.map((x, i) => <span key={x} className={i === 0 ? 'dg-chip dg-chip-default' : 'dg-chip'} title={i === 0 ? title : undefined}>{x}</span>)}</>
+		: <span className="dg-muted">{none}</span>
+}
 
 /**
- * A role: its permissions (one box each), the schemas where it applies, its views and stages, its limits. One of the
- * configuration is read only: what is saved here extends it (it adds, never takes away). A new one when name is none.
+ * A role: all it gives (its permissions, the schemas where it applies with their views and stages and the defaults,
+ * its limits), with Edit and Remove. Edit changes what is kept in the state of the gateway: one of the configuration is
+ * extended (what the configuration gives stays, marked); a new one when name is none starts editing.
  */
 export const RolePage: React.FC<{ client: ManagementClient, name?: string, refresh: number, onSaved: (name: string) => void, onRemoved: () => void }> = ({ client, name, refresh, onSaved, onRemoved }) => {
 	const { t, culture } = usePrefs()
 	const roles = useAdmin<ListedRole[]>(client, '/admin/roles', refresh)
 	const access = useAdmin<Access>(client, '/admin/access', refresh)
+	const scopes = useAdmin<SchemaScopes[]>(client, '/admin/scopes', refresh)
 	const yaml = roles.value?.find(r => r.name === name && r.source === 'yaml')
 	const stored = roles.value?.find(r => r.name === name && r.source === 'state' && !r.ignored)
+	const role = roleAsApplies(yaml?.config, yaml?.locked ? undefined : stored?.config)
 	const [draft, setDraft] = useState<RoleDraft>()
 	const [error, setError] = useState<string>()
 	const [busy, setBusy] = useState(false)
 	const [removing, setRemoving] = useState(false)
-	useEffect(() => {
-		if (!roles.value) return
-		const c: RoleBody = stored?.config ?? {}
-		setDraft({ name: name ?? '', permissions: new Set(c.permissions ?? []), schemas: textOf(c.schemas), views: textOf(c.views), stages: textOf(c.stages), maxRows: c.maxRows ? String(c.maxRows) : '', approval: c.approval === 'writes', reason: '' })
-	}, [roles.value, name])
 	const when = (iso: string) => new Date(iso).toLocaleString(culture, { dateStyle: 'short', timeStyle: 'short' })
 	const permissions = access.value?.permissions ?? []
+	const given = (key: 'permissions', x: string) => !!yaml?.config[key]?.includes(x)
+	const givenIn = (path: string, key: 'views' | 'stages', x: string) => !!yaml?.config.schemas?.[path]?.[key]?.includes(x)
+	const editing = draft !== undefined
+	const startEditing = () => {
+		const c: RoleBody = stored?.config ?? {}
+		const paths = [...new Set([...(scopes.value ?? []).map(s => s.path), ...Object.keys(role.schemas ?? {})])]
+		setDraft({
+			name: name ?? '',
+			permissions: new Set(c.permissions ?? []),
+			everywhere: !role.schemas,
+			schemas: Object.fromEntries(paths.map(path => {
+				const e = role.schemas?.[path]
+				return [path, { on: !!e, views: new Set(e?.views ?? []), stages: new Set(e?.stages ?? []), view: e?.view ?? '', stage: e?.stage ?? '' }]
+			})),
+			views: textOf(c.views), stages: textOf(c.stages), maxRows: c.maxRows ? String(c.maxRows) : '', approval: c.approval === 'writes', reason: ''
+		})
+		setError(undefined)
+	}
+	// a new role: editing at once
+	useEffect(() => { if (!name && roles.value && scopes.value && !draft) startEditing() }, [name, roles.value, scopes.value])
 	const save = async (event: React.FormEvent) => {
 		event.preventDefault()
 		if (!draft?.name.trim()) return
 		setBusy(true)
 		try {
+			// what the state keeps: what is added to the configuration (the configuration's stays as it is)
+			const schemas = draft.everywhere ? undefined : Object.fromEntries(Object.entries(draft.schemas).filter(([, d]) => d.on).map(([path, d]) => {
+				const views = [...d.views].filter(v => !givenIn(path, 'views', v))
+				const stages = [...d.stages].filter(v => !givenIn(path, 'stages', v))
+				return [path, { ...(views.length ? { views } : {}), ...(stages.length ? { stages } : {}), ...(d.view ? { view: d.view } : {}), ...(d.stage ? { stage: d.stage } : {}) }]
+			}))
+			const added = [...draft.permissions].filter(p => !given('permissions', p))
 			const config: RoleBody = {
-				...(draft.permissions.size ? { permissions: [...draft.permissions] } : {}),
-				...(listOf(draft.schemas) ? { schemas: listOf(draft.schemas) } : {}),
-				...(listOf(draft.views) ? { views: listOf(draft.views) } : {}),
-				...(listOf(draft.stages) ? { stages: listOf(draft.stages) } : {}),
+				...(added.length ? { permissions: added } : {}),
+				...(schemas && Object.keys(schemas).length ? { schemas } : {}),
+				...(draft.everywhere && listOf(draft.views) ? { views: listOf(draft.views) } : {}),
+				...(draft.everywhere && listOf(draft.stages) ? { stages: listOf(draft.stages) } : {}),
 				...(draft.maxRows.trim() ? { maxRows: Number(draft.maxRows) } : {}),
 				...(draft.approval ? { approval: 'writes' } : {})
 			}
@@ -188,6 +263,7 @@ export const RolePage: React.FC<{ client: ManagementClient, name?: string, refre
 			})
 			if (!response.ok) { setError(await failed(response)); return }
 			setError(undefined)
+			setDraft(undefined)
 			onSaved(draft.name.trim())
 		} finally { setBusy(false) }
 	}
@@ -200,72 +276,168 @@ export const RolePage: React.FC<{ client: ManagementClient, name?: string, refre
 		} finally { setBusy(false); setRemoving(false) }
 	}
 	if (name && roles.value && !yaml && !stored) return <div className="dg-pane"><h2>{t.roleName}: {name}</h2><p className="dg-muted">{t.roleGone}</p></div>
-	const field = (key: 'schemas' | 'views' | 'stages' | 'maxRows' | 'reason', label: string, hint?: string) => (
-		<label>
-			{label}
-			<input aria-label={label} value={draft![key]} onChange={e => setDraft({ ...draft!, [key]: e.target.value })} spellCheck={false} />
-			{hint && <span className="dg-muted">{hint}</span>}
-		</label>
+	const problem = roles.error ?? access.error ?? error
+	const setSchema = (path: string, patch: Partial<SchemaDraft>) => setDraft({ ...draft!, schemas: { ...draft!.schemas, [path]: { ...draft!.schemas[path], ...patch } } })
+	const toggle = (set: Set<string>, x: string, on: boolean) => { const next = new Set(set); if (on) next.add(x); else next.delete(x); return next }
+
+	// ─── what it gives ───
+	const details = (
+		<>
+			<section className="dg-card">
+				<h3>{t.permissions}</h3>
+				<ul className="dg-permission-grid">
+					{permissions.map(p => (
+						<li key={p} className={role.permissions?.includes(p) ? 'dg-granted' : 'dg-denied'}>
+							{role.permissions?.includes(p) ? <Check size={14} aria-label={p} /> : <Minus size={14} aria-hidden="true" />} <code>{p}</code>
+						</li>
+					))}
+				</ul>
+			</section>
+			<section className="dg-card">
+				<h3>{t.roleSchemas}</h3>
+				{role.schemas
+					? (
+						<div className="dg-table-scroll"><table className="dg-table">
+							<thead><tr><th>{t.roleSchemas}</th><th>{t.roleViews}</th><th>{t.roleStages}</th></tr></thead>
+							<tbody>
+								{Object.entries(role.schemas).map(([path, e]) => (
+									<tr key={path} aria-label={path}>
+										<td><strong>{path || '/'}</strong></td>
+										<td><Defaulted items={e.views ?? role.views} chosen={e.view} none={t.roleOfSchema} title={t.meDefault} /></td>
+										<td><Defaulted items={e.stages ?? role.stages} chosen={e.stage} none={t.roleOfSchema} title={t.meDefault} /></td>
+									</tr>
+								))}
+							</tbody>
+						</table></div>
+						)
+					: (
+						<dl className="dg-facts">
+							<dt>{t.roleSchemas}</dt><dd><span className="dg-muted">{t.roleEverySchema}</span></dd>
+							<dt>{t.roleViews}</dt><dd><Defaulted items={role.views} none={t.roleOfSchema} title={t.meDefault} /></dd>
+							<dt>{t.roleStages}</dt><dd><Defaulted items={role.stages} none={t.roleOfSchema} title={t.meDefault} /></dd>
+						</dl>
+						)}
+			</section>
+			<section className="dg-card">
+				<dl className="dg-facts">
+					<dt>{t.roleMaxRows}</dt><dd>{role.maxRows ?? '—'}</dd>
+					<dt>{t.roleApproval}</dt><dd>{role.approval === 'writes' ? '✓' : '—'}</dd>
+					<dt>{t.roleSource}</dt>
+					<dd>{[yaml ? t.roleFromConfig : undefined, stored?.updatedBy ? fill(t.obsChangedBy, { name: stored.updatedBy, time: when(stored.updatedAt!) }) : undefined].filter(Boolean).join(' · ')}</dd>
+				</dl>
+				{yaml && !yaml.locked && <p className="dg-muted">{t.roleFromConfigNote}</p>}
+				{yaml?.locked && <p className="dg-muted">{t.roleLockedNote}</p>}
+			</section>
+		</>
 	)
-	const ofYaml = (key: keyof RoleBody) => {
-		const value = yaml?.config[key]
-		return Array.isArray(value) ? value.join(', ') : value !== undefined ? String(value) : ''
-	}
+
+	// ─── editing ───
+	const form = draft && (
+		<form className="dg-form dg-role-form" onSubmit={save} aria-label={t.saveRole}>
+			{!name && <label>{t.roleName}<input aria-label={t.roleName} value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} spellCheck={false} autoFocus /></label>}
+			<fieldset className="dg-permission-boxes">
+				<legend>{t.permissions}</legend>
+				{permissions.map(p => (
+					<label key={p} className="dg-check" title={given('permissions', p) ? t.roleFromConfig : undefined}>
+						<input type="checkbox" checked={given('permissions', p) || draft.permissions.has(p)} disabled={given('permissions', p)}
+							onChange={e => setDraft({ ...draft, permissions: toggle(draft.permissions, p, e.target.checked) })} />
+						<code>{p}</code>
+					</label>
+				))}
+			</fieldset>
+			<fieldset className="dg-schema-boxes">
+				<legend>{t.roleSchemas}</legend>
+				<label className="dg-check">
+					<input type="radio" name="where" checked={draft.everywhere} disabled={!!yaml?.config.schemas} onChange={() => setDraft({ ...draft, everywhere: true })} /> {t.roleEverySchema}
+				</label>
+				<label className="dg-check">
+					<input type="radio" name="where" checked={!draft.everywhere} disabled={!!yaml && !yaml.config.schemas} onChange={() => setDraft({ ...draft, everywhere: false })} /> {t.roleTheseSchemas}
+				</label>
+				{draft.everywhere && (
+					<>
+						<label>{t.roleViews}<input aria-label={t.roleViews} value={draft.views} onChange={e => setDraft({ ...draft, views: e.target.value })} spellCheck={false} /><span className="dg-muted">{t.roleListHint}; {t.roleFirstDefault}</span></label>
+						<label>{t.roleStages}<input aria-label={t.roleStages} value={draft.stages} onChange={e => setDraft({ ...draft, stages: e.target.value })} spellCheck={false} /><span className="dg-muted">{t.roleListHint}; {t.roleFirstDefault}</span></label>
+					</>
+				)}
+				{!draft.everywhere && Object.entries(draft.schemas).map(([path, d]) => {
+					const scope = scopes.value?.find(s => s.path === path)
+					const fromConfig = !!yaml?.config.schemas?.[path]
+					const views = [...new Set([...(scope?.views ?? []), ...d.views])]
+					const stages = [...new Set([...(scope?.stages ?? []), ...d.stages])]
+					const chosenViews = views.filter(v => d.views.has(v) || givenIn(path, 'views', v))
+					const chosenStages = stages.filter(v => d.stages.has(v) || givenIn(path, 'stages', v))
+					return (
+						<div key={path} className="dg-schema-scope" aria-label={path}>
+							<label className="dg-check">
+								<input type="checkbox" checked={d.on || fromConfig} disabled={fromConfig} onChange={e => setSchema(path, { on: e.target.checked })} />
+								<strong>{path || '/'}</strong>
+							</label>
+							{(d.on || fromConfig) && (
+								<div className="dg-schema-scope-body">
+									<div>
+										<span className="dg-muted">{t.roleViews}</span>
+										{views.map(v => (
+											<label key={v} className="dg-check">
+												<input type="checkbox" checked={d.views.has(v) || givenIn(path, 'views', v)} disabled={givenIn(path, 'views', v)} onChange={e => setSchema(path, { views: toggle(d.views, v, e.target.checked) })} /> {v}
+											</label>
+										))}
+										<label>{t.roleDefaultView}
+											<select aria-label={`${path} ${t.roleDefaultView}`} value={d.view} onChange={e => setSchema(path, { view: e.target.value })}>
+												<option value="">{chosenViews.length ? `— (${chosenViews[0]})` : `— (${t.roleOfSchema})`}</option>
+												{chosenViews.map(v => <option key={v} value={v}>{v}</option>)}
+											</select>
+										</label>
+										{!chosenViews.length && <span className="dg-muted">{t.roleNoneOfSchema}</span>}
+									</div>
+									<div>
+										<span className="dg-muted">{t.roleStages}</span>
+										{stages.map(v => (
+											<label key={v} className="dg-check">
+												<input type="checkbox" checked={d.stages.has(v) || givenIn(path, 'stages', v)} disabled={givenIn(path, 'stages', v)} onChange={e => setSchema(path, { stages: toggle(d.stages, v, e.target.checked) })} /> {v}
+											</label>
+										))}
+										<label>{t.roleDefaultStage}
+											<select aria-label={`${path} ${t.roleDefaultStage}`} value={d.stage} onChange={e => setSchema(path, { stage: e.target.value })}>
+												<option value="">{chosenStages.length ? `— (${chosenStages[0]})` : `— (${t.roleOfSchema})`}</option>
+												{chosenStages.map(v => <option key={v} value={v}>{v}</option>)}
+											</select>
+										</label>
+										{!chosenStages.length && <span className="dg-muted">{t.roleNoneOfSchema}</span>}
+									</div>
+								</div>
+							)}
+						</div>
+					)
+				})}
+			</fieldset>
+			<label>{t.roleMaxRows}<input aria-label={t.roleMaxRows} value={draft.maxRows} onChange={e => setDraft({ ...draft, maxRows: e.target.value })} /></label>
+			<label className="dg-check"><input type="checkbox" checked={draft.approval} onChange={e => setDraft({ ...draft, approval: e.target.checked })} /> {t.roleApproval}</label>
+			<label>{t.roleReason}<input aria-label={t.roleReason} value={draft.reason} onChange={e => setDraft({ ...draft, reason: e.target.value })} /></label>
+			<span className="dg-form-actions">
+				<span className="dg-spacer" />
+				{name && <button type="button" onClick={() => { setDraft(undefined); setError(undefined) }}>{t.cancel}</button>}
+				<button type="submit" className="dg-primary" disabled={busy || !draft.name.trim()}>{t.saveRole}</button>
+			</span>
+		</form>
+	)
+
 	return (
 		<div className="dg-pane">
-			<h2>{name ? `${t.roleName}: ${name}` : t.newRole}{yaml?.locked && <span className="dg-badge">{t.roleLocked}</span>}</h2>
-			{(roles.error ?? access.error ?? error) && <div className="dg-error" role="alert">{roles.error ?? access.error ?? error}</div>}
-			{yaml && (
-				<section className="dg-card">
-					<h3>{t.roleFromConfig}</h3>
-					<p className="dg-muted">{yaml.locked ? t.roleLockedNote : t.roleFromConfigNote}</p>
-					<dl className="dg-facts">
-						<dt>{t.permissions}</dt><dd>{ofYaml('permissions') || '—'}</dd>
-						<dt>{t.roleSchemas}</dt><dd>{ofYaml('schemas') || <span className="dg-muted">{t.roleEverySchema}</span>}</dd>
-						<dt>{t.roleViews}</dt><dd>{ofYaml('views') || yaml.config.view || <span className="dg-muted">{t.roleOfSchema}</span>}</dd>
-						<dt>{t.roleStages}</dt><dd>{ofYaml('stages') || <span className="dg-muted">{t.roleOfSchema}</span>}</dd>
-						{yaml.config.maxRows !== undefined && <><dt>{t.roleMaxRows}</dt><dd>{yaml.config.maxRows}</dd></>}
-						{yaml.config.approval && <><dt>approval</dt><dd>{yaml.config.approval}</dd></>}
-					</dl>
-				</section>
-			)}
-			{draft && !yaml?.locked && (
-				<section className="dg-card">
-					<h3>{yaml ? t.extendRole : t.permissions}</h3>
-					{stored?.updatedBy && <p className="dg-muted">{fill(t.obsChangedBy, { name: stored.updatedBy, time: when(stored.updatedAt!) })}</p>}
-					<form className="dg-form dg-role-form" onSubmit={save} aria-label={t.saveRole}>
-						{!name && (
-							<label>{t.roleName}<input aria-label={t.roleName} value={draft.name} onChange={e => setDraft({ ...draft, name: e.target.value })} spellCheck={false} autoFocus /></label>
-						)}
-						<fieldset className="dg-permission-boxes">
-							<legend>{t.permissions}</legend>
-							{permissions.map(p => {
-								const given = yaml?.config.permissions?.includes(p)
-								return (
-									<label key={p} className="dg-check" title={given ? t.roleFromConfig : undefined}>
-										<input type="checkbox" checked={given || draft.permissions.has(p)} disabled={given}
-											onChange={e => { const next = new Set(draft.permissions); if (e.target.checked) next.add(p); else next.delete(p); setDraft({ ...draft, permissions: next }) }} />
-										<code>{p}</code>
-									</label>
-								)
-							})}
-						</fieldset>
-						{field('schemas', t.roleSchemas, `${t.roleListHint}; ${t.roleSchemasHint}`)}
-						{field('views', t.roleViews, t.roleListHint)}
-						{field('stages', t.roleStages, t.roleListHint)}
-						{field('maxRows', t.roleMaxRows)}
-						<label className="dg-check"><input type="checkbox" checked={draft.approval} onChange={e => setDraft({ ...draft, approval: e.target.checked })} /> {t.roleApproval}</label>
-						{field('reason', t.roleReason)}
-						<span className="dg-form-actions">
-							{stored && (removing
-								? <><span className="dg-muted">{t.confirmRemove}</span><button type="button" onClick={() => setRemoving(false)}>{t.cancel}</button><button type="button" className="dg-danger" disabled={busy} onClick={remove}>{t.removeRole}</button></>
-								: <button type="button" className="dg-danger" onClick={() => setRemoving(true)}>{t.removeRole}</button>)}
-							<span className="dg-spacer" />
-							<button type="submit" className="dg-primary" disabled={busy || !draft.name.trim()}>{t.saveRole}</button>
-						</span>
-					</form>
-				</section>
-			)}
+			<div className="dg-card-head">
+				<h2>{name ? `${t.roleName}: ${name}` : t.newRole}{yaml?.locked && <span className="dg-badge">{t.roleLocked}</span>}</h2>
+				<span className="dg-spacer" />
+				{name && !editing && (
+					<span className="dg-form-actions">
+						{!yaml?.locked && <button type="button" className="dg-primary" disabled={!roles.value || !scopes.value} onClick={startEditing}>{t.editRole}</button>}
+						{stored && (removing
+							? <><span className="dg-muted">{yaml ? t.roleRemoveExtension : t.confirmRemove}</span><button type="button" onClick={() => setRemoving(false)}>{t.cancel}</button><button type="button" className="dg-danger" disabled={busy} onClick={remove}>{t.removeRole}</button></>
+							: <button type="button" className="dg-danger" onClick={() => setRemoving(true)}>{t.removeRole}</button>)}
+						{!stored && yaml && <button type="button" className="dg-danger" disabled title={t.roleFromConfigNote}>{t.removeRole}</button>}
+					</span>
+				)}
+			</div>
+			{problem && <div className="dg-error" role="alert">{problem}</div>}
+			{editing ? form : roles.value && details}
 		</div>
 	)
 }
@@ -551,7 +723,7 @@ export const ObservabilityPage: React.FC<{ client: ManagementClient, signal: Sig
 
 // ─── who I am ───────────────────────────────────────────────────────────────
 
-interface MyRole { name: string, permissions: string[], schemas?: string[], views?: string[], stages?: string[], maxRows?: number, approval?: string, unknown?: boolean }
+interface MyRole { name: string, permissions: string[], schemas?: Record<string, SchemaEntry>, views?: string[], stages?: string[], maxRows?: number, approval?: string, unknown?: boolean }
 interface Me { name: string, permissions: string[], context?: Record<string, unknown>, roles: MyRole[] }
 
 /**
@@ -564,9 +736,6 @@ export const MeCard: React.FC<{ client: ManagementClient, fallback?: React.React
 	// a gateway before 5.0 has no /admin/me: what its session says (its permissions)
 	if (me.error) return <>{fallback ?? <div className="dg-error" role="alert">{me.error}</div>}</>
 	if (!me.value) return null
-	const list = (items: string[] | undefined, none: string) => items?.length
-		? <>{items.map((x, i) => <span key={x} className={i === 0 ? 'dg-chip dg-chip-default' : 'dg-chip'} title={i === 0 ? t.meDefault : undefined}>{x}</span>)}</>
-		: <span className="dg-muted">{none}</span>
 	return (
 		<section className="dg-card dg-me">
 			<h3>{t.meTitle}</h3>
@@ -579,15 +748,19 @@ export const MeCard: React.FC<{ client: ManagementClient, fallback?: React.React
 					<div className="dg-table-scroll"><table className="dg-table">
 						<thead><tr><th>{t.roleName}</th><th>{t.permissions}</th><th>{t.roleViews}</th><th>{t.roleStages}</th><th>{t.roleSchemas}</th></tr></thead>
 						<tbody>
-							{me.value.roles.map(r => (
-								<tr key={r.name} aria-label={r.name}>
-									<td><strong>{r.name}</strong>{r.unknown && <span className="dg-chip">{t.meUnknownRole}</span>}</td>
-									<td className="dg-wrap">{r.permissions.join(', ') || '—'}</td>
-									<td>{list(r.views, t.roleOfSchema)}</td>
-									<td>{list(r.stages, t.roleOfSchema)}</td>
-									<td>{r.schemas?.join(', ') ?? <span className="dg-muted">{t.roleEverySchema}</span>}</td>
-								</tr>
-							))}
+							{me.value.roles.flatMap(r => {
+								// a row by schema where it applies, with its views and stages there; one when it applies everywhere
+								const rows: [string | undefined, SchemaEntry][] = r.schemas ? Object.entries(r.schemas) : [[undefined, {}]]
+								return rows.map(([path, e], i) => (
+									<tr key={`${r.name}@${path ?? '*'}`} aria-label={path ? `${r.name} ${path}` : r.name}>
+										<td>{i === 0 && <><strong>{r.name}</strong>{r.unknown && <span className="dg-chip">{t.meUnknownRole}</span>}</>}</td>
+										<td className="dg-wrap">{i === 0 ? r.permissions.join(', ') || '—' : ''}</td>
+										<td><Defaulted items={e.views ?? r.views} chosen={e.view} none={t.roleOfSchema} title={t.meDefault} /></td>
+										<td><Defaulted items={e.stages ?? r.stages} chosen={e.stage} none={t.roleOfSchema} title={t.meDefault} /></td>
+										<td>{path !== undefined ? <strong>{path || '/'}</strong> : <span className="dg-muted">{t.roleEverySchema}</span>}</td>
+									</tr>
+								))
+							})}
 						</tbody>
 					</table></div>
 					)

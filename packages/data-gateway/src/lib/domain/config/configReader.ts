@@ -1,5 +1,6 @@
 import { ObservabilityConfig } from '@lambdaorm/base'
 import { readExplore, readObservabilitySdk } from './observabilitySettings'
+import { readRoleSchemas } from '../auth/roles'
 import { ALL_PERMISSIONS, isPermission, KNOWN_PERMISSIONS, Permission } from '../auth/permission'
 import {
 	AuthenticationConfig, AuthenticationType, AuthorizationConfig, StateConfig, StateDialect, STATE_DIALECTS, ConfigReading, CredentialConfig, DataGatewayConfig, ExploreConfig, JwtConfig, RoleConfig, CacheConfig, ClusterConfig, FilesConfig, FileStorageConfig, OutboxConfig, OutboxDestinationConfig, LoggerConfig, McpConfig,
@@ -728,7 +729,7 @@ export class ConfigReader {
 		if (views) role.views = views
 		const stages = names(value.stages, 'stages')
 		if (stages) role.stages = stages
-		const schemas = names(value.schemas, 'schemas')
+		const schemas = readRoleSchemas(value.schemas, `${at}.schemas`, this.issues)
 		if (schemas) role.schemas = schemas
 		if (value.maxRows !== undefined) role.maxRows = this.int(value.maxRows, 0, `${at}.maxRows`, 1)
 		const approval = this.approvalMode(value.approval, `${at}.approval`)
@@ -772,7 +773,7 @@ export class ConfigReader {
 		if (!config.orm.workspacePath) {
 			const paths = new Set(config.orm.schemas.map(s => s.path))
 			for (const [name, role] of Object.entries(config.authorization.roles)) {
-				const missing = (role.schemas ?? []).filter(s => !paths.has(s))
+				const missing = Object.keys(role.schemas ?? {}).filter(s => !paths.has(s))
 				if (missing.length) this.warnings.push(`the role "${name}" names the schemas ${missing.join(', ')}, which orm.schemas doesn't have`)
 			}
 		}

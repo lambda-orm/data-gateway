@@ -1,5 +1,5 @@
 import { DataGatewayConfig, RoleConfig } from '../../domain/config/dataGatewayConfig'
-import { extendGrant, grantOf, RoleGrant } from '../../domain/auth/roles'
+import { extendGrant, extendSchemaEntry, grantInSchema, grantOf, RoleGrant, RoleSchemaConfig } from '../../domain/auth/roles'
 import { Permission } from '../../domain/auth/permission'
 import { Principal } from '../../domain/auth/principal'
 import { StoredRole } from '../ports/output/statePorts'
@@ -54,17 +54,30 @@ export class RoleCatalog implements RoleGrantsPort, RoleLookupPort {
 		return this.stored.find(r => r.name === name && r.schema === undefined)
 	}
 
-	/** the schemas where a role applies (the YAML and the state together); undefined, every schema */
-	public schemasOf (name: string): string[] | undefined {
-		const base = this.base[name]
-		const own = this.locked(name) ? undefined : this.storedOf(name)?.config
-		if (!base) return own?.schemas
-		// an extension adds schemas to a role that names some; one that applies everywhere keeps applying everywhere
-		if (!own?.schemas || !base.schemas) return base.schemas
-		return [...new Set([...base.schemas, ...own.schemas])]
+	/**
+	 * the schemas where a role applies, each with what it may use there (the YAML and the state together); undefined,
+	 * every schema. An extension adds schemas (and views and stages in one) to a role that names some; one that applies
+	 * everywhere keeps applying everywhere, with what the extension says of a schema.
+	 */
+	public schemasOf (name: string): Record<string, RoleSchemaConfig> | undefined {
+		const base = this.base[name]?.schemas
+		const own = this.locked(name) ? undefined : this.storedOf(name)?.config.schemas
+		if (!this.base[name]) return own
+		if (!base) return undefined
+		if (!own) return base
+		return Object.fromEntries([...new Set([...Object.keys(base), ...Object.keys(own)])].map(path => [path, extendSchemaEntry(base[path], own[path])]))
 	}
 
-	/** a role (in a schema: nothing where it doesn't apply): the YAML extended by the state */
+	/** what a role says of one schema: undefined, it doesn't apply there; {} applies with its views and stages */
+	private entryOf (name: string, schema: string): RoleSchemaConfig | undefined {
+		const schemas = this.schemasOf(name)
+		if (schemas) return schemas[schema]
+		// everywhere: what the state said of this schema (an extension of a role of the YAML without schemas)
+		const own = this.locked(name) ? undefined : this.storedOf(name)?.config.schemas?.[schema]
+		return own ?? {}
+	}
+
+	/** a role (in a schema: nothing where it doesn't apply, and its views and stages there): the YAML extended by the state */
 	public grantOf (name: string, schema?: string): RoleGrant | undefined {
 		let grant: RoleGrant | undefined = this.base[name] ? grantOf(name, this.base[name]) : undefined
 		if (!this.locked(name)) {
@@ -72,8 +85,9 @@ export class RoleCatalog implements RoleGrantsPort, RoleLookupPort {
 			if (global) grant = extendGrant(grant, global.config, name)
 		}
 		if (grant && schema !== undefined) {
-			const schemas = this.schemasOf(name)
-			if (schemas && !schemas.includes(schema)) return undefined
+			const entry = this.entryOf(name, schema)
+			if (!entry) return undefined
+			return grantInSchema(grant, entry)
 		}
 		return grant
 	}

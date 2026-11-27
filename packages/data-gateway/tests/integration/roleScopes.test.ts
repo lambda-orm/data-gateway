@@ -170,5 +170,11 @@ test('the observability: over the YAML, kept in the state, with the permission o
 test('me: any credential, its own roles with what each gives, its context', async () => {
 	const me = await call(admin, '/admin/me', { headers: await login(admin, key('ana-key')) })
 	expect(me.status).toBe(200)
-	expect(me.body).toEqual({ name: 'ana', permissions: ['read'], roles: [{ name: 'analyst', permissions: ['read'], schemas: ['shop'], views: ['support', 'default'], stages: ['default', 'reporting'] }] })
+	expect(me.body).toEqual({ name: 'ana', permissions: ['read'], roles: [{ name: 'analyst', permissions: ['read'], schemas: { shop: {} }, views: ['support', 'default'], stages: ['default', 'reporting'] }] })
+})
+
+test('scopes: the views and the stages of every schema, for the roles; with the permission roles', async () => {
+	expect((await call(admin, '/admin/scopes', { headers: await login(admin, key('ana-key')) })).status).toBe(403)
+	const scopes = await call(admin, '/admin/scopes', { headers: await login(admin, key('boss-key')) })
+	expect(scopes.body).toEqual([{ path: 'shop', views: ['default', 'support'], stages: ['default', 'reporting'] }])
 })

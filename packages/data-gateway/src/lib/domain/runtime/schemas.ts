@@ -119,8 +119,8 @@ export const effectiveSettings = (config: DataGatewayConfig, schema: SchemaDescr
 		...(config.authorization?.stages === 'open' ? { openStages: true } : {}),
 		// the views of the roles that apply in it (the only place a credential gets one)
 		namedViews: [...new Set(Object.values(config.authorization?.roles ?? {})
-			.filter(r => !r.schemas || r.schemas.includes(schema.path))
-			.flatMap(r => r.views ?? (r.view ? [r.view] : [])))]
+			.filter(r => !r.schemas || r.schemas[schema.path])
+			.flatMap(r => [...(r.views ?? (r.view ? [r.view] : [])), ...(r.schemas?.[schema.path]?.views ?? [])]))]
 	}
 }
 

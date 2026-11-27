@@ -15,7 +15,9 @@ All notable changes to this project will be documented in this file.
 - A method `jwt` says only the claim of the roles (`principal.permissions.claim`); its own `roles` stop the gateway:
   they go in `authorization.roles`.
 - **A role is of the gateway and says its `schemas`** (their paths; none, every schema): in another schema it gives
-  nothing. `orm.schemas[].roles` is gone (it stops the gateway): a role that needs other permissions or views in
+  nothing. By schema it may say the views and stages it uses there and the ones of who doesn't choose
+  (`schemas: { shop: { views: [support, public], view: public, stages: [default], stage: default } }`).
+  `GET /admin/scopes` (permission `roles`) tells the views and stages of every schema served. `orm.schemas[].roles` is gone (it stops the gateway): a role that needs other permissions or views in
   another schema is another role. From the administration, a role says its `schemas` too (`PUT` with `schema`, `400`);
   one kept for a schema by 4.4 doesn't apply and is listed as ignored, to remove it.
 - **The observability, from the administration:** `GET/PUT/DELETE /admin/observability` with the new permission

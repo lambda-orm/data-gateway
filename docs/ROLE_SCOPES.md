@@ -33,8 +33,10 @@ Los roles salen de cada método de autenticación y pasan a un lugar propio, `au
 authorization:
   roles:
     support:
-      schemas: [shop]                  # dónde vale; sin schemas, en todos
-      views: [support, public]         # la primera, la de quien no elige
+      schemas:                         # dónde vale, y en cada uno qué puede usar; sin schemas, en todos
+        shop: { views: [support, public], view: public, stages: [default, reporting], stage: default }
+        sales: {}                      # las vistas y stages de abajo (o los del schema)
+      views: [support]                 # en todos sus schemas, salvo el que dice las suyas; la primera, la de quien no elige
       permissions: [read]
     analyst:
       views: [analytics, support]
@@ -67,7 +69,10 @@ orm:
 ```
 
 - **Un rol es del gateway (5.0.0):** dice en qué schemas vale (`schemas: [shop, sales]`, sus rutas; sin `schemas`, en
-  todos) y en otro no da nada. `orm.schemas[].roles` ya no existe (la gateway no arranca y el error dice que va en
+  todos) y en otro no da nada. Por schema puede decir las vistas y stages que usa ahí y los de quien no elige
+  (`schemas: { shop: { views, view, stages, stage } }`): reemplazan los del rol en ese schema; `view` y `stage` tienen
+  que ser de sus `views` y `stages`. Desde la administración se extiende igual: más vistas o stages en un schema, otro
+  default. `GET /admin/scopes` (con `roles`) dice las vistas y stages de cada schema servido, para elegirlos. `orm.schemas[].roles` ya no existe (la gateway no arranca y el error dice que va en
   `authorization.roles` con `schemas`): si en dos schemas un rol necesita otros permisos o vistas, son dos roles.
 
 - **Un solo camino (5.0.0):** los permisos, las vistas, los stages y la aprobación los dice un rol. Una clave (o un

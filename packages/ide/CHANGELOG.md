@@ -4,8 +4,9 @@
 
 - **Administration, in the explorer:** each connection has a node **Administration** above its schemas, with what its
   credential may do: **Roles** (the permissions by role, a role by row and a permission by column, with its schemas;
-  Add role; and each role as a node: what the configuration gives it, read only, and what is added to it, a box per
-  permission), **Access** (each key or token, where it applies, its roles and its context; never a secret),
+  Add role; and each role as a node: all it gives, its permissions and, by schema, its views and stages with the
+  defaults marked, with Edit and Remove; Edit has a box per permission and, for each schema chosen, its views and
+  stages to check and the default view and stage), **Access** (each key or token, where it applies, its roles and its context; never a secret),
   **Sessions**, **Writes that wait**, **Tools** (REST API, WebSocket, MCP) and **Observability** (Metrics, Logs,
   Traces: what is sent, the OTLP exporter and where it is seen in Grafana, saved and applied at once). Needs
   data-gateway 5.0.

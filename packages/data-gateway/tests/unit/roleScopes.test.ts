@@ -20,7 +20,7 @@ describe('the configuration of the roles', () => {
 		const { config, issues } = read({
 			authorization: {
 				roles: {
-					support: { permissions: ['read'], views: ['support'], schemas: ['shop', 'shop'] },
+					support: { permissions: ['read'], views: ['support'], schemas: ['shop'] },
 					analyst: { permissions: ['read'], views: ['analytics', 'support'], stages: ['default', 'reporting'], maxRows: 5000 },
 					admin: { permissions: ['read', 'roles'], locked: true },
 					agent: { permissions: ['read', 'write'], approval: 'writes', scope: 'any' }
@@ -33,13 +33,20 @@ describe('the configuration of the roles', () => {
 		expect(config!.authorization.roles.analyst).toEqual({ permissions: ['read'], views: ['analytics', 'support'], stages: ['default', 'reporting'], maxRows: 5000 })
 		expect(config!.authorization.roles.admin.locked).toBe(true)
 		expect(config!.authorization.roles.agent).toMatchObject({ approval: 'writes', scope: 'any' })
-		expect(config!.authorization.roles.support).toEqual({ permissions: ['read'], views: ['support'], schemas: ['shop'] })
+		expect(config!.authorization.roles.support).toEqual({ permissions: ['read'], views: ['support'], schemas: { shop: {} } })
 		expect(config!.orm.schemas[0]).toMatchObject({ stage: 'default' })
 		// the roles are of the gateway: a schema doesn't have its own, and a role names schemas there are
 		expect(read({ orm: { schemas: [{ path: 'shop', workspace: '/w', roles: { support: { views: ['public'] } } }] } }).issues)
 			.toContain('orm.schemas "shop".roles: the roles are of the gateway: in authorization.roles, with schemas: [shop]')
 		expect(read({ authorization: { roles: { r: { permissions: ['read'], schemas: ['shp'] } } }, orm: { schemas: [{ path: 'shop', workspace: '/w' }] } }).warnings)
 			.toContain('the role "r" names the schemas shp, which orm.schemas doesn\'t have')
+		// by schema: the views and stages it may use there, and the ones of who doesn't choose
+		const bySchema = read({ authorization: { roles: { r: { permissions: ['read'], schemas: { shop: { views: ['public', 'support'], view: 'support', stages: ['default'], stage: 'default' }, sales: null } } } }, orm: { schemas: [{ path: 'shop', workspace: '/w' }, { path: 'sales', workspace: '/s' }] } })
+		expect(bySchema.issues).toEqual([])
+		expect(bySchema.config!.authorization.roles.r.schemas).toEqual({ shop: { views: ['public', 'support'], view: 'support', stages: ['default'], stage: 'default' }, sales: {} })
+		const wrong = read({ authorization: { roles: { r: { permissions: ['read'], schemas: { shop: { views: ['public'], view: 'support', stagez: [] } } } } } }).issues
+		expect(wrong).toContain('authorization.roles.r.schemas.shop: unknown keys stagez (views, stages, view, stage)')
+		expect(wrong).toContain('authorization.roles.r.schemas.shop.view "support" is not one of its views (public)')
 		expect(config!.authentication.credentials[0]).toEqual({ name: 'billing', value: 'k', roles: ['support'] })
 		expect(config!.authorization.stages).toBe('restricted')
 	})
@@ -122,7 +129,7 @@ describe('the catalog of the roles', () => {
 	const config = read({
 		authorization: {
 			roles: {
-				support: { permissions: ['read'], views: ['support'], stages: ['default', 'reporting'], schemas: ['shop'] },
+				support: { permissions: ['read'], views: ['support'], stages: ['default', 'reporting'], schemas: { shop: {} } },
 				admin: { permissions: ['read', 'roles', 'schemaRead'], locked: true }
 			}
 		},
@@ -137,13 +144,16 @@ describe('the catalog of the roles', () => {
 		expect(catalog.grantOf('support')?.permissions).toEqual(['read'])
 		expect(catalog.grantOf('admin', 'sales')?.permissions).toEqual(['read', 'roles', 'schemaRead'])
 		catalog.load([
-			{ name: 'support', config: { permissions: ['write'], schemas: ['sales'], maxRows: 100 }, updatedAt: 'x', updatedBy: 'x' },
+			{ name: 'support', config: { permissions: ['write'], schemas: { sales: { views: ['sales'] } }, maxRows: 100 }, updatedAt: 'x', updatedBy: 'x' },
 			// of a schema (4.4): it doesn't apply
 			{ name: 'support', schema: 'shop', config: { permissions: ['ddl'] }, updatedAt: 'x', updatedBy: 'x' },
 			{ name: 'admin', config: { permissions: ['write'] }, updatedAt: 'x', updatedBy: 'x' },
-			{ name: 'auditor', config: { permissions: ['read'], views: ['audit'], schemas: ['sales'] }, updatedAt: 'x', updatedBy: 'x' }
+			{ name: 'auditor', config: { permissions: ['read'], views: ['audit'], schemas: { sales: {} } }, updatedAt: 'x', updatedBy: 'x' }
 		])
-		expect(catalog.schemasOf('support')).toEqual(['shop', 'sales'])
+		expect(catalog.schemasOf('support')).toEqual({ shop: {}, sales: { views: ['sales'] } })
+		// in sales, the views of its entry (they replace the role's); in shop, the role's
+		expect(catalog.grantOf('support', 'sales')?.views).toEqual(['sales'])
+		expect(catalog.grantOf('support', 'shop')?.views).toEqual(['support'])
 		expect(catalog.grantOf('support', 'sales')).toMatchObject({ permissions: ['read', 'write'], maxRows: 100 })
 		expect(catalog.grantOf('support', 'shop')?.permissions).toEqual(['read', 'write'])
 		expect(catalog.grantOf('admin')?.permissions).toEqual(['read', 'roles', 'schemaRead'])
@@ -151,6 +161,18 @@ describe('the catalog of the roles', () => {
 		expect(catalog.grantOf('auditor', 'shop')).toBeUndefined()
 		expect(catalog.permissionsOf(['auditor', 'admin']).sort()).toEqual(['read', 'roles', 'schemaRead'])
 		expect(catalog.grantsOf({ ...principal('x', []), roles: ['auditor', 'nobody', 'support'] }, 'shop').map(g => g.role)).toEqual(['support'])
+	})
+
+	test('by schema: its views and stages there, the default first; the state adds views and may change the default', () => {
+		const catalog = new RoleCatalog(read({
+			authorization: { roles: { analyst: { permissions: ['read'], views: ['public'], schemas: { shop: { views: ['support', 'public'], view: 'public', stages: ['default', 'reporting'], stage: 'reporting' }, sales: {} } } } }
+		}).config!)
+		expect(catalog.grantOf('analyst', 'shop')).toEqual({ role: 'analyst', permissions: ['read'], views: ['public', 'support'], stages: ['reporting', 'default'] })
+		expect(catalog.grantOf('analyst', 'sales')).toEqual({ role: 'analyst', permissions: ['read'], views: ['public'] })
+		expect(catalog.grantOf('analyst', 'other')).toBeUndefined()
+		catalog.load([{ name: 'analyst', config: { schemas: { shop: { views: ['audit'], view: 'audit' } } }, updatedAt: 'x', updatedBy: 'x' }])
+		expect(catalog.grantOf('analyst', 'shop')?.views).toEqual(['audit', 'support', 'public'])
+		expect(catalog.grantOf('analyst', 'shop')?.stages).toEqual(['reporting', 'default'])
 	})
 
 	test('a key with roles: their names, and before a schema the permissions of them all', async () => {
@@ -183,7 +205,7 @@ describe('the catalog of the roles', () => {
 		expect(catalog.grantOf('support', 'sales')).toBeUndefined()
 		const changes = await admin.changes(boss, 10)
 		expect(changes.map(c => [c.key, c.by, c.reason])).toEqual([['support', 'boss', undefined], ['support', 'boss', 'the sales team too']])
-		expect(changes[0].before).toEqual({ permissions: ['write'], schemas: ['sales'] })
+		expect(changes[0].before).toEqual({ permissions: ['write'], schemas: { sales: {} } })
 	})
 
 	test('the access: the authentications of every level with their keys and roles, never a secret', async () => {

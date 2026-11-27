@@ -1,6 +1,7 @@
 import { isPermission, KNOWN_PERMISSIONS, Permission } from '../../domain/auth/permission'
 import { Principal } from '../../domain/auth/principal'
 import { RoleConfig } from '../../domain/config/dataGatewayConfig'
+import { readRoleSchemas, RoleSchemaConfig } from '../../domain/auth/roles'
 import { badRequest, forbidden, GatewayError, notFound } from '../../domain/errors/gatewayError'
 import { ClockPort, LoggerPort } from '../ports/output/supportPorts'
 import { ConfigChange, RoleStorePort, StoredRole } from '../ports/output/statePorts'
@@ -11,8 +12,8 @@ import { AccessDescription } from './accessView'
 export interface MyRole {
 	name: string
 	permissions: string[]
-	/** where it applies; none, every schema */
-	schemas?: string[]
+	/** where it applies, each with its views and stages there (the first, the one of who doesn't choose); none, every schema */
+	schemas?: Record<string, RoleSchemaConfig>
 	/** the first, the one of who doesn't choose; none, the one of the schema */
 	views?: string[]
 	stages?: string[]
@@ -57,7 +58,13 @@ export const roleOfBody = (raw: unknown): Partial<RoleConfig> => {
 		if (!Array.isArray(body.permissions) || body.permissions.some(p => !isPermission(p))) throw badRequest('ValidationError', `permissions: a list of ${KNOWN_PERMISSIONS.join(', ')}`)
 		role.permissions = [...new Set(body.permissions as Permission[])]
 	}
-	for (const key of ['schemas', 'views', 'stages'] as const) {
+	if (body.schemas !== undefined) {
+		const issues: string[] = []
+		const schemas = readRoleSchemas(body.schemas, 'schemas', issues)
+		if (issues.length) throw badRequest('ValidationError', issues.join('; '))
+		if (schemas) role.schemas = schemas
+	}
+	for (const key of ['views', 'stages'] as const) {
 		const value = body[key]
 		if (value === undefined) continue
 		if (!Array.isArray(value) || !value.length || value.some(v => typeof v !== 'string' || !v)) throw badRequest('ValidationError', `${key}: a list of names`)

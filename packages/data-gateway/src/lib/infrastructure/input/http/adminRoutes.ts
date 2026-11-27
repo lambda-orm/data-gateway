@@ -41,6 +41,8 @@ export const adminRouter = (admin: AdminService, authenticate: express.RequestHa
 		router.get('/me', handle(async (_req, res) => roles.me(principal(res))))
 		// who may come in: the authentications with their keys and roles (never a secret), and the permissions there are
 		router.get('/access', handle(async (_req, res) => roles.access(principal(res))))
+		// what a role may be given in each schema: its views and its stages
+		router.get('/scopes', handle(async (_req, res) => { roles.access(principal(res)); return admin.scopes() }))
 		router.get('/roles/changes', handle(async (req, res) => roles.changes(principal(res), Number(req.query.limit ?? 100))))
 		router.put('/roles/:name', handle(async (req, res) => roles.put(principal(res), String(req.params.name), req.body?.schema ? schemaParam(String(req.body.schema)) : schemaOf(req), req.body?.config ?? req.body, req.body?.reason)))
 		router.delete('/roles/:name', handle(async (req, res) => {

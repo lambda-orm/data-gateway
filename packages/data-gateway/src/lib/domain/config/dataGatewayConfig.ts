@@ -1,3 +1,4 @@
+import { RoleSchemaConfig } from '../auth/roles'
 import { ObservabilityConfig } from '@lambdaorm/base'
 import { Permission } from '../auth/permission'
 
@@ -26,8 +27,11 @@ export interface CredentialConfig {
  */
 export interface RoleConfig {
 	permissions: Permission[]
-	/** the schemas (their paths) where it applies; none, every schema */
-	schemas?: string[]
+	/**
+	 * the schemas (their paths) where it applies, each with the views and stages it may use there and its defaults;
+	 * none, every schema (with the views and stages below)
+	 */
+	schemas?: Record<string, RoleSchemaConfig>
 	/** @deprecated a single view: views: [view] */
 	view?: string
 	/** the views it may use; none, the one of the schema */
