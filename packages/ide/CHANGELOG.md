@@ -2,6 +2,10 @@
 
 ### Unreleased
 
+### 1.4.0 (2026-11-26)
+
+Works with any data-gateway 4.x; the roles of the gateway and the view in the options need data-gateway 4.4.
+
 - **Roles of the gateway:** with the permission `roles` (data-gateway 4.4), the tab **Roles** of a connection lists the
   roles of its configuration (read only) and those of its state; **Add a role**, **Extend** one of the configuration
   (more views, stages or permissions, in every schema or in one), edit or remove one of the state, with a reason; its
