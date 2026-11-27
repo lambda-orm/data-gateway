@@ -152,6 +152,15 @@ publicar, quitar las marcas *"not in the image 4.0.0"* de sus páginas de la gat
 > `feature/data-gateway-4.4.0` (mergearla **después** de publicar las imágenes). Changesets: `@lambdaorm/ui` (la vista en
 > las opciones, `WhoAmI`).
 
+### R8. Liberar 5.0.0 y el IDE 1.5.0
+
+> **Estado (2026-11-27):** los permisos solo por roles (roles de la gateway con sus `schemas`), el `context` de una
+> credencial local, la administración de la observabilidad y de dónde se guarda el estado, `/admin/me`, `/admin/access`,
+> `/admin/state`; el IDE con la administración en el árbol de cada conexión y las entidades abstractas; los clientes de
+> Node (`@lambdaorm/data-gateway-client-node`, su primera publicación) y de Go (`packages/client-go`, falta su espejo
+> público). Ramas `release/data-gateway-5.0.0` y `release/ide-1.5.0`, listas para `main`. La wiki en
+> `lambda-orm/wiki` → `feature/data-gateway-5.0.0` (mergearla **después** de publicar las imágenes).
+
 ## 3. Las features (G1–G7)
 
 El orden de §5. Cada una con su documento de diseño (`docs/<FEATURE>.md` y su plan), decisiones de a una con una

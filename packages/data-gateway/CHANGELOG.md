@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 
 ### Unreleased
 
+### 5.0.0 (2026-11-27)
+
+With `@lambdaorm/base` 3.11.1 and `@lambdaorm/lib` 3.15.0, the exact versions the image installs. Breaking: a gateway of
+4.x whose keys, tokens or users carry their own `permissions` (or whose `jwt` methods or `orm.schemas[]` say `roles`)
+stops on starting, saying where each one goes (see *To migrate*).
+
 **Breaking: what a credential may do is said only by its roles** (`docs/ROLE_SCOPES.md` §2). One way, not two:
 
 - A local credential (`keys`, `tokens`, `users`, or the single `token`/`value`/`username`) names its `roles` of
