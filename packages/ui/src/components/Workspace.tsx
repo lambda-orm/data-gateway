@@ -365,6 +365,12 @@ const ConnectionSection: React.FC<{
 		if (known) controller.load()
 		setRefreshing(r => ({ n: r.n + 1, schema }))
 	}, [controller, known])
+	// its problem gone (its key entered): what was read while it failed (the domains) is read again
+	const wasSolved = useRef(solved)
+	useEffect(() => {
+		if (solved && !wasSolved.current) refresh()
+		wasSolved.current = solved
+	}, [solved, refresh])
 	const revision = useMemo(() => revisionOf(listed), [listed])
 	const schemas = useMemo(() => listed.filter(s => s.status === 'ready'), [listed])
 
@@ -993,7 +999,6 @@ export const Workspace: React.FC<WorkspaceProps> = ({ store, workspaceKey, maxTa
 									<EntityView key={sinceOf(conn, tab.schema)} api={r.api} schema={tab.schema ?? ''} entity={tab.entity ?? ''} domain={r.loaderOf(tab.schema ?? '')} theme={theme} locale={workbench.locale}
 										onOpenEntity={(schema, entity) => openEntity(conn, schema, entity)} onQuery={queryEntity(conn)} onQueryText={queryOfDiagram(conn)} culture={workbench.culture}
 										onEdit={adminApi && can?.schemaWrite ? (schema, entity) => openElement(conn, schema, { section: 'entities', name: entity }, true) : undefined} editLabel={a.edit}
-										onOpenForm={adminApi && can?.schemaRead ? (schema, entity) => openElement(conn, schema, { section: 'entities', name: entity }) : undefined}
 										onRemove={adminApi && can?.schemaWrite ? (schema, entity) => openElement(conn, schema, { section: 'entities', name: entity }, false, true) : undefined} removeLabel={a.remove}
 										admin={adminApi && can?.schemaRead ? adminApi : undefined} revision={sinceOf(conn, tab.schema)}
 										tracesUrl={connections.find(c => c.id === conn)?.tracesUrl?.(tab.schema ?? '', tab.entity ?? '')} />

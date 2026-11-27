@@ -8,7 +8,7 @@ import { explorerMessagesOf, format } from '../domain/explorerI18n'
 import { Locale } from '../domain/i18n'
 import { DomainDiagram } from './DomainDiagram'
 import { ExpressionView } from './ExpressionView'
-import { Inheritance, inheritanceOf } from '../domain/inheritance'
+import { abstractEntityOf, inheritanceOf, sourceEntitiesOf } from '../domain/inheritance'
 import { fromYaml } from '../domain/results'
 
 export interface EntityViewProps {
@@ -31,8 +31,6 @@ export interface EntityViewProps {
 	onEdit?: (schema: string, entity: string) => void
 	/** the text of the button of onEdit */
 	editLabel?: string
-	/** The form of an entity the domain doesn't serve: the abstract it extends (the completed domain has no abstracts) */
-	onOpenForm?: (schema: string, entity: string) => void
 	/** Its removal (what uses it, and a confirmation), when the credential may write the schema */
 	onRemove?: (schema: string, entity: string) => void
 	/** the text of the button of onRemove */
@@ -56,7 +54,7 @@ const Check: React.FC<{ on?: boolean }> = ({ on }) => <>{on ? '✓' : ''}</>
  * auto, default, enum, what each foreign key references, expressions), its relations and what references it, its
  * keys, indexes and constraints, its rows (a backoffice: editable with write, exported) and its diagram with its neighbours.
  */
-export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: name, domain: loadDomain, theme = 'light', locale, onOpenEntity, onQuery, onQueryText, onEdit, editLabel = 'Edit', onOpenForm, onRemove, removeLabel = 'Remove', pageSize = 50, admin, tracesUrl, revision }) => {
+export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: name, domain: loadDomain, theme = 'light', locale, onOpenEntity, onQuery, onQueryText, onEdit, editLabel = 'Edit', onRemove, removeLabel = 'Remove', pageSize = 50, admin, tracesUrl, revision }) => {
 	const m = explorerMessagesOf(locale)
 	const a = adminMessagesOf(locale)
 	const [domain, setDomain] = useState<DomainInfo>()
@@ -69,17 +67,19 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 
 	useEffect(() => { loadDomain().then(setDomain, e => setError(e?.message ?? String(e))) }, [loadDomain])
 
-	// what it inherits: the completed domain no longer says extends, the lambdaORM.yaml does (with schemaRead)
-	const [inheritance, setInheritance] = useState<Inheritance>()
+	// the entities as the lambdaORM.yaml says them (with schemaRead): the completed domain no longer says extends, nor
+	// has the abstract ones; null while it is read, [] without it
+	const [source, setSource] = useState<any[] | null>(admin ? null : [])
 	useEffect(() => {
-		if (!admin) { setInheritance(undefined); return }
+		if (!admin) { setSource([]); return }
 		let live = true
 		// (a port without readSchema, or that fails: nothing is said of the inheritance)
 		Promise.resolve().then(() => admin.readSchema(schema)).then(file => {
-			if (live) setInheritance(inheritanceOf((fromYaml(file.text) as any)?.domain?.entities, name))
-		}, () => { if (live) setInheritance(undefined) })
+			if (live) setSource(sourceEntitiesOf(fromYaml(file.text)))
+		}, () => { if (live) setSource([]) })
 		return () => { live = false }
-	}, [admin, schema, name, revision])
+	}, [admin, schema, revision])
+	const inheritance = useMemo(() => source?.length ? inheritanceOf(source, name) : undefined, [source, name])
 	const inherits = !!inheritance?.bases.length
 	// where a property or relation comes from: the base that declares it, or the one an own one redefines
 	const originOf = (key: 'properties' | 'relations', itemName: string): React.ReactNode => {
@@ -89,15 +89,19 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 		return item.redefines ? <span className="lw-muted">{format(m.redefines, { name: item.redefines })}</span> : ''
 	}
 
-	const entity: EntityInfo | undefined = domain?.entities.find(e => e.name === name)
+	// an abstract one isn't in the completed domain: from the lambdaORM.yaml, with what it inherits (no data, no diagram)
+	const served: EntityInfo | undefined = domain?.entities.find(e => e.name === name)
+	const entity: EntityInfo | undefined = useMemo(() => served ?? (source ? abstractEntityOf(source, name) : undefined), [served, source, name])
 	const references = useMemo(() => {
 		const map = new Map<string, string>()
 		if (!domain) return map
-		for (const edge of edgesOf(domain)) {
+		// an abstract one: what its own relations say (the domain's edges don't have it)
+		const of = served || !entity ? domain : { ...domain, entities: [...domain.entities, entity] }
+		for (const edge of edgesOf(of)) {
 			if (edge.kind === 'relation' && edge.child === name && edge.childField) map.set(edge.childField, `${edge.parent}.${edge.parentField}`)
 		}
 		return map
-	}, [domain, name])
+	}, [domain, name, served, entity])
 	const referencedBy = useMemo(() => domain ? referencesTo(domain, name) : [], [domain, name])
 	// the variables of its expressions: its properties (colored apart)
 	const names = useMemo(() => (entity?.properties ?? []).map(p => p.name), [entity])
@@ -111,6 +115,7 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 
 	if (error) return <div className={`lw-workbench lw-${theme}`}><div className="lw-notice" role="alert">{error}</div></div>
 	if (!domain) return <div className={`lw-workbench lw-${theme}`}><span className="lw-muted">{m.loading}</span></div>
+	if (!entity && source === null) return <div className={`lw-workbench lw-${theme}`}><span className="lw-muted">{m.loading}</span></div>
 	if (!entity) return <div className={`lw-workbench lw-${theme}`}><div className="lw-notice" role="alert">{name}?</div></div>
 
 	const keys = new Set(entity.primaryKey ?? [])
@@ -128,8 +133,9 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 				{(entity.extends ?? inheritance?.bases[0]) && (() => {
 					const base: string = entity.extends ?? inheritance!.bases[0]
 					const title = inheritance?.bases.length ? [entity.name, ...inheritance.bases].join(' → ') : undefined
-					return onOpenForm
-						? <button type="button" className="lw-badge lw-badge-link" title={title} onClick={() => onOpenForm(schema, base)}>{format(m.extendsEntity, { name: base })}</button>
+					// its base is shown as an entity too (from the lambdaORM.yaml), when it can be read
+					return source?.length
+						? <button type="button" className="lw-badge lw-badge-link" title={title} onClick={() => onOpenEntity(schema, base)}>{format(m.extendsEntity, { name: base })}</button>
 						: <span className="lw-badge" title={title}>{format(m.extendsEntity, { name: base })}</span>
 				})()}
 				<span className="lw-spacer" />
@@ -140,7 +146,7 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 			</div>
 			<div className="lw-toolbar" role="tablist" aria-label={entity.name}>
 				{([['properties', `${m.properties} (${entity.properties?.length ?? 0})`], ['relations', `${m.relations} (${entity.relations?.length ?? 0})`],
-					['keys', m.keysIndexes], ['constraints', `${m.constraints} (${entity.constraints?.length ?? 0})`], ...(entity.abstract ? [] : [['data', m.data]]), ['diagram', m.diagram], ...(admin?.history ? [['history', a.history]] : [])] as [Section, string][]).map(([key, label]) => (
+					['keys', m.keysIndexes], ['constraints', `${m.constraints} (${entity.constraints?.length ?? 0})`], ...(entity.abstract ? [] : [['data', m.data]]), ...(served ? [['diagram', m.diagram]] : []), ...(admin?.history ? [['history', a.history]] : [])] as [Section, string][]).map(([key, label]) => (
 					<button key={key} role="tab" aria-selected={section === key} className={section === key ? 'lw-active' : ''} onClick={() => setSection(key)}>{label}</button>
 				))}
 			</div>

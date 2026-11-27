@@ -1,9 +1,10 @@
 import React, { useContext, useEffect, useRef, useState, useSyncExternalStore } from 'react'
 import { QueryApiPort, SchemaInfo } from '../application/ports'
 import { WorkspaceController, WorkspaceError } from '../application/workspaceController'
-import { cardinalityOf, DomainInfo, typeText } from '../domain/diagram'
+import { cardinalityOf, DomainInfo, EntityInfo, typeText } from '../domain/diagram'
 import { ExplorerMessages, explorerMessagesOf, format } from '../domain/explorerI18n'
 import { filterEntities } from '../domain/entityFilter'
+import { abstractEntityOf, sourceEntitiesOf } from '../domain/inheritance'
 import { Locale } from '../domain/i18n'
 import { childrenOf, folderPaths, SavedItem, subtreeOf } from '../domain/savedItems'
 import { ConfirmDialog, Icons, ItemDialog, MenuButton, Modal } from './dialogs'
@@ -294,14 +295,13 @@ export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, sc
 		...(Array.isArray(doc?.domain?.entities) ? doc.domain.entities.filter((e: any) => e?.abstract === true) : [])
 	].filter((e: any) => typeof e?.name === 'string').map((e: any) => ({ name: e.name, ...(typeof e.extends === 'string' ? { extends: e.extends } : {}) }))
 		.sort((x, y) => x.name.localeCompare(y.name))
-	const abstractRows = (schema: string, doc: any, level: number) => {
+	// as the entities, from the lambdaORM.yaml with what each inherits: each opens its view (Edit there, as an entity)
+	const abstractRows = (schema: string, doc: any, level: number): React.ReactNode[] => {
 		if (doc === undefined) return [<Row key="abstracts-loading" level={level} label={m.loading} icon={null} muted />]
-		const list = abstractsIn(doc)
+		const all = sourceEntitiesOf(doc)
+		const list = abstractsIn(doc).map(e => abstractEntityOf(all, e.name)).filter(Boolean)
 		if (list.length === 0) return [<Row key="abstracts-none" level={level} label={m.none} icon={null} muted />]
-		return list.map(e => (
-			<Row key={`abstract:${e.name}`} level={level} label={e.name} icon={<Icons.entity />} title={e.extends ? format(m.extendsEntity, { name: e.extends }) : undefined}
-				onOpen={() => admin!.onOpenElement!(schema, { section: 'entities', name: e.name })} />
-		))
+		return list.flatMap(entity => entityNode(schema, entity, level, 'abstract', entity.extends ? format(m.extendsEntity, { name: entity.extends }) : undefined))
 	}
 	const removeSchema = (schema: string) => admin?.can.schemaAdmin
 		? <Action label={`${a.removeSchema} ${schema || '/'}`} onClick={() => admin.onRemoveSchema(schema)}><Icons.trash /></Action>
@@ -431,25 +431,51 @@ export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, sc
 			return isFolder && expanded.has(key) ? [row, ...savedRows(schema, item.id, level + 1)] : [row]
 		})
 
+	// an entity of the tree (an abstract one too): its name opens its view; unfolded, its properties and relations
+	const propertyRow = (entity: EntityInfo, name: string, key: string, level: number) => {
+		const p = (entity.properties ?? []).find(q => q.name === name)!
+		const isKey = (entity.primaryKey ?? []).includes(name)
+		return <Row key={key} level={level} icon={null} muted={!isKey}
+			label={<span className="lw-property"><span className={isKey ? 'lw-pk' : ''}>{p.name}</span><span className="lw-type">{typeText(p)}</span></span>} />
+	}
+	const relationRow = (schema: string, entity: EntityInfo, name: string, key: string, level: number) => {
+		const r = (entity.relations ?? []).find(q => q.name === name)!
+		return <Row key={key} level={level} icon={null} title={`${r.name}: ${r.from} → ${r.entity}.${r.to} (${r.type})`}
+			onOpen={() => onOpenEntity(schema, r.entity)}
+			actions={<Action label={`${m.open} ${r.entity}`} onClick={() => onOpenEntity(schema, r.entity)}><Icons.open /></Action>}
+			label={<span className="lw-property"><span>{r.name}</span><span className="lw-type">→ {r.entity} · {cardinalityOf(r)}</span></span>} />
+	}
+	// kind: of the entities (the keys a saved session has unfolded) or of the abstracts
+	const entityNode = (schema: string, entity: EntityInfo, level: number, kind: 'entity' | 'abstract', title?: string, matched?: { properties: string[], relations: string[] }): React.ReactNode[] => {
+		const [k, kp, kr] = kind === 'entity' ? ['en', 'ep', 'er'] : ['ab', 'abp', 'abr']
+		const key = `${k}:${schema}:${entity.name}`
+		const propertiesKey = `${kp}:${schema}:${entity.name}`
+		const relationsKey = `${kr}:${schema}:${entity.name}`
+		const relations = entity.relations ?? []
+		const rows: React.ReactNode[] = [
+			<Row key={key} level={level} label={entity.name} icon={<Icons.entity />} title={title ?? `${entity.name} — ${m.openEntity}`}
+				expanded={expanded.has(key)} onToggle={() => { if (!expanded.has(key)) onOpenEntity(schema, entity.name); toggle(key) }} onOpen={() => onOpenEntity(schema, entity.name)} />
+		]
+		if (!expanded.has(key)) {
+			// what the filter found in it, without opening it
+			rows.push(...(matched?.properties ?? []).map(name => propertyRow(entity, name, `${key}.p.${name}`, level + 1)))
+			rows.push(...(matched?.relations ?? []).map(name => relationRow(schema, entity, name, `${key}.r.${name}`, level + 1)))
+			return rows
+		}
+		rows.push(<Row key={propertiesKey} level={level + 1} label={`${m.properties} (${entity.properties?.length ?? 0})`} icon={null}
+			expanded={expanded.has(propertiesKey)} onToggle={() => toggle(propertiesKey)} />)
+		if (expanded.has(propertiesKey)) rows.push(...(entity.properties ?? []).map(p => propertyRow(entity, p.name, `${propertiesKey}.${p.name}`, level + 2)))
+		rows.push(<Row key={relationsKey} level={level + 1} label={`${m.relations} (${relations.length})`} icon={null}
+			expanded={expanded.has(relationsKey)} onToggle={() => toggle(relationsKey)} />)
+		if (expanded.has(relationsKey)) rows.push(...relations.map(r => relationRow(schema, entity, r.name, `${relationsKey}.${r.name}`, level + 2)))
+		return rows
+	}
 	const entityRows = (schema: string): React.ReactNode[] => {
 		const domain = domains[schema]
 		if (domain === undefined) return []
 		if (typeof domain === 'string') return [<Row key="e-status" level={5} label={domain} icon={null} muted />]
 		const filter = filters[schema] ?? ''
 		const found = filterEntities(domain.entities, filter)
-		const propertyRow = (entity: typeof domain.entities[number], name: string, key: string, level: number) => {
-			const p = (entity.properties ?? []).find(q => q.name === name)!
-			const isKey = (entity.primaryKey ?? []).includes(name)
-			return <Row key={key} level={level} icon={null} muted={!isKey}
-				label={<span className="lw-property"><span className={isKey ? 'lw-pk' : ''}>{p.name}</span><span className="lw-type">{typeText(p)}</span></span>} />
-		}
-		const relationRow = (entity: typeof domain.entities[number], name: string, key: string, level: number) => {
-			const r = (entity.relations ?? []).find(q => q.name === name)!
-			return <Row key={key} level={level} icon={null} title={`${r.name}: ${r.from} → ${r.entity}.${r.to} (${r.type})`}
-				onOpen={() => onOpenEntity(schema, r.entity)}
-				actions={<Action label={`${m.open} ${r.entity}`} onClick={() => onOpenEntity(schema, r.entity)}><Icons.open /></Action>}
-				label={<span className="lw-property"><span>{r.name}</span><span className="lw-type">→ {r.entity} · {cardinalityOf(r)}</span></span>} />
-		}
 		const head = (
 			<div key="e-filter" className="lw-tree-filter" style={{ paddingLeft: 6 + 5 * INDENT }}>
 				<input type="search" value={filter} placeholder={m.filterEntities} aria-label={m.filterEntities} spellCheck={false}
@@ -459,29 +485,7 @@ export const Explorer: React.FC<ExplorerProps> = ({ refresh, onRefreshSchema, sc
 			</div>
 		)
 		if (found.length === 0) return [head, <Row key="e-none" level={5} label={m.noMatches} icon={null} muted />]
-		return [head, ...found.flatMap(({ entity, properties: matchedProperties, relations: matchedRelations }) => {
-			const key = `en:${schema}:${entity.name}`
-			const propertiesKey = `ep:${schema}:${entity.name}`
-			const relationsKey = `er:${schema}:${entity.name}`
-			const relations = entity.relations ?? []
-			const rows: React.ReactNode[] = [
-				<Row key={key} level={5} label={entity.name} icon={<Icons.entity />} title={`${entity.name} — ${m.openEntity}`}
-					expanded={expanded.has(key)} onToggle={() => { if (!expanded.has(key)) onOpenEntity(schema, entity.name); toggle(key) }} onOpen={() => onOpenEntity(schema, entity.name)} />
-			]
-			if (!expanded.has(key)) {
-				// what the filter found in it, without opening it
-				rows.push(...matchedProperties.map(name => propertyRow(entity, name, `${key}.p.${name}`, 6)))
-				rows.push(...matchedRelations.map(name => relationRow(entity, name, `${key}.r.${name}`, 6)))
-				return rows
-			}
-			rows.push(<Row key={propertiesKey} level={6} label={`${m.properties} (${entity.properties?.length ?? 0})`} icon={null}
-				expanded={expanded.has(propertiesKey)} onToggle={() => toggle(propertiesKey)} />)
-			if (expanded.has(propertiesKey)) rows.push(...(entity.properties ?? []).map(p => propertyRow(entity, p.name, `${propertiesKey}.${p.name}`, 7)))
-			rows.push(<Row key={relationsKey} level={6} label={`${m.relations} (${relations.length})`} icon={null}
-				expanded={expanded.has(relationsKey)} onToggle={() => toggle(relationsKey)} />)
-			if (expanded.has(relationsKey)) rows.push(...relations.map(r => relationRow(entity, r.name, `${relationsKey}.${r.name}`, 7)))
-			return rows
-		})]
+		return [head, ...found.flatMap(({ entity, properties, relations }) => entityNode(schema, entity, 5, 'entity', undefined, { properties, relations }))]
 	}
 
 	const folders = (schema: string) => folderPaths(state.items, schema)

@@ -55,3 +55,25 @@ export const inheritedByBase = (inheritance: Inheritance, key: 'properties' | 'r
 	inheritance.bases
 		.map(base => [base, inheritance[key].filter(i => i.from === base).map(i => i.row)] as [string, Json[]])
 		.filter(([, rows]) => rows.length > 0)
+
+/** The entities of a lambdaORM.yaml: those of domain.abstracts (once λORM has it, L52) as abstract, and domain.entities */
+export const sourceEntitiesOf = (doc: any): Json[] => [
+	...listOf(doc?.domain?.abstracts).map(e => ({ ...e, abstract: true })),
+	...listOf(doc?.domain?.entities)
+]
+
+/**
+ * An abstract entity as the view of an entity shows it (the completed domain has none): with what it inherits, and
+ * the defaults λORM gives what doesn't say them (a property is a string, a relation one to many). Undefined if it isn't
+ * an abstract one of `entities` (as sourceEntitiesOf gives them).
+ */
+export const abstractEntityOf = (entities: Json[] | undefined, name: string): Json | undefined => {
+	const entity = listOf(entities).find(e => e.name === name && e.abstract === true)
+	if (!entity) return undefined
+	const inheritance = inheritanceOf(entities, name)
+	return {
+		...entity,
+		properties: inheritance.properties.map(i => ({ ...i.row, type: i.row.type ?? 'string' })),
+		relations: inheritance.relations.map(i => ({ ...i.row, type: i.row.type ?? 'oneToMany' }))
+	}
+}

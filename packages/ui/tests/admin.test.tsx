@@ -965,18 +965,25 @@ describe('several data-gateways', () => {
 		await readAgain()
 	})
 
-	test('its key entered after it opened: what the credential may do is asked again (the administration appears)', async () => {
+	test('its key entered after it opened: what the credential may do and its domains are read again', async () => {
 		// without its key the gateway refuses; with it (the same admin, the same fetch) it answers
-		class KeyedAdmin extends FakeAdmin { keyed = false; async capabilities () { if (!this.keyed) throw new Error('401'); return super.capabilities() } }
+		const key = { entered: false }
+		class KeyedAdmin extends FakeAdmin { async capabilities () { if (!key.entered) throw new Error('401'); return super.capabilities() } }
+		class KeyedApi extends FakeApi { async domain () { if (!key.entered) throw new Error('Its key'); return { entities: [{ name: 'Products', primaryKey: ['id'], properties: [{ name: 'id', type: 'integer' }], relations: [] }], enums: [] } as any } }
 		const admin = new KeyedAdmin()
-		const of = (problem?: string) => ({ id: 'a', name: 'local', api: new FakeApi(), admin, store: new MemoryWorkspaceStore([], true), ...(problem ? { problem } : {}) })
+		const api = new KeyedApi()
+		const of = (problem?: string) => ({ id: 'a', name: 'local', api, admin, store: new MemoryWorkspaceStore([], true), ...(problem ? { problem } : {}) })
 		const { rerender } = render(<Workspace locale="en" refreshMs={0} history={false} connections={[of('Its key: open the connection to enter it')]} />)
 		fireEvent.click(await rowSoon('Metadata'))
-		await waitFor(() => expect(row('domain')).toBeTruthy())
+		fireEvent.click(await rowSoon('domain'))
+		fireEvent.click(await rowSoon('Entities'))
+		await rowSoon('Its key')
 		expect(row('config')).toBeFalsy()
-		admin.keyed = true
+		key.entered = true
 		rerender(<Workspace locale="en" refreshMs={0} history={false} connections={[of()]} />)
 		await rowSoon('config')
+		await rowSoon('Products')
+		expect(row('Its key')).toBeFalsy()
 	})
 
 	test('a connection opens its page by a click on its name (its edit and remove are there)', async () => {
@@ -1070,18 +1077,31 @@ describe('what an entity inherits from the abstract one it extends', () => {
 		expect(within(own).queryByRole('textbox', { name: 'createdAt name' })).toBeNull()
 	})
 
-	// the abstract isn't in the completed domain (nor in the explorer): the view and the form open its form
+	// the abstract isn't in the completed domain: its view is made from the lambdaORM.yaml, as an entity's
+	const viewOf = (name: string) => waitFor(() => {
+		const v = document.querySelector('[role=tabpanel]:not([hidden]) .lw-entity-view')
+		expect(v?.querySelector('.lw-entity-title')?.textContent).toBe(name)
+		return v as HTMLElement
+	})
 	const formOf = (name: string) => waitFor(() => {
 		const f = document.querySelector('[role=tabpanel]:not([hidden]) .lw-schema-forms')
 		expect(f?.textContent).toContain(`Entities / ${name}`)
 		return f as HTMLElement
 	})
 
-	test('its view opens the form of the abstract it extends', async () => {
+	test('its view opens the view of the abstract it extends: the same, without data nor diagram; Edit as an entity', async () => {
 		const view = await openCustomers()
 		fireEvent.click(await within(view).findByRole('button', { name: 'extends Audited' }))
+		const abstract = await viewOf('Audited')
+		expect(within(abstract).getByText('abstract')).toBeTruthy()
+		expect(within(abstract).getAllByRole('tab').map(t => t.textContent)).toEqual(['Properties (2)', 'Relations (0)', 'Keys and indexes', 'Constraints (0)'])
+		expect(within(abstract).queryByRole('button', { name: 'Query' })).toBeNull()
+		const table = abstract.querySelector('.lw-form-table') as HTMLElement
+		expect([...table.querySelectorAll('tbody tr')].map(tr => [tr.children[1]?.textContent, tr.children[2]?.textContent])).toEqual([['createdAt', 'dateTime'], ['createdBy', 'string']])
+		fireEvent.click(within(abstract).getByRole('button', { name: 'Edit' }))
 		const form = await formOf('Audited')
-		expect(within(form).getAllByRole('tab').map(t => t.textContent)[0]).toBe('Properties (2)')
+		await within(form).findByRole('button', { name: 'Save' })
+		expect((within(form).getByRole('checkbox', { name: 'abstract' }) as HTMLInputElement).checked).toBe(true)
 	})
 
 	test('its form opens the form of the abstract in a tab of its own, keeping what is being edited', async () => {
@@ -1112,15 +1132,17 @@ describe('what an entity inherits from the abstract one it extends', () => {
 		expect(names.slice(at + 1, at + 4)).toEqual(['Audited', 'Catalog', 'Located'])
 	})
 
-	test('the domain lists its abstracts apart, from the lambdaORM.yaml; each opens its form', async () => {
+	test('the domain lists its abstracts apart, as its entities: each opens its view, unfolded its properties', async () => {
 		await openDomain()
 		fireEvent.click(await rowSoon('Entities'))
 		await rowSoon('Customers')
 		expect(row('Audited')).toBeFalsy()
 		fireEvent.click(await rowSoon('Abstracts'))
 		fireEvent.click(await rowSoon('Audited'))
-		const form = await formOf('Audited')
-		expect((within(form).getByRole('checkbox', { name: 'abstract' }) as HTMLInputElement).checked).toBe(true)
+		await viewOf('Audited')
+		fireEvent.click(await rowSoon('Properties (2)'))
+		// each with its type, as an entity's
+		await waitFor(() => expect(screen.getAllByRole('treeitem').map(r => r.querySelector('.lw-tree-label')?.textContent)).toEqual(expect.arrayContaining(['createdAtdateTime', 'createdBystring(128)'])))
 	})
 
 	test('a new abstract starts abstract', async () => {
