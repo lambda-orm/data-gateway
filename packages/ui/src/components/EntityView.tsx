@@ -271,7 +271,8 @@ export const EntityView: React.FC<EntityViewProps> = ({ api, schema, entity: nam
 			)}
 
 			{section === 'diagram' && (
-				<DomainDiagram api={api} schema={schema} focus={entity.name} theme={theme} locale={locale} onOpenEntity={onOpenEntity} onQueryText={onQueryText} height="60vh" exportName={`${entity.name}-diagram`} />
+				<DomainDiagram api={api} schema={schema} focus={entity.name} theme={theme} locale={locale} onOpenEntity={onOpenEntity} onQueryText={onQueryText} height="60vh" exportName={`${entity.name}-diagram`}
+					options source={source?.length ? source : undefined} />
 			)}
 		</div>
 	)

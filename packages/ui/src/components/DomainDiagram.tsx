@@ -64,6 +64,13 @@ export interface DomainDiagramProps {
 	layout?: LayoutPort
 	/** Height of the drawing (default 70vh) */
 	height?: number | string
+	/**
+	 * The options of the diagram of an entity, in one list of several choices instead of the check of the names: the
+	 * names of the relations, its related entities (without them, only the entity), the entities it extends (with source)
+	 */
+	options?: boolean
+	/** The entities as the lambdaORM.yaml says them (their extends, the abstract ones): the completed domain has neither */
+	source?: EntityInfo[]
 }
 
 type Depth = 1 | 2 | 'all'
@@ -197,6 +204,25 @@ const Box: React.FC<{
 	)
 }
 
+/** A list of choices, several at once, that opens below its button and closes on a click outside it */
+const MultiSelect: React.FC<{ label: string, choices: { label: string, on: boolean, set: (on: boolean) => void }[] }> = ({ label, choices }) => {
+	const ref = useRef<HTMLDetailsElement>(null)
+	useEffect(() => {
+		const away = (e: PointerEvent) => { if (ref.current?.open && !ref.current.contains(e.target as Node)) ref.current.open = false }
+		document.addEventListener('pointerdown', away)
+		return () => document.removeEventListener('pointerdown', away)
+	}, [])
+	const on = choices.filter(c => c.on).length
+	return (
+		<details ref={ref} className="lw-multi-select">
+			<summary aria-label={label}>{label}{on > 0 && <span className="lw-type"> ({on})</span>}</summary>
+			<div className="lw-multi-options" role="group" aria-label={label}>
+				{choices.map(c => <label key={c.label} className="lw-check"><input type="checkbox" checked={c.on} onChange={e => c.set(e.target.checked)} /> {c.label}</label>)}
+			</div>
+		</details>
+	)
+}
+
 /** The longest stretch of a line: where its name goes */
 const middleOf = (points: Point[]): Point => {
 	let best = { x: points[0].x, y: points[0].y }
@@ -268,7 +294,23 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 	const api = useMemo(() => props.api ?? new RestQueryApi(props.baseUrl ?? '', props.headers), [props.api, props.baseUrl, props.headers])
 	const [schemas, setSchemas] = useState<SchemaInfo[]>([])
 	const [schema, setSchema] = useState<string | undefined>(fixedSchema)
-	const [domain, setDomain] = useState<DomainInfo>()
+	const [loaded, setDomain] = useState<DomainInfo>()
+	// the options of the diagram of an entity: its related entities, and the entities it extends
+	const [related, setRelated] = useState(true)
+	const [extended, setExtended] = useState(false)
+	const extending = !!props.options && extended && !!props.source?.length
+	// what is drawn: the domain, and with the entities it extends, the extends of each one and the abstract ones (their own
+	// properties; their relations are drawn from the entities that have them)
+	const domain = useMemo<DomainInfo | undefined>(() => {
+		if (!loaded || !extending) return loaded
+		const written = new Map(props.source!.map(e => [e.name, e]))
+		const entities: EntityInfo[] = loaded.entities.map(e => written.get(e.name)?.extends ? { ...e, extends: written.get(e.name)!.extends } : e)
+		const names = new Set(entities.map(e => e.name))
+		for (const e of props.source!) {
+			if (e.abstract && !names.has(e.name)) entities.push({ ...e, properties: (e.properties ?? []).map(p => ({ ...p, type: p.type ?? 'string' })), relations: [] })
+		}
+		return { ...loaded, entities }
+	}, [loaded, extending, props.source])
 	const [error, setError] = useState<string>()
 	const [focus, setFocus] = useState<string>()
 	const [search, setSearch] = useState('')
@@ -326,9 +368,22 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 	useEffect(() => { if (domain) setFocus(props.focus && domain.entities.some(e => e.name === props.focus) ? props.focus : only?.[0] ?? hubOf(domain, edges)) }, [domain, edges, props.focus])
 
 	const onlyKey = only?.join('\n')
-	const visible = useMemo(() => !domain ? new Set<string>() : only ? new Set(only) : neighbourhood(domain, edges, focus, depth),
+	const visible = useMemo(() => {
+		if (!domain) return new Set<string>()
+		if (only) return new Set(only)
+		if (!props.options) return neighbourhood(domain, edges, focus, depth)
+		// the related ones by their relations (an inheritance would bring every other entity of the same base)
+		const shown = related ? neighbourhood(domain, edges.filter(e => e.kind === 'relation'), focus, depth) : new Set(focus ? [focus] : [])
+		if (extending) {
+			const byName = new Map(domain.entities.map(e => [e.name, e]))
+			for (const name of [...shown]) {
+				let base = byName.get(name)?.extends
+				while (base && byName.has(base) && !shown.has(base)) { shown.add(base); base = byName.get(base)?.extends }
+			}
+		}
+		return shown
 		// only changes by its content
-		[domain, edges, focus, depth, onlyKey])
+	}, [domain, edges, focus, depth, onlyKey, props.options, related, extending])
 	// what a box shows of its entity: its keys only (PK, and FK), or all its properties
 	const detailed = useCallback((e: EntityInfo): EntityInfo => detail === 'all' || detail === 'name'
 		? e
@@ -727,7 +782,13 @@ export const DomainDiagram: React.FC<DomainDiagramProps> = props => {
 						<option value="name">{m.detailName}</option>
 					</select>
 				</label>
-				<label className="lw-check"><input type="checkbox" checked={relationNames} onChange={e => setRelationNames(e.target.checked)} /> {m.relationNames}</label>
+				{props.options
+					? <MultiSelect label={m.diagramOptions} choices={[
+						{ label: m.relationNames, on: relationNames, set: setRelationNames },
+						{ label: m.relatedEntities, on: related, set: setRelated },
+						...(props.source?.length ? [{ label: m.extendedEntities, on: extended, set: setExtended }] : [])
+					]} />
+					: <label className="lw-check"><input type="checkbox" checked={relationNames} onChange={e => setRelationNames(e.target.checked)} /> {m.relationNames}</label>}
 				<span className="lw-tool-group" role="group" aria-label={m.zoomIn}>
 					{editable && (
 						<>

@@ -98,6 +98,11 @@
 .lw-entity { cursor: pointer; }
 .lw-hint { color: var(--lw-muted); font-size: var(--lw-text-sm); line-height: 1.4; }
 .lw-check { display: inline-flex; align-items: center; gap: 4px; }
+.lw-multi-select { position: relative; }
+.lw-multi-select > summary { cursor: pointer; list-style: none; border: 1px solid var(--lw-border); border-radius: 4px; padding: 2px 8px; background: var(--lw-bg); user-select: none; }
+.lw-multi-select > summary::-webkit-details-marker { display: none; }
+.lw-multi-select > summary::after { content: ' ▾'; color: var(--lw-muted); }
+.lw-multi-options { position: absolute; z-index: 20; top: calc(100% + 4px); left: 0; display: flex; flex-direction: column; gap: 6px; padding: 8px 10px; min-width: 180px; background: var(--lw-bg); border: 1px solid var(--lw-border); border-radius: 6px; box-shadow: 0 4px 14px rgba(0, 0, 0, 0.18); white-space: nowrap; }
 .lw-tab-model button { font-weight: 600; }
 /* workspace: explorer on the left, tabs on the right */
 .lw-space { display: flex; align-items: stretch; min-height: calc(100vh - 60px); color: var(--lw-fg); background: var(--lw-bg); }
