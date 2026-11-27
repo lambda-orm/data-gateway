@@ -6,6 +6,10 @@ All notable changes to this project will be documented in this file.
 
 ### Unreleased
 
+### 4.4.0 (2026-11-26)
+
+With `@lambdaorm/base` 3.11.1 and `@lambdaorm/lib` 3.15.0, the exact versions the image installs.
+
 **Roles with their views and stages** (`docs/ROLE_SCOPES.md`):
 
 - **`authorization.roles`**: a role says its `permissions`, the `views` and the `stages` it may use (the first of each,
