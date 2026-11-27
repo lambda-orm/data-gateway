@@ -1,5 +1,28 @@
 # @lambdaorm/data-gateway-client-node
 
+## 0.2.0
+
+### Minor Changes
+
+- 80440c8: `client.approval(id)` and `isApprovalPending(result)`: a write that waits for a person to approve it (gateway 4.3,
+  `docs/MUTATION_APPROVAL.md`) answers `{ approval, status: 'pending', expiresAt }` at once; `approval(id)` tells its state
+  (pending, done with its result, failed, rejected, expired), on every transport.
+- 23887f8: `client.queries()` lists the queries of `application.queries` that the credential can use (their parameters and
+  model) and `client.query(name, data)` runs one by its name, on every transport (on MCP, the tool `query_<name>`): the
+  named queries of the gateway 4.1.0 (`docs/NAMED_QUERIES.md`).
+- b153e2d: `client.subscribe({ entity } | { query, data } | { name, data }, listener)` over a `ws(s)://` connection: the writes
+  of an entity, or a query run again when what it reads changes (the subscriptions of the gateway, `docs/SUBSCRIPTIONS.md`);
+  it answers the subscription, the first result of a query and `unsubscribe()`.
+- 9e83577: `token` can be a function that gives it (`token: () => idp.accessToken()`): it is asked for on every request of REST
+  and MCP over HTTP, and on opening a WebSocket, so the token of an identity provider can be refreshed (the JWT of the
+  gateway 4.1.0, `docs/JWT.md`).
+
+### Patch Changes
+
+- 6804c59: `@lambdaorm/base` ^3.11.1 (its types of the λORM the gateway 4.1.0 runs).
+- d552889: The package can be imported from an ES module (`import { connect } from '@lambdaorm/data-gateway-client-node'`): its
+  `exports` said only `require`, so `import` failed with `ERR_PACKAGE_PATH_NOT_EXPORTED`.
+
 ## 0.1.1
 
 ### Patch Changes
