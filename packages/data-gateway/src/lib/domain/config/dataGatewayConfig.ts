@@ -69,7 +69,16 @@ export interface StateConfig {
 	refreshMs: number
 	/** without the source the gateway doesn't start (else it starts with the YAML alone) */
 	required: boolean
+	/** the tables and columns of the system schema in a database through λORM, by entity (else dg_ and its names) */
+	mapping?: StateMapping
+	/** state.source and mapping come from the administration (.data-gateway/persist.yaml), not from the YAML */
+	persisted?: boolean
+	/** with persisted: the state of the YAML (to go back to it) */
+	yaml?: Omit<StateConfig, 'yaml'>
 }
+
+/** By entity of the system schema: its table and, by property, its column (docs/GATEWAY_STATE.md §3) */
+export type StateMapping = Record<string, { table?: string, columns?: Record<string, string> }>
 
 export type AuthenticationType = 'bearer' | 'apikey' | 'basic'
 

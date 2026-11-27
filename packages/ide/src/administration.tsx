@@ -786,6 +786,8 @@ interface StateDescription {
 	required: boolean
 	available: boolean
 	schema?: string
+	persisted?: boolean
+	mappingEditable?: boolean
 }
 
 /**
@@ -810,7 +812,7 @@ export const PersistPage: React.FC<{ client: ManagementClient }> = ({ client }) 
 						{s.file && <><dt>{t.persistFile}</dt><dd><code>{s.file}</code></dd></>}
 						{connection && s.kind === 'orm' && <><dt>{t.persistConnection}</dt><dd><code className="dg-wrap">{connection}</code></dd></>}
 						<dt>{t.persistManagedBy}</dt><dd>{s.managedBy}</dd>
-						<dt>{t.persistFrom}</dt><dd>{s.configured ? t.persistConfigured : s.kind === 'memory' ? t.persistMemory : t.persistVolume}</dd>
+						<dt>{t.persistFrom}</dt><dd>{s.persisted ? t.persistFromAdmin : s.configured ? t.persistConfigured : s.kind === 'memory' ? t.persistMemory : t.persistVolume}</dd>
 						<dt>{t.persistRefresh}</dt><dd>{s.refreshMs ? `${s.refreshMs / 1000} s` : '—'}</dd>
 						<dt>{t.persistRequired}</dt><dd>{s.required ? '✓' : '—'}</dd>
 						<dt>{t.persistAvailable}</dt><dd className={s.available ? 'dg-ok' : 'dg-error'}>{s.available ? '✓' : t.persistUnavailable}</dd>
@@ -822,18 +824,145 @@ export const PersistPage: React.FC<{ client: ManagementClient }> = ({ client }) 
 	)
 }
 
-/** Config: the lambdaORM.yaml of the administration (the system schema of the state), read only, without secrets */
-export const StateConfigPage: React.FC<{ client: ManagementClient, theme: 'light' | 'dark' }> = ({ client, theme }) => {
+/** What a change of where the state is kept answered: the rows copied and where it is now */
+interface Moved { rows: number, where: string }
+
+/** Sends a change of Persist: the state is copied (λORM) and the gateway restarts with it */
+const usePersistChange = (client: ManagementClient) => {
+	const [busy, setBusy] = useState(false)
+	const [error, setError] = useState<string>()
+	const [moved, setMoved] = useState<Moved>()
+	const send = async (path: string, init: RequestInit): Promise<boolean> => {
+		setBusy(true)
+		setError(undefined)
+		setMoved(undefined)
+		try {
+			const response = await client.fetch(`${client.base}/admin/persist${path}`, init)
+			if (!response.ok) { setError(await failed(response)); return false }
+			setMoved(await response.json())
+			return true
+		} catch (e: any) {
+			setError(e?.message ?? String(e))
+			return false
+		} finally { setBusy(false) }
+	}
+	return { busy, error, moved, send }
+}
+
+/**
+ * Persist › Config: the lambdaORM.yaml of the administration (the system schema of the state). Its mapping (the tables
+ * and the columns of each entity) is edited here in a database through λORM: saved, the state is copied to the new
+ * tables and the gateway restarts; the rest is the gateway's, read only. Without secrets.
+ */
+export const StateConfigPage: React.FC<{ client: ManagementClient, theme: 'light' | 'dark', canEdit: boolean }> = ({ client, theme, canEdit }) => {
 	const { t } = usePrefs()
-	const state = useAdmin<StateDescription>(client, '/admin/state')
+	const [refresh, setRefresh] = useState(0)
+	const state = useAdmin<StateDescription>(client, '/admin/state', refresh)
+	const [text, setText] = useState<string>()
+	const change = usePersistChange(client)
+	useEffect(() => { if (state.value?.schema !== undefined) setText(state.value.schema) }, [state.value?.schema])
+	const editable = canEdit && !!state.value?.mappingEditable
+	const changed = text !== undefined && text !== state.value?.schema
+	const fmt = (template: string, values: Record<string, string | number>) => template.replace(/\{(\w+)\}/g, (_, k) => String(values[k] ?? ''))
+	const save = async () => {
+		if (!text || !window.confirm(t.persistConfirm)) return
+		if (await change.send('/schema', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }) })) setTimeout(() => setRefresh(n => n + 1), 4000)
+	}
 	return (
 		<div className="dg-pane dg-pane-editor">
-			<h2>{t.stateConfigTitle}</h2>
-			<p className="dg-muted">{state.value?.managedBy === 'node:sqlite' ? t.stateConfigSqliteNote : t.stateConfigNote}</p>
-			{state.error && <div className="dg-error" role="alert">{state.error}</div>}
-			{state.value && (state.value.schema
-				? <CodeEditor value={state.value.schema} onChange={() => undefined} language="yaml" readOnly height="calc(100vh - 170px)" theme={theme} ariaLabel="lambdaORM.yaml" />
+			<div className="dg-card-head">
+				<h2>{t.stateConfigTitle}</h2>
+				<span className="dg-spacer" />
+				{editable && (
+					<span className="dg-form-actions">
+						<button type="button" disabled={!changed || change.busy} onClick={() => setText(state.value?.schema)}>{t.cancel}</button>
+						<button type="button" className="dg-primary" disabled={!changed || change.busy} onClick={save}>{t.stateConfigSave}</button>
+					</span>
+				)}
+			</div>
+			<p className="dg-muted">{editable ? t.stateConfigEditNote : state.value?.managedBy === 'node:sqlite' ? t.stateConfigSqliteNote : t.stateConfigNote}</p>
+			{(state.error ?? change.error) && <div className="dg-error" role="alert">{state.error ?? change.error}</div>}
+			{change.moved && <div className="dg-ok" role="status">{fmt(t.persistMoved, { rows: change.moved.rows, where: change.moved.where })}</div>}
+			{state.value && (text !== undefined
+				? <CodeEditor value={text} onChange={editable ? setText : () => undefined} language="yaml" readOnly={!editable} height="calc(100vh - 190px)" theme={theme} ariaLabel="lambdaORM.yaml" />
 				: <p className="dg-muted">{t.persistMemoryNote}</p>)}
+		</div>
+	)
+}
+
+const DIALECTS = ['SQLite', 'PostgreSQL', 'MySQL', 'MariaDB', 'SqlServer', 'Oracle']
+
+/**
+ * Persist › Connection: the database where the gateway keeps its administration. Another one: the state is copied there
+ * with λORM (push, export, import) and the gateway restarts with it; back to the configuration, the same the other way.
+ */
+export const PersistConnectionPage: React.FC<{ client: ManagementClient, canEdit: boolean }> = ({ client, canEdit }) => {
+	const { t } = usePrefs()
+	const [refresh, setRefresh] = useState(0)
+	const state = useAdmin<StateDescription>(client, '/admin/state', refresh)
+	const [dialect, setDialect] = useState('PostgreSQL')
+	const [connection, setConnection] = useState('')
+	const [reason, setReason] = useState('')
+	const change = usePersistChange(client)
+	useEffect(() => { if (state.value?.dialect) setDialect(state.value.dialect) }, [state.value?.dialect])
+	const s = state.value
+	const current = s?.connection === undefined ? '' : typeof s.connection === 'string' ? s.connection : JSON.stringify(s.connection)
+	const fmt = (template: string, values: Record<string, string | number>) => template.replace(/\{(\w+)\}/g, (_, k) => String(values[k] ?? ''))
+	const after = () => setTimeout(() => setRefresh(n => n + 1), 4000)
+	const parsed = (): unknown => {
+		const value = connection.trim()
+		if (dialect === 'SQLite') return { file: value }
+		if (value.startsWith('{')) { try { return JSON.parse(value) } catch { return value } }
+		return value
+	}
+	const move = async (event: React.FormEvent) => {
+		event.preventDefault()
+		if (!connection.trim() || !window.confirm(t.persistConfirm)) return
+		if (await change.send('/connection', { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ dialect, connection: parsed(), ...(reason.trim() ? { reason: reason.trim() } : {}) }) })) { setConnection(''); after() }
+	}
+	const back = async () => {
+		if (!window.confirm(t.persistConfirm)) return
+		if (await change.send('', { method: 'DELETE' })) after()
+	}
+	return (
+		<div className="dg-pane">
+			<h2>{t.persistConnectionTitle}</h2>
+			<p className="dg-muted">{t.persistConnectionNote}</p>
+			{(state.error ?? change.error) && <div className="dg-error" role="alert">{state.error ?? change.error}</div>}
+			{change.moved && <div className="dg-ok" role="status">{fmt(t.persistMoved, { rows: change.moved.rows, where: change.moved.where })}</div>}
+			{s && (
+				<section className="dg-card">
+					<h3>{t.persistNow}</h3>
+					<dl className="dg-facts">
+						<dt>{t.persistWhere}</dt><dd><strong>{s.where}</strong></dd>
+						{current && <><dt>{t.persistConnection}</dt><dd><code className="dg-wrap">{current}</code></dd></>}
+						<dt>{t.persistFrom}</dt><dd>{s.persisted ? t.persistFromAdmin : s.configured ? t.persistConfigured : s.kind === 'memory' ? t.persistMemory : t.persistVolume}</dd>
+					</dl>
+				</section>
+			)}
+			{canEdit && (
+				<form className="dg-form dg-persist-form" onSubmit={move} aria-label={t.persistConnectionTitle}>
+					<section className="dg-card">
+						<h3>{t.persistAnother}</h3>
+						<label>{t.persistDialect}
+							<select aria-label={t.persistDialect} value={dialect} onChange={e => setDialect(e.target.value)}>
+								{DIALECTS.map(d => <option key={d} value={d}>{d}</option>)}
+							</select>
+						</label>
+						<label>{dialect === 'SQLite' ? t.persistFile : t.persistConnection}
+							<input aria-label={t.persistConnection} value={connection} onChange={e => setConnection(e.target.value)} spellCheck={false}
+								placeholder={dialect === 'SQLite' ? '/workspace/.data-gateway/state.sqlite' : dialect === 'PostgreSQL' ? 'postgres://user:password@host:5432/gateway' : '{ "host": "…", "user": "…", "password": "…", "database": "…" }'} />
+							<span className="dg-muted">{t.persistConnectionHint}</span>
+						</label>
+						<label>{t.roleReason}<input aria-label={t.roleReason} value={reason} onChange={e => setReason(e.target.value)} /></label>
+						<span className="dg-form-actions">
+							{s?.persisted && <button type="button" disabled={change.busy} onClick={back}>{t.persistBack}</button>}
+							<span className="dg-spacer" />
+							<button type="submit" className="dg-primary" disabled={change.busy || !connection.trim()}>{change.busy ? t.persistMoving : t.persistMove}</button>
+						</span>
+					</section>
+				</form>
+			)}
 		</div>
 	)
 }

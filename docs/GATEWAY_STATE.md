@@ -97,6 +97,21 @@ réplicas, si es obligatoria, si se puede leer ahora, y el `lambdaORM.yaml` del 
 secretos (contraseñas de una URL o de un objeto, `***`). En el IDE: **Administration › Persist** y **› Config** (en
 Monaco, de solo lectura).
 
+**Cambiar dónde está, desde la administración (5.0.0, permiso `persist`):**
+
+- `PUT /admin/persist/connection` `{ dialect, connection, reason }`: otra base. `PUT /admin/persist/schema` `{ text }`:
+  el `lambdaORM.yaml` del estado editado, del que **solo cambia el mapping** (la tabla de cada entidad y sus columnas);
+  el dominio es del gateway, la fuente es la de la conexión. `DELETE /admin/persist`: volver a `state` del YAML.
+- Se guarda en `.data-gateway/persist.yaml` del volumen (necesita `orm.workspacePath`), que reemplaza a
+  `state.source` y `state.mapping` del YAML al arrancar; la conexión puede nombrar variables (`$STATE_DB`).
+- **El estado se copia con λORM:** `push` de las tablas en la nueva, `export` de la actual e `import` en la nueva. El
+  SQLite del volumen se lee de una copia (con su WAL volcado antes) con un mapping a sus tablas, y se escribe con
+  SQLjs. En la misma base con otro mapping, solo las entidades cuya tabla o columnas cambian. Una base nueva que ya
+  tiene estado se rechaza (`409`); un SQLite con estado se guarda aparte (`.bak-<hora>`). Si la copia falla, nada
+  cambia.
+- Después, el supervisor reinicia el edge y recarga los schemas con la fuente nueva. Las sesiones siguen valiendo
+  (se copiaron). Las tablas viejas no se borran.
+
 `Settings` existe para no necesitar una migración por cada opción nueva: una opción de la configuración que se puede
 cambiar en caliente se declara en el código (su camino, su tipo, su validación) y su valor va a `Settings`. Una
 opción con estructura propia (los roles) tiene su entidad.

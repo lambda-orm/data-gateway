@@ -25,6 +25,7 @@ import { SessionDeps, sessionAuthentication, sessionRouter } from './sessionRout
 import { ManagementEvents } from './managementEvents'
 import { RoleAdmin } from '../../../application/auth/roleAdmin'
 import { ObservabilityAdmin } from '../../../application/observability/observabilityAdmin'
+import { PersistAdmin } from '../../build/persist'
 import { parseSize } from '../../../domain/config/sizes'
 import { ExploreConfig } from '../../../domain/config/dataGatewayConfig'
 const YAML = require('js-yaml')
@@ -65,7 +66,7 @@ export interface HttpTransportDeps {
 	metrics: MetricsPort
 	logger: LoggerPort
 	/** management: the administration of the workspaces at {basePath}/admin, with this authentication */
-	admin?: { service: AdminService, commands?: CommandService, authenticator: AuthenticatorPort, roles?: RoleAdmin, observability?: ObservabilityAdmin }
+	admin?: { service: AdminService, commands?: CommandService, authenticator: AuthenticatorPort, roles?: RoleAdmin, observability?: ObservabilityAdmin, persist?: PersistAdmin }
 	/**
 	 * management: every request needs a session (docs/DATA_GATEWAY_SESSIONS_PLAN.md), given at {basePath}/sessions
 	 * with the credential; a credential sent directly is refused
@@ -195,7 +196,7 @@ export class HttpTransport implements Transport {
 		// where its traces are seen (no credential either: a URL of the installation, no data)
 		if (this.options.observability) app.get(`${base}/observability`, this.handle(async () => this.options.observability))
 		if (this.deps.sessions) app.use(`${base}/sessions`, sessionRouter(this.deps.sessions))
-		if (this.deps.admin) app.use(`${base}/admin`, adminRouter(this.deps.admin.service, this.authenticate(this.deps.admin.authenticator), this.deps.admin.commands, this.deps.directory, this.deps.admin.roles, this.deps.admin.observability))
+		if (this.deps.admin) app.use(`${base}/admin`, adminRouter(this.deps.admin.service, this.authenticate(this.deps.admin.authenticator), this.deps.admin.commands, this.deps.directory, this.deps.admin.roles, this.deps.admin.observability, this.deps.admin.persist))
 		// the schemas: the router of the moment (a schema added or removed replaces it)
 		app.use((req, res, next) => this.schemaRouter(req, res, next))
 		// a route that doesn't exist: JSON like every other answer, with the closest routes (L42)

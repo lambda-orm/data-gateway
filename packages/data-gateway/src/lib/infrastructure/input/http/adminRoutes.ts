@@ -8,6 +8,7 @@ import { notFound } from '../../../domain/errors/gatewayError'
 import { SchemaDirectoryPort } from '../../../application/ports/input/schemaDirectoryPort'
 import { RoleAdmin } from '../../../application/auth/roleAdmin'
 import { ObservabilityAdmin } from '../../../application/observability/observabilityAdmin'
+import { PersistAdmin } from '../../build/persist'
 
 /** A route in a URL path segment: iot%2Fv1, and ~ for the schema at the root */
 export const schemaParam = (raw: string | string[]): string => { const value = Array.isArray(raw) ? raw.join("/") : raw; return value === "~" ? "" : value }
@@ -17,7 +18,7 @@ export const schemaParam = (raw: string | string[]): string => { const value = A
  * the authentication of the http transport. A workspace is named by its route, encoded in one segment (iot%2Fv1; ~ is
  * the root). Every read answers its version (ETag), every write says the one it changes (If-Match).
  */
-export const adminRouter = (admin: AdminService, authenticate: express.RequestHandler, commands?: CommandService, directory?: SchemaDirectoryPort, roles?: RoleAdmin, observability?: ObservabilityAdmin): express.Router => {
+export const adminRouter = (admin: AdminService, authenticate: express.RequestHandler, commands?: CommandService, directory?: SchemaDirectoryPort, roles?: RoleAdmin, observability?: ObservabilityAdmin, persist?: PersistAdmin): express.Router => {
 	const router = express.Router()
 	router.use(authenticate)
 	const principal = (res: express.Response) => res.locals.principal as Principal
@@ -58,6 +59,14 @@ export const adminRouter = (admin: AdminService, authenticate: express.RequestHa
 		router.get('/observability', handle(async (_req, res) => observability.get(principal(res))))
 		router.put('/observability', handle(async (req, res) => observability.put(principal(res), req.body?.config ?? req.body, req.body?.reason)))
 		router.delete('/observability', handle(async (req, res) => observability.remove(principal(res), typeof req.query.reason === 'string' ? req.query.reason : undefined)))
+	}
+
+	// where the state is kept (docs/GATEWAY_STATE.md §2): another database or another mapping, copied there with λORM
+	if (persist) {
+		const reasonOf = (req: express.Request) => (typeof req.body?.reason === 'string' ? req.body.reason : typeof req.query.reason === 'string' ? req.query.reason : undefined)
+		router.put('/persist/connection', handle(async (req, res) => persist.connection(principal(res), req.body, reasonOf(req))))
+		router.put('/persist/schema', handle(async (req, res) => persist.schema(principal(res), req.body?.text, reasonOf(req))))
+		router.delete('/persist', handle(async (req, res) => persist.reset(principal(res), reasonOf(req))))
 	}
 
 	// what this credential may do here: the UI shows the actions with it

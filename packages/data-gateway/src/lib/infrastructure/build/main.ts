@@ -15,6 +15,7 @@ import { ConsoleLogger } from '../output/logger/loggers'
 import { YamlFileConfigSource } from '../output/config/yamlFileConfigSource'
 import { EdgeWorkerRuntime, SchemaWorkerRuntime } from '../output/runtime/workerRuntimes'
 import { applicableObservability } from './observability'
+import { withPersist } from './persist'
 import { closeState, roleStoreOf, stateSourceOf } from '../output/state/stateStores'
 import { buildLogger, DataGatewayBuilder, maskSecrets, packageVersion, resolveConfiguredSchemas, RunningGateway } from './dataGatewayBuilder'
 
@@ -33,6 +34,8 @@ const readConfig = async (options: MainOptions): Promise<{ config: DataGatewayCo
 	const reading = new ConfigReader().read(await source.load())
 	for (const warning of reading.warnings) bootLogger.warn(warning)
 	if (!reading.config) throw new ConfigError(reading.issues)
+	// where the state is kept, as the administration changed it (.data-gateway/persist.yaml), over state of the YAML
+	reading.config = withPersist(reading.config)
 	const logger = buildLogger(reading.config, '[supervisor]')
 	for (const note of reading.notes) logger.info(note)
 	logger.info(`[data-gateway] configuration ${source.location}`)
@@ -54,7 +57,10 @@ export const startGateway = async (options: MainOptions = {}): Promise<RunningGa
  * used; a schema that doesn't start does not stop the others.
  */
 export const startSupervisor = async (options: MainOptions = {}): Promise<Supervisor> => {
-	const { config, logger } = await readConfig(options)
+	const read = await readConfig(options)
+	const logger = read.logger
+	// the configuration in use: where the state is kept may change from the administration (persist.yaml)
+	let config = read.config
 	const schemas = resolveConfiguredSchemas(config, logger)
 	const threads = schemas.filter(s => s.settings.runtime.mode === 'thread').length
 	// before any worker (and anything of this thread) uses the libuv threadpool
@@ -89,7 +95,15 @@ export const startSupervisor = async (options: MainOptions = {}): Promise<Superv
 			restart: new RestartPolicy(config.runtime.restart.initialDelayMs, config.runtime.restart.maxDelayMs),
 			heartbeat: new HeartbeatPolicy(config.runtime.heartbeat.intervalMs, config.runtime.heartbeat.timeoutMs),
 			graceMs: config.server.timeout,
-			onObservability: observe
+			onObservability: observe,
+			onPersist: () => {
+				// the state is somewhere else now: its schemas (their approvals) and the edge (its sessions, roles) with it
+				config = withPersist(read.config.state.yaml ? { ...read.config, state: { ...read.config.state.yaml } } : read.config)
+				runtimeSettings.config = config
+				logger.info(`[data-gateway] the state is kept somewhere else now: restarting the edge and reloading the schemas`)
+				for (const schema of resolveConfiguredSchemas(config, logger)) supervisor.reload(specOf(schema))
+				supervisor.restart({ schemas: false }).catch(error => logger.error(error))
+			}
 		},
 		new SystemClock(),
 		logger

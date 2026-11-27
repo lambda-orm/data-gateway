@@ -64,7 +64,7 @@ authorization:
     backend: { permissions: [read, write] }
     analyst: { permissions: [read], views: [support, default], stages: [default, reporting], schemas: [shop] }
     elsewhere: { permissions: [read, write], schemas: [sales] }
-    admin: { permissions: [read, write, schemaRead, roles, observability] }
+    admin: { permissions: [read, write, schemaRead, roles, observability, persist] }
 authentication:
   adapter: local
   type: apikey
@@ -184,4 +184,21 @@ test('state: where the gateway keeps it and its schema, with the permission role
 	const state = await call(admin, '/admin/state', { headers: await login(admin, key('boss-key')) })
 	expect(state.body).toMatchObject({ kind: 'sqlite', dialect: 'SQLite', managedBy: 'node:sqlite', available: true })
 	expect(state.body.schema).toContain('name: Sessions')
+})
+
+// last: it moves the state of this gateway
+test('persist: another database, the state copied there with λORM and written in persist.yaml; back to the YAML', async () => {
+	expect((await call(admin, '/admin/persist/connection', { method: 'PUT', body: { dialect: 'SQLite', connection: { file: 'x' } }, headers: await login(admin, key('ana-key')) })).status).toBe(403)
+	const session = await login(admin, key('boss-key'))
+	const moved = path.join(dir, 'moved', 'state.sqlite')
+	const answer = await call(admin, '/admin/persist/connection', { method: 'PUT', body: { dialect: 'SQLite', connection: { file: moved }, reason: 'to another disk' }, headers: session })
+	expect(answer.status).toBe(200)
+	expect(answer.body.rows).toBeGreaterThan(0)
+	expect(answer.body.where).toBe(`SQLite ${moved}`)
+	expect(fs.existsSync(moved)).toBe(true)
+	expect(fs.readFileSync(path.join(dir, '.data-gateway', 'persist.yaml'), 'utf8')).toContain(moved)
+	// back to the YAML: the SQLite of the volume, the one it had kept aside
+	expect((await call(admin, '/admin/persist', { method: 'DELETE', headers: session })).status).toBe(200)
+	expect(fs.existsSync(path.join(dir, '.data-gateway', 'persist.yaml'))).toBe(false)
+	expect(fs.readdirSync(path.join(dir, '.data-gateway')).some(f => f.startsWith('state.sqlite.bak-'))).toBe(true)
 })

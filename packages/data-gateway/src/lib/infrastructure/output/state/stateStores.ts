@@ -15,23 +15,23 @@ export { StateSource, stateSourceOf, describeState } from '../../../domain/confi
 
 /** The sessions of management */
 export const sessionStoreOf = (source: StateSource): SessionStorePort =>
-	source.kind === 'sqlite' ? new SqliteSessionStore(path.resolve(source.file)) : source.kind === 'orm' ? new OrmSessionStore(OrmState.of(source.dialect, source.connection)) : new MemorySessionStore()
+	source.kind === 'sqlite' ? new SqliteSessionStore(path.resolve(source.file)) : source.kind === 'orm' ? new OrmSessionStore(OrmState.of(source.dialect, source.connection, source.mapping)) : new MemorySessionStore()
 
 /** The state of the UI of each credential (none in memory: the IDE keeps it) */
 export const uiStateStoreOf = (source: StateSource): SessionStatePort | undefined =>
-	source.kind === 'sqlite' ? new SqliteSessionState(path.resolve(source.file)) : source.kind === 'orm' ? new OrmUiStateStore(OrmState.of(source.dialect, source.connection)) : undefined
+	source.kind === 'sqlite' ? new SqliteSessionState(path.resolve(source.file)) : source.kind === 'orm' ? new OrmUiStateStore(OrmState.of(source.dialect, source.connection, source.mapping)) : undefined
 
 /** The writes that wait for a person */
 export const approvalStoreOf = (source: StateSource): ApprovalStorePort =>
-	source.kind === 'sqlite' ? new SqliteApprovalStore(path.resolve(source.file)) : source.kind === 'orm' ? new OrmApprovalStore(OrmState.of(source.dialect, source.connection)) : new MemoryApprovalStore()
+	source.kind === 'sqlite' ? new SqliteApprovalStore(path.resolve(source.file)) : source.kind === 'orm' ? new OrmApprovalStore(OrmState.of(source.dialect, source.connection, source.mapping)) : new MemoryApprovalStore()
 
 /** The roles and the settings of the state (one store: the same database, the same changes and versions) */
 export const roleStoreOf = (source: StateSource): RoleStorePort & SettingStorePort =>
-	source.kind === 'sqlite' ? new SqliteRoleStore(path.resolve(source.file)) : source.kind === 'orm' ? new OrmRoleStore(OrmState.of(source.dialect, source.connection)) : new MemoryRoleStore()
+	source.kind === 'sqlite' ? new SqliteRoleStore(path.resolve(source.file)) : source.kind === 'orm' ? new OrmRoleStore(OrmState.of(source.dialect, source.connection, source.mapping)) : new MemoryRoleStore()
 
 /** Ends what a source holds open (the λORM of a database) */
 export const closeState = async (source: StateSource): Promise<void> => {
-	if (source.kind === 'orm') await OrmState.of(source.dialect, source.connection).end()
+	if (source.kind === 'orm') await OrmState.of(source.dialect, source.connection, source.mapping).end()
 }
 
 const GLOBAL = '*'

@@ -21,7 +21,7 @@ export const BOOTSTRAP = path.join(BUILD_DIR, 'workerBootstrap.js')
 export const SCHEMA_ENTRY = path.join(BUILD_DIR, `schemaWorkerMain${extension}`)
 export const EDGE_ENTRY = path.join(BUILD_DIR, `edgeWorkerMain${extension}`)
 
-type ControlEvent = { type: 'pong' } | { type: 'ready', info?: McpServerInfo, socketPath?: string } | { type: 'failed', reason: string } | { type: 'observability', override?: Record<string, any> }
+type ControlEvent = { type: 'pong' } | { type: 'ready', info?: McpServerInfo, socketPath?: string } | { type: 'failed', reason: string } | { type: 'observability', override?: Record<string, any> } | { type: 'persist' }
 
 /** Turns the control messages and the end of a worker into WorkerEvents, once: failed or exited, not both */
 class Lifecycle {
@@ -41,6 +41,7 @@ class Lifecycle {
 			this.ended = true
 			this.events.failed(event.reason)
 		} else if (event.type === 'observability') this.events.observability?.(event.override)
+		else if (event.type === 'persist') this.events.persist?.()
 	}
 
 	public exit (reason: string): void {

@@ -6,6 +6,7 @@ import { Session } from '../../../domain/session/session'
 import { ApprovalStorePort } from '../../../application/ports/output/approvalPorts'
 import { SessionStorePort } from '../../../application/ports/output/sessionPorts'
 import { SessionStatePort } from '../../../application/ports/output/adminPorts'
+import { StateMapping } from '../../../domain/config/dataGatewayConfig'
 import { ConfigArea, ConfigChange, RoleStorePort, SettingStorePort, StoredRole, StoredSetting } from '../../../application/ports/output/statePorts'
 
 const text = (name: string, length: number, required = false) => ({ name, type: 'string', length, ...(required ? { required: true } : {}) })
@@ -18,7 +19,34 @@ const TIME = 30
  * from one installation to another is only its source. Its tables start with dg_; push creates what is missing and
  * adds what a new version brings (it never removes: a replica of the version before still works).
  */
-export const systemSchema = (dialect: string, connection: unknown, stateDir: string): any => ({
+export const STATE_ENTITIES = ['Sessions', 'SessionConnections', 'UiStates', 'Approvals', 'Roles', 'ConfigChanges', 'Settings', 'StateVersions']
+
+/** The table of an entity by default: dg_ and its name in snake case (Sessions → dg_sessions) */
+export const defaultTableOf = (entity: string): string => `dg_${entity.replace(/[A-Z]/g, (c, i) => (i ? '_' : '') + c.toLowerCase())}`
+
+/**
+ * The tables of the SQLite of the volume, as the gateway writes them (node:sqlite): with it λORM reads and writes that
+ * file too (SQLjs), to copy the state to another database or from one (docs/GATEWAY_STATE.md §6)
+ */
+export const VOLUME_MAPPING: StateMapping = {
+	Sessions: { table: 'sessions', columns: { tokenHash: 'token_hash', createdAt: 'created_at', lastSeenAt: 'last_seen_at', expiresAt: 'expires_at', revokedAt: 'revoked_at', revokedBy: 'revoked_by', claims: 'context', viewName: 'view' } },
+	SessionConnections: { table: 'session_connections', columns: { sessionId: 'session_id', seenAt: 'seen_at' } },
+	UiStates: { table: 'session', columns: { updatedAt: 'updated_at' } },
+	Approvals: { table: 'approval', columns: { schemaPath: 'schema', createdAt: 'created_at' } },
+	Roles: { table: 'roles', columns: { schemaPath: 'schema_path', updatedAt: 'updated_at', updatedBy: 'updated_by' } },
+	ConfigChanges: { table: 'config_changes', columns: { changeKey: 'change_key', changedBy: 'changed_by', changedAt: 'changed_at' } },
+	Settings: { table: 'settings', columns: { settingKey: 'key', updatedAt: 'updated_at', updatedBy: 'updated_by' } },
+	StateVersions: { table: 'state_versions' }
+}
+
+/** The mapping of the state: by entity its table (and its columns), with what the configuration changes of it */
+const mappingOf = (mapping: StateMapping | undefined) => STATE_ENTITIES.map(name => {
+	const own = mapping?.[name]
+	const columns = Object.entries(own?.columns ?? {})
+	return { name, mapping: own?.table ?? defaultTableOf(name), ...(columns.length ? { properties: columns.map(([property, column]) => ({ name: property, mapping: column })) } : {}) }
+})
+
+export const systemSchema = (dialect: string, connection: unknown, stateDir: string, mapping?: StateMapping): any => ({
 	domain: {
 		entities: [
 			{
@@ -77,8 +105,7 @@ export const systemSchema = (dialect: string, connection: unknown, stateDir: str
 		paths: { state: stateDir },
 		mappings: [{
 			name: 'state',
-			entities: ['Sessions', 'SessionConnections', 'UiStates', 'Approvals', 'Roles', 'ConfigChanges', 'Settings', 'StateVersions']
-				.map(name => ({ name, mapping: `dg_${name.replace(/[A-Z]/g, (c, i) => (i ? '_' : '') + c.toLowerCase())}` }))
+			entities: mappingOf(mapping)
 		}],
 		sources: [{ name: 'state', dialect, mapping: 'state', connection: connectionOf(dialect, connection) }],
 		stages: [{ name: 'state', sources: [{ name: 'state' }] }]
@@ -105,13 +132,13 @@ export class OrmState {
 	private started?: Promise<Orm>
 	private static readonly shared = new Map<string, OrmState>()
 
-	private constructor (private readonly dialect: string, private readonly connection: unknown) {}
+	private constructor (private readonly dialect: string, private readonly connection: unknown, private readonly mapping?: StateMapping) {}
 
-	public static of (dialect: string, connection: unknown): OrmState {
-		const key = `${dialect}:${JSON.stringify(connection)}`
+	public static of (dialect: string, connection: unknown, mapping?: StateMapping): OrmState {
+		const key = `${dialect}:${JSON.stringify(connection)}:${JSON.stringify(mapping ?? {})}`
 		let state = OrmState.shared.get(key)
 		if (!state) {
-			state = new OrmState(dialect, connection)
+			state = new OrmState(dialect, connection, mapping)
 			OrmState.shared.set(key, state)
 		}
 		return state
@@ -128,7 +155,7 @@ export class OrmState {
 	private async start (): Promise<Orm> {
 		const orm = new Orm()
 		// λORM keeps what it pushed here; push reads the database too, so another replica's tables are not created again
-		await orm.init(systemSchema(this.dialect, this.connection, path.join(os.tmpdir(), `data-gateway-state-${process.pid}`)), true)
+		await orm.init(systemSchema(this.dialect, this.connection, path.join(os.tmpdir(), `data-gateway-state-${process.pid}`), this.mapping), true)
 		try {
 			await orm.stage.push({ stage: 'state' }).execute()
 		} catch {

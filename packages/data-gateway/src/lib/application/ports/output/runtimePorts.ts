@@ -24,6 +24,8 @@ export interface WorkerEvents {
 	pong (): void
 	/** the edge: the observability of the state changed (docs/DATA_GATEWAY.md §8.2), with what the state says now */
 	observability? (override: Record<string, any> | undefined): void
+	/** the edge: where the state is kept changed (.data-gateway/persist.yaml): the gateway restarts with it */
+	persist? (): void
 }
 
 /** A running worker, as the supervisor sees it. What it carries to build channels is the runtime's business. */

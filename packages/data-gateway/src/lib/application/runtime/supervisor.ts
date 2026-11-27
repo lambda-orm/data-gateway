@@ -26,6 +26,8 @@ export interface SupervisorOptions {
 	graceMs: number
 	/** the edge says the observability of the state changed: who applies it (it restarts the workers with restart()) */
 	onObservability?: (override: Record<string, any> | undefined) => void
+	/** the edge says where the state is kept changed: who applies it (the configuration again, and restart()) */
+	onPersist?: () => void
 }
 
 /**
@@ -282,7 +284,8 @@ export class Supervisor {
 			failed: reason => this.edgeDown(handle, `edge did not start: ${reason}`),
 			exited: reason => this.edgeDown(handle, `edge exited: ${reason}`),
 			pong: () => { this.edge.lastPong = this.clock.now().getTime() },
-			observability: override => { if (this.edge.handle === handle) this.options.onObservability?.(override) }
+			observability: override => { if (this.edge.handle === handle) this.options.onObservability?.(override) },
+			persist: () => { if (this.edge.handle === handle) this.options.onPersist?.() }
 		}, [...this.schemas.values()].map(s => s.spec))
 		this.edge.handle = handle
 		// a new edge learns every state and gets a channel to every ready schema

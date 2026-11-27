@@ -1,4 +1,4 @@
-import { StateConfig } from './dataGatewayConfig'
+import { StateConfig, StateMapping } from './dataGatewayConfig'
 
 /**
  * Where the state of the gateway lives (docs/GATEWAY_STATE.md §2): a SQLite file (node:sqlite: durable, shared by the
@@ -6,7 +6,7 @@ import { StateConfig } from './dataGatewayConfig'
  */
 export type StateSource =
 	| { kind: 'sqlite', file: string }
-	| { kind: 'orm', dialect: string, connection: unknown }
+	| { kind: 'orm', dialect: string, connection: unknown, mapping?: StateMapping }
 	| { kind: 'memory' }
 
 /** The SQLite of the volume, shared by the replicas that mount it */
@@ -15,7 +15,7 @@ export const stateFileOf = (workspacePath: string): string => `${workspacePath.r
 /** The source of the state of a configuration: state.source, else the SQLite of the volume, else memory */
 export const stateSourceOf = (state: StateConfig | undefined, workspacePath: string | undefined): StateSource => {
 	const source = state?.source
-	if (source && source.dialect !== 'SQLite') return { kind: 'orm', dialect: source.dialect, connection: source.connection }
+	if (source && source.dialect !== 'SQLite') return { kind: 'orm', dialect: source.dialect, connection: source.connection, ...(state?.mapping ? { mapping: state.mapping } : {}) }
 	if (source) {
 		const connection = source.connection as string | { file?: string }
 		const file = typeof connection === 'string' ? connection : connection?.file

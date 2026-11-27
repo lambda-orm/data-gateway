@@ -20,7 +20,7 @@ const run = async (): Promise<void> => {
 	const logger = buildLogger(yaml, '[edge]')
 	// the roles of the YAML and of the state of the gateway (docs/ROLE_SCOPES.md), before the transports; an observability
 	// saved (here or in another replica) is told to the supervisor, which restarts the edge and the workers with it
-	const state = await buildGatewayState(yaml, logger, new SystemClock(), override => ctl.send({ type: 'observability', override }))
+	const state = await buildGatewayState(yaml, logger, new SystemClock(), override => ctl.send({ type: 'observability', override }), () => ctl.send({ type: 'persist' }))
 	// where its traces, metrics and logs are seen: the YAML with what the administration changed
 	const config = { ...yaml, explore: effectiveExplore(yaml, data.observabilityOverride) }
 	const registry = new AuthenticatorRegistry(state.catalog)

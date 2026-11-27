@@ -26,6 +26,6 @@ describe('the state, described', () => {
 	})
 
 	test('memory: no schema', () => {
-		expect(describeStateOf({ kind: 'memory' }, config(), true)).toEqual({ kind: 'memory', where: 'memory', managedBy: 'memory', configured: false, refreshMs: 30000, required: false, available: true })
+		expect(describeStateOf({ kind: 'memory' }, config(), true)).toEqual({ kind: 'memory', where: 'memory', managedBy: 'memory', configured: false, refreshMs: 30000, required: false, available: true, persisted: false, mappingEditable: false })
 	})
 })

@@ -28,7 +28,13 @@ All notable changes to this project will be documented in this file.
   watches the version); it reads it before starting the workers too.
 - **`observability.explore`** says where the metrics and the logs are seen too: `prometheus` and `loki`, the uids of
   their datasources in Grafana (`prometheus`, `loki` by default).
-- **`GET /admin/state`** (permission `roles`): where the gateway keeps its state (the SQLite of the volume, a
+- **Where the state is kept, from the administration** (the new permission `persist`): `PUT /admin/persist/connection`
+  (another database) and `PUT /admin/persist/schema` (the lambdaORM.yaml of the state, of which only the mapping, its
+  tables and columns, changes), kept in `.data-gateway/persist.yaml` over `state` of the YAML; `DELETE` goes back.
+  The state is copied there with λORM (push, export, import; the SQLite of the volume read through SQLjs with a
+  mapping to its tables) and then the supervisor restarts the edge and reloads the schemas with it. `state.mapping`
+  says the tables and columns of the system schema in a database through λORM.
+- **`GET /admin/state`** (permission `roles` or `persist`): where the gateway keeps its state (the SQLite of the volume, a
   database through λORM, memory), how it is read, how often the replicas read it again, whether it can be read now,
   and the lambdaORM.yaml of its system schema; the connection without its secrets.
 - **`GET /admin/me`** (any credential, about itself): its name, its context and each of its roles as it applies

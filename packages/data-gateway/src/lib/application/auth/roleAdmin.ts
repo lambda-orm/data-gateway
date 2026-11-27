@@ -41,6 +41,10 @@ export interface StateDescription {
 	available: boolean
 	/** the lambdaORM.yaml of the system schema of the state (its entities, its mapping, its source) */
 	schema?: string
+	/** its source and mapping come from the administration (.data-gateway/persist.yaml) */
+	persisted: boolean
+	/** its mapping can change (a database through λORM) */
+	mappingEditable: boolean
 }
 
 /** Who asks: its name, its context (the user it is of) and its roles with what each gives */
@@ -125,7 +129,8 @@ export class RoleAdmin {
 
 	/** where the gateway keeps its state (sessions, roles, its observability) and its schema, without secrets */
 	public state (who: Principal): StateDescription {
-		this.require(who)
+		// who administers the roles, or where the state is kept
+		if (!who.permissions.has('roles') && !who.permissions.has('persist')) throw forbidden(who.name, 'persist')
 		if (!this.stateOf) throw notFound('this gateway says nothing of its state')
 		return this.stateOf()
 	}

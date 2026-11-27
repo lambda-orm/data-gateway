@@ -8,8 +8,9 @@ import { ClockPort, LoggerPort } from '../../application/ports/output/supportPor
 import { closeState, roleStoreOf } from '../output/state/stateStores'
 import { ObservabilityAdmin, ObservabilityRefresher } from '../../application/observability/observabilityAdmin'
 import { observabilityProblems } from './observability'
+import { PersistAdmin } from './persist'
 import { stringify } from 'yaml'
-import { systemSchema } from '../output/state/ormState'
+import { systemSchema, VOLUME_MAPPING } from '../output/state/ormState'
 import { StateDescription } from '../../application/auth/roleAdmin'
 
 /** A connection without its secrets: the values of keys like password, the password of a URL */
@@ -43,7 +44,10 @@ export const describeStateOf = (source: StateSource, config: DataGatewayConfig, 
 		refreshMs: config.state?.refreshMs ?? 30000,
 		required: config.state?.required ?? false,
 		available,
-		...(dialect ? { schema: stringify(systemSchema(dialect, connection, '<the temporary folder of the gateway>')) } : {})
+		persisted: !!config.state?.persisted,
+		// the mapping changes in a database through λORM; the SQLite of the volume has the gateway's own tables
+		mappingEditable: source.kind === 'orm',
+		...(dialect ? { schema: stringify(systemSchema(dialect, connection, '<the temporary folder of the gateway>', source.kind === 'orm' ? source.mapping : VOLUME_MAPPING)) } : {})
 	}
 }
 
@@ -55,6 +59,8 @@ export interface GatewayState {
 	refresher: RoleRefresher
 	/** the observability of the gateway changed from the administration (docs/DATA_GATEWAY.md §8.2) */
 	observability: ObservabilityAdmin
+	/** where the state is kept, changed from the administration (docs/GATEWAY_STATE.md §2) */
+	persist: PersistAdmin
 	/** what the administration changed of the observability when this process started (none: the YAML's) */
 	observabilityOverride?: Record<string, any>
 	close (): Promise<void>
@@ -69,7 +75,9 @@ export const buildGatewayState = async (
 	logger: LoggerPort,
 	clock: ClockPort,
 	/** an observability saved (here or in another replica): who applies it (the supervisor); none, at the next start */
-	onObservability?: (override: Record<string, any> | undefined) => void
+	onObservability?: (override: Record<string, any> | undefined) => void,
+	/** where the state is kept changed: who restarts the gateway with it (the supervisor); none, at the next start */
+	onPersist?: () => void
 ): Promise<GatewayState> => {
 	const source = stateSourceOf(config.state, config.orm.workspacePath)
 	const catalog = new RoleCatalog(config)
@@ -91,6 +99,10 @@ export const buildGatewayState = async (
 		catalog,
 		roles: new RoleAdmin(store, catalog, clock, randomUUID, logger, () => describeAccess(config), () => describeStateOf(source, config, refresher.available)),
 		refresher,
+		persist: new PersistAdmin(config, logger, () => {
+			if (onPersist) onPersist()
+			else logger.warn('[data-gateway] state: where it is kept changed; it applies when the gateway starts again')
+		}),
 		observability: new ObservabilityAdmin(store, config, config.metrics.enabled, clock, randomUUID, logger, observabilityProblems, () => observed.refresh()),
 		close: async () => {
 			refresher.stop()
