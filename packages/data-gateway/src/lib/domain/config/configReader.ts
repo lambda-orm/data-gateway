@@ -1,7 +1,7 @@
 import { ObservabilityConfig } from '@lambdaorm/base'
 import { ALL_PERMISSIONS, isPermission, KNOWN_PERMISSIONS, Permission } from '../auth/permission'
 import {
-	AuthenticationConfig, AuthenticationType, AuthorizationConfig, StateConfig, StateDialect, STATE_DIALECTS, ConfigReading, CredentialConfig, DataGatewayConfig, JwtConfig, RoleConfig, CacheConfig, ClusterConfig, FilesConfig, FileStorageConfig, OutboxConfig, OutboxDestinationConfig, LoggerConfig, McpConfig,
+	AuthenticationConfig, AuthenticationType, AuthorizationConfig, StateConfig, StateDialect, STATE_DIALECTS, ConfigReading, CredentialConfig, DataGatewayConfig, ExploreConfig, JwtConfig, RoleConfig, CacheConfig, ClusterConfig, FilesConfig, FileStorageConfig, OutboxConfig, OutboxDestinationConfig, LoggerConfig, McpConfig,
 	OrmConfig, RuntimeConfig, RuntimeMode, SchemaConfig, SessionsConfig, TransportConfig, TransportName, TransportsConfig, WatchConfig
 } from './dataGatewayConfig'
 import { parseDuration } from './durations'
@@ -63,6 +63,7 @@ export class ConfigReader {
 			logger: this.logger(raw.logger),
 			metrics: { enabled: this.bool(raw.metrics?.enabled, true, 'metrics.enabled') },
 			observability: this.observability(raw.observability),
+			explore: this.explore(isObject(raw.observability) ? raw.observability.explore : undefined),
 			audit: {
 				enabled: this.bool(raw.audit?.enabled, true, 'audit.enabled'),
 				includeData: this.bool(raw.audit?.includeData, false, 'audit.includeData')
@@ -304,7 +305,28 @@ export class ConfigReader {
 		if ((raw as any).exporter?.headers !== undefined) {
 			this.issues.push('observability.exporter.headers is not allowed: the headers carry tokens; use OTEL_EXPORTER_OTLP_HEADERS')
 		}
-		return raw as ObservabilityConfig
+		// explore is of the gateway (the link of the IDE), not of the SDK of λORM
+		const sdk: Raw = { ...(raw as Raw) }
+		delete sdk.explore
+		return sdk as ObservabilityConfig
+	}
+
+	private explore (raw: unknown): ExploreConfig | undefined {
+		if (raw === undefined || raw === null) return undefined
+		if (!isObject(raw)) {
+			this.issues.push('observability.explore must be an object: { grafana, tempo, orgId }')
+			return undefined
+		}
+		const unknown = Object.keys(raw).filter(k => !['grafana', 'tempo', 'orgId'].includes(k))
+		if (unknown.length) this.issues.push(`observability.explore: unknown keys ${unknown.join(', ')} (grafana, tempo, orgId)`)
+		const grafana = raw.grafana
+		if (typeof grafana !== 'string' || !/^https?:\/\/[^\s]+$/.test(grafana)) {
+			this.issues.push('observability.explore.grafana: the URL of Grafana (http or https)')
+			return undefined
+		}
+		const tempo = this.str(raw.tempo, 'tempo')
+		if (!tempo) this.issues.push('observability.explore.tempo: the uid of the datasource of Tempo')
+		return { grafana: grafana.replace(/\/+$/, ''), tempo, orgId: this.int(raw.orgId, 1, 'observability.explore.orgId', 1) }
 	}
 
 	private logger (raw: Raw | undefined): LoggerConfig {

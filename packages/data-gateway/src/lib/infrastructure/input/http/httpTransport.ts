@@ -25,6 +25,7 @@ import { SessionDeps, sessionAuthentication, sessionRouter } from './sessionRout
 import { ManagementEvents } from './managementEvents'
 import { RoleAdmin } from '../../../application/auth/roleAdmin'
 import { parseSize } from '../../../domain/config/sizes'
+import { ExploreConfig } from '../../../domain/config/dataGatewayConfig'
 const YAML = require('js-yaml')
 
 export interface HttpTransportOptions {
@@ -38,6 +39,13 @@ export interface HttpTransportOptions {
 	swaggerEnabled: boolean
 	/** The transports of this gateway, told at GET {basePath}/transports (an IDE finds there its WebSocket and MCP) */
 	transports?: TransportInfo[]
+	/** where the traces of this gateway are seen, told at GET {basePath}/observability (management: the IDE links them) */
+	observability?: ObservabilityInfo
+}
+
+/** What GET /observability of management tells: where a person sees the traces (observability.explore), or nothing */
+export interface ObservabilityInfo {
+	explore?: ExploreConfig
 }
 
 /** A transport of the gateway as a client sees it: where it listens (its port; behind a proxy its public URL differs) */
@@ -183,6 +191,8 @@ export class HttpTransport implements Transport {
 		app.get(`${base}/schemas`, this.handle(async () => this.deps.directory.states()))
 		// its transports (no credential: as /schemas, what a client needs to find them)
 		if (this.options.transports) app.get(`${base}/transports`, this.handle(async () => this.options.transports))
+		// where its traces are seen (no credential either: a URL of the installation, no data)
+		if (this.options.observability) app.get(`${base}/observability`, this.handle(async () => this.options.observability))
 		if (this.deps.sessions) app.use(`${base}/sessions`, sessionRouter(this.deps.sessions))
 		if (this.deps.admin) app.use(`${base}/admin`, adminRouter(this.deps.admin.service, this.authenticate(this.deps.admin.authenticator), this.deps.admin.commands, this.deps.directory, this.deps.admin.roles))
 		// the schemas: the router of the moment (a schema added or removed replaces it)

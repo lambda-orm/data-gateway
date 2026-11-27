@@ -377,6 +377,19 @@ export interface AdminConfig {
 	commandTimeoutMs: number
 }
 
+/**
+ * Where a person sees the traces of this gateway (docs/OBSERVABILITY.md §explore): its Grafana and the datasource of
+ * Tempo there. Of the installation, not of each IDE: the IDE shows a link to the traces of an entity when it is given.
+ */
+export interface ExploreConfig {
+	/** the URL of Grafana, as the person opens it (http or https) */
+	grafana: string
+	/** the uid of the datasource of Tempo in that Grafana (tempo when it isn't given) */
+	tempo: string
+	/** the organization of Grafana (1 when it isn't given) */
+	orgId: number
+}
+
 export interface DataGatewayConfig {
 	orm: OrmConfig
 	admin: AdminConfig
@@ -388,6 +401,8 @@ export interface DataGatewayConfig {
 	 * lambdaORM.yaml; the OTEL_* variables override it. Its SDK is the one of λORM too.
 	 */
 	observability?: ObservabilityConfig
+	/** where the traces of this gateway are seen (observability.explore): told to the IDE at GET /observability of management */
+	explore?: ExploreConfig
 	audit: AuditConfig
 	authentication: AuthenticationConfig
 	rateLimit: RateLimitConfig

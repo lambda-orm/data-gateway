@@ -340,6 +340,12 @@
 .lw-connections-root { display: flex; align-items: center; gap: 6px; padding: 6px 4px; border-bottom: 1px solid var(--lw-border); }
 .lw-connections-root .lw-spacer { flex: 1; }
 .lw-connections-list { padding: 6px 4px 6px 6px; }
+/* the side: its heading stays while the tree scrolls; the box of the last connection fills the height and grows with its
+   tree (past the height, the side scrolls) */
+.lw-space-side { display: flex; flex-direction: column; }
+.lw-space-side > .lw-connections-root { flex: none; position: sticky; top: 0; z-index: 2; background: var(--lw-bg); }
+.lw-space-side > .lw-connections-list:not([hidden]) { flex: 1 0 auto; display: flex; flex-direction: column; box-sizing: border-box; }
+.lw-connections-list > .lw-connection:last-child { flex: 1 0 auto; }
 .lw-connection-icon { display: inline-flex; color: var(--lw-accent); }
 .lw-connection-icon.lw-problem { color: var(--lw-warning); }
 

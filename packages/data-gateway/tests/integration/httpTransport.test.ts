@@ -2,7 +2,7 @@ import fs from 'fs'
 import os from 'os'
 import path from 'path'
 // The REST transport over a real socket, with the real facade and use cases on fake λORM ports.
-import { HttpTransport, TransportInfo } from '../../src/lib/infrastructure/input/http/httpTransport'
+import { HttpTransport, ObservabilityInfo, TransportInfo } from '../../src/lib/infrastructure/input/http/httpTransport'
 import { ApiKeyAuthenticator, BearerAuthenticator } from '../../src/lib/infrastructure/output/auth/authenticators'
 import { NoMetrics, PromClientMetrics } from '../../src/lib/infrastructure/output/metrics/promClientMetrics'
 import { ConsoleLogger } from '../../src/lib/infrastructure/output/logger/loggers'
@@ -18,7 +18,7 @@ const credentials = [
 const agent = { Authorization: 'Bearer agent-token' }
 const backend = { Authorization: 'Bearer backend-token' }
 
-const start = async (fixture: GatewayFixture, options: Partial<{ basePath: string, rateLimit: { windowMs: number, max: number }, metrics: boolean, requestBodySize: string, authenticator: AuthenticatorPort, transports: TransportInfo[] }> = {}) => {
+const start = async (fixture: GatewayFixture, options: Partial<{ basePath: string, rateLimit: { windowMs: number, max: number }, metrics: boolean, requestBodySize: string, authenticator: AuthenticatorPort, transports: TransportInfo[], observability: ObservabilityInfo }> = {}) => {
 	const transport = new HttpTransport({
 		port: 0,
 		host: '127.0.0.1',
@@ -26,7 +26,8 @@ const start = async (fixture: GatewayFixture, options: Partial<{ basePath: strin
 		requestBodySize: options.requestBodySize ?? '1mb',
 		rateLimit: options.rateLimit ?? { windowMs: 1000, max: 0 },
 		swaggerEnabled: true,
-		transports: options.transports
+		transports: options.transports,
+		observability: options.observability
 	}, {
 		directory: new InlineSchemaDirectory([{
 			path: '', gateway: fixture.gateway, mcp: undefined as any, transports: ['http'], authenticators: { http: options.authenticator ?? new BearerAuthenticator(credentials) }
@@ -155,6 +156,16 @@ describe('http transport options', () => {
 			expect((await call(base.replace('/api', ''), '/ping')).status).toBe(404)
 			expect((await call(base, '/ping')).status).toBe(200)
 			expect((await call(base, '/ping')).status).toBe(429)
+		} finally {
+			await transport.stop()
+		}
+	})
+
+	test('where its traces are seen (observability.explore), without a credential', async () => {
+		const explore = { grafana: 'https://grafana.example.com', tempo: 'tempo', orgId: 1 }
+		const { transport, base } = await start(fakeGateway(), { observability: { explore } })
+		try {
+			expect(await (await fetch(`${base}/observability`)).json()).toEqual({ explore })
 		} finally {
 			await transport.stop()
 		}

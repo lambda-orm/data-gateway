@@ -2,6 +2,13 @@
 
 ### Unreleased
 
+- **The traces of an entity, from its gateway:** the link of an entity to its traces in Grafana comes from the
+  configuration of the gateway (`observability.explore`, data-gateway 4.5, `GET /observability` of its management).
+  The section **Observability** of a connection (Grafana URL, Tempo datasource) is gone: what was saved there is no
+  longer used.
+- **The explorer on the left:** the box of the connection fills the height of the side and grows with its tree; past
+  the height, the side scrolls and its heading stays.
+
 ### 1.4.0 (2026-11-26)
 
 Works with any data-gateway 4.x; the roles of the gateway and the view in the options need data-gateway 4.4.
